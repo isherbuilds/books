@@ -1,0 +1,31 @@
+import { Button } from "@accly/ui/components/button";
+import { cn } from "@accly/ui/lib/utils";
+import { LoaderCircleIcon } from "lucide-react";
+import type * as React from "react";
+
+export function SubmitButton({
+  children,
+  isSubmitting,
+  disabled,
+  className,
+  ...props
+}: React.ComponentProps<typeof Button> & { isSubmitting: boolean }) {
+  return (
+    <Button
+      type="submit"
+      disabled={isSubmitting || disabled}
+      className={cn("relative", className)}
+      {...props}
+    >
+      {/* Wrapper keeps the button's own row layout; without it an icon child breaks onto its own line. */}
+      <span className={cn("inline-flex items-center [gap:inherit]", isSubmitting && "invisible")}>
+        {children}
+      </span>
+      {isSubmitting && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
+        </span>
+      )}
+    </Button>
+  );
+}

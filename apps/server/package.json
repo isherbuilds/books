@@ -1,0 +1,36 @@
+{
+  "name": "server",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+    "dev": "portless",
+    "dev:app": "bun run --hot src/index.ts",
+    "start": "bun run dist/index.mjs"
+  },
+  "dependencies": {
+    "@accly/api": "workspace:*",
+    "@accly/auth": "workspace:*",
+    "@accly/db": "workspace:*",
+    "@accly/env": "workspace:*",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "drizzle-orm": "catalog:",
+    "evlog": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@accly/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "tsdown": "^0.23.0",
+    "typescript": "catalog:"
+  },
+  "portless": {
+    "name": "api.accly",
+    "script": "dev:app"
+  }
+}

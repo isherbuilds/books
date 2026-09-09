@@ -1,0 +1,36 @@
+node_modules
+**/node_modules
+.git
+
+docs
+tests
+.evlog
+
+**/dist
+**/build
+**/.next
+**/.nuxt
+**/.output
+**/.svelte-kit
+**/.astro
+**/.turbo
+.turbo
+
+**/.wrangler
+**/.alchemy
+**/.expo
+**/.vercel
+*.log
+
+# macOS metadata — Nitro copies public/ verbatim into .output, so keep these
+# out of the image build context entirely.
+**/.DS_Store
+
+Dockerfile
+**/Dockerfile
+**/docker-compose*.yaml
+**/docker-compose*.yml
+
+# Secrets stay out of image layers. Runtime values come from the platform's
+# environment (Coolify), build-time public values from --build-arg.
+**/.env*

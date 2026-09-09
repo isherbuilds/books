@@ -1,0 +1,46 @@
+name: accly-db-dev
+
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    container_name: accly-db-dev-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    ports:
+      - "55442:5432"
+    volumes:
+      - accly-db-dev-postgres:/var/lib/postgresql
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.40
+    container_name: accly-db-dev-seaweedfs
+    command: >-
+      mini -dir=/data -webdav=false -admin.ui=false
+      -admin.password=better-stack-admin-secret -s3.port.iceberg=0
+      -master.telemetry=false
+      -s3.allowedOrigins=https://accly.localhost,http://localhost:55444,http://127.0.0.1:55444
+    environment:
+      AWS_ACCESS_KEY_ID: better-stack
+      AWS_SECRET_ACCESS_KEY: better-stack-secret
+      S3_BUCKET: files
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8333/status"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    ports:
+      - "55451:8333"
+    volumes:
+      - accly-db-dev-seaweedfs:/data
+
+volumes:
+  accly-db-dev-postgres:
+  accly-db-dev-seaweedfs:

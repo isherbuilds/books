@@ -1,0 +1,180 @@
+import { drainAuditWrites } from "@accly/api/audit";
+import { createRequestContext, type ORPCContext } from "@accly/api/lib/context";
+import { appRouter } from "@accly/api/routers/index";
+import { auth } from "@accly/auth";
+import { db } from "@accly/db";
+import { env } from "@accly/env/server";
+import { OpenAPIHandler } from "@orpc/openapi/fetch";
+import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
+import { ORPCError, onError } from "@orpc/server";
+import { RPCHandler } from "@orpc/server/fetch";
+import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
+import { sql } from "drizzle-orm";
+import { initLogger } from "evlog";
+import { identifyUser } from "evlog/better-auth";
+import { createFsDrain } from "evlog/fs";
+import { evlog, type EvlogVariables } from "evlog/hono";
+import { compress } from "hono/compress";
+import { Hono, type Context as HonoContext } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
+
+initLogger({
+  env: { service: "accly-server" },
+});
+
+const isProduction = env.NODE_ENV === "production";
+export const app = new Hono<EvlogVariables>();
+app.use(
+  "/*",
+  secureHeaders({
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
+    referrerPolicy: "no-referrer",
+    strictTransportSecurity: isProduction ? "max-age=31536000; includeSubDomains" : false,
+    xContentTypeOptions: "nosniff",
+    xDnsPrefetchControl: false,
+    xDownloadOptions: false,
+    xFrameOptions: false,
+    xPermittedCrossDomainPolicies: false,
+    xXssProtection: false,
+    permissionsPolicy: {
+      camera: false,
+      microphone: false,
+      geolocation: false,
+      payment: false,
+    },
+    // Production-only so the development API reference can load its scripts and styles.
+    contentSecurityPolicy: isProduction
+      ? {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+        }
+      : undefined,
+  }),
+);
+
+app.use(
+  evlog({
+    drain: isProduction ? undefined : createFsDrain(),
+  }),
+);
+app.use(
+  "/*",
+  cors({
+    origin: env.CORS_ORIGIN,
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    // Cache preflight responses so cross-origin RPCs don't pay an OPTIONS round trip.
+    maxAge: 86400,
+  }),
+);
+app.use("/*", compress());
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+async function createLoggedRequestContext(
+  context: HonoContext<EvlogVariables>,
+): Promise<ORPCContext> {
+  const startedAt = Date.now();
+  const requestContext = await createRequestContext(context.req.raw.headers);
+  const identified = requestContext.session
+    ? identifyUser(context.get("log"), requestContext.session, {
+        maskEmail: true,
+      })
+    : false;
+
+  context.get("log").set({
+    auth: { resolvedIn: Date.now() - startedAt, identified },
+  });
+
+  return requestContext;
+}
+
+// Expected outcomes reach here too — a duplicate customer is a CONFLICT, not a
+// fault. Logging those buries the genuine 500s they outnumber.
+function logORPCError(error: unknown): void {
+  if (error instanceof ORPCError && error.status < 500) {
+    return;
+  }
+  console.error(error);
+}
+
+const procedureBodyLimit = bodyLimit({
+  maxSize: 1024 * 1024,
+  onError: (c) => c.json({ error: "Request too large" }, 413),
+});
+
+const rpcHandler = new RPCHandler(appRouter, {
+  interceptors: [onError(logORPCError)],
+});
+
+// Reject oversized requests before session resolution.
+app.use("/rpc/*", procedureBodyLimit);
+app.use("/rpc/*", async (c) => {
+  const context = await createLoggedRequestContext(c);
+  const result = await rpcHandler.handle(c.req.raw, {
+    prefix: "/rpc",
+    context,
+  });
+
+  if (!result.matched) {
+    return c.notFound();
+  }
+
+  return c.newResponse(result.response.body, result.response);
+});
+
+if (!isProduction) {
+  const apiHandler = new OpenAPIHandler(appRouter, {
+    plugins: [
+      new OpenAPIReferencePlugin({
+        schemaConverters: [new ZodToJsonSchemaConverter()],
+      }),
+    ],
+    interceptors: [onError(logORPCError)],
+  });
+
+  app.use("/api-reference/*", procedureBodyLimit);
+  app.use("/api-reference/*", async (c) => {
+    const context = await createLoggedRequestContext(c);
+    const result = await apiHandler.handle(c.req.raw, {
+      prefix: "/api-reference",
+      context,
+    });
+
+    if (!result.matched) {
+      return c.notFound();
+    }
+
+    return c.newResponse(result.response.body, result.response);
+  });
+}
+
+// Readiness, not liveness: a process that answers while Postgres is unreachable
+// reports healthy through an outage in which every request fails.
+app.get("/", async (c) => {
+  try {
+    await db.execute(sql`select 1`);
+  } catch (error) {
+    console.error("health check failed", error);
+    return c.text("UNAVAILABLE", 503);
+  }
+  return c.text("OK");
+});
+
+// Audit writes are fire-and-forget, so a deploy drops whichever are in flight.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    void drainAuditWrites()
+      .catch((error: unknown) => console.error("audit drain failed", error))
+      .finally(() => process.exit(0));
+  });
+}
+
+// Part of this project's dev port block (55442-55451) so parallel checkouts of
+// other products do not fight over 3000. The container sets PORT explicitly.
+export default { port: Number(process.env.PORT ?? 55443), fetch: app.fetch };

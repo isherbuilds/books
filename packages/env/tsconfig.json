@@ -1,0 +1,3 @@
+{
+  "extends": "@accly/config/tsconfig.base.json"
+}

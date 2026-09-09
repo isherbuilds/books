@@ -1,0 +1,8 @@
+/* Self-hosted so the declared `--font-sans` is the font that actually renders:
+   no CDN request, no flash of fallback, and it works on a business LAN with no
+   outbound internet. Mono is loaded for the columns that need figure alignment
+   (customer code, invoice number, actor id). */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@accly/ui/globals.css";
+@source "../node_modules/streamdown/dist/*.js";

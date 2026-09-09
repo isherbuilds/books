@@ -1,0 +1,305 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@source "../../../apps/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* The inset shell layers three surfaces: the canvas (--background), the
+     rail that sits flat on it (--sidebar, same value), and the raised content
+     card (--card). Keep --sidebar equal to --background or the rail stops
+     reading as part of the page. */
+  --background: oklch(0.978 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.938 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  /* Two states billing needs to name in colour: money not yet invoiced, and
+     money that has waited long enough to chase. Both always ship with a word
+     beside them (docs/design.md §5). */
+  --pending: oklch(0.55 0.14 250);
+  --overdue: oklch(0.6 0.16 42);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  /* Focus indicators must maintain 3:1 contrast; guarded by the theme contrast test. */
+  --ring: oklch(0.45 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  /* Status severity. `docs/design.md` §5 says colour means state, and these
+     are the one exception: what needs attention (an overdue balance), what is
+     provisional, what is settled, and what is neutral identity. Never used
+     decoratively — a hue here is a claim. */
+  --status-alert: oklch(0.52 0.19 27);
+  --status-alert-surface: oklch(0.962 0.024 27);
+  --status-alert-border: oklch(0.88 0.06 27);
+  --status-note: oklch(0.5 0.11 68);
+  --status-note-surface: oklch(0.965 0.03 80);
+  --status-note-border: oklch(0.89 0.06 75);
+  --status-info: oklch(0.5 0.13 253);
+  --status-info-surface: oklch(0.962 0.025 253);
+  --status-info-border: oklch(0.88 0.05 253);
+  --status-clear: oklch(0.47 0.11 155);
+  --status-clear-surface: oklch(0.958 0.03 155);
+  --status-clear-border: oklch(0.87 0.06 155);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.978 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.928 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.45 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.87 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.371 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --pending: oklch(0.72 0.13 250);
+  --overdue: oklch(0.76 0.16 42);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --status-alert: oklch(0.78 0.13 27);
+  --status-alert-surface: oklch(0.28 0.055 27);
+  --status-alert-border: oklch(0.4 0.08 27);
+  --status-note: oklch(0.83 0.11 80);
+  --status-note-surface: oklch(0.28 0.045 75);
+  --status-note-border: oklch(0.4 0.07 75);
+  --status-info: oklch(0.8 0.1 253);
+  --status-info-surface: oklch(0.28 0.05 253);
+  --status-info-border: oklch(0.4 0.07 253);
+  --status-clear: oklch(0.8 0.11 155);
+  --status-clear-surface: oklch(0.27 0.045 155);
+  --status-clear-border: oklch(0.39 0.07 155);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.145 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-status-alert: var(--status-alert);
+  --color-status-alert-surface: var(--status-alert-surface);
+  --color-status-alert-border: var(--status-alert-border);
+  --color-status-note: var(--status-note);
+  --color-status-note-surface: var(--status-note-surface);
+  --color-status-note-border: var(--status-note-border);
+  --color-status-info: var(--status-info);
+  --color-status-info-surface: var(--status-info-surface);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-clear: var(--status-clear);
+  --color-status-clear-surface: var(--status-clear-surface);
+  --color-status-clear-border: var(--status-clear-border);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-pending: var(--pending);
+  --color-overdue: var(--overdue);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+@layer base {
+  /* `width` sizes vertical bars only; `height` is the horizontal one. */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /*
+   * The focus outline traces the element's own corners, so a bare link or a
+   * square control gets a hard-cornered box. This softens that default. It sits
+   * in `base` on purpose: any `rounded-*` utility still wins, so a pill button
+   * keeps its pill outline — this only reaches elements that set no radius, and
+   * only while they are focused.
+   */
+  :focus-visible {
+    border-radius: var(--radius-sm);
+  }
+  body {
+    @apply font-sans bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  html,
+  body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  select option {
+    background: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  select option:disabled {
+    color: var(--muted-foreground);
+  }
+}
+
+/*
+ * A hairline at the bottom edge of a scroll box, there only while something is
+ * still below the fold. The JS-free scroll shadow: no measuring, no observer,
+ * no state, and it keeps up with a flung scroll because the browser never asks
+ * us anything.
+ *
+ * Two 1px layers in the same place. The rule is pinned to the box (`scroll`);
+ * the cover is pinned to the end of the content (`local`), so it only reaches
+ * the box's bottom edge once the last row is in view — and hides the rule
+ * exactly then. Content that fits without scrolling starts covered.
+ *
+ * The cover has to be opaque against whatever is behind it, so a surface other
+ * than a popover sets `--scroll-rule-surface`.
+ */
+@utility scroll-rule {
+  --scroll-rule-surface: var(--color-popover);
+  background-image:
+    linear-gradient(var(--scroll-rule-surface), var(--scroll-rule-surface)),
+    linear-gradient(var(--color-border), var(--color-border));
+  background-position: bottom;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-attachment: local, scroll;
+}
+
+/*
+ * Keyboard focus is a floor, not a per-component decision.
+ *
+ * Components reset the native outline (`outline-none`) and re-add a ring via
+ * `focus-visible:ring-*`, which leaves anything that misses those utilities
+ * with no visible focus at all. This rule is deliberately *unlayered* so it
+ * outranks the `utilities` layer that `outline-none` lives in, and therefore
+ * guarantees an indicator on every focusable element. Components that draw a
+ * nicer ring still do — this only ever adds a floor beneath them.
+ *
+ * A control that draws its *own* complete indicator (an underline field, for
+ * example, where a rectangle around the box looks wrong) opts out with
+ * `data-focus-floor="off"`. Only do that where the replacement indicator is at
+ * least as visible as this one.
+ */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+[data-focus-floor="off"]:focus-visible {
+  outline: none;
+}
+
+/*
+ * Autofilled fields keep the app's own colours.
+ *
+ * Chrome, Edge and Safari paint an autofilled input with a fixed yellow (blue
+ * in dark mode) that no `background-color` rule can beat — it is a UA-internal
+ * style. The transition does reach it: give the colour change a delay measured
+ * in days and the field never arrives, so the input keeps the background it
+ * already had. Firefox tints with a `filter` instead, hence the reset.
+ *
+ * Unlayered on purpose: `transition-colors` sits in the `utilities` layer and
+ * would otherwise outrank the delay.
+ */
+input:autofill,
+textarea:autofill,
+select:autofill {
+  -webkit-text-fill-color: var(--foreground);
+  filter: none;
+  transition-property: background-color;
+  transition-delay: 600000s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

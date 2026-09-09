@@ -1,0 +1,14 @@
+{
+  "extends": "@accly/config/tsconfig.base.json",
+  // Unit tests import browser modules from apps/web, so this project needs the
+  // DOM lib the base config (server-side) leaves out.
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM"],
+    "paths": {
+      "@/*": ["../apps/web/src/*"],
+      "@accly/ui/*": ["../packages/ui/src/*"]
+    }
+  },
+  "include": ["**/*.ts"]
+}
