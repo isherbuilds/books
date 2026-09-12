@@ -1,4 +1,4 @@
-import { fromPaise, toPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal, parseMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
 import type { RouterClient } from "@orpc/server";
 import type { CSSProperties, ReactNode } from "react";
@@ -7,9 +7,13 @@ import { formatMoney } from "@/lib/money";
 import { methodLabel } from "@/lib/settlement";
 
 export type InvoiceBundle = Awaited<ReturnType<RouterClient<AppRouter>["billing"]["getInvoice"]>>;
+
 type Invoice = InvoiceBundle["invoice"];
+
 type Payment = InvoiceBundle["payments"][number];
+
 type CreditNote = InvoiceBundle["creditNotes"][number];
+
 type Refund = InvoiceBundle["refunds"][number];
 
 const colors = {
@@ -234,12 +238,13 @@ export function InvoiceDocument({
 
   const taxSummary = Array.from(
     lines.reduce((groups, line) => {
-      const current = groups.get(line.taxRatePercent) ?? { taxable: 0, tax: 0 };
-      current.taxable += toPaise(line.taxableValue);
-      current.tax += toPaise(line.taxAmount);
+      const current = groups.get(line.taxRatePercent) ?? { taxable: 0n, tax: 0n };
+      current.taxable += parseMoney(line.taxableValue);
+      current.tax += parseMoney(line.taxAmount);
       groups.set(line.taxRatePercent, current);
+
       return groups;
-    }, new Map<string, { taxable: number; tax: number }>()),
+    }, new Map<string, { taxable: bigint; tax: bigint }>()),
   );
 
   return (
@@ -317,16 +322,17 @@ export function InvoiceDocument({
             </thead>
             <tbody>
               {taxSummary.map(([rate, amounts]) => {
-                const cgst = Math.floor((amounts.tax + 1) / 2);
+                const cgst = (amounts.tax + 1n) / 2n;
+
                 return (
                   <tr key={rate}>
                     <td style={cellStyle}>{rate}%</td>
                     <td style={{ ...cellStyle, textAlign: "right" }}>
-                      {fromPaise(amounts.taxable)}
+                      {formatDecimal(amounts.taxable)}
                     </td>
-                    <td style={{ ...cellStyle, textAlign: "right" }}>{fromPaise(cgst)}</td>
+                    <td style={{ ...cellStyle, textAlign: "right" }}>{formatDecimal(cgst)}</td>
                     <td style={{ ...cellStyle, textAlign: "right" }}>
-                      {fromPaise(amounts.tax - cgst)}
+                      {formatDecimal(amounts.tax - cgst)}
                     </td>
                   </tr>
                 );
@@ -380,13 +386,16 @@ export function CreditNoteDocument({
   note: CreditNote;
 }) {
   const descriptions = new Map(invoiceLines.map((line) => [line.id, line.description]));
+
   const rows = note.lines.map((line) => {
     const description = descriptions.get(line.invoiceLineId);
+
     if (!description) {
       throw new Error(
         `Invoice line ${line.invoiceLineId} is missing from ${invoice.invoiceNumber}`,
       );
     }
+
     return { line, description };
   });
 

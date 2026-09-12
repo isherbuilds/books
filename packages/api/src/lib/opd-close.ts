@@ -14,6 +14,7 @@ export async function voidPendingCharges(options: {
   now: Date;
 }) {
   if (options.appointmentIds.length === 0) return [];
+
   return options.tx
     .update(charges)
     .set({ status: "voided", voidReason: options.reason, updatedAt: options.now })
@@ -45,6 +46,7 @@ export async function closeExpiredBookings(options: {
         ),
       )
       .returning({ id: opdAppointments.id });
+
     const voided = await voidPendingCharges({
       tx,
       orgId: options.orgId,
@@ -52,13 +54,16 @@ export async function closeExpiredBookings(options: {
       reason: "No-show",
       now: options.now,
     });
+
     const voidedByAppointment = new Map<string, number>();
+
     for (const charge of voided) {
       voidedByAppointment.set(
         charge.appointmentId,
         (voidedByAppointment.get(charge.appointmentId) ?? 0) + 1,
       );
     }
+
     return closed.map((appointment) => ({
       id: appointment.id,
       voidedCharges: voidedByAppointment.get(appointment.id) ?? 0,

@@ -16,7 +16,10 @@ export function billingPdfUrl({
   request: BillingDocumentRequest;
 }): string {
   const search = new URLSearchParams({ kind: request.kind });
+
   if (request.kind === "invoice" && request.layout === "thermal") search.set("layout", "thermal");
+
   if (request.documentId) search.set("id", request.documentId);
+
   return `/api/${encodeURIComponent(orgSlug)}/billing/invoices/${encodeURIComponent(invoiceId)}/pdf?${search}`;
 }

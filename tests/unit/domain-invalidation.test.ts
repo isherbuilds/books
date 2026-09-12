@@ -3,13 +3,16 @@ import { expect, test } from "bun:test";
 type QueryKey = readonly unknown[];
 
 const previousSkip = process.env.SKIP_ENV_VALIDATION;
+
 process.env.SKIP_ENV_VALIDATION = "true";
+
 const {
   invalidateAccountingReports,
   invalidateBillingState,
   invalidateOpdAppointmentState,
   invalidateCustomerState,
 } = await import("../../apps/web/src/lib/domain-invalidation");
+
 if (previousSkip === undefined) {
   delete process.env.SKIP_ENV_VALIDATION;
 } else {
@@ -18,6 +21,7 @@ if (previousSkip === undefined) {
 
 function recordingInvalidator() {
   const keys: QueryKey[] = [];
+
   return {
     keys,
     client: {
@@ -38,6 +42,7 @@ test("appointment invalidation scopes every key to the given org", async () => {
 
   const emitted = serialize(keys);
   expect(emitted.length).toBeGreaterThan(0);
+
   for (const key of emitted) expect(key).toContain('"orgSlug":"org-a"');
   expect(emitted.some((key) => key.includes('"opd","get"'))).toBe(false);
   expect(emitted.some((key) => key.includes('"collections"'))).toBe(true);
@@ -49,6 +54,7 @@ test("accounting-report invalidation refreshes every financial read model", asyn
   await invalidateAccountingReports(client, "org-a");
 
   const emitted = serialize(keys);
+
   for (const report of ["dailyCollections", "gst", "trialBalance", "balanceSheet"]) {
     expect(emitted.some((key) => key.includes(`"report","${report}"`))).toBe(true);
   }
@@ -100,10 +106,12 @@ test("billing invalidation scopes every key to the given org", async () => {
 
   const emitted = serialize(keys);
   expect(emitted.length).toBeGreaterThan(0);
+
   for (const key of emitted) expect(key).toContain('"orgSlug":"org-a"');
   expect(emitted.some((key) => key.includes('"appointmentId":"appointment-1"'))).toBe(true);
   expect(emitted.some((key) => key.includes('"invoiceId":"invoice-1"'))).toBe(true);
   expect(emitted.some((key) => key.includes('"billing","refundDue"'))).toBe(true);
+
   for (const report of ["dailyCollections", "opdRegister", "gst", "trialBalance", "balanceSheet"]) {
     expect(emitted.some((key) => key.includes(`"report","${report}"`))).toBe(true);
   }

@@ -125,6 +125,7 @@ const formSchema = z.object({
 });
 
 type ItemFormValues = z.infer<typeof formSchema>;
+
 type Item = {
   id: string;
   name: string;
@@ -157,11 +158,13 @@ function ItemRoute() {
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
+
   const toggleActive = useMutation(
     orpc.item.update.mutationOptions({
       onMutate: async (variables) => {
         const queryKey = orpc.item.list.key({ input: { orgSlug }, type: "infinite" });
         await queryClient.cancelQueries({ queryKey });
+
         const snapshot = queryClient.getQueriesData<
           InfiniteData<{
             items: Item[];
@@ -194,6 +197,7 @@ function ItemRoute() {
         for (const [queryKey, data] of context?.snapshot ?? []) {
           queryClient.setQueryData(queryKey, data);
         }
+
         toast.error(errorMessage(error, "Could not update item item"));
       },
       onSettled: () => {
@@ -202,14 +206,18 @@ function ItemRoute() {
         const pending = queryClient.isMutating({
           mutationKey: orpc.item.update.mutationKey(),
         });
+
         if (pending > 1) return;
+
         return queryClient.invalidateQueries({
           queryKey: orpc.item.list.key({ input: { orgSlug } }),
         });
       },
     }),
   );
+
   const mutateToggle = toggleActive.mutate;
+
   const toggleItem = useCallback(
     (item: Item) =>
       mutateToggle({
@@ -225,6 +233,7 @@ function ItemRoute() {
       }),
     [mutateToggle, orgSlug],
   );
+
   const item = useInfiniteQuery(
     itemListQuery(orgSlug, {
       query,
@@ -232,6 +241,7 @@ function ItemRoute() {
       activeOnly: activeOnly ?? false,
     }),
   );
+
   const items = item.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
@@ -410,6 +420,7 @@ function ItemDialog(props: ItemDialogProps) {
   const { mode, orgSlug, open, onOpenChange } = props;
   const queryClient = useQueryClient();
   const item = mode === "edit" ? props.item : null;
+
   const form = useZodForm(formSchema, {
     defaultValues: item
       ? {
@@ -439,6 +450,7 @@ function ItemDialog(props: ItemDialogProps) {
     const mapped = applyOrpcFieldError(form, error, {
       duplicate: { field: "code", message: "Code already in use" },
     });
+
     toast.error(mapped ?? errorMessage(error, "Could not save item item"));
   };
 
@@ -448,6 +460,7 @@ function ItemDialog(props: ItemDialogProps) {
       onError: handleError,
     }),
   );
+
   const update = useMutation(
     orpc.item.update.mutationOptions({
       onSuccess: () => closeAfterSuccess("Item item updated"),
@@ -472,6 +485,7 @@ function ItemDialog(props: ItemDialogProps) {
       create.mutate(shared);
     }
   });
+
   const isPending = create.isPending || update.isPending;
 
   const changeOpen = (next: boolean) => {

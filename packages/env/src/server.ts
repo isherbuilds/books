@@ -17,8 +17,8 @@ export const env = createEnv({
     SEAWEEDFS_BUCKET: z.string().optional(),
     SEAWEEDFS_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().optional(),
   },
-  createFinalSchema: (shape) =>
-    z.object(shape).superRefine((values, context) => {
+  createFinalSchema: (fields) =>
+    z.object(fields).superRefine((values, context) => {
       if (
         values.NODE_ENV === "production" &&
         new URL(values.BETTER_AUTH_URL).hostname !== new URL(values.CORS_ORIGIN).hostname &&

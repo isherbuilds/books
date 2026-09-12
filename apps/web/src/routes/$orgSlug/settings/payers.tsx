@@ -179,6 +179,7 @@ function PayerDialog(props: PayerDialogProps) {
   const { mode, orgSlug, open, onOpenChange } = props;
   const payer = mode === "edit" ? props.payer : null;
   const queryClient = useQueryClient();
+
   const form = useZodForm(formSchema, {
     defaultValues: payer
       ? { name: payer.name, type: payer.type, active: payer.active }
@@ -198,6 +199,7 @@ function PayerDialog(props: PayerDialogProps) {
     const mapped = applyOrpcFieldError(form, error, {
       duplicate: { field: "name", message: "Name already in use" },
     });
+
     toast.error(mapped ?? errorMessage(error, "Could not save payer"));
   };
 
@@ -207,12 +209,14 @@ function PayerDialog(props: PayerDialogProps) {
       onError: handleError,
     }),
   );
+
   const update = useMutation(
     orpc.payer.update.mutationOptions({
       onSuccess: () => closeAfterSuccess("Payer updated"),
       onError: handleError,
     }),
   );
+
   const isPending = create.isPending || update.isPending;
 
   const onSubmit = form.handleSubmit((values) => {

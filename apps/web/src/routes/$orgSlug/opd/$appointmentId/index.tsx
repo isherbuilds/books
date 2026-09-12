@@ -44,10 +44,13 @@ function prescriptionMimeType(file: File): string | null {
   if (file.type === "application/pdf" || file.type.startsWith("image/")) {
     return file.type;
   }
+
   if (file.type !== "") {
     return null;
   }
+
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
   return SCAN_EXTENSION_TYPES[extension] ?? null;
 }
 
@@ -68,13 +71,16 @@ function OpdAppointmentDetailRoute() {
   const { record } = useOpdRecord();
   // Cashiers and accountants read the record; attaching a scan needs `opd:update`.
   const canEdit = useCan(orgSlug, { opd: ["update"] });
+
   const settings = useQuery({
     ...orpc.settings.get.queryOptions({ input: { orgSlug } }),
     // The slip is all this tab reads out of settings, so any other setting edit must
     // not redraw the record.
     select: (data) => ({
       legalName: data.legalName,
-      address: data.address,
+      address: [data.addressLine1, data.addressLine2, data.city, data.stateCode, data.pinCode]
+        .filter(Boolean)
+        .join(", "),
       currency: data.currency,
     }),
   });
@@ -86,12 +92,15 @@ function OpdAppointmentDetailRoute() {
   }
 
   const { appointment, customer, practitioner, department, charges, prescriptions } = record;
+
   const consultCharge = charges.find(
     (charge) => charge.revenueCategory === "consultation" && charge.status !== "voided",
   );
+
   const age = customer
     ? `${customerAgeLabel(customer.dateOfBirth, customer.dobEstimated, today)} years`
     : null;
+
   // A booked appointment has no token or customer yet — both arrive at check-in.
   const hasToken = appointment.tokenNumber != null;
 
@@ -175,6 +184,7 @@ function PrescriptionDocuments({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({
@@ -188,11 +198,15 @@ function PrescriptionDocuments({
 
   const upload = async (file: File) => {
     const mimeType = prescriptionMimeType(file);
+
     if (!mimeType) {
       toast.error("Only image or PDF scans can be attached");
+
       return;
     }
+
     setUploading(true);
+
     try {
       const fileId = await uploadOrgFile(orgSlug, file, mimeType);
       await orpc.opd.attachPrescription.call({ orgSlug, appointmentId, fileId });
@@ -201,6 +215,7 @@ function PrescriptionDocuments({
     } catch (error) {
       toast.error(errorMessage(error, "Could not attach prescription scan"));
     }
+
     setUploading(false);
   };
 
@@ -214,6 +229,7 @@ function PrescriptionDocuments({
 
   const remove = async (attachmentId: string) => {
     setRemovingId(attachmentId);
+
     try {
       await orpc.opd.detachPrescription.call({ orgSlug, attachmentId });
       await refresh();
@@ -221,6 +237,7 @@ function PrescriptionDocuments({
     } catch (error) {
       toast.error(errorMessage(error, "Could not remove prescription scan"));
     }
+
     setRemovingId(null);
   };
 
@@ -238,6 +255,7 @@ function PrescriptionDocuments({
               className="sr-only"
               onChange={(event) => {
                 const file = event.target.files?.[0];
+
                 if (file) void upload(file);
                 event.target.value = "";
               }}

@@ -192,7 +192,8 @@ export function FilterGroup<T extends string>({
       spacing={1}
       className="bg-muted p-0.5"
       onValueChange={(next) => {
-        const nextValue = next[0] as T | undefined;
+        const nextValue = options.find((option) => option.value === next[0])?.value;
+
         if (nextValue !== undefined) onValueChange(nextValue);
       }}
     >
@@ -221,7 +222,11 @@ export function FilterSelect<T extends string>({
     <NativeSelect
       aria-label={label}
       value={value}
-      onChange={(event) => onValueChange(event.target.value as T)}
+      onChange={(event) => {
+        const selected = options.find((option) => option.value === event.target.value);
+
+        if (selected) onValueChange(selected.value);
+      }}
       className="w-44"
     >
       {options.map((option) => (
@@ -293,7 +298,7 @@ export function ListState({
     isPending: boolean;
     isError: boolean;
     error: unknown;
-    refetch: () => unknown;
+    refetch: () => void;
   };
   errorTitle: string;
   /** Explicit, so a message can never paint over real rows. */
@@ -327,7 +332,7 @@ export function LoadMore({
     isError: boolean;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
-    fetchNextPage: () => unknown;
+    fetchNextPage: () => void;
   };
   shown: number;
 }) {

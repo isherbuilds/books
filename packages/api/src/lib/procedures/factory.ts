@@ -14,9 +14,16 @@ export type Scope = {
   roles: RoleKey[];
 };
 
-// Not exported: every procedure goes through `orgProcedure`, which cannot be
-// constructed without stating a permission.
+// Not exported: every procedure goes through an explicit authentication boundary.
 const base = os.$context<ORPCContext>();
+
+export const sessionProcedure = base.use(async ({ context, next }) => {
+  if (!context.session) {
+    throw new ORPCError("UNAUTHORIZED", { message: "Sign in to continue." });
+  }
+
+  return next({ context: { session: context.session } });
+});
 
 // The unverified claim, named by the page URL. Safe to key authorization on only
 // because slug changes are rejected after creation. Handlers scope on
@@ -31,6 +38,7 @@ async function resolveMembership(
   orgSlug: string,
 ): Promise<OrgMembership | null> {
   const memoized = context.memberships.get(orgSlug);
+
   if (memoized) {
     return memoized;
   }
@@ -46,6 +54,7 @@ async function resolveMembership(
     .then(([row]) => (row ? { orgId: row.orgId, roles: parseRoles(row.role) } : null));
 
   context.memberships.set(orgSlug, pending);
+
   return pending;
 }
 
@@ -75,6 +84,7 @@ async function authorizeOrg(
   }
 
   const { orgId, roles } = membership;
+
   if (!authorize(roles, permission)) {
     audit({
       action: "rbac.permission",
@@ -95,5 +105,6 @@ export const orgProcedure = <TSchema extends z.ZodType<{ orgSlug: string }, unkn
 ) =>
   base.input(input).use(async ({ context, next }, { orgSlug }: { orgSlug: string }) => {
     const scope = await authorizeOrg(context, orgSlug, permission);
+
     return next({ context: { scope } });
   });

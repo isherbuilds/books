@@ -1,4 +1,4 @@
-import { toPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import { Separator } from "@accly/ui/components/separator";
 import { type ReactNode } from "react";
 
@@ -13,6 +13,7 @@ export function FinancialSummary({
   discountRow?: ReactNode;
 }) {
   const { currency } = quote;
+
   return (
     <dl className="grid gap-2">
       <div className="flex justify-between">
@@ -20,7 +21,7 @@ export function FinancialSummary({
         <dd className="tabular-nums">{formatMoney(quote.subtotal, currency)}</dd>
       </div>
       {discountRow ??
-        (toPaise(quote.discountAmount) > 0 ? (
+        (parseMoney(quote.discountAmount) > 0n ? (
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Discount</dt>
             <dd className="tabular-nums">-{formatMoney(quote.discountAmount, currency)}</dd>

@@ -17,6 +17,7 @@ test("renders stored Devanagari text from application-owned fonts", async () => 
 
 test("an invoice PDF uses its business date and ignores later account activity", async () => {
   const source = billingPdfFixture({ unicode: false });
+
   const afterPayment: InvoiceBundle = {
     ...source,
     invoice: {
@@ -53,6 +54,7 @@ test("an invoice PDF uses its business date and ignores later account activity",
     documentId: null,
     layout: "a4",
   });
+
   const after = await renderBillingPdf({
     kind: "invoice",
     data: afterPayment,
@@ -65,6 +67,7 @@ test("an invoice PDF uses its business date and ignores later account activity",
 
 test("a receipt PDF does not change when later account activity changes", async () => {
   const source = billingPdfFixture({ unicode: false });
+
   const payment: InvoiceBundle["payments"][number] = {
     id: "payment-1",
     orgId: "org-1",
@@ -78,12 +81,14 @@ test("a receipt PDF does not change when later account activity changes", async 
     receivedBy: "user-1",
     createdAt: new Date("2026-08-27T10:30:00.000Z"),
   };
-  const issued = {
+
+  const issued: InvoiceBundle = {
     ...source,
     payments: [payment],
     balance: { ...source.balance, paymentsTotal: "50.00", outstanding: "68.00" },
   };
-  const later = {
+
+  const later: InvoiceBundle = {
     ...issued,
     payments: [
       payment,
@@ -98,6 +103,7 @@ test("a receipt PDF does not change when later account activity changes", async 
     documentId: payment.id,
     layout: "a4",
   });
+
   const after = await renderBillingPdf({
     kind: "receipt",
     data: later,

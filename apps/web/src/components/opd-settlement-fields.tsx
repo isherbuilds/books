@@ -1,4 +1,4 @@
-import { fromPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   Field,
@@ -49,7 +49,7 @@ export function SettlementFields({
   note: string;
   payments: PaymentLineValue[];
   pending: boolean;
-  due: number;
+  due: bigint;
   problems: SettlementProblem[];
   onDiscountChange: (value: string) => void;
   onNoteChange: (value: string) => void;
@@ -59,19 +59,21 @@ export function SettlementFields({
     onPaymentsChange(
       payments.map((payment) => (payment.id === id ? { ...payment, ...patch } : payment)),
     );
+
   const remaining = due - collectedPaise(payments);
   const overCollected = loudProblem(problems, "over-collected");
   const discountProblem = loudProblem(problems, "discount");
   const noteProblem = loudProblem(problems, "note");
-  const reasonRequired = remaining > 0 || (parseMoneyInput(discount.trim() || "0") ?? 0) > 0;
+  const reasonRequired = remaining > 0n || (parseMoneyInput(discount.trim() || "0") ?? 0n) > 0n;
 
   const allocateRest = () => {
     const last = payments[payments.length - 1];
+
     if (!last) return onPaymentsChange([nextPaymentLine(payments, remaining)]);
     onPaymentsChange(
       payments.map((payment) =>
         payment.id === last.id
-          ? { ...payment, amount: fromPaise((amountOf(payment) ?? 0) + remaining) }
+          ? { ...payment, amount: formatDecimal((amountOf(payment) ?? 0n) + remaining) }
           : payment,
       ),
     );
@@ -117,7 +119,8 @@ export function SettlementFields({
             {payments.map((payment, index) => {
               const amountProblem = loudProblem(problems, `amount:${payment.id}`);
               const referenceProblem = loudProblem(problems, `reference:${payment.id}`);
-              const referenceRequired = (amountOf(payment) ?? 0) > 0;
+              const referenceRequired = (amountOf(payment) ?? 0n) > 0n;
+
               return (
                 <PaymentLine
                   key={payment.id}
@@ -136,9 +139,10 @@ export function SettlementFields({
                         aria-label={`Payment ${index + 1} method`}
                         value={payment.method}
                         disabled={pending}
-                        onChange={(event) =>
-                          replace(payment.id, { method: event.target.value as PaymentMethod })
-                        }
+                        onChange={(event) => {
+                          // SAFETY: every option below is a PaymentMethod from PAYMENT_METHODS.
+                          replace(payment.id, { method: event.target.value as PaymentMethod });
+                        }}
                       >
                         {PAYMENT_METHODS.map((method) => (
                           <option key={method} value={method}>

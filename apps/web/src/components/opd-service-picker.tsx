@@ -51,6 +51,7 @@ export function ServicePicker({
     }),
     enabled: searching,
   });
+
   const results = (itemSearch.data ?? []).filter((item) => !chosen.has(item.id));
 
   const renderMatch = (item: (typeof results)[number]) => (

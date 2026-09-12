@@ -1,3 +1,4 @@
+import { parseMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import {
   Table,
@@ -101,31 +102,37 @@ function BillingIndexRoute() {
     ...worklistQuery(orgSlug, query),
     ...OPERATIONAL_REFETCH,
   });
+
   const invoices = useInfiniteQuery({
     ...openInvoicesQuery(orgSlug, query, facet === "overdue"),
     ...OPERATIONAL_INFINITE_REFETCH,
     enabled: facet !== "to-bill",
   });
+
   const refunds = useQuery({
     ...orpc.billing.refundDue.queryOptions({
       input: { orgSlug, query: query || undefined },
     }),
     ...OPERATIONAL_REFETCH,
   });
+
   const refundData = refunds.data;
 
   const invoiceRows =
     facet === "to-bill" ? [] : (invoices.data?.pages.flatMap((page) => page.items) ?? []);
+
   const rows = toWorklistRows(
     facet === "all" || facet === "to-bill" ? (worklist.data?.unbilled ?? []) : [],
     invoiceRows,
     currency,
   );
+
   // The sheet holds a key, not a row, so it always shows what the list shows.
   const openRow = rows.find((row) => row.key === openRowKey) ?? null;
 
   const pending = worklist.isPending || (facet !== "to-bill" && invoices.isPending);
   const failure = worklist.error ?? (facet !== "to-bill" ? invoices.error : null);
+
   // ListState receives one read state because this list combines two queries.
   const listQuery = {
     isPending: pending,
@@ -134,6 +141,7 @@ function BillingIndexRoute() {
     refetch: () =>
       Promise.all([worklist.refetch(), ...(facet === "to-bill" ? [] : [invoices.refetch()])]),
   };
+
   const summary = worklist.data?.summary;
 
   return (
@@ -166,7 +174,7 @@ function BillingIndexRoute() {
               label="Over 30 days"
               value={formatMoney(summary.staleTotal, currency)}
               detail={`${summary.staleCount} nobody has chased`}
-              alarm={Number(summary.staleTotal) > 0}
+              alarm={parseMoney(summary.staleTotal) > 0n}
             />
           </Panel>
         ) : null}
@@ -452,7 +460,10 @@ function Stat({
 
 function StateBadge({ state }: { state: WorklistRow["state"] }) {
   if (state === "to-bill") return <Badge variant="pending">To bill</Badge>;
+
   if (state === "stale") return <Badge variant="destructive">Over 30 days</Badge>;
+
   if (state === "late") return <Badge variant="overdue">Over 7 days</Badge>;
+
   return <Badge variant="muted">Unpaid</Badge>;
 }

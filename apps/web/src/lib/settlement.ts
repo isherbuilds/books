@@ -1,4 +1,4 @@
-import { fromPaise, toPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal, parseMoney } from "@accly/api/core/money";
 import { paymentMethod, type PaymentMethod } from "@accly/api/lib/schemas";
 import { z } from "zod";
 
@@ -43,7 +43,7 @@ export const paymentLineFields = z.object({
   amount: z
     .string()
     .regex(MONEY_INPUT_PATTERN, "Amount like 150.00")
-    .refine((value) => (parseMoneyInput(value) ?? 0) > 0, "Enter an amount above zero"),
+    .refine((value) => (parseMoneyInput(value) ?? 0n) > 0n, "Enter an amount above zero"),
   reference: z.string().trim().max(100).optional(),
 });
 
@@ -65,8 +65,8 @@ const paymentLineSchema = paymentLineFields.superRefine(requireTransactionRefere
 export const MAX_PAYMENT_LINES = 4;
 
 /** What the lines add up to. Every collect form weighs this against what is owed. */
-export function collectedPaise(payments: { amount: string }[]): number {
-  return payments.reduce((sum, payment) => sum + (parseMoneyInput(payment.amount) ?? 0), 0);
+export function collectedPaise(payments: { amount: string }[]): bigint {
+  return payments.reduce((sum, payment) => sum + (parseMoneyInput(payment.amount) ?? 0n), 0n);
 }
 
 export const paymentFormSchema = z.object({
@@ -76,14 +76,15 @@ export const paymentFormSchema = z.object({
 /** The next split line: an unused method, pre-filled with whatever is still owed. */
 export function nextPaymentLine(
   payments: Array<{ id: number; method: PaymentMethod }>,
-  remainingPaise: number,
+  remainingPaise: bigint,
 ) {
   const used = new Set(payments.map((payment) => payment.method));
   const method = PAYMENT_METHODS.find((candidate) => !used.has(candidate)) ?? "cash";
+
   return {
     id: Math.max(0, ...payments.map((payment) => payment.id)) + 1,
     method,
-    amount: remainingPaise > 0 ? fromPaise(remainingPaise) : "",
+    amount: remainingPaise > 0n ? formatDecimal(remainingPaise) : "",
     reference: "",
   };
 }
@@ -97,9 +98,10 @@ export type SettlementProblem = {
 };
 
 /** Empty means nothing collected on that line, which is allowed. A typo is not. */
-export function amountOf(payment: PaymentLine): number | null {
+export function amountOf(payment: PaymentLine): bigint | null {
   const trimmed = payment.amount.trim();
-  return trimmed === "" ? 0 : parseMoneyInput(trimmed);
+
+  return trimmed === "" ? 0n : parseMoneyInput(trimmed);
 }
 
 // In the order the desk should deal with them: the first entry is what the blocked
@@ -114,9 +116,9 @@ export function settlementProblems({
   currency,
 }: {
   /** Paise, already net of the discount, as quoted by the server. */
-  due: number;
+  due: bigint;
   /** Paise before discount, from the server-selected service quote. */
-  subtotal: number;
+  subtotal: bigint;
   discount: string;
   note: string;
   payments: PaymentLine[];
@@ -124,11 +126,12 @@ export function settlementProblems({
   currency: string;
 }): SettlementProblem[] {
   const problems: SettlementProblem[] = [];
-  const amount = (paise: number) => formatMoney(fromPaise(paise), currency);
+  const amount = (paise: bigint) => formatMoney(formatDecimal(paise), currency);
 
   // `due` is only refetched for a discount the server would accept, so every rule
   // below measures against a stale figure until this one is fixed. It comes first.
   const normalizedDiscount = discount.trim() || "0";
+
   if (!MONEY_INPUT_PATTERN.test(normalizedDiscount)) {
     return [
       {
@@ -140,7 +143,8 @@ export function settlementProblems({
       },
     ];
   }
-  if (toPaise(normalizedDiscount) > subtotal) {
+
+  if (parseMoney(normalizedDiscount) > subtotal) {
     return [
       {
         key: "discount",
@@ -166,7 +170,9 @@ export function settlementProblems({
 
   for (const [index, payment] of payments.entries()) {
     const collected = amountOf(payment);
-    if (collected === null || collected === 0) continue;
+
+    if (collected === null || collected === 0n) continue;
+
     if (!needsReference(payment.method) || payment.reference.trim() !== "") continue;
     problems.push({
       key: `reference:${payment.id}`,
@@ -177,6 +183,7 @@ export function settlementProblems({
   }
 
   const collecting = collectedPaise(payments);
+
   if (collecting > due) {
     const last = payments[payments.length - 1];
     problems.push({
@@ -189,13 +196,14 @@ export function settlementProblems({
   }
 
   const balance = due - collecting;
-  const discounted = (parseMoneyInput(normalizedDiscount) ?? 0) > 0;
-  if ((balance > 0 || discounted) && note.trim() === "") {
+  const discounted = (parseMoneyInput(normalizedDiscount) ?? 0n) > 0n;
+
+  if ((balance > 0n || discounted) && note.trim() === "") {
     problems.push({
       key: "note",
       fieldId: "settlement-note",
       message:
-        balance > 0
+        balance > 0n
           ? `Add a reason for the ${amount(balance)} balance.`
           : "Add a reason for the discount.",
       quiet: !attempted,

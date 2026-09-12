@@ -1,15 +1,18 @@
 CREATE TABLE "accounts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"org_id" text NOT NULL,
+	"parent_id" text,
 	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"type" text NOT NULL,
 	"system_key" text,
+	"supply_class" text,
 	"active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "accounts_org_id_id_unique" UNIQUE("org_id","id"),
-	CONSTRAINT "accounts_type_check" CHECK ("accounts"."type" in ('asset', 'liability', 'equity', 'income', 'expense'))
+	CONSTRAINT "accounts_type_check" CHECK ("accounts"."type" in ('asset', 'liability', 'equity', 'income', 'expense')),
+	CONSTRAINT "accounts_supply_class_check" CHECK ("accounts"."supply_class" is null or "accounts"."supply_class" in ('taxable', 'exempt', 'nil', 'nonGst', 'notASupply'))
 );
 --> statement-breakpoint
 CREATE TABLE "attachments" (
@@ -118,7 +121,7 @@ CREATE TABLE "charges" (
 	"opd_appointment_id" text NOT NULL,
 	"item_id" text NOT NULL,
 	"description" text NOT NULL,
-	"unit_price" numeric(12, 2) NOT NULL,
+	"unit_price" bigint NOT NULL,
 	"tax_rate_percent" numeric(4, 2) NOT NULL,
 	"tax_code" text,
 	"revenue_category" text NOT NULL,
@@ -152,9 +155,9 @@ CREATE TABLE "credit_note_lines" (
 	"org_id" text NOT NULL,
 	"credit_note_id" text NOT NULL,
 	"invoice_line_id" text NOT NULL,
-	"taxable_value" numeric(12, 2) NOT NULL,
-	"tax_amount" numeric(12, 2) NOT NULL,
-	"gross" numeric(12, 2) NOT NULL
+	"taxable_value" bigint NOT NULL,
+	"tax_amount" bigint NOT NULL,
+	"gross" bigint NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "credit_notes" (
@@ -165,9 +168,9 @@ CREATE TABLE "credit_notes" (
 	"fiscal_year" text NOT NULL,
 	"business_date" date NOT NULL,
 	"reason" text NOT NULL,
-	"subtotal" numeric(12, 2) NOT NULL,
-	"tax_total" numeric(12, 2) NOT NULL,
-	"total" numeric(12, 2) NOT NULL,
+	"subtotal" bigint NOT NULL,
+	"tax_total" bigint NOT NULL,
+	"total" bigint NOT NULL,
 	"issued_by" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "credit_notes_org_id_id_unique" UNIQUE("org_id","id")
@@ -226,23 +229,56 @@ CREATE TABLE "file" (
 --> statement-breakpoint
 CREATE TABLE "organization_settings" (
 	"org_id" text PRIMARY KEY NOT NULL,
+	"legal_type" text NOT NULL,
 	"legal_name" text NOT NULL,
-	"address" text NOT NULL,
-	"tax_id" text NOT NULL,
+	"pan" text NOT NULL,
+	"gstin" text,
+	"state_code" text NOT NULL,
+	"financial_year_start" integer DEFAULT 4 NOT NULL,
+	"advance_tax_treatment" text NOT NULL,
+	"address_line_1" text NOT NULL,
+	"address_line_2" text,
+	"city" text NOT NULL,
+	"pin_code" text NOT NULL,
 	"currency" text NOT NULL,
 	"code_prefix" text NOT NULL,
 	"invoice_prefix" text NOT NULL,
 	"receipt_prefix" text NOT NULL,
 	"credit_note_prefix" text NOT NULL,
-	"fiscal_year_start_month" integer NOT NULL,
 	"time_zone" text DEFAULT 'Asia/Kolkata' NOT NULL,
 	"follow_up_validity_days" integer DEFAULT 14 NOT NULL,
 	"unbilled_alert_hours" integer DEFAULT 24 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "organization_settings_fiscal_month_check" CHECK ("organization_settings"."fiscal_year_start_month" between 1 and 12),
+	CONSTRAINT "organization_settings_legal_type_check" CHECK ("organization_settings"."legal_type" in ('individual', 'proprietorship', 'partnership', 'llp', 'company', 'trust', 'society')),
+	CONSTRAINT "organization_settings_state_code_check" CHECK (char_length("organization_settings"."state_code") = 2),
+	CONSTRAINT "organization_settings_financial_year_start_check" CHECK ("organization_settings"."financial_year_start" between 1 and 12),
+	CONSTRAINT "organization_settings_advance_tax_treatment_check" CHECK ("organization_settings"."advance_tax_treatment" in ('required', 'none')),
 	CONSTRAINT "organization_settings_follow_up_days_check" CHECK ("organization_settings"."follow_up_validity_days" between 1 and 365),
 	CONSTRAINT "organization_settings_unbilled_alert_hours_check" CHECK ("organization_settings"."unbilled_alert_hours" between 1 and 168)
+);
+--> statement-breakpoint
+CREATE TABLE "parties" (
+	"id" text PRIMARY KEY NOT NULL,
+	"org_id" text NOT NULL,
+	"name" text NOT NULL,
+	"normalized_name" text NOT NULL,
+	"roles" text[] NOT NULL,
+	"gstin" text,
+	"pan" text,
+	"address_line_1" text,
+	"address_line_2" text,
+	"city" text,
+	"state_code" text NOT NULL,
+	"pin_code" text,
+	"email" text,
+	"phone" text,
+	"active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "parties_org_id_id_unique" UNIQUE("org_id","id"),
+	CONSTRAINT "parties_roles_check" CHECK ("parties"."roles" <@ array['customer', 'vendor', 'tenant', 'donor', 'employee', 'government']::text[]),
+	CONSTRAINT "parties_state_code_check" CHECK (char_length("parties"."state_code") = 2)
 );
 --> statement-breakpoint
 CREATE TABLE "payers" (
@@ -262,7 +298,7 @@ CREATE TABLE "items" (
 	"name" text NOT NULL,
 	"code" text NOT NULL,
 	"category" text NOT NULL,
-	"unit_price" numeric(12, 2) NOT NULL,
+	"unit_price" bigint NOT NULL,
 	"tax_rate_percent" numeric(4, 2) DEFAULT '0' NOT NULL,
 	"tax_code" text,
 	"active" boolean DEFAULT true NOT NULL,
@@ -330,11 +366,11 @@ CREATE TABLE "invoices" (
 	"invoice_number" text NOT NULL,
 	"fiscal_year" text NOT NULL,
 	"business_date" date NOT NULL,
-	"discount_amount" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"discount_amount" bigint DEFAULT 0 NOT NULL,
 	"note" text,
-	"subtotal" numeric(12, 2) NOT NULL,
-	"tax_total" numeric(12, 2) NOT NULL,
-	"grand_total" numeric(12, 2) NOT NULL,
+	"subtotal" bigint NOT NULL,
+	"tax_total" bigint NOT NULL,
+	"grand_total" bigint NOT NULL,
 	"org_legal_name" text NOT NULL,
 	"org_address" text NOT NULL,
 	"org_tax_id" text NOT NULL,
@@ -361,12 +397,12 @@ CREATE TABLE "invoice_lines" (
 	"charge_id" text NOT NULL,
 	"description" text NOT NULL,
 	"qty" integer NOT NULL,
-	"unit_price" numeric(12, 2) NOT NULL,
-	"line_subtotal" numeric(12, 2) NOT NULL,
-	"allocated_discount" numeric(12, 2) NOT NULL,
-	"taxable_value" numeric(12, 2) NOT NULL,
-	"tax_amount" numeric(12, 2) NOT NULL,
-	"gross" numeric(12, 2) NOT NULL,
+	"unit_price" bigint NOT NULL,
+	"line_subtotal" bigint NOT NULL,
+	"allocated_discount" bigint NOT NULL,
+	"taxable_value" bigint NOT NULL,
+	"tax_amount" bigint NOT NULL,
+	"gross" bigint NOT NULL,
 	"tax_rate_percent" numeric(4, 2) NOT NULL,
 	"tax_code" text,
 	"revenue_category" text NOT NULL,
@@ -379,7 +415,7 @@ CREATE TABLE "payments" (
 	"org_id" text NOT NULL,
 	"invoice_id" text NOT NULL,
 	"method" text NOT NULL,
-	"amount" numeric(12, 2) NOT NULL,
+	"amount" bigint NOT NULL,
 	"reference" text,
 	"receipt_number" text NOT NULL,
 	"fiscal_year" text NOT NULL,
@@ -396,7 +432,7 @@ CREATE TABLE "refunds" (
 	"invoice_id" text NOT NULL,
 	"credit_note_id" text NOT NULL,
 	"method" text NOT NULL,
-	"amount" numeric(12, 2) NOT NULL,
+	"amount" bigint NOT NULL,
 	"reference" text,
 	"refund_number" text NOT NULL,
 	"fiscal_year" text NOT NULL,
@@ -424,14 +460,15 @@ CREATE TABLE "journal_lines" (
 	"org_id" text NOT NULL,
 	"entry_id" text NOT NULL,
 	"account_id" text NOT NULL,
-	"debit" numeric(12, 2) DEFAULT '0' NOT NULL,
-	"credit" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"debit" bigint DEFAULT 0 NOT NULL,
+	"credit" bigint DEFAULT 0 NOT NULL,
 	CONSTRAINT "journal_lines_debit_check" CHECK ("journal_lines"."debit" >= 0),
 	CONSTRAINT "journal_lines_credit_check" CHECK ("journal_lines"."credit" >= 0),
 	CONSTRAINT "journal_lines_one_side_check" CHECK (("journal_lines"."debit" = 0) <> ("journal_lines"."credit" = 0))
 );
 --> statement-breakpoint
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_parent_fk" FOREIGN KEY ("org_id","parent_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_org_id_file_id_file_org_id_id_fk" FOREIGN KEY ("org_id","file_id") REFERENCES "public"."file"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -463,6 +500,7 @@ ALTER TABLE "departments" ADD CONSTRAINT "departments_org_id_default_consult_fee
 ALTER TABLE "file" ADD CONSTRAINT "file_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "file" ADD CONSTRAINT "file_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "organization_settings" ADD CONSTRAINT "organization_settings_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "parties" ADD CONSTRAINT "parties_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payers" ADD CONSTRAINT "payers_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "practitioners" ADD CONSTRAINT "practitioners_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -519,9 +557,12 @@ CREATE INDEX "credit_notes_org_business_date_idx" ON "credit_notes" USING btree 
 CREATE UNIQUE INDEX "customer_payers_org_customer_idx" ON "customer_payers" USING btree ("org_id","customer_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "customers_org_code_idx" ON "customers" USING btree ("org_id","code");--> statement-breakpoint
 CREATE UNIQUE INDEX "customers_org_uid_idx" ON "customers" USING btree ("org_id","uid") WHERE "customers"."uid" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "departments_org_name_idx" ON "departments" USING btree ("org_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "departments_org_name_idx" ON "departments" USING btree ("org_id",lower("name"));--> statement-breakpoint
 CREATE INDEX "file_org_created_idx" ON "file" USING btree ("org_id","created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST);--> statement-breakpoint
-CREATE UNIQUE INDEX "payers_org_name_idx" ON "payers" USING btree ("org_id","name");--> statement-breakpoint
+CREATE INDEX "parties_org_normalized_name_idx" ON "parties" USING btree ("org_id","normalized_name");--> statement-breakpoint
+CREATE INDEX "parties_org_name_idx" ON "parties" USING btree ("org_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "parties_org_gstin_idx" ON "parties" USING btree ("org_id","gstin") WHERE "parties"."gstin" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "payers_org_name_idx" ON "payers" USING btree ("org_id",lower("name"));--> statement-breakpoint
 CREATE UNIQUE INDEX "items_org_code_idx" ON "items" USING btree ("org_id","code");--> statement-breakpoint
 CREATE INDEX "items_org_category_name_idx" ON "items" USING btree ("org_id","category","name");--> statement-breakpoint
 CREATE INDEX "items_org_name_idx" ON "items" USING btree ("org_id","name");--> statement-breakpoint

@@ -1,3 +1,4 @@
+import { parseMoney } from "@accly/api/core/money";
 import { buttonVariants } from "@accly/ui/components/button";
 import {
   Table,
@@ -51,6 +52,7 @@ function VisitPanel({
   if (detail.isPending) {
     return <p className="text-muted-foreground">Loading visit…</p>;
   }
+
   if (detail.isError) {
     return <ErrorNote title="Could not load this visit" error={detail.error} />;
   }
@@ -161,7 +163,7 @@ function VisitAccordionRow({
   currency: string;
 }) {
   const [open, setOpen] = useState(false);
-  const due = Number(visit.outstanding) !== 0;
+  const due = parseMoney(visit.outstanding) !== 0n;
 
   return (
     <div className="border-b border-border/60 last:border-b-0">

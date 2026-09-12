@@ -1,4 +1,4 @@
-import { toSignedPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import { authorize, type AppPermission } from "@accly/auth/access";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import { cn } from "@accly/ui/lib/utils";
@@ -27,8 +27,6 @@ const TABS = [
   { id: "visits", label: "Visits", permission: { opd: ["read"] } },
   { id: "billing", label: "Billing", permission: { billing: ["read"] } },
 ] as const satisfies readonly { id: string; label: string; permission: AppPermission }[];
-
-type TabId = (typeof TABS)[number]["id"];
 
 export const Route = createFileRoute("/$orgSlug/customers/$customerId")({
   // Every open editor and expanded visit belongs to the record above it, so customer A
@@ -63,7 +61,7 @@ function PinnedFacts({
   currency: string;
 }) {
   const outstanding = account?.outstanding;
-  const owes = outstanding !== undefined && toSignedPaise(outstanding) !== 0;
+  const owes = outstanding !== undefined && parseMoney(outstanding) !== 0n;
 
   return (
     <div className="shrink-0 border-b border-border bg-card px-3 py-3 lg:px-6">
@@ -81,7 +79,7 @@ function PinnedFacts({
               numbers belong beside the Edit button that changes them. */}
           {record.sponsor ? (
             <p className="truncate text-xs text-muted-foreground">
-              Sponsor: {record.sponsor.payerName}
+              Sponsor: <span>{record.sponsor.payerName}</span>
             </p>
           ) : null}
         </div>
@@ -145,7 +143,9 @@ function RecordTab({
           <Row label="Code">
             <span className="font-mono text-muted-foreground">{record.code}</span>
           </Row>
-          <Row label="Name">{record.name}</Row>
+          <Row label="Name">
+            <span>{record.name}</span>
+          </Row>
           <Row label="Phone">
             <span className="font-mono tabular-nums">{record.phone}</span>
           </Row>
@@ -169,7 +169,8 @@ function RecordTab({
           <Row label="Sponsor">
             {record.sponsor ? (
               <>
-                {record.sponsor.payerName} ({PAYER_TYPE_LABELS[record.sponsor.payerType]})
+                <span>{record.sponsor.payerName}</span> (
+                {PAYER_TYPE_LABELS[record.sponsor.payerType]})
               </>
             ) : (
               <Empty>Self-paying</Empty>
@@ -215,7 +216,7 @@ function CustomerRecordSections({
   accountError: Error | null;
 }) {
   const { tab } = Route.useSearch();
-  const active: TabId = visible.some((entry) => entry.id === tab) ? (tab as TabId) : "record";
+  const active = visible.find((entry) => entry.id === tab)?.id ?? "record";
 
   return (
     <>
@@ -256,22 +257,27 @@ function CustomerRecordSections({
 function CustomerDetailRoute() {
   const { orgSlug, customerId } = Route.useParams();
   const { today } = useOrgDateTime();
+
   // The loader awaited this and turns a missing customer into a 404, so it is present
   // here — a `useQuery` beside it would only add branches that never run.
   const record = useSuspenseQuery(
     orpc.customer.get.queryOptions({ input: { orgSlug, customerId } }),
   ).data;
+
   const { roles, currency } = useMembership(orgSlug);
   const canReadCustomer = authorize(roles, { customer: ["read"] });
   const canReadVisits = authorize(roles, { opd: ["read"] });
   const canReadBilling = authorize(roles, { billing: ["read"] });
+
   const visible = TABS.filter(({ id }) =>
     id === "record" ? canReadCustomer : id === "visits" ? canReadVisits : canReadBilling,
   );
+
   const account = useQuery({
     ...orpc.customer.account.queryOptions({ input: { orgSlug, customerId } }),
     enabled: canReadBilling,
   });
+
   const ageLabel = customerAgeLabel(record.dateOfBirth, record.dobEstimated, today);
 
   return (

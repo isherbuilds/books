@@ -25,7 +25,9 @@ initLogger({
 });
 
 const isProduction = env.NODE_ENV === "production";
+
 export const app = new Hono<EvlogVariables>();
+
 app.use(
   "/*",
   secureHeaders({
@@ -61,6 +63,7 @@ app.use(
     drain: isProduction ? undefined : createFsDrain(),
   }),
 );
+
 app.use(
   "/*",
   cors({
@@ -72,6 +75,7 @@ app.use(
     maxAge: 86400,
   }),
 );
+
 app.use("/*", compress());
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -81,6 +85,7 @@ async function createLoggedRequestContext(
 ): Promise<ORPCContext> {
   const startedAt = Date.now();
   const requestContext = await createRequestContext(context.req.raw.headers);
+
   const identified = requestContext.session
     ? identifyUser(context.get("log"), requestContext.session, {
         maskEmail: true,
@@ -100,6 +105,7 @@ function logORPCError(error: unknown): void {
   if (error instanceof ORPCError && error.status < 500) {
     return;
   }
+
   console.error(error);
 }
 
@@ -114,8 +120,10 @@ const rpcHandler = new RPCHandler(appRouter, {
 
 // Reject oversized requests before session resolution.
 app.use("/rpc/*", procedureBodyLimit);
+
 app.use("/rpc/*", async (c) => {
   const context = await createLoggedRequestContext(c);
+
   const result = await rpcHandler.handle(c.req.raw, {
     prefix: "/rpc",
     context,
@@ -141,6 +149,7 @@ if (!isProduction) {
   app.use("/api-reference/*", procedureBodyLimit);
   app.use("/api-reference/*", async (c) => {
     const context = await createLoggedRequestContext(c);
+
     const result = await apiHandler.handle(c.req.raw, {
       prefix: "/api-reference",
       context,
@@ -161,8 +170,10 @@ app.get("/", async (c) => {
     await db.execute(sql`select 1`);
   } catch (error) {
     console.error("health check failed", error);
+
     return c.text("UNAVAILABLE", 503);
   }
+
   return c.text("OK");
 });
 

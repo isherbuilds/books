@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -37,7 +38,7 @@ export const items = pgTable(
     name: text("name").notNull(),
     code: text("code").notNull(),
     category: text("category", { enum: ITEM_CATEGORIES }).notNull(),
-    unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+    unitPrice: bigint("unit_price", { mode: "bigint" }).notNull(),
     // The single stored rate; the CGST/SGST split is display-time.
     taxRatePercent: numeric("tax_rate_percent", { precision: 4, scale: 2 }).notNull().default("0"),
     taxCode: text("tax_code"),

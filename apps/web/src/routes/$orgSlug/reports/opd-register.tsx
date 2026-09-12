@@ -44,11 +44,13 @@ export const Route = createFileRoute("/$orgSlug/reports/opd-register")({
       { report: ["readOpdRegister"] },
       "/$orgSlug/dashboard",
     );
+
     const fallback = defaultRange(timeZone);
     const range = { from: deps.from ?? fallback.from, to: deps.to ?? fallback.to };
     await loadRouteQuery(
       queryClient.query(orpc.report.opdRegister.queryOptions({ input: { orgSlug, ...range } })),
     );
+
     return range;
   },
   component: OpdRegisterRoute,

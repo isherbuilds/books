@@ -26,6 +26,7 @@ type NavEntry<Route extends string> = {
 };
 
 export const NAV_GROUPS = ["Sales", "Finance", "Workspace"] as const;
+
 type NavGroup = (typeof NAV_GROUPS)[number];
 
 type PrimaryNavItem = NavEntry<

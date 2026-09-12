@@ -1,4 +1,4 @@
-import { toSignedPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import { authorize } from "@accly/auth/access";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
@@ -48,6 +48,7 @@ function DayStepper({
   const shift = (days: number) => {
     const next = new Date(`${date}T00:00:00Z`);
     next.setUTCDate(next.getUTCDate() + days);
+
     return next.toISOString().slice(0, 10);
   };
 
@@ -184,10 +185,12 @@ function OpdAppointments({ orgSlug, search }: { orgSlug: string; search: string 
   const { timeZone, today } = useOrgDateTime();
   const currency = useMembership(orgSlug, (membership) => membership.currency);
   const shownDate = date ?? today;
+
   const day = useInfiniteQuery({
     ...dayQuery(orgSlug, date, search, includeClosed ?? false),
     ...OPERATIONAL_INFINITE_REFETCH,
   });
+
   const items = day.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
@@ -286,7 +289,7 @@ function OpdAppointments({ orgSlug, search }: { orgSlug: string; search: string 
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      {toSignedPaise(appointment.balanceDue) > 0 ? (
+                      {parseMoney(appointment.balanceDue) > 0n ? (
                         <Badge variant="destructive">
                           {formatMoney(appointment.balanceDue, currency)} due
                         </Badge>
@@ -325,7 +328,7 @@ function OpdAppointments({ orgSlug, search }: { orgSlug: string; search: string 
                       {" · "}
                       {appointment.practitionerName}
                     </span>
-                    {toSignedPaise(appointment.balanceDue) > 0 ? (
+                    {parseMoney(appointment.balanceDue) > 0n ? (
                       <span className="mt-1 block font-medium text-destructive">
                         {formatMoney(appointment.balanceDue, currency)} due
                       </span>
@@ -402,9 +405,11 @@ function OpdHeader({ orgSlug }: { orgSlug: string }) {
   const navigate = useNavigate();
   const { today } = useOrgDateTime();
   const roles = useMembership(orgSlug, (membership) => membership.roles);
+
   // Registering the customer is part of the same intake, so both grants are required.
   const canCreateOpdAppointments =
     authorize(roles, { opd: ["create"] }) && authorize(roles, { customer: ["read"] });
+
   const shownDate = date ?? today;
 
   return (

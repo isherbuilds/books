@@ -41,6 +41,7 @@ export type OpdAppointmentStatus = keyof typeof OPD_STATUS_LABELS;
 export function OpdAppointmentStatusBadge({ status }: { status: OpdAppointmentStatus }) {
   const variant =
     status === "checked_in" ? "secondary" : status === "cancelled" ? "destructive" : "muted";
+
   return <Badge variant={variant}>{OPD_STATUS_LABELS[status]}</Badge>;
 }
 
@@ -53,6 +54,7 @@ export function useOpdCheckIn(orgSlug: string) {
     orpc.opd.checkIn.mutationOptions({
       onSuccess: ({ appointment }) => {
         toast.success(`Checked in · Token ${appointment.tokenNumber}`);
+
         return invalidateOpdAppointmentState(queryClient, orgSlug, appointment.id, "checkIn");
       },
       onError: (error, variables) => onOpdError(variables.appointmentId, "checkIn", error),
@@ -65,10 +67,12 @@ export function useOpdStatusActions(orgSlug: string) {
   const onOpdError = useOpdErrorToast(orgSlug);
 
   const checkIn = useOpdCheckIn(orgSlug);
+
   const markNoShow = useMutation(
     orpc.opd.markNoShow.mutationOptions({
       onSuccess: (appointment) => {
         toast.success("Marked as no show");
+
         return invalidateOpdAppointmentState(queryClient, orgSlug, appointment.id, "noShow");
       },
       onError: (error, variables) => onOpdError(variables.appointmentId, "noShow", error),
@@ -94,6 +98,7 @@ export function CancelOpdAppointmentDialog({
   const queryClient = useQueryClient();
   const onOpdError = useOpdErrorToast(orgSlug);
   const form = useZodForm(cancelSchema, { defaultValues: { cancelReason: "" } });
+
   const cancel = useMutation(
     orpc.opd.cancel.mutationOptions({
       onSuccess: async () => {
@@ -104,10 +109,12 @@ export function CancelOpdAppointmentDialog({
       },
       onError: (error) => {
         if (hasErrorCode(error, "CONFLICT")) onClose();
+
         return onOpdError(appointmentId, "cancel", error);
       },
     }),
   );
+
   const submit = form.handleSubmit(({ cancelReason }) => {
     cancel.mutate({ orgSlug, appointmentId, reason: cancelReason });
   });

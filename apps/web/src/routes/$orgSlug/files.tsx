@@ -68,6 +68,7 @@ function FilesRoute() {
 
   const upload = async (file: File) => {
     setUploading(file.name);
+
     // Cleared after the catch, not in a `finally`: React Compiler cannot lower one, and
     // it would leave this whole component unmemoized.
     try {
@@ -77,6 +78,7 @@ function FilesRoute() {
     } catch (error) {
       toast.error(errorMessage(error, "Upload failed"));
     }
+
     setUploading(null);
   };
 
@@ -114,9 +116,11 @@ function FilesRoute() {
                 className="sr-only"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
+
                   if (file) {
                     upload(file);
                   }
+
                   event.target.value = "";
                 }}
               />

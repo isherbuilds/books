@@ -6,7 +6,8 @@
     "target": "ES2022",
     "jsx": "react-jsx",
     "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // Only the Intl typings from ES2023: Vite's browser targets predate the rest of it.
+    "lib": ["ES2022", "ES2023.Intl", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
 
     /* Bundler mode */

@@ -12,6 +12,7 @@
   "dependencies": {
     "@accly/auth": "workspace:*",
     "@accly/db": "workspace:*",
+    "@accly/env": "workspace:*",
     "@accly/storage": "workspace:*",
     "@orpc/server": "catalog:",
     "@types/pg": "catalog:",

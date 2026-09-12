@@ -32,7 +32,7 @@ test("settings are scoped by explicit input: defaults until saved, then the save
 
   const fresh = await api.settings.get({ orgSlug: organization.slug });
   expect(fresh.currency).toBe("INR");
-  expect(fresh.legalName).toBe("");
+  expect(fresh.legalName).toBe("settings-pages");
 
   await expectORPCCode(
     api.settings.update({ orgSlug: organization.slug, ...fresh, currency: "USD" }),
@@ -45,19 +45,30 @@ test("settings are scoped by explicit input: defaults until saved, then the save
     legalName: "Settings Pages Business Pvt. Ltd.",
     invoicePrefix: "SPH",
   });
+
   expect(saved.legalName).toBe("Settings Pages Business Pvt. Ltd.");
   expect(saved.currency).toBe("INR");
 
   expect(await api.settings.get({ orgSlug: organization.slug })).toEqual(saved);
   await expectORPCCode(
-    api.settings.update({ orgSlug: organization.slug, ...saved, currency: "EUR" }),
+    api.settings.update({
+      orgSlug: organization.slug,
+      ...saved,
+      currency: "EUR",
+      legalName: "Must not be saved",
+      invoicePrefix: "NO",
+    }),
     "CONFLICT",
   );
 
+  expect(await api.settings.get({ orgSlug: organization.slug })).toEqual(saved);
+
   const entry = await eventually(async () => {
     const audit = await api.audit.list({ orgSlug: organization.slug });
+
     return audit.items.find((item) => item.action === "settings.update");
   });
+
   expect(entry.actorId).toBe(owner.user.id);
   expect(entry.orgId).toBe(organization.id);
 });
@@ -78,7 +89,7 @@ test("settings are invisible across orgs, and a foreign org is FORBIDDEN", async
   const bobClient = clientFor(bob);
 
   const visible = await bobClient.settings.get({ orgSlug: beta.slug });
-  expect(visible.legalName).toBe("");
+  expect(visible.legalName).toBe("beta");
 
   await bobClient.settings.update({ orgSlug: beta.slug, ...visible, legalName: "beta public" });
   const alphaAfter = await aliceClient.settings.get({ orgSlug: alpha.slug });
@@ -118,6 +129,7 @@ test("one client can work in different orgs concurrently", async () => {
       .get({ orgSlug: two.slug })
       .then((s) => api.settings.update({ orgSlug: two.slug, ...s, legalName: "from tab two" })),
   ]);
+
   expect(inOne.legalName).toBe("from tab one");
   expect(inTwo.legalName).toBe("from tab two");
 
@@ -147,22 +159,27 @@ test("today's queue and collections are scoped, concurrent, and revoke with memb
     dobEstimated: true,
     address: "Today Address",
   });
+
   const department = await api.staff.createDepartment({ orgSlug: one.slug, name: "Today Dept" });
+
   const practitioner = await api.staff.createPractitioner({
     orgSlug: one.slug,
     name: "Dr. Today",
     departmentId: department.id,
   });
+
   const booked = await api.opd.book({
     orgSlug: one.slug,
     customerId: customer.id,
     practitionerId: practitioner.id,
     scheduledLocal: "2030-03-15T10:30",
   });
+
   const { appointment } = await api.opd.checkIn({
     orgSlug: one.slug,
     appointmentId: booked.id,
   });
+
   const consult = await api.item.create({
     orgSlug: one.slug,
     name: "Consultation",
@@ -171,12 +188,14 @@ test("today's queue and collections are scoped, concurrent, and revoke with memb
     unitPrice: "500.00",
     taxRatePercent: "0",
   });
+
   const charge = await addPendingItemCharge({
     orgId: one.id,
     userId: owner.user.id,
     appointmentId: appointment.id,
     itemId: consult.id,
   });
+
   await db
     .update(charges)
     .set({ createdAt: new Date(Date.now() - 2 * 3_600_000) })
@@ -194,8 +213,8 @@ test("today's queue and collections are scoped, concurrent, and revoke with memb
   expect(todayTwo.checkedIn).toBe(0);
   expect(todayTwo.mix).toEqual([]);
 
-  expect(Number(moneyOne.unbilled)).toBe(500);
-  expect(Number(moneyTwo.unbilled)).toBe(0);
+  expect(moneyOne.unbilled).toBe("500.00");
+  expect(moneyTwo.unbilled).toBe("0.00");
 
   const outsiderApi = clientFor(outsider);
   await expectORPCCode(outsiderApi.dashboard.today({ orgSlug: one.slug }), "FORBIDDEN");
@@ -218,15 +237,19 @@ test("plain members are denied audit:read, the denial is recorded, and admins se
   await expectORPCCode(clientFor(member).audit.list({ orgSlug: organization.slug }), "FORBIDDEN");
 
   const ownerClient = clientFor(owner);
+
   const denial = await eventually(async () => {
     const audit = await ownerClient.audit.list({ orgSlug: organization.slug });
+
     for (const entry of audit.items) {
       expect(entry.orgId).toBe(organization.id);
     }
+
     return audit.items.find(
       (entry) => entry.action === "rbac.permission" && entry.actorId === member.user.id,
     );
   });
+
   expect(denial.denied).toBe(true);
 });
 
@@ -255,6 +278,7 @@ test("settings writes are admin-gated while reads are org-wide", async () => {
     ...seen,
     legalName: "now allowed",
   });
+
   expect(saved.legalName).toBe("now allowed");
 });
 
@@ -263,10 +287,14 @@ test("the audit trail pages by a stable tenant-scoped cursor", async () => {
   const organization = await createOrganization(owner, "audit-pages");
   const api = clientFor(owner);
 
-  const base = await api.settings.get({ orgSlug: organization.slug });
-  for (const legalName of ["one", "two", "three"]) {
-    await api.settings.update({ orgSlug: organization.slug, ...base, legalName });
+  for (const index of [1, 2, 3]) {
+    await api.member.invite({
+      orgSlug: organization.slug,
+      email: `audit-page-${index}-${uniqueSuffix()}@example.com`,
+      role: "reception",
+    });
   }
+
   await drainAuditWrites();
 
   const first = await api.audit.list({ orgSlug: organization.slug, limit: 2 });
@@ -278,6 +306,7 @@ test("the audit trail pages by a stable tenant-scoped cursor", async () => {
     limit: 2,
     cursor: first.nextCursor!,
   });
+
   expect(second.items).toHaveLength(1);
   const firstIds = first.items.map((entry) => entry.id);
   expect(firstIds).not.toContain(second.items[0]!.id);
@@ -296,6 +325,7 @@ test("a member,admin holder gets the union of both roles' permissions", async ()
   const membership = await clientFor(owner).member.list({
     orgSlug: organization.slug,
   });
+
   const row = membership.members.find((m) => m.userId === person.user.id);
   expect(row).toBeDefined();
 
@@ -304,10 +334,12 @@ test("a member,admin holder gets the union of both roles' permissions", async ()
   // Reading only the first stored role would leave this denied.
   const ownDenial = await eventually(async () => {
     const audit = await personClient.audit.list({ orgSlug: organization.slug });
+
     return audit.items.find(
       (entry) => entry.action === "rbac.permission" && entry.actorId === person.user.id,
     );
   });
+
   expect(ownDenial.orgId).toBe(organization.id);
   expect(ownDenial.denied).toBe(true);
 });
@@ -349,6 +381,26 @@ test("an unknown slug is FORBIDDEN, not NOT_FOUND — existence never leaks", as
 // Compared against `appRouter` below, so a new procedure that is not listed here
 // fails the suite rather than going uncovered.
 const GUARDED_CALLS = {
+  "organization.getProfile": (api, claim) => api.organization.getProfile({ ...claim }),
+  "party.create": (api, claim) =>
+    api.party.create({
+      ...claim,
+      name: "Intrusion",
+      roles: ["customer"],
+      stateCode: "27",
+    }),
+  "party.update": (api, claim) =>
+    api.party.update({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      name: "Intrusion",
+      roles: ["customer"],
+      stateCode: "27",
+      active: true,
+      allowNamesake: false,
+    }),
+  "party.get": (api, claim) => api.party.get({ ...claim, partyId: crypto.randomUUID() }),
+  "party.list": (api, claim) => api.party.list({ ...claim }),
   "dashboard.today": (api, claim) => api.dashboard.today({ ...claim }),
   "dashboard.collections": (api, claim) => api.dashboard.collections({ ...claim }),
   "settings.get": (api, claim) => api.settings.get({ ...claim }),
@@ -356,15 +408,18 @@ const GUARDED_CALLS = {
     api.settings.update({
       ...claim,
       legalName: "intrusion",
-      address: "",
-      taxId: "",
+      pan: "ABCDE1234F",
+      stateCode: "27",
+      addressLine1: "1 Intrusion Street",
+      city: "Pune",
+      pinCode: "411001",
+      financialYearStart: 4,
       currency: "INR",
       timeZone: "Asia/Kolkata",
       codePrefix: "",
       invoicePrefix: "INV",
       receiptPrefix: "RCT",
       creditNotePrefix: "CN",
-      fiscalYearStartMonth: 4,
       followUpValidityDays: 14,
       unbilledAlertHours: 24,
     }),
@@ -572,23 +627,33 @@ const GUARDED_CALLS = {
   "member.remove": (api, claim) => api.member.remove({ ...claim, memberId: "m" }),
 } satisfies Record<string, (api: AppRouterClient, claim: { orgSlug: string }) => Promise<unknown>>;
 
-const NO_CLAIM = {} as { orgSlug: string };
+// SAFETY: Deliberately omit the required tenant claim to exercise runtime validation.
+const NO_CLAIM = {} as Parameters<AppRouterClient["member"]["me"]>[0];
 
-function reportRange(): { from: string; to: string } {
+function reportRange() {
   const day = 24 * 60 * 60 * 1_000;
   const now = Date.now();
+
   return {
     from: new Date(now - 300 * day).toISOString().slice(0, 10),
     to: new Date(now + day).toISOString().slice(0, 10),
   };
 }
 
-test("the guarded-call table covers every procedure in the router", () => {
+// Bootstrap creation is guarded by sessionProcedure and deliberately has no
+// organization claim yet; every other procedure must appear in GUARDED_CALLS.
+const SESSION_ONLY_PROCEDURES = new Set(["organization.create"]);
+
+test("the guarded-call table covers every organization-scoped procedure in the router", () => {
   const procedures = Object.entries(appRouter)
     .flatMap(([namespace, router]) => Object.keys(router).map((name) => `${namespace}.${name}`))
     .sort();
 
-  expect(Object.keys(GUARDED_CALLS).sort()).toEqual(procedures);
+  const sessionOnly = procedures.filter((procedure) => SESSION_ONLY_PROCEDURES.has(procedure));
+  const orgScoped = procedures.filter((procedure) => !SESSION_ONLY_PROCEDURES.has(procedure));
+
+  expect(sessionOnly).toEqual([...SESSION_ONLY_PROCEDURES].sort());
+  expect(Object.keys(GUARDED_CALLS).sort()).toEqual(orgScoped);
 });
 
 test("every procedure is FORBIDDEN when an outsider names a foreign org", async () => {
@@ -644,9 +709,11 @@ test("member mutations reject an id belonging to another tenant", async () => {
 
   const stranger = await createTestUser("member-scope-stranger");
   await joinOrganization(stranger, alpha.id);
+
   const [inAlpha] = (await clientFor(alice).member.list({ orgSlug: alpha.slug })).members.filter(
     (row) => row.userId === stranger.user.id,
   );
+
   expect(inAlpha).toBeDefined();
 
   // Bob owns beta, so the guard passes — only the scoped pre-read stops alpha's
@@ -693,6 +760,7 @@ test("customer rows are invisible from another org through search or get", async
   const bob = await createTestUser("customer-scope-bob");
   const beta = await createOrganization(bob, "customer-scope-beta");
   const phone = "5551000";
+
   const customer = await clientFor(alice).customer.register({
     orgSlug: alpha.slug,
     name: "Alpha Customer",
@@ -718,10 +786,12 @@ test("customer rows are invisible from another org through search or get", async
   );
 
   const aliceClient = clientFor(alice);
+
   const [visits, account] = await Promise.all([
     aliceClient.customer.visits({ orgSlug: alpha.slug, customerId: customer.id }),
     aliceClient.customer.account({ orgSlug: alpha.slug, customerId: customer.id }),
   ]);
+
   expect(visits.items).toHaveLength(0);
   expect(account.invoices).toHaveLength(0);
   expect(account.outstanding).toBe("0.00");
@@ -751,10 +821,12 @@ test("one client concurrently scopes customer calls to two organizations", async
       dobEstimated: true,
     }),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.customer.search({ orgSlug: one.slug }),
     api.customer.search({ orgSlug: two.slug }),
   ]);
+
   expect(seenInOne.items.map((customer) => customer.id)).toEqual([inOne.id]);
   expect(seenInTwo.items.map((customer) => customer.id)).toEqual([inTwo.id]);
 });
@@ -764,6 +836,7 @@ test("item rows are invisible from another org and cannot be updated by foreign 
   const alpha = await createOrganization(alice, "item-scope-alpha");
   const bob = await createTestUser("item-scope-bob");
   const beta = await createOrganization(bob, "item-scope-beta");
+
   const item = await clientFor(alice).item.create({
     orgSlug: alpha.slug,
     name: "Alpha Item",
@@ -796,6 +869,7 @@ test("one client concurrently scopes item calls to two organizations", async () 
   const one = await createOrganization(user, "item-scope-one");
   const two = await createOrganization(user, "item-scope-two");
   const api = clientFor(user);
+
   const [inOne, inTwo] = await Promise.all([
     api.item.create({
       orgSlug: one.slug,
@@ -814,6 +888,7 @@ test("one client concurrently scopes item calls to two organizations", async () 
       taxRatePercent: "0",
     }),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.item.list({ orgSlug: one.slug }),
     api.item.list({ orgSlug: two.slug }),
@@ -822,6 +897,7 @@ test("one client concurrently scopes item calls to two organizations", async () 
   expect(seenInOne.items.map((item) => item.id)).toEqual([inOne.id]);
   expect(seenInTwo.items.map((item) => item.id)).toEqual([inTwo.id]);
 });
+
 test("payer access stays tenant-scoped across concurrency, foreign claims, and revocation", async () => {
   const owner = await createTestUser("payer-scope-owner");
   const one = await createOrganization(owner, "payer-scope-one");
@@ -832,10 +908,12 @@ test("payer access stays tenant-scoped across concurrency, foreign claims, and r
     api.payer.create({ orgSlug: one.slug, name: "Alpha Health", type: "insurer" }),
     api.payer.create({ orgSlug: two.slug, name: "Beta Corporate", type: "corporate" }),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.payer.list({ orgSlug: one.slug }),
     api.payer.list({ orgSlug: two.slug }),
   ]);
+
   expect(seenInOne.map((payer) => payer.id)).toEqual([inOne.id]);
   expect(seenInTwo.map((payer) => payer.id)).toEqual([inTwo.id]);
 
@@ -875,6 +953,7 @@ test("staff rows are invisible from another org and cannot be updated by foreign
   const alpha = await createOrganization(alice, "staff-scope-alpha");
   const bob = await createTestUser("staff-scope-bob");
   const beta = await createOrganization(bob, "staff-scope-beta");
+
   const department = await clientFor(alice).staff.createDepartment({
     orgSlug: alpha.slug,
     name: "Alpha Department",
@@ -897,10 +976,12 @@ test("one client concurrently scopes staff calls to two organizations", async ()
   const one = await createOrganization(user, "staff-scope-one");
   const two = await createOrganization(user, "staff-scope-two");
   const api = clientFor(user);
+
   const [inOne, inTwo] = await Promise.all([
     api.staff.createDepartment({ orgSlug: one.slug, name: "Department In One" }),
     api.staff.createDepartment({ orgSlug: two.slug, name: "Department In Two" }),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.staff.listDepartments({ orgSlug: one.slug }),
     api.staff.listDepartments({ orgSlug: two.slug }),
@@ -914,6 +995,7 @@ test("OPD appointment rows are invisible from another org through queue or get",
   const alice = await createTestUser("opd-scope-alice");
   const alpha = await createOrganization(alice, "opd-scope-alpha");
   const aliceClient = clientFor(alice);
+
   const customer = await aliceClient.customer.register({
     orgSlug: alpha.slug,
     name: "Alpha OpdAppointment Customer",
@@ -923,6 +1005,7 @@ test("OPD appointment rows are invisible from another org through queue or get",
     dobEstimated: true,
     address: "",
   });
+
   const fee = await aliceClient.item.create({
     orgSlug: alpha.slug,
     name: "Alpha consultation",
@@ -931,20 +1014,24 @@ test("OPD appointment rows are invisible from another org through queue or get",
     unitPrice: "100.00",
     taxRatePercent: "0",
   });
+
   const department = await aliceClient.staff.createDepartment({
     orgSlug: alpha.slug,
     name: "Alpha OpdAppointment Department",
   });
+
   const practitioner = await aliceClient.staff.createPractitioner({
     orgSlug: alpha.slug,
     name: "Dr. Alpha OpdAppointment",
     departmentId: department.id,
     consultFeeItemId: fee.id,
   });
+
   const currentMinute = localMinute(
     new Date(),
     (await aliceClient.settings.get({ orgSlug: alpha.slug })).timeZone,
   );
+
   const created = await aliceClient.opd.createWalkIn({
     orgSlug: alpha.slug,
     customerId: customer.id,
@@ -955,6 +1042,7 @@ test("OPD appointment rows are invisible from another org through queue or get",
       note: "Tenant visibility probe",
     },
   });
+
   const pastBooking = await aliceClient.opd.book({
     orgSlug: alpha.slug,
     customerId: customer.id,
@@ -988,6 +1076,7 @@ test("one client concurrently scopes OPD calls to two organizations", async () =
   const one = await createOrganization(user, "opd-scope-one");
   const two = await createOrganization(user, "opd-scope-two");
   const api = clientFor(user);
+
   const [customerOne, customerTwo] = await Promise.all([
     api.customer.register({
       orgSlug: one.slug,
@@ -1008,6 +1097,7 @@ test("one client concurrently scopes OPD calls to two organizations", async () =
       address: "",
     }),
   ]);
+
   const [feeOne, feeTwo] = await Promise.all([
     api.item.create({
       orgSlug: one.slug,
@@ -1026,10 +1116,12 @@ test("one client concurrently scopes OPD calls to two organizations", async () =
       taxRatePercent: "0",
     }),
   ]);
+
   const [departmentOne, departmentTwo] = await Promise.all([
     api.staff.createDepartment({ orgSlug: one.slug, name: "OpdAppointment Department One" }),
     api.staff.createDepartment({ orgSlug: two.slug, name: "OpdAppointment Department Two" }),
   ]);
+
   const [practitionerOne, practitionerTwo] = await Promise.all([
     api.staff.createPractitioner({
       orgSlug: one.slug,
@@ -1065,10 +1157,12 @@ test("one client concurrently scopes OPD calls to two organizations", async () =
       },
     }),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.opd.day({ orgSlug: one.slug }),
     api.opd.day({ orgSlug: two.slug }),
   ]);
+
   if (!inOne.invoice || !inTwo.invoice) throw new Error("Expected walk-ins to issue invoices");
 
   expect(seenInOne.items.map((appointment) => appointment.id)).toEqual([inOne.appointment.id]);
@@ -1090,21 +1184,18 @@ async function createScopedInvoice(
     payments: [{ method: "cash", amount: "100.00" }],
   },
 ) {
+  const settings = await api.settings.get({ orgSlug: organization.slug });
   await api.settings.update({
     orgSlug: organization.slug,
+    ...settings,
     legalName: `${seed} Business`,
-    address: `${seed} Address`,
-    taxId: "",
-    currency: "INR",
-    timeZone: "Asia/Kolkata",
+    addressLine1: `${seed} Address`,
     codePrefix: "Code",
     invoicePrefix: "INV",
     receiptPrefix: "RCT",
     creditNotePrefix: "CN",
-    fiscalYearStartMonth: 4,
-    followUpValidityDays: 14,
-    unbilledAlertHours: 24,
   });
+
   const customer = await api.customer.register({
     orgSlug: organization.slug,
     name: `${seed} Customer`,
@@ -1114,6 +1205,7 @@ async function createScopedInvoice(
     dobEstimated: true,
     address: "",
   });
+
   const fee = await api.item.create({
     orgSlug: organization.slug,
     name: `${seed} Consultation`,
@@ -1122,23 +1214,28 @@ async function createScopedInvoice(
     unitPrice: "100.00",
     taxRatePercent: "0",
   });
+
   const department = await api.staff.createDepartment({
     orgSlug: organization.slug,
     name: `${seed} Department`,
   });
+
   const practitioner = await api.staff.createPractitioner({
     orgSlug: organization.slug,
     name: `Dr. ${seed}`,
     departmentId: department.id,
     consultFeeItemId: fee.id,
   });
+
   const created = await api.opd.createWalkIn({
     orgSlug: organization.slug,
     customerId: customer.id,
     practitionerId: practitioner.id,
     settlement,
   });
+
   if (!created.invoice) throw new Error("Expected walk-in to issue an invoice");
+
   return {
     appointment: created.appointment,
     invoice: created.invoice,
@@ -1170,10 +1267,12 @@ test("one client concurrently scopes billing calls to two organizations", async 
   const one = await createOrganization(user, "billing-scope-one");
   const two = await createOrganization(user, "billing-scope-two");
   const api = clientFor(user);
+
   const [inOne, inTwo] = await Promise.all([
     createScopedInvoice(api, one, "Billing One"),
     createScopedInvoice(api, two, "Billing Two"),
   ]);
+
   const [seenInOne, seenInTwo] = await Promise.all([
     api.billing.listInvoices({ orgSlug: one.slug, appointmentId: inOne.appointment.id }),
     api.billing.listInvoices({ orgSlug: two.slug, appointmentId: inTwo.appointment.id }),
@@ -1216,6 +1315,7 @@ test("reports reject a foreign org claim and expose none of that org's figures i
     bobClient.report.balanceSheet({ orgSlug: beta.slug, asOf: range.to }),
     bobClient.report.gst({ orgSlug: beta.slug, ...range }),
   ]);
+
   expect(trialBalance.rows).toEqual([]);
   expect(trialBalance.totals).toEqual({
     openingDebit: "0.00",
@@ -1271,15 +1371,18 @@ test("one client concurrently scopes report calls to two organizations", async (
   const one = await createOrganization(user, "report-scope-one");
   const two = await createOrganization(user, "report-scope-two");
   const api = clientFor(user);
+
   const unpaid = {
     expectedGrandTotal: "100.00",
     payments: [],
     note: "Settle at the counter",
   };
+
   const [inOne, inTwo] = await Promise.all([
     createScopedInvoice(api, one, "Report One", unpaid),
     createScopedInvoice(api, two, "Report Two", unpaid),
   ]);
+
   await api.billing.recordPayments({
     orgSlug: one.slug,
     invoiceId: inOne.invoice.id,
@@ -1287,6 +1390,7 @@ test("one client concurrently scopes report calls to two organizations", async (
   });
 
   const range = reportRange();
+
   const [trialOne, trialTwo, balanceOne, balanceTwo, gstOne, gstTwo] = await Promise.all([
     api.report.trialBalance({ orgSlug: one.slug, ...range }),
     api.report.trialBalance({ orgSlug: two.slug, ...range }),

@@ -1,111 +1,135 @@
 import { db } from "@accly/db";
-import { SETTINGS_DEFAULTS, organizationSettings } from "@accly/db/schema/organization-settings";
-import { eq } from "drizzle-orm";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
+import { and, eq } from "drizzle-orm";
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
 import { audit } from "../audit";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import {
+  indianPinCode,
+  indianStateCode,
+  optionalGstin,
+  pan,
+  timeZone,
+  validateGstinIdentity,
+} from "../lib/schemas";
 import { invalidateOrgSettings } from "../lib/settings-cache";
 
-// Time zones are validated by probing the formatter: Bun's JavaScriptCore lists
-// only legacy canonical ids (Asia/Calcutta), so a membership check would reject
-// Asia/Kolkata — the default the migration backfills.
-function isSupportedTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const settingsFields = z.object({
-  legalName: z.string().trim().max(200),
-  address: z.string().trim().max(500),
-  taxId: z.string().trim().max(50),
+const editableSettings = {
+  legalName: z.string().trim().min(1).max(200),
+  pan,
+  gstin: optionalGstin,
+  stateCode: indianStateCode,
+  addressLine1: z.string().trim().min(1).max(200),
+  addressLine2: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((value) => value || undefined)
+    .optional(),
+  city: z.string().trim().min(1).max(120),
+  pinCode: indianPinCode,
+  financialYearStart: z.number().int().min(1).max(12),
   currency: z
     .string()
     .trim()
     .toUpperCase()
     .regex(/^[A-Z]{3}$/, "Use a three-letter currency code"),
-  timeZone: z.string().refine(isSupportedTimeZone, {
-    message: "Use a valid IANA time zone like Asia/Kolkata",
-  }),
+  timeZone: timeZone,
   codePrefix: z.string().trim().max(10),
   invoicePrefix: z.string().trim().max(10),
   receiptPrefix: z.string().trim().max(10),
   creditNotePrefix: z.string().trim().max(10),
-  fiscalYearStartMonth: z.number().int().min(1).max(12),
   followUpValidityDays: z.number().int().min(1).max(365),
   unbilledAlertHours: z.number().int().min(1).max(168),
-});
+};
+
+const settingsFields = z.object(editableSettings).superRefine(validateGstinIdentity);
 
 export type SettingsFields = z.infer<typeof settingsFields>;
+
+function settingsDto(settings: typeof organizationSettings.$inferSelect): SettingsFields {
+  return {
+    legalName: settings.legalName,
+    pan: settings.pan,
+    gstin: settings.gstin ?? undefined,
+    stateCode: settings.stateCode,
+    addressLine1: settings.addressLine1,
+    addressLine2: settings.addressLine2 ?? undefined,
+    city: settings.city,
+    pinCode: settings.pinCode,
+    financialYearStart: settings.financialYearStart,
+    currency: settings.currency,
+    timeZone: settings.timeZone,
+    codePrefix: settings.codePrefix,
+    invoicePrefix: settings.invoicePrefix,
+    receiptPrefix: settings.receiptPrefix,
+    creditNotePrefix: settings.creditNotePrefix,
+    followUpValidityDays: settings.followUpValidityDays,
+    unbilledAlertHours: settings.unbilledAlertHours,
+  };
+}
 
 export const settingsRouter = {
   get: orgProcedure({ settings: ["read"] }, orgInput).handler(
     async ({ context }): Promise<SettingsFields> => {
+      const { orgId } = context.scope;
+
       const [row] = await db
         .select()
         .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, context.scope.orgId))
+        .where(eq(organizationSettings.orgId, orgId))
         .limit(1);
 
       if (!row) {
-        return { ...SETTINGS_DEFAULTS };
+        throw new ORPCError("NOT_FOUND", { message: "Organization settings not found" });
       }
-      const { orgId: _orgId, createdAt: _c, updatedAt: _u, ...fields } = row;
-      return fields;
+
+      return settingsDto(row);
     },
   ),
 
-  update: orgProcedure({ settings: ["update"] }, orgInput.extend(settingsFields.shape)).handler(
-    async ({ context, input }): Promise<SettingsFields> => {
-      const { scope } = context;
-      const { orgSlug: _claim, ...fields } = input;
-      const { currency, ...mutableFields } = fields;
-      const [current] = await db
-        .select({ currency: organizationSettings.currency })
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, scope.orgId))
-        .limit(1);
+  update: orgProcedure(
+    { settings: ["update"] },
+    orgInput.extend(editableSettings).superRefine(validateGstinIdentity),
+  ).handler(async ({ context, input }): Promise<SettingsFields> => {
+    const { scope } = context;
+    const { orgSlug: _claim, currency, ...settings } = input;
 
-      // Fail loud: a differing currency is a config error, never a silent drop.
-      if (currency !== (current?.currency ?? SETTINGS_DEFAULTS.currency)) {
-        throw new ORPCError("CONFLICT", {
-          message: "Currency cannot be changed for this organization",
-        });
-      }
+    const [saved] = await db
+      .update(organizationSettings)
+      .set({
+        ...settings,
+        gstin: settings.gstin ?? null,
+        addressLine2: settings.addressLine2 ?? null,
+        advanceTaxTreatment: settings.gstin ? "required" : "none",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(organizationSettings.orgId, scope.orgId),
+          eq(organizationSettings.currency, currency),
+        ),
+      )
+      .returning();
 
-      // A later time-zone change re-derives future dates only; written rows keep the
-      // business date they were numbered under. The check above is sufficient: no
-      // write path ever changes a stored currency, so the upsert needs no guard.
-      const [row] = await db
-        .insert(organizationSettings)
-        .values({ ...fields, orgId: scope.orgId })
-        .onConflictDoUpdate({
-          target: organizationSettings.orgId,
-          set: { ...mutableFields, updatedAt: new Date() },
-        })
-        .returning();
-
-      if (!row) {
-        throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to save settings" });
-      }
-
-      // Derived reads must see the new prefixes on the next call in this process.
-      invalidateOrgSettings(scope.orgId);
-
-      audit({
-        action: "settings.update",
-        actorId: scope.userId,
-        orgId: scope.orgId,
-        target: `settings:${scope.orgId}`,
+    if (!saved) {
+      throw new ORPCError("CONFLICT", {
+        message: "Organization settings changed; reload and try again",
       });
+    }
 
-      const { orgId: _orgId, createdAt: _c, updatedAt: _u, ...saved } = row;
-      return saved;
-    },
-  ),
+    // Derived reads must see the new prefixes on the next call in this process.
+    invalidateOrgSettings(scope.orgId);
+
+    audit({
+      action: "settings.update",
+      actorId: scope.userId,
+      orgId: scope.orgId,
+      target: `settings:${scope.orgId}`,
+    });
+
+    return settingsDto(saved);
+  }),
 };

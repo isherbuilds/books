@@ -57,6 +57,7 @@ export const Route = createFileRoute("/$orgSlug/opd/$appointmentId")({
         staleTime: "static",
       }),
     );
+
     // A booked appointment has no customer yet — name it by the caller.
     return {
       tokenNumber: data.appointment.tokenNumber,
@@ -81,13 +82,16 @@ export const Route = createFileRoute("/$orgSlug/opd/$appointmentId")({
 // `member.me` observer stay mounted.
 function OpdRecordLayout() {
   const { orgSlug, appointmentId } = Route.useParams();
+
   const detail = useQuery({
     ...orpc.opd.get.queryOptions({ input: { orgSlug, appointmentId } }),
     ...OPERATIONAL_REFETCH,
   });
+
   const isClinical = useChildMatches({
     select: (matches) => matches[0]?.routeId === CLINICAL_ROUTE_ID,
   });
+
   // Cashiers and accountants read the record; the status controls need `opd:update`.
   const canUpdate = useCan(orgSlug, { opd: ["update"] });
 
@@ -109,6 +113,7 @@ function OpdRecordLayout() {
       </>
     );
   }
+
   if (!detail.data) {
     return (
       <>
@@ -120,6 +125,7 @@ function OpdRecordLayout() {
   }
 
   const record = detail.data;
+
   return (
     <OpdRecordContext.Provider value={{ record, refreshError: detail.error }}>
       {/* `contents` so the bands stay direct children of the page column. The
@@ -172,6 +178,7 @@ function RecordFreshness({ orgSlug, appointmentId }: { orgSlug: string; appointm
     ...orpc.opd.get.queryOptions({ input: { orgSlug, appointmentId } }),
     enabled: false,
   });
+
   return <StaleDataNotice dataUpdatedAt={dataUpdatedAt} />;
 }
 
@@ -346,6 +353,7 @@ function OpdRecordDescription({ orgSlug, record }: { orgSlug: string; record: Op
 function OpdRecordSummary({ record, action }: { record: OpdRecordIdentity; action?: ReactNode }) {
   const { timeZone } = useOrgDateTime();
   const { appointment } = record;
+
   const event = appointment.arrivedAt
     ? { label: "Arrived", value: formatDateTime(appointment.arrivedAt, timeZone) }
     : appointment.scheduledFor
@@ -380,6 +388,7 @@ function OpdRecordSummary({ record, action }: { record: OpdRecordIdentity; actio
 function OpdRecordFacts({ record }: { record: OpdRecordIdentity }) {
   const { today } = useOrgDateTime();
   const { appointment, customer, practitioner, department } = record;
+
   const age = customer
     ? `${customerAgeLabel(customer.dateOfBirth, customer.dobEstimated, today)} years`
     : null;

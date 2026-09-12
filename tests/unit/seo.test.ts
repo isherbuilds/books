@@ -3,13 +3,18 @@ import { expect, test } from "bun:test";
 // `@accly/env/web` validates at import time, so the origin must be set before the
 // module loads; a static import would hoist above the assignment.
 process.env.VITE_SERVER_URL ??= "https://api.accly.example";
+
 process.env.VITE_WEB_URL = "https://accly.example";
+
 process.env.VITE_WHATSAPP_NUMBER ??= "919999999999";
+
 process.env.VITE_CONTACT_EMAIL ??= "hello@accly.example";
+
 const { pageHead } = await import("../../apps/web/src/lib/seo");
 
 test("the landing page head carries the complete Open Graph contract with absolute URLs", () => {
   const { meta, links } = pageHead({ path: "/" });
+
   const byKey = Object.fromEntries(
     meta.map((tag) => [
       "title" in tag ? "title" : "property" in tag ? tag.property : tag.name,

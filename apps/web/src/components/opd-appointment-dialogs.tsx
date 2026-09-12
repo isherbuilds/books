@@ -117,6 +117,7 @@ export function RescheduleOpdAppointmentDialog({
   const queryClient = useQueryClient();
   const onOpdError = useOpdErrorToast(orgSlug);
   const { timeZone } = useOrgDateTime();
+
   const form = useZodForm(rescheduleSchema, {
     defaultValues: {
       scheduledFor: scheduledFor
@@ -124,6 +125,7 @@ export function RescheduleOpdAppointmentDialog({
         : nextHalfHour(timeZone),
     },
   });
+
   const reschedule = useMutation(
     orpc.opd.reschedule.mutationOptions({
       onSuccess: async () => {
@@ -133,10 +135,12 @@ export function RescheduleOpdAppointmentDialog({
       },
       onError: (error) => {
         if (hasErrorCode(error, "CONFLICT")) onClose();
+
         return onOpdError(appointmentId, "reschedule", error);
       },
     }),
   );
+
   const submit = form.handleSubmit((values) =>
     reschedule.mutate({
       orgSlug,

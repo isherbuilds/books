@@ -43,6 +43,7 @@ export function VoidChargeDialog({
   const invalidate = useBillingInvalidation(orgSlug, appointmentId);
   const onOpdError = useOpdErrorToast(orgSlug);
   const form = useZodForm(voidSchema, { defaultValues: { reason: "" } });
+
   const mutation = useMutation(
     orpc.billing.voidCharge.mutationOptions({
       onSuccess: () => {

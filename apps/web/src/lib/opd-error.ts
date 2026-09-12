@@ -24,6 +24,7 @@ export function useOpdErrorToast(orgSlug: string) {
   ) => {
     if (!hasErrorCode(error, "CONFLICT")) {
       toast.error(errorMessage(error));
+
       return;
     }
 
@@ -33,8 +34,10 @@ export function useOpdErrorToast(orgSlug: string) {
         : invalidateOpdAppointmentState(queryClient, orgSlug, appointmentId, transition));
     } catch {
       toast.error("Another terminal moved this appointment, and the refresh failed. Reload.");
+
       return;
     }
+
     toast.error(errorMessage(error));
   };
 }

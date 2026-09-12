@@ -13,6 +13,7 @@ export const Route = createFileRoute("/api/$orgSlug/billing/invoices/$invoiceId/
     handlers: {
       GET: async ({ request, params }) => {
         const parsed = parseBillingDocumentRequest(new URL(request.url).searchParams);
+
         if (!parsed) return new Response("Unknown document", { status: 400 });
 
         const client = createRouterClient(appRouter, {
@@ -24,10 +25,11 @@ export const Route = createFileRoute("/api/$orgSlug/billing/invoices/$invoiceId/
             orgSlug: params.orgSlug,
             invoiceId: params.invoiceId,
           });
+
           const { renderBillingPdf } = await import("@/lib/billing-pdf");
           const { bytes, fileName } = await renderBillingPdf({ ...parsed.document, data });
 
-          return new Response(bytes.slice().buffer as ArrayBuffer, {
+          return new Response(new Uint8Array(bytes).buffer, {
             headers: {
               "Cache-Control": "private, no-store",
               "Content-Disposition": pdfContentDisposition(fileName, parsed.download),
@@ -38,7 +40,9 @@ export const Route = createFileRoute("/api/$orgSlug/billing/invoices/$invoiceId/
           if (error instanceof ORPCError) {
             return new Response(error.message, { status: error.status });
           }
+
           console.error(error);
+
           return new Response("Could not render the document", { status: 500 });
         }
       },

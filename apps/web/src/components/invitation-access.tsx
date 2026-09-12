@@ -1,3 +1,4 @@
+import { shortName } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { Form, FormFieldset } from "@accly/ui/components/form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,25 +20,40 @@ export function InvitationAccess({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
   const invitation = useQuery({
     queryKey: ["auth", "invitation", invitationId],
     queryFn: async () => {
-      const { data, error } = await authClient.invitation.claimStatus({ query: { invitationId } });
+      const { data, error } = await authClient.invitation.claimStatus({
+        query: { invitationId },
+      });
+
       if (error)
         throw new Error(authErrorMessage(error, "Could not load the invitation. Try again."));
+
       return data;
     },
     retry: false,
   });
+
   const joining = useMutation({
     mutationFn: async (organizationSlug: string) => {
-      const { error } = await authClient.organization.acceptInvitation({ invitationId });
+      const { error } = await authClient.organization.acceptInvitation({
+        invitationId,
+      });
+
       if (error)
         throw new Error(authErrorMessage(error, "Could not join the organization. Try again."));
-      await navigate({ to: "/$orgSlug/onboarding", params: { orgSlug: organizationSlug } });
+      await navigate({
+        to: "/$orgSlug",
+        params: { orgSlug: organizationSlug },
+      });
     },
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: ["auth", "join"], refetchType: "none" }),
+      queryClient.invalidateQueries({
+        queryKey: ["auth", "join"],
+        refetchType: "none",
+      }),
   });
 
   if (invitation.isPending)
@@ -46,6 +62,7 @@ export function InvitationAccess({
         Loading invitation…
       </p>
     );
+
   return (
     <div className="flex flex-col gap-6">
       {invitation.error ? (
@@ -92,7 +109,7 @@ export function InvitationAccess({
 }
 
 const signUpSchema = z.object({
-  name: z.string().trim().min(1, "Enter your name.").max(100),
+  name: shortName,
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
 });
 
@@ -100,20 +117,28 @@ const signUpSchema = z.object({
 // for it) so the server can bind the new account to this invitation and email.
 function SignUpForm({ invitationId, email }: { invitationId: string; email: string }) {
   const queryClient = useQueryClient();
-  const form = useZodForm(signUpSchema, { defaultValues: { name: "", password: "" } });
+
+  const form = useZodForm(signUpSchema, {
+    defaultValues: { name: "", password: "" },
+  });
+
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root.server");
+
     const { error } = await authClient.signUp.email({
       email,
       ...values,
       fetchOptions: { body: { invitationId } },
     });
+
     if (error) {
       form.setError("root.server", {
         message: authErrorMessage(error, "Could not create your account. Try again."),
       });
+
       return;
     }
+
     queryClient.clear();
   });
 

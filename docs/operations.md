@@ -6,27 +6,31 @@
 Local development uses the single `packages/env/.env`, copied from the example.
 Real process variables win over the file; no `.env` is copied into an image.
 
-| Variable                                                  | Used by              | Requirement                                                             |
-| --------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------- |
-| `DATABASE_URL`                                            | server + web SSR     | PostgreSQL URL; test harness accepts only a `_test` database            |
-| `BETTER_AUTH_SECRET`                                      | server + web SSR     | At least 32 characters; identical on both runtimes                      |
-| `BETTER_AUTH_URL`                                         | server + web SSR     | Public API/auth origin                                                  |
-| `BETTER_AUTH_COOKIE_DOMAIN`                               | split-host web + API | Shared parent domain so web SSR receives the API cookie                 |
-| `CORS_ORIGIN`                                             | server + web SSR     | Exact web origin; also invitation-link base                             |
-| `FOUNDING_EMAIL`                                          | server + web SSR     | Sole Organization-creation account                                      |
-| `NODE_ENV`                                                | both                 | `development`, `production`, or `test`                                  |
-| `VITE_SERVER_URL`                                         | web build            | Public API origin used by browser RPC                                   |
-| `VITE_WEB_URL`                                            | web build            | Public web origin, bare (no path); canonical, sitemap and OG URLs       |
-| `VITE_WHATSAPP_NUMBER` / `VITE_CONTACT_EMAIL`             | web build            | Public contact channels on `/contact` and the footer; digits-only E.164 |
-| `SEAWEEDFS_ENDPOINT`                                      | server + web SSR     | Publicly reachable S3 gateway for direct browser transfer               |
-| `SEAWEEDFS_BUCKET`                                        | server + web SSR     | Private bucket name                                                     |
-| `SEAWEEDFS_ACCESS_KEY_ID` / `SEAWEEDFS_SECRET_ACCESS_KEY` | server + web SSR     | S3 credentials                                                          |
-| `SEAWEEDFS_MAX_UPLOAD_BYTES`                              | server + web SSR     | Optional positive integer; default 100 MiB                              |
-| `SKIP_ENV_VALIDATION`                                     | build only           | Never set on a running application                                      |
+| Variable                                                  | Used by               | Requirement                                                             |
+| --------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `DATABASE_URL`                                            | app + migration tools | PostgreSQL URL; tests require a `_test` database                        |
+| `BETTER_AUTH_SECRET`                                      | server + web SSR      | At least 32 characters; identical on both runtimes                      |
+| `BETTER_AUTH_URL`                                         | server + web SSR      | Public API/auth origin                                                  |
+| `BETTER_AUTH_COOKIE_DOMAIN`                               | split-host web + API  | Shared parent domain so web SSR receives the API cookie                 |
+| `CORS_ORIGIN`                                             | server + web SSR      | Exact web origin; also invitation-link base                             |
+| `FOUNDING_EMAIL`                                          | server + web SSR      | Sole Organization-creation account                                      |
+| `NODE_ENV`                                                | both                  | `development`, `production`, or `test`                                  |
+| `VITE_SERVER_URL`                                         | web build             | Public API origin used by browser RPC                                   |
+| `VITE_WEB_URL`                                            | web build             | Public web origin, bare (no path); canonical, sitemap and OG URLs       |
+| `VITE_WHATSAPP_NUMBER` / `VITE_CONTACT_EMAIL`             | web build             | Public contact channels on `/contact` and the footer; digits-only E.164 |
+| `SEAWEEDFS_ENDPOINT`                                      | server + web SSR      | Publicly reachable S3 gateway for direct browser transfer               |
+| `SEAWEEDFS_BUCKET`                                        | server + web SSR      | Private bucket name                                                     |
+| `SEAWEEDFS_ACCESS_KEY_ID` / `SEAWEEDFS_SECRET_ACCESS_KEY` | server + web SSR      | S3 credentials                                                          |
+| `SEAWEEDFS_MAX_UPLOAD_BYTES`                              | server + web SSR      | Optional positive integer; default 100 MiB                              |
+| `SKIP_ENV_VALIDATION`                                     | build only            | Never set on a running application                                      |
 
 Add a variable to the narrowest Zod schema in `packages/env`, the example file,
 and deployment configuration. Optional is valid only when the feature fails with
 a clear named error or degrades cleanly.
+
+Application queries, Drizzle Kit, deployment migrations, and test reset use
+`DATABASE_URL`. The pre-production MVP does not maintain a separate migration
+credential.
 
 The four core storage values—endpoint, bucket, access key, and secret—are
 optional only as a complete group. Omitting all four leaves valid-sized upload
@@ -69,14 +73,14 @@ no production counterpart.
 There is no production Compose file. The local
 `packages/db/docker-compose.dev.yaml` is development-only. Both app containers
 receive the server environment because web SSR imports auth/database code. The
-web build also receives `VITE_SERVER_URL`, `VITE_WEB_URL`, `VITE_WHATSAPP_NUMBER`
-and `VITE_CONTACT_EMAIL`.
+web build also receives `VITE_SERVER_URL`,
+`VITE_WEB_URL`, `VITE_WHATSAPP_NUMBER` and `VITE_CONTACT_EMAIL`.
 
-The server container applies migrations before accepting traffic. A migration
-failure exits startup; concurrent starters serialize through the advisory lock.
-Rolling releases require migrations compatible with the previous application
-until old instances drain. Use expand-and-contract for destructive production
-changes.
+The server container applies migrations with `DATABASE_URL` before accepting
+traffic. A migration failure exits startup; concurrent starters
+serialize through the advisory lock. Rolling releases require migrations
+compatible with the previous application until old instances drain. Use
+expand-and-contract for destructive production changes.
 
 The `chargeRevision` release is a coordinated cutover, not a rolling
 release: `settleCharges` changes shape and old writers do not advance the

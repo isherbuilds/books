@@ -1,4 +1,4 @@
-import { fromPaise, toSignedPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal, parseMoney } from "@accly/api/core/money";
 import {
   Table,
   TableBody,
@@ -44,26 +44,29 @@ export function CustomerBilling({
 
   const invoices = account?.invoices ?? [];
   const [firstInvoice] = invoices;
-  const outstandingPaise = account ? toSignedPaise(account.outstanding) : 0;
+  const outstandingPaise = account ? parseMoney(account.outstanding) : 0n;
 
   return (
     <div className="flex flex-col gap-4">
       {account && firstInvoice ? (
         <section className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <p className="text-muted-foreground">
-            {outstandingPaise < 0 ? "Refund due" : "Outstanding"}
+            {outstandingPaise < 0n ? "Refund due" : "Outstanding"}
           </p>
           <p
             className={cn(
               "text-sm font-medium tabular-nums",
-              outstandingPaise < 0
+              outstandingPaise < 0n
                 ? "text-destructive"
                 : account.openCount > 0
                   ? "text-status-alert"
                   : undefined,
             )}
           >
-            {formatMoney(fromPaise(Math.abs(outstandingPaise)), firstInvoice.currency)}
+            {formatMoney(
+              formatDecimal(outstandingPaise < 0n ? -outstandingPaise : outstandingPaise),
+              firstInvoice.currency,
+            )}
           </p>
           <p className="text-muted-foreground">
             {account.openCount === 0
@@ -92,7 +95,8 @@ export function CustomerBilling({
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => {
-                const due = toSignedPaise(invoice.outstanding) !== 0;
+                const due = parseMoney(invoice.outstanding) !== 0n;
+
                 return (
                   <TableRow key={invoice.id}>
                     <TableCell className="font-mono whitespace-nowrap">

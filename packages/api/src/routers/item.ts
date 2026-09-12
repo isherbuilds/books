@@ -4,6 +4,7 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatDecimal as formatMoney } from "../core/money";
 import { audit } from "../audit";
 import { conflict } from "../lib/conflict";
 import { uniqueViolationConstraint } from "../lib/db-errors";
@@ -33,7 +34,8 @@ export const itemRouter = {
     }),
   ).handler(async ({ context, input }) => {
     const pattern = input.query ? likePattern(input.query) : undefined;
-    return db
+
+    const rows = await db
       .select({
         id: items.id,
         code: items.code,
@@ -62,6 +64,8 @@ export const itemRouter = {
       )
       .orderBy(asc(items.name), asc(items.id))
       .limit(6);
+
+    return rows.map((item) => ({ ...item, unitPrice: formatMoney(item.unitPrice) }));
   }),
 
   list: orgProcedure(
@@ -76,6 +80,7 @@ export const itemRouter = {
     }),
   ).handler(async ({ context, input }) => {
     const pattern = input.query ? likePattern(input.query) : undefined;
+
     const rows = await db
       .select()
       .from(items)
@@ -94,13 +99,15 @@ export const itemRouter = {
       .limit(input.limit + 1);
 
     const hasNextPage = rows.length > input.limit;
+
     if (hasNextPage) {
       rows.pop();
     }
+
     const last = rows.at(-1);
 
     return {
-      items: rows,
+      items: rows.map((item) => ({ ...item, unitPrice: formatMoney(item.unitPrice) })),
       nextCursor: hasNextPage && last ? { name: last.name, id: last.id } : null,
     };
   }),
@@ -135,17 +142,18 @@ export const itemRouter = {
           target: `item:${id}`,
           // Origin entry of the price timeline; item.update meta carries every change after.
           meta: {
-            unitPrice: item.unitPrice,
+            unitPrice: formatMoney(item.unitPrice),
             taxRatePercent: item.taxRatePercent,
             active: item.active,
           },
         });
 
-        return item;
+        return { ...item, unitPrice: formatMoney(item.unitPrice) };
       } catch (error) {
         if (uniqueViolationConstraint(error) !== undefined) {
           throw conflict("duplicate", "A item item with this code already exists.");
         }
+
         throw error;
       }
     },
@@ -185,17 +193,18 @@ export const itemRouter = {
         // Written values make the audit trail double as the price-change history, so
         // successive entries reconstruct the timeline without a dedicated table.
         meta: {
-          unitPrice: item.unitPrice,
+          unitPrice: formatMoney(item.unitPrice),
           taxRatePercent: item.taxRatePercent,
           active: item.active,
         },
       });
 
-      return item;
+      return { ...item, unitPrice: formatMoney(item.unitPrice) };
     } catch (error) {
       if (uniqueViolationConstraint(error) !== undefined) {
         throw conflict("duplicate", "A item item with this code already exists.");
       }
+
       throw error;
     }
   }),

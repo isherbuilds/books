@@ -29,10 +29,12 @@ function BillingOpdAppointmentRoute() {
   const { orgSlug, appointmentId } = Route.useParams();
   const { record, refreshError: recordRefreshError } = useOpdRecord();
   const [voiding, setVoiding] = useState<{ id: string; description: string } | null>(null);
+
   const invoices = useQuery({
     ...orpc.billing.listInvoices.queryOptions({ input: { orgSlug, appointmentId } }),
     ...OPERATIONAL_REFETCH,
   });
+
   // From membership, not `settings.get`: the same currency, already loaded by the org
   // layout, and readable by a cashier who has no `settings:read` grant.
   const { roles, currency } = useMembership(orgSlug);
@@ -124,5 +126,6 @@ function BillingFreshness({ orgSlug, appointmentId }: { orgSlug: string; appoint
     ...orpc.billing.listInvoices.queryOptions({ input: { orgSlug, appointmentId } }),
     enabled: false,
   });
+
   return <StaleDataNotice dataUpdatedAt={dataUpdatedAt} />;
 }

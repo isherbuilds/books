@@ -1,3 +1,4 @@
+import { formatDecimal as formatMoney, parseMoney } from "@accly/api/core/money";
 import { computeInvoiceLines } from "@accly/api/lib/invoice-math";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
@@ -30,11 +31,13 @@ export async function addPendingItemCharge({
       .where(and(eq(opdAppointments.orgId, orgId), eq(opdAppointments.id, appointmentId)))
       .limit(1)
       .for("update");
+
     const [item] = await tx
       .select()
       .from(items)
       .where(and(eq(items.orgId, orgId), eq(items.id, itemId)))
       .limit(1);
+
     if (!appointment || !item) throw new Error("Test charge fixture is incomplete");
 
     const [charge] = await tx
@@ -57,12 +60,14 @@ export async function addPendingItemCharge({
         createdAt,
       })
       .returning();
+
     if (!charge) throw new Error("Test charge was not inserted");
 
     await tx
       .update(opdAppointments)
       .set({ chargeRevision: sql`${opdAppointments.chargeRevision} + 1` })
       .where(and(eq(opdAppointments.orgId, orgId), eq(opdAppointments.id, appointment.id)));
+
     return charge;
   });
 }
@@ -85,18 +90,20 @@ export async function settlePendingCharges(
     orgSlug: input.orgSlug,
     appointmentId: input.appointmentId,
   });
+
   const discountAmount = input.discountAmount ?? "0";
   const pending = review.charges.filter((charge) => charge.status === "pending");
+
   const quote = computeInvoiceLines(
     pending.map((charge) => ({
       chargeId: charge.id,
       description: charge.description,
       qty: charge.qty,
-      unitPrice: charge.unitPrice,
+      unitPrice: parseMoney(charge.unitPrice),
       taxRatePercent: charge.taxRatePercent,
       taxCode: charge.taxCode,
     })),
-    discountAmount,
+    parseMoney(discountAmount),
   );
 
   return api.billing.settleCharges({
@@ -104,6 +111,6 @@ export async function settlePendingCharges(
     discountAmount,
     note: input.note ?? "Test invoice issued without collection",
     expectedChargeRevision: review.appointment.chargeRevision,
-    expectedGrandTotal: quote.grandTotal,
+    expectedGrandTotal: formatMoney(quote.grandTotal),
   });
 }

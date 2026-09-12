@@ -40,6 +40,7 @@ export const Route = createFileRoute("/$orgSlug/reports/daily-collections")({
       { report: ["readDailyCollections"] },
       "/$orgSlug/dashboard",
     );
+
     const fallback = defaultRange(timeZone);
     const range = { from: deps.from ?? fallback.from, to: deps.to ?? fallback.to };
     await loadRouteQuery(
@@ -47,6 +48,7 @@ export const Route = createFileRoute("/$orgSlug/reports/daily-collections")({
         orpc.report.dailyCollections.queryOptions({ input: { orgSlug, ...range } }),
       ),
     );
+
     return range;
   },
   component: DailyCollectionsRoute,
@@ -57,6 +59,7 @@ function DailyCollectionsRoute() {
   const navigate = Route.useNavigate();
   const { from, to } = Route.useLoaderData();
   const currency = useMembership(orgSlug, (membership) => membership.currency);
+
   const report = useQuery(
     orpc.report.dailyCollections.queryOptions({ input: { orgSlug, from, to } }),
   );

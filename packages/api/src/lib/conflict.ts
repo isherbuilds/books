@@ -1,16 +1,16 @@
 import { ORPCError } from "@orpc/server";
 
 /**
- * Why a CONFLICT happened, for the three cases where the web client branches on it:
- *
- * - `duplicate` — a item code is already in use (mapped to the code field).
- * - `uid_taken` — that customer UID belongs to someone else (mapped to the UID field).
- * - `stale_record` — the customer row moved after the operator opened it (offers Refresh).
- *
- * Every other CONFLICT is a plain `ORPCError("CONFLICT")`: the client refetches and
- * shows the server message.
+ * Why a CONFLICT happened when a client can take a specific recovery path.
+ * Every other CONFLICT is a plain `ORPCError("CONFLICT")`: the client refetches
+ * and shows the server message.
  */
-export type ConflictReason = "duplicate" | "uid_taken" | "stale_record";
+export type ConflictReason =
+  | "duplicate"
+  | "uid_taken"
+  | "stale_record"
+  | "PARTY_NAME_COLLISION"
+  | "PARTY_GSTIN_TAKEN";
 
 /** A clash the operator can act on. Expected, so the server does not log it. */
 export function conflict(reason: ConflictReason, message: string) {

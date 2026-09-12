@@ -1,9 +1,9 @@
 import { beforeAll, expect, test } from "bun:test";
 
+import { formatDecimal as formatMoney, parseMoney } from "@accly/api/core/money";
 import { businessDate } from "@accly/api/lib/business-date";
 import { invoiceBalanceFor } from "@accly/api/lib/invoice-balance";
 import { postJournalEntry } from "@accly/api/lib/ledger";
-import type { AppRouterClient } from "@accly/api/routers/index";
 
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
@@ -20,6 +20,7 @@ import { addPendingItemCharge, settlePendingCharges } from "../support/billing";
 import { clientFor, expectORPCCode } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 import { uniqueSuffix } from "../support/unique";
+
 beforeAll(async () => {
   await resetTestDatabase();
 });
@@ -37,80 +38,33 @@ function reportDate(date = new Date()): string {
 
 function addDays(date: string, days: number): string {
   const instant = new Date(`${date}T12:00:00+05:30`);
+
   return reportDate(new Date(instant.getTime() + days * 86_400_000));
 }
 
-function toPaise(value: string): bigint {
-  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-  if (!match) {
-    throw new Error(`invalid money value: ${value}`);
-  }
-  const amount = BigInt(match[2]!) * 100n + BigInt((match[3] ?? "").padEnd(2, "0"));
-  return match[1] === "-" ? -amount : amount;
-}
-
-function fromPaise(value: bigint): string {
-  const negative = value < 0n;
-  const absolute = negative ? -value : value;
-  return `${negative ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
-}
-
 function sumMoney(values: string[]): string {
-  return fromPaise(values.reduce((total, value) => total + toPaise(value), 0n));
+  return formatMoney(values.reduce((total, value) => total + parseMoney(value), 0n));
 }
 
-type AccountingFixture = {
-  organization: { id: string; slug: string };
-  api: AppRouterClient;
-  customer: { name: string; code: string };
-  createOpdAppointment: () => Promise<{ id: string }>;
-  addOtherCharge: (
-    appointmentId: string,
-    unitPrice: string,
-    taxRatePercent?: string,
-    description?: string,
-    taxCode?: string,
-  ) => Promise<unknown>;
-  addItemCharge: (
-    appointmentId: string,
-    options: {
-      name: string;
-      category: "consultation" | "procedure" | "lab" | "radiology" | "other";
-      unitPrice: string;
-      taxRatePercent: string;
-      taxCode?: string;
-    },
-  ) => Promise<{
-    item: { id: string };
-    charge: { sourceType: string; revenueCategory: string };
-  }>;
-  createConsultationAppointment: (options: {
-    name: string;
-    unitPrice: string;
-    taxRatePercent: string;
-    taxCode?: string;
-  }) => Promise<{ appointment: { id: string }; item: { id: string } }>;
-};
+type AccountingFixture = Awaited<ReturnType<typeof createAccountingFixture>>;
 
 async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") {
   const owner = await createTestUser(`${seed}-owner`);
   const organization = await createOrganization(owner, seed);
   const api = clientFor(owner);
+  const settings = await api.settings.get({ orgSlug: organization.slug });
   await api.settings.update({
     orgSlug: organization.slug,
+    ...settings,
     legalName: `${seed} Business`,
-    address: `${seed} Address`,
-    taxId: "GSTIN-TEST",
-    currency: "INR",
+    addressLine1: `${seed} Address`,
     timeZone,
     codePrefix: "Code",
     invoicePrefix: "INV",
     receiptPrefix: "RCT",
     creditNotePrefix: "CN",
-    fiscalYearStartMonth: 4,
-    followUpValidityDays: 14,
-    unbilledAlertHours: 24,
   });
+
   const customer = await api.customer.register({
     orgSlug: organization.slug,
     name: `${seed} Customer`,
@@ -120,10 +74,12 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
     dobEstimated: true,
     address: `${seed} Customer Address`,
   });
+
   const department = await api.staff.createDepartment({
     orgSlug: organization.slug,
     name: `${seed} Department`,
   });
+
   const practitioner = await api.staff.createPractitioner({
     orgSlug: organization.slug,
     name: `Dr. ${seed}`,
@@ -137,6 +93,7 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
       practitionerId: practitioner.id,
       scheduledLocal: "2030-03-15T10:30",
     });
+
     return (
       await api.opd.checkIn({
         orgSlug: organization.slug,
@@ -161,14 +118,17 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
       taxRatePercent,
       taxCode,
     });
+
     const charge = await addPendingItemCharge({
       orgId: organization.id,
       userId: owner.user.id,
       appointmentId,
       itemId: item.id,
     });
+
     return charge;
   }
+
   async function createConsultationAppointment(options: {
     name: string;
     unitPrice: string;
@@ -184,22 +144,26 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
       taxRatePercent: options.taxRatePercent,
       taxCode: options.taxCode,
     });
+
     const consultant = await api.staff.createPractitioner({
       orgSlug: organization.slug,
       name: `Dr. ${options.name}`,
       departmentId: department.id,
       consultFeeItemId: item.id,
     });
+
     const booked = await api.opd.book({
       orgSlug: organization.slug,
       customerId: customer.id,
       practitionerId: consultant.id,
       scheduledLocal: "2030-03-15T10:30",
     });
+
     const checkedIn = await api.opd.checkIn({
       orgSlug: organization.slug,
       appointmentId: booked.id,
     });
+
     return { appointment: checkedIn.appointment, item };
   }
 
@@ -222,12 +186,14 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
       taxRatePercent: options.taxRatePercent,
       taxCode: options.taxCode,
     });
+
     const charge = await addPendingItemCharge({
       orgId: organization.id,
       userId: owner.user.id,
       appointmentId,
       itemId: item.id,
     });
+
     return { item, charge };
   }
 
@@ -246,14 +212,17 @@ async function createAccountingFixture(seed: string, timeZone = "Asia/Kolkata") 
 test("dashboard collection trend labels the organization's Business Dates", async () => {
   const now = new Date();
   const utcDate = now.toISOString().slice(0, 10);
+
   // These fixed-offset extremes overlap around UTC noon, so one is always on a
   // different calendar date. America/Adak's DST offset made this time-dependent.
   const timeZone = ["Pacific/Kiritimati", "Etc/GMT+12"].find(
     (candidate) => businessDate(now, candidate) !== utcDate,
   );
+
   if (!timeZone) {
     throw new Error("Expected an extreme time zone to differ from the UTC date");
   }
+
   const fixture = await createAccountingFixture("dashboard-business-date", timeZone);
 
   const collections = await fixture.api.dashboard.collections({
@@ -275,9 +244,11 @@ async function journalFor(fixture: AccountingFixture, sourceType: string, source
         eq(journalEntries.sourceId, sourceId),
       ),
     );
+
   if (entries.length !== 1) {
     return { entries, lines: [] };
   }
+
   const lines = await db
     .select({
       code: accounts.code,
@@ -296,7 +267,15 @@ async function journalFor(fixture: AccountingFixture, sourceType: string, source
         eq(journalLines.entryId, entries[0]!.id),
       ),
     );
-  return { entries, lines };
+
+  return {
+    entries,
+    lines: lines.map((line) => ({
+      ...line,
+      debit: formatMoney(line.debit),
+      credit: formatMoney(line.credit),
+    })),
+  };
 }
 
 function expectBalanced(lines: Array<{ debit: string; credit: string }>) {
@@ -307,9 +286,11 @@ function expectBalanced(lines: Array<{ debit: string; credit: string }>) {
 
 function lineByCode(lines: Array<{ code: string; debit: string; credit: string }>, code: string) {
   const line = lines.find((candidate) => candidate.code === code);
+
   if (!line) {
     throw new Error(`expected journal line for account ${code}`);
   }
+
   return line;
 }
 
@@ -320,27 +301,32 @@ async function issueConsultationInvoice(fixture: AccountingFixture, seed: string
     taxRatePercent: "18.00",
     taxCode: "SVC18",
   });
+
   const issued = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: appointment.id,
   });
+
   return { appointment, ...issued };
 }
 
 test("issuing an invoice posts one balanced entry split across receivables, revenue, and GST", async () => {
   const fixture = await createAccountingFixture("accounting-invoice");
+
   const { appointment } = await fixture.createConsultationAppointment({
     name: "Taxable Consultation",
     unitPrice: "100.00",
     taxRatePercent: "18.00",
     taxCode: "SVC18",
   });
+
   await fixture.addOtherCharge(appointment.id, "50.00", "0", "Other Service");
 
   const issued = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: appointment.id,
   });
+
   expect(issued.invoice).toMatchObject({
     subtotal: "150.00",
     taxTotal: "18.00",
@@ -372,12 +358,14 @@ test("issuing an invoice posts one balanced entry split across receivables, reve
 test("a desk-added consultation charge posts to consultation revenue", async () => {
   const fixture = await createAccountingFixture("accounting-desk-consultation");
   const appointment = await fixture.createOpdAppointment();
+
   const { charge } = await fixture.addItemCharge(appointment.id, {
     name: "Desk Consultation",
     category: "consultation",
     unitPrice: "75.00",
     taxRatePercent: "0",
   });
+
   expect(charge).toMatchObject({
     sourceType: "item",
     revenueCategory: "consultation",
@@ -387,6 +375,7 @@ test("a desk-added consultation charge posts to consultation revenue", async () 
     orgSlug: fixture.organization.slug,
     appointmentId: appointment.id,
   });
+
   const journal = await journalFor(fixture, "invoice", issued.invoice.id);
   expect(lineByCode(journal.lines, "4100")).toMatchObject({
     debit: "0.00",
@@ -400,10 +389,12 @@ test("zero-rated invoices omit GST and zero-total invoices do not post", async (
   const fixture = await createAccountingFixture("accounting-zero");
   const zeroRateOpdAppointment = await fixture.createOpdAppointment();
   await fixture.addOtherCharge(zeroRateOpdAppointment.id, "25.00", "0", "Zero-rated Service");
+
   const zeroRate = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: zeroRateOpdAppointment.id,
   });
+
   const zeroRateJournal = await journalFor(fixture, "invoice", zeroRate.invoice.id);
   expect(zeroRateJournal.entries).toHaveLength(1);
   expect(zeroRateJournal.lines.map((line) => line.code)).not.toContain("2100");
@@ -413,10 +404,12 @@ test("zero-rated invoices omit GST and zero-total invoices do not post", async (
 
   const zeroTotalOpdAppointment = await fixture.createOpdAppointment();
   await fixture.addOtherCharge(zeroTotalOpdAppointment.id, "0.00", "0", "No-charge Service");
+
   const zeroTotal = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: zeroTotalOpdAppointment.id,
   });
+
   expect(zeroTotal.invoice.grandTotal).toBe("0.00");
   expect((await journalFor(fixture, "invoice", zeroTotal.invoice.id)).entries).toHaveLength(0);
 });
@@ -432,16 +425,19 @@ test("payments, credits, and refunds post exactly and reconcile in the OPD regis
     }),
     "BAD_REQUEST",
   );
+
   const [cash] = await fixture.api.billing.recordPayments({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
     payments: [{ method: "cash", amount: "100.00" }],
   });
+
   const [bank] = await fixture.api.billing.recordPayments({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
     payments: [{ method: "bank", amount: "18.00", reference: "BANK-LEDGER" }],
   });
+
   if (!cash || !bank) throw new Error("expected both payments");
 
   const cashJournal = await journalFor(fixture, "payment", cash.id);
@@ -455,9 +451,11 @@ test("payments, credits, and refunds post exactly and reconcile in the OPD regis
   expect(lineByCode(bankJournal.lines, "1100")).toMatchObject({ debit: "18.00", credit: "0.00" });
   expect(lineByCode(bankJournal.lines, "1200")).toMatchObject({ debit: "0.00", credit: "18.00" });
   expectBalanced(bankJournal.lines);
+
   const collections = await fixture.api.dashboard.collections({
     orgSlug: fixture.organization.slug,
   });
+
   expect(collections.collected).toBe("118.00");
   expect(collections.byMethod).toEqual([
     { method: "cash", amount: "100.00" },
@@ -465,15 +463,18 @@ test("payments, credits, and refunds post exactly and reconcile in the OPD regis
   ]);
 
   const [invoiceLine] = issued.lines;
+
   if (!invoiceLine) {
     throw new Error("expected an invoice line");
   }
+
   const credited = await fixture.api.billing.issueCreditNote({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
     reason: "Partial reversal",
     lines: [{ invoiceLineId: invoiceLine.id, gross: "59.00" }],
   });
+
   const creditJournal = await journalFor(fixture, "credit_note", credited.creditNote.id);
   expect(creditJournal.entries).toHaveLength(1);
   expect(lineByCode(creditJournal.lines, "4100")).toMatchObject({ debit: "50.00", credit: "0.00" });
@@ -488,6 +489,7 @@ test("payments, credits, and refunds post exactly and reconcile in the OPD regis
     amount: "59.00",
     reference: "UPI-REFUND-LEDGER",
   });
+
   const refundJournal = await journalFor(fixture, "refund", refund.id);
   expect(refundJournal.entries).toHaveLength(1);
   expect(lineByCode(refundJournal.lines, "1200")).toMatchObject({ debit: "59.00", credit: "0.00" });
@@ -498,11 +500,13 @@ test("payments, credits, and refunds post exactly and reconcile in the OPD regis
     orgSlug: fixture.organization.slug,
     appointmentId: issued.appointment.id,
   });
+
   const register = await fixture.api.report.opdRegister({
     orgSlug: fixture.organization.slug,
     from: appointment.businessDate,
     to: appointment.businessDate,
   });
+
   expect(register.rows).toHaveLength(1);
   expect(register.rows[0]).toMatchObject({
     appointmentId: appointment.id,
@@ -533,13 +537,16 @@ test("daily collections nets payments and refunds by Business Date and method", 
     ],
   });
   const [invoiceLine] = issued.lines;
+
   if (!invoiceLine) throw new Error("expected an invoice line");
+
   const credited = await fixture.api.billing.issueCreditNote({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
     reason: "Partial collection reversal",
     lines: [{ invoiceLineId: invoiceLine.id, gross: "20.00" }],
   });
+
   await fixture.api.billing.recordRefund({
     orgSlug: fixture.organization.slug,
     creditNoteId: credited.creditNote.id,
@@ -563,11 +570,13 @@ test("daily collections nets payments and refunds by Business Date and method", 
         and(eq(refunds.orgId, fixture.organization.id), eq(refunds.invoiceId, issued.invoice.id)),
       ),
   ]);
+
   const report = await fixture.api.report.dailyCollections({
     orgSlug: fixture.organization.slug,
     from: collectionDay,
     to: collectionDay,
   });
+
   expect(report.rows).toEqual([
     {
       businessDate: collectionDay,
@@ -584,10 +593,12 @@ test("daily collections nets payments and refunds by Business Date and method", 
   ]);
   expect(report.byMethod.find((row) => row.method === "cash")?.net).toBe("50.00");
   expect(report.totals.net).toBe("98.00");
+
   const dashboard = await fixture.api.dashboard.collections({
     orgSlug: fixture.organization.slug,
   });
-  expect(dashboard.collected).toBe("0");
+
+  expect(dashboard.collected).toBe("0.00");
   expect(dashboard.trend.find((row) => row.day === collectionDay)?.amount).toBe("118.00");
   await expectORPCCode(
     fixture.api.report.dailyCollections({
@@ -603,13 +614,18 @@ test("trial balance is balanced, agrees with invoice outstanding, and carries pr
   const fixture = await createAccountingFixture("accounting-trial");
   const issued = await issueConsultationInvoice(fixture, "Trial");
   const today = reportDate();
-  const balance = await invoiceBalanceFor(db, fixture.organization.id, issued.invoice);
+
+  const balance = await invoiceBalanceFor(db, fixture.organization.id, {
+    ...issued.invoice,
+    grandTotal: parseMoney(issued.invoice.grandTotal),
+  });
 
   const active = await fixture.api.report.trialBalance({
     orgSlug: fixture.organization.slug,
     from: today,
     to: today,
   });
+
   expect(active.totals.debit).toBe(active.totals.credit);
   expect(active.totals.debit).toBe("118.00");
   expect(active.totals.openingDebit).toBe(active.totals.openingCredit);
@@ -620,7 +636,7 @@ test("trial balance is balanced, agrees with invoice outstanding, and carries pr
   expect(receivables?.openingDebit).toBe("0.00");
   expect(receivables?.openingCredit).toBe("0.00");
   expect(receivables?.debit).toBe("118.00");
-  expect(receivables?.closingDebit).toBe(balance.outstanding);
+  expect(receivables?.closingDebit).toBe(formatMoney(balance.outstanding));
   expect(receivables?.closingCredit).toBe("0.00");
   expect(revenue?.closingDebit).toBe("0.00");
   expect(revenue?.closingCredit).toBe("100.00");
@@ -635,20 +651,22 @@ test("trial balance is balanced, agrees with invoice outstanding, and carries pr
         eq(journalEntries.sourceId, issued.invoice.id),
       ),
     );
+
   const afterRange = await fixture.api.report.trialBalance({
     orgSlug: fixture.organization.slug,
     from: today,
     to: today,
   });
+
   expect(afterRange.totals.debit).toBe("0.00");
   expect(afterRange.totals.credit).toBe("0.00");
   expect(afterRange.totals.openingDebit).toBe(afterRange.totals.openingCredit);
   expect(afterRange.totals.closingDebit).toBe(afterRange.totals.closingCredit);
   const carriedReceivables = afterRange.rows.find((row) => row.code === "1200");
-  expect(carriedReceivables?.openingDebit).toBe(balance.outstanding);
+  expect(carriedReceivables?.openingDebit).toBe(formatMoney(balance.outstanding));
   expect(carriedReceivables?.openingCredit).toBe("0.00");
   expect(carriedReceivables?.debit).toBe("0.00");
-  expect(carriedReceivables?.closingDebit).toBe(balance.outstanding);
+  expect(carriedReceivables?.closingDebit).toBe(formatMoney(balance.outstanding));
   expect(carriedReceivables?.closingCredit).toBe("0.00");
 });
 
@@ -660,6 +678,7 @@ test("balance sheet balances GST output and current surplus against assets", asy
     orgSlug: fixture.organization.slug,
     asOf: reportDate(),
   });
+
   expect(report.totals.assets).toBe("118.00");
   expect(report.totals.assets).toBe(report.totals.liabilitiesAndEquity);
   expect(report.liabilities).toContainEqual({
@@ -676,23 +695,29 @@ test("balance sheet balances GST output and current surplus against assets", asy
 
 test("GST register reconciles invoice and credit-note documents, rates, HSN, and date filters", async () => {
   const fixture = await createAccountingFixture("accounting-gst");
+
   const { appointment } = await fixture.createConsultationAppointment({
     name: "GST Consultation",
     unitPrice: "100.00",
     taxRatePercent: "18.00",
     taxCode: "SVC18",
   });
+
   await fixture.addOtherCharge(appointment.id, "50.00", "0", "Nil-rated Service", "NIL");
+
   const issued = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: appointment.id,
     discountAmount: "15.00",
     note: "Package discount",
   });
+
   const taxableLine = issued.lines.find((line) => line.taxRatePercent === "18.00");
+
   if (!taxableLine) {
     throw new Error("expected a taxable invoice line");
   }
+
   const credited = await fixture.api.billing.issueCreditNote({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
@@ -702,10 +727,12 @@ test("GST register reconciles invoice and credit-note documents, rates, HSN, and
 
   const outsideOpdAppointment = await fixture.createOpdAppointment();
   await fixture.addOtherCharge(outsideOpdAppointment.id, "25.00", "0", "Outside-range Service");
+
   const outside = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: outsideOpdAppointment.id,
   });
+
   const today = reportDate();
   const yesterday = addDays(today, -1);
   await db
@@ -718,6 +745,7 @@ test("GST register reconciles invoice and credit-note documents, rates, HSN, and
     from: today,
     to: today,
   });
+
   expect(report.documents).toHaveLength(2);
   expect(report.documents.map((document) => document.number)).not.toContain(
     outside.invoice.invoiceNumber,
@@ -729,8 +757,8 @@ test("GST register reconciles invoice and credit-note documents, rates, HSN, and
     date: today,
     customerName: fixture.customer.name,
     customerCode: fixture.customer.code,
-    taxableValue: fromPaise(
-      toPaise(issued.invoice.subtotal) - toPaise(issued.invoice.discountAmount),
+    taxableValue: formatMoney(
+      parseMoney(issued.invoice.subtotal) - parseMoney(issued.invoice.discountAmount),
     ),
     taxAmount: issued.invoice.taxTotal,
     gross: issued.invoice.grandTotal,
@@ -785,6 +813,7 @@ test("trial balance rejects an inverted date range", async () => {
 
 test("invoice and credit note keep the revenue category captured when the charge was created", async () => {
   const fixture = await createAccountingFixture("accounting-category-snapshot");
+
   const { appointment, item } = await fixture.createConsultationAppointment({
     name: "Snapshot Consultation",
     unitPrice: "100.00",
@@ -803,18 +832,22 @@ test("invoice and credit note keep the revenue category captured when the charge
     taxCode: item.taxCode,
     active: item.active,
   });
+
   const issued = await settlePendingCharges(fixture.api, {
     orgSlug: fixture.organization.slug,
     appointmentId: appointment.id,
   });
+
   const invoiceJournal = await journalFor(fixture, "invoice", issued.invoice.id);
   expect(lineByCode(invoiceJournal.lines, "4100").credit).toBe("100.00");
   expect(invoiceJournal.lines.some((line) => line.code === "4300")).toBe(false);
 
   const [invoiceLine] = issued.lines;
+
   if (!invoiceLine) {
     throw new Error("expected an invoice line");
   }
+
   const credited = await fixture.api.billing.issueCreditNote({
     orgSlug: fixture.organization.slug,
     invoiceId: issued.invoice.id,
@@ -833,6 +866,12 @@ test("invoice and credit note keep the revenue category captured when the charge
 
 test("concurrent first invoices seed one complete chart and both post", async () => {
   const fixture = await createAccountingFixture("accounting-concurrent-chart");
+
+  const initialChart = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.orgId, fixture.organization.id));
+
   const firstOpdAppointment = await fixture.createOpdAppointment();
   const secondOpdAppointment = await fixture.createOpdAppointment();
   await fixture.addOtherCharge(firstOpdAppointment.id, "10.00");
@@ -851,12 +890,16 @@ test("concurrent first invoices seed one complete chart and both post", async ()
 
   expect((await journalFor(fixture, "invoice", first.invoice.id)).entries).toHaveLength(1);
   expect((await journalFor(fixture, "invoice", second.invoice.id)).entries).toHaveLength(1);
+
   const chart = await db
     .select({ systemKey: accounts.systemKey })
     .from(accounts)
     .where(eq(accounts.orgId, fixture.organization.id));
-  expect(chart).toHaveLength(9);
-  expect(new Set(chart.map((row) => row.systemKey)).size).toBe(9);
+
+  // Cash and bank already exist in the core chart; first posting adds seven legacy controls.
+  expect(chart).toHaveLength(initialChart.length + 7);
+  const systemKeys = chart.flatMap((row) => (row.systemKey === null ? [] : [row.systemKey]));
+  expect(new Set(systemKeys).size).toBe(systemKeys.length);
 });
 
 test("journal lines reject accounts and entries from another organization", async () => {
@@ -864,10 +907,12 @@ test("journal lines reject accounts and entries from another organization", asyn
     createTestUser("accounting-journal-tenant-a"),
     createTestUser("accounting-journal-tenant-b"),
   ]);
+
   const [organizationA, organizationB] = await Promise.all([
     createOrganization(ownerA, "accounting-journal-tenant-a"),
     createOrganization(ownerB, "accounting-journal-tenant-b"),
   ]);
+
   const accountAId = Bun.randomUUIDv7();
   const accountBId = Bun.randomUUIDv7();
   const entryAId = Bun.randomUUIDv7();
@@ -918,8 +963,8 @@ test("journal lines reject accounts and entries from another organization", asyn
         orgId: organizationB.id,
         entryId: entryBId,
         accountId: accountAId,
-        debit: "1.00",
-        credit: "0",
+        debit: 100n,
+        credit: 0n,
       })
       .execute(),
   ).rejects.toThrow();
@@ -931,8 +976,8 @@ test("journal lines reject accounts and entries from another organization", asyn
         orgId: organizationB.id,
         entryId: entryAId,
         accountId: accountBId,
-        debit: "1.00",
-        credit: "0",
+        debit: 100n,
+        credit: 0n,
       })
       .execute(),
   ).rejects.toThrow();
@@ -953,8 +998,8 @@ test("duplicate source posting is rejected", async () => {
         now: new Date(),
         timeZone: "Asia/Kolkata",
         lines: [
-          { account: "customer_receivables", debit: "1.00" },
-          { account: "revenue_other", credit: "1.00" },
+          { account: "customer_receivables", debit: 100n },
+          { account: "revenue_other", credit: 100n },
         ],
       }),
     ),
@@ -969,7 +1014,7 @@ test("posting failure rolls back the invoice and charge transition", async () =>
   await db.insert(accounts).values({
     id: Bun.randomUUIDv7(),
     orgId: fixture.organization.id,
-    code: "1000",
+    code: "1200",
     name: "Conflicting custom account",
     type: "asset",
   });
@@ -987,12 +1032,14 @@ test("posting failure rolls back the invoice and charge transition", async () =>
       appointmentId: appointment.id,
     }),
   ).toHaveLength(0);
+
   const pending = await db
     .select({ status: charges.status, invoiceId: charges.invoiceId })
     .from(charges)
     .where(
       and(eq(charges.orgId, fixture.organization.id), eq(charges.opdAppointmentId, appointment.id)),
     );
+
   expect(pending).toEqual([{ status: "pending", invoiceId: null }]);
 });
 
@@ -1009,31 +1056,37 @@ test("GST summaries reconcile odd-paise tax buckets", async () => {
   }
 
   const today = reportDate();
+
   const report = await fixture.api.report.gst({
     orgSlug: fixture.organization.slug,
     from: today,
     to: today,
   });
+
   const invoiceDocuments = report.documents.filter((document) => document.docType === "invoice");
 
   expect(invoiceDocuments).toHaveLength(2);
   expect(invoiceDocuments.map((document) => document.taxAmount)).toEqual(["0.05", "0.05"]);
-  expect(toPaise(report.totals.cgst)).toBe(
-    invoiceDocuments.reduce((sum, document) => sum + toPaise(document.cgst), 0n),
+  expect(parseMoney(report.totals.cgst)).toBe(
+    invoiceDocuments.reduce((sum, document) => sum + parseMoney(document.cgst), 0n),
   );
-  expect(toPaise(report.totals.sgst)).toBe(
-    invoiceDocuments.reduce((sum, document) => sum + toPaise(document.sgst), 0n),
+  expect(parseMoney(report.totals.sgst)).toBe(
+    invoiceDocuments.reduce((sum, document) => sum + parseMoney(document.sgst), 0n),
   );
-  expect(report.rateSummary.reduce((sum, row) => sum + toPaise(row.cgst), 0n)).toBe(
-    toPaise(report.totals.cgst),
+  expect(report.rateSummary.reduce((sum, row) => sum + parseMoney(row.cgst), 0n)).toBe(
+    parseMoney(report.totals.cgst),
   );
-  expect(report.rateSummary.reduce((sum, row) => sum + toPaise(row.sgst), 0n)).toBe(
-    toPaise(report.totals.sgst),
+  expect(report.rateSummary.reduce((sum, row) => sum + parseMoney(row.sgst), 0n)).toBe(
+    parseMoney(report.totals.sgst),
   );
+
   for (const document of invoiceDocuments) {
-    expect(toPaise(document.cgst) + toPaise(document.sgst)).toBe(toPaise(document.taxAmount));
+    expect(parseMoney(document.cgst) + parseMoney(document.sgst)).toBe(
+      parseMoney(document.taxAmount),
+    );
   }
-  expect(toPaise(report.totals.cgst) + toPaise(report.totals.sgst)).toBe(
-    toPaise(report.totals.taxAmount),
+
+  expect(parseMoney(report.totals.cgst) + parseMoney(report.totals.sgst)).toBe(
+    parseMoney(report.totals.taxAmount),
   );
 });

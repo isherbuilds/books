@@ -22,6 +22,6 @@ export const payers = pgTable(
       sql`${table.type} in (${sql.raw(PAYER_TYPES.map((type) => `'${type}'`).join(", "))})`,
     ),
     unique("payers_org_id_id_unique").on(table.orgId, table.id),
-    uniqueIndex("payers_org_name_idx").on(table.orgId, table.name),
+    uniqueIndex("payers_org_name_idx").on(table.orgId, sql`lower(${table.name})`),
   ],
 );

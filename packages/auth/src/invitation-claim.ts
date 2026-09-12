@@ -23,6 +23,7 @@ export function invitationClaim() {
                 // never reach this hook, so every other creation path is refused.
                 async before(user, ctx) {
                   const invitationId = ctx?.path === "/sign-up/email" && ctx.body?.invitationId;
+
                   const [invited] = invitationId
                     ? await db
                         .select({ id: invitation.id })
@@ -36,12 +37,20 @@ export function invitationClaim() {
                         )
                         .limit(1)
                     : [];
+
                   if (!invited) {
                     throw new APIError("FORBIDDEN", {
                       code: "INVITATION_REQUIRED",
                       message: "Account creation requires a current invitation for this email.",
                     });
                   }
+
+                  return {
+                    data: {
+                      ...user,
+                      name: z.string().trim().min(1).max(200).parse(user.name),
+                    },
+                  };
                 },
               },
             },
@@ -68,11 +77,13 @@ export function invitationClaim() {
             .innerJoin(organization, eq(organization.id, invitation.organizationId))
             .leftJoin(user, eq(user.email, invitation.email))
             .where(and(eq(invitation.id, ctx.query.invitationId), live));
+
           if (!invited) {
             throw new APIError("NOT_FOUND", {
               message: "This invitation is no longer available. Ask the sender for a new link.",
             });
           }
+
           return ctx.json(invited);
         },
       ),

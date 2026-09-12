@@ -1,10 +1,10 @@
+import { createOrganization, createOrganizationInput } from "@accly/api/core/organizations";
 import { auth } from "@accly/auth";
 import type { RoleKey } from "@accly/auth/access";
 import { createUserWithPassword } from "@accly/auth/manual-user";
 import { db } from "@accly/db";
 import { runMigrations } from "@accly/db/migrate";
 import { member, user } from "@accly/db/schema/auth";
-import { SETTINGS_DEFAULTS, organizationSettings } from "@accly/db/schema/organization-settings";
 import { env } from "@accly/env/server";
 import { count, eq } from "drizzle-orm";
 import pg from "pg";
@@ -28,6 +28,7 @@ const RESETTABLE_DATABASE = /^(postgres|.*_dev|.*_test)$/;
 
 function assertResettableDatabase(): void {
   const name = new URL(env.DATABASE_URL).pathname.slice(1);
+
   if (!RESETTABLE_DATABASE.test(name)) {
     throw new Error(
       `Refusing to drop the schema of database "${name}". ` +
@@ -40,6 +41,7 @@ async function resetSchema(): Promise<void> {
   assertResettableDatabase();
   const client = new pg.Client({ connectionString: env.DATABASE_URL });
   await client.connect();
+
   try {
     await client.query(
       "drop schema public cascade; create schema public; drop schema if exists drizzle cascade;",
@@ -47,19 +49,24 @@ async function resetSchema(): Promise<void> {
   } finally {
     await client.end();
   }
+
   await runMigrations();
 }
 
 async function createUser(email: string, name: string): Promise<Person> {
   const { id } = await createUserWithPassword({ email, name, password: PASSWORD });
+
   const { headers } = await auth.api.signInEmail({
     body: { email, password: PASSWORD },
     returnHeaders: true,
   });
+
   const cookie = headers.get("set-cookie")?.split(";")[0];
+
   if (!cookie) {
     throw new Error(`Sign-in for ${email} returned no session cookie`);
   }
+
   return { email, name, id, headers: new Headers({ cookie }) };
 }
 
@@ -73,26 +80,23 @@ async function addMember(
   });
 }
 
-// Better Auth's system path (a userId with no session) bypasses
-// `allowUserToCreateOrganization`; the creator still becomes owner.
 async function createOrg(owner: Person, name: string, slug: string): Promise<string> {
-  const org = await auth.api.createOrganization({
-    body: { name, slug, userId: owner.id },
-  });
-  if (!org) {
-    throw new Error(`Could not create organization "${name}"`);
-  }
-  return org.id;
-}
+  const org = await createOrganization(
+    owner.id,
+    createOrganizationInput.parse({
+      name,
+      slug,
+      legalType: "company",
+      legalName: name,
+      pan: "AAACM1234A",
+      stateCode: "27",
+      addressLine1: "12 Business Road",
+      city: "Pune",
+      pinCode: "411001",
+    }),
+  );
 
-async function addSettings(orgId: string): Promise<void> {
-  await db.insert(organizationSettings).values({
-    orgId,
-    ...SETTINGS_DEFAULTS,
-    legalName: "Meridian Traders Pvt. Ltd.",
-    address: "12 Business Road, Pune, Maharashtra 411001",
-    taxId: "27AAACM1234A1Z5",
-  });
+  return org.id;
 }
 
 async function main(): Promise<void> {
@@ -101,17 +105,20 @@ async function main(): Promise<void> {
   }
 
   const reset = process.argv.includes("--reset");
+
   if (reset) {
     console.info("Dropping and re-migrating the schema…");
     await resetSchema();
   }
 
   const [existing] = await db.select({ value: count() }).from(user);
+
   if (existing && existing.value > 0) {
     console.info(
       `Database already has ${existing.value} user(s); leaving it alone.\n` +
         "Re-run with `bun run db:seed -- --reset` to wipe and reseed.",
     );
+
     return;
   }
 
@@ -129,8 +136,6 @@ async function main(): Promise<void> {
     body: { email: "invited@example.com", role: "reception", organizationId: meridian },
     headers: owner.headers,
   });
-
-  await addSettings(meridian);
 
   const [meridianCount] = await db
     .select({ value: count() })
@@ -165,4 +170,5 @@ async function main(): Promise<void> {
 }
 
 await main();
+
 process.exit(0);

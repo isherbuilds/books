@@ -1,4 +1,4 @@
-import { toPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import {
@@ -36,7 +36,9 @@ type PendingCharge = {
 
 function quotedAmount(grossById: Map<string, string>, chargeId: string): string {
   const amount = grossById.get(chargeId);
+
   if (amount === undefined) throw new Error(`Quote missing pending charge ${chargeId}`);
+
   return amount;
 }
 
@@ -74,6 +76,7 @@ export function ChargeCheckout({
   const chargesChanged = chargeRevision !== reviewed.chargeRevision;
   // Shown charges follow the reviewed snapshot, so a total cannot change mid-count.
   const shown = canSettle ? reviewed.pending : pending;
+
   const quote = servicePreview(
     shown.map((charge) => ({
       itemId: charge.id,
@@ -85,6 +88,7 @@ export function ChargeCheckout({
     })),
     currency,
   );
+
   const grossById = new Map(quote.lines.map((line) => [line.chargeId, line.gross]));
   const reason = chargesChanged ? CHARGES_MOVED : undefined;
 
@@ -98,6 +102,7 @@ export function ChargeCheckout({
       },
       onError: (error) => {
         if (hasErrorCode(error, "CONFLICT")) setCollecting(false);
+
         return onOpdError(appointmentId, "billing", error);
       },
     }),
@@ -114,13 +119,17 @@ export function ChargeCheckout({
   const issue = () => {
     if (reason) {
       document.getElementById(reason.fieldId)?.focus();
+
       return;
     }
+
     // Nothing to collect, so there is nothing for the overlay to ask.
-    if (toPaise(quote.grandTotal) === 0) {
+    if (parseMoney(quote.grandTotal) === 0n) {
       settle({ discountAmount: "0", expectedGrandTotal: quote.grandTotal, payments: [] });
+
       return;
     }
+
     setCollecting(true);
   };
 
@@ -202,7 +211,7 @@ export function ChargeCheckout({
               aria-describedby={reason ? "charge-checkout-issue" : undefined}
               onClick={issue}
             >
-              {toPaise(quote.grandTotal) === 0 ? "Issue invoice" : "Review and collect"}
+              {parseMoney(quote.grandTotal) === 0n ? "Issue invoice" : "Review and collect"}
             </SubmitButton>
             {reason ? (
               <p id="charge-checkout-issue" className="text-muted-foreground">

@@ -21,5 +21,6 @@ export async function nextCounter(tx: DbTransaction, orgId: string, key: string)
   if (!row) {
     throw new Error(`Counter increment returned no row for key "${key}"`);
   }
+
   return row.value;
 }

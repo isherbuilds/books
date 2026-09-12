@@ -4,23 +4,30 @@ import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
 
 const API_URL = process.env.PERF_API_URL ?? "http://127.0.0.1:3100";
+
 const WEB_URL = process.env.PERF_BASE_URL ?? "http://127.0.0.1:3101";
+
 const EMAIL = process.env.PERF_EMAIL;
+
 const PASSWORD = process.env.PERF_PASSWORD;
+
 const REQUEST_COUNT = Number(process.env.PERF_RPC_REQUESTS ?? 200);
+
 const WARMUP_COUNT = 20;
+
 const ORG_SLUG = "meridian-traders";
 
 if (!EMAIL || !PASSWORD) {
   throw new Error("Set PERF_EMAIL and PERF_PASSWORD to a benchmark fixture account");
 }
+
 if (!Number.isInteger(REQUEST_COUNT) || REQUEST_COUNT < 1) {
   throw new Error("PERF_RPC_REQUESTS must be a positive integer");
 }
 
 type Scenario = {
   name: string;
-  run: () => Promise<unknown>;
+  run: () => Promise<void>;
 };
 
 type ScenarioReport = {
@@ -46,10 +53,13 @@ async function signIn(): Promise<string> {
     },
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
   });
+
   if (!response.ok) throw new Error(`Benchmark sign-in failed: ${response.status}`);
   const setCookie = response.headers.get("set-cookie");
   const cookie = setCookie?.split(";")[0];
+
   if (!cookie) throw new Error("Benchmark sign-in returned no session cookie");
+
   return cookie;
 }
 
@@ -77,13 +87,16 @@ async function runScenario(scenario: Scenario): Promise<ScenarioReport> {
   }
 
   const durations: number[] = [];
+
   for (let index = 0; index < REQUEST_COUNT; index += 1) {
     const startedAt = performance.now();
+
     try {
       await scenario.run();
     } catch {
       failures += 1;
     }
+
     durations.push(performance.now() - startedAt);
   }
 
@@ -92,6 +105,7 @@ async function runScenario(scenario: Scenario): Promise<ScenarioReport> {
   }
 
   durations.sort((left, right) => left - right);
+
   return {
     scenario: scenario.name,
     requests: REQUEST_COUNT,
@@ -104,27 +118,38 @@ async function runScenario(scenario: Scenario): Promise<ScenarioReport> {
 }
 
 const cookie = await signIn();
+
 const client = createClient(cookie);
+
 const scenarios: Scenario[] = [
   {
     name: "customers_first_page",
-    run: async () => client.customer.search({ orgSlug: ORG_SLUG, limit: 20 }),
+    run: async () => {
+      await client.customer.search({ orgSlug: ORG_SLUG, limit: 20 });
+    },
   },
   {
     name: "customers_query_ra",
-    run: async () => client.customer.search({ orgSlug: ORG_SLUG, query: "ra", limit: 20 }),
+    run: async () => {
+      await client.customer.search({ orgSlug: ORG_SLUG, query: "ra", limit: 20 });
+    },
   },
   {
     name: "customers_phone_9876",
-    run: async () => client.customer.search({ orgSlug: ORG_SLUG, phone: "9876", limit: 20 }),
+    run: async () => {
+      await client.customer.search({ orgSlug: ORG_SLUG, phone: "9876", limit: 20 });
+    },
   },
   {
     name: "item_list",
-    run: async () => client.item.list({ orgSlug: ORG_SLUG, activeOnly: false }),
+    run: async () => {
+      await client.item.list({ orgSlug: ORG_SLUG, activeOnly: false });
+    },
   },
 ];
 
 const scenarioReports: ScenarioReport[] = [];
+
 for (const scenario of scenarios) {
   scenarioReports.push(await runScenario(scenario));
 }
@@ -141,4 +166,5 @@ const report = JSON.stringify(
 );
 
 if (process.env.PERF_OUTPUT) await Bun.write(process.env.PERF_OUTPUT, `${report}\n`);
+
 console.log(report);

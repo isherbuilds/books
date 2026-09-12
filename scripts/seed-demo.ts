@@ -1,5 +1,7 @@
+import { formatDecimal as formatMoney, parseMoney } from "@accly/api/core/money";
 import { businessDate } from "@accly/api/lib/business-date";
 import { documentNumber, fiscalYearLabel } from "@accly/api/lib/invoice-math";
+import { readOrgSettings } from "@accly/api/lib/settings-cache";
 import { db } from "@accly/db";
 import { nextCounter } from "@accly/db/counter";
 import { organization, user } from "@accly/db/schema/auth";
@@ -9,7 +11,6 @@ import { departments } from "@accly/db/schema/departments";
 import { invoiceLines } from "@accly/db/schema/invoice-lines";
 import { invoices } from "@accly/db/schema/invoices";
 import { opdAppointments } from "@accly/db/schema/opd-appointments";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { customers } from "@accly/db/schema/customers";
 import { payments } from "@accly/db/schema/payments";
 import { practitioners } from "@accly/db/schema/practitioners";
@@ -25,43 +26,53 @@ import { and, eq, like } from "drizzle-orm";
 if (env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");
 
 const SLUG = "meridian-traders";
+
 const HISTORY_DAYS = 20;
 
 const now = new Date();
 
 const [org] = await db.select().from(organization).where(eq(organization.slug, SLUG)).limit(1);
+
 if (!org) throw new Error(`No organization "${SLUG}". Run \`bun run db:seed\` first.`);
+
 const orgId = org.id;
-const [settings] = await db
-  .select()
-  .from(organizationSettings)
-  .where(eq(organizationSettings.orgId, orgId));
-if (!settings) throw new Error(`No settings for "${SLUG}". Run \`bun run db:seed\` first.`);
+
+const settings = await readOrgSettings(orgId);
+
 const today = businessDate(now, settings.timeZone);
 
 const [actor] = await db.select().from(user).where(eq(user.email, "owner@example.com")).limit(1);
+
 if (!actor) throw new Error("No owner@example.com. Run `bun run db:seed` first.");
+
 const userId = actor.id;
 
 // --- Deterministic ids and randomness ----------------------------------------
 
 let sequence = 0;
+
 const id = (kind: string) => `demo-${kind}-${(sequence += 1).toString().padStart(6, "0")}`;
 
 // A fixed seed, so two runs produce the same screenshots.
 let rngState = 0x5eed_2026;
+
 function random(): number {
   rngState = (rngState * 1_664_525 + 1_013_904_223) % 4_294_967_296;
+
   return rngState / 4_294_967_296;
 }
+
 const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!;
+
 const between = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
 
 function dayBefore(days: number): string {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - days);
+
   return date.toISOString().slice(0, 10);
 }
+
 // An IST wall-clock time on a business date, as an instant.
 const at = (day: string, hour: number, minute: number) =>
   new Date(`${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+05:30`);
@@ -104,18 +115,19 @@ const consultItems = DEPARTMENTS.map((d) => ({
   name: `${d.name} consultation`,
   code: d.code,
   category: "consultation" as const,
-  unitPrice: d.fee,
+  unitPrice: parseMoney(d.fee),
   taxRatePercent: "0",
   taxCode: null,
   active: true,
 }));
+
 const procedureItems = PROCEDURES.map((p) => ({
   id: id("item"),
   orgId,
   name: p.name,
   code: p.code,
   category: "procedure" as const,
-  unitPrice: p.price,
+  unitPrice: parseMoney(p.price),
   taxRatePercent: "0",
   taxCode: null,
   active: true,
@@ -128,10 +140,12 @@ const deptRows = DEPARTMENTS.map((d, i) => ({
   defaultConsultFeeItemId: consultItems[i]!.id,
   share: d.share,
 }));
+
 const deptByName = new Map(deptRows.map((d) => [d.name, d]));
 
 const doctorRows = DOCTORS.map((doc) => {
   const dept = deptByName.get(doc.dept)!;
+
   return {
     id: id("doc"),
     orgId,
@@ -172,6 +186,7 @@ const FEMALE_GIVEN = [
   "Pooja",
   "Neelam",
 ];
+
 const MALE_GIVEN = [
   "Rakesh",
   "Joseph",
@@ -193,6 +208,7 @@ const MALE_GIVEN = [
   "Sanjay",
   "Iqbal",
 ];
+
 const FAMILY = [
   "Nair",
   "Yadav",
@@ -219,18 +235,21 @@ const FAMILY = [
   "Joshi",
   "Fernandes",
 ];
+
 const AREAS = ["Kothrud", "Aundh", "Camp", "Hadapsar", "Baner", "Wanowrie", "Kharadi"];
 
 const CUSTOMER_COUNT = 160;
+
 const customerRows = Array.from({ length: CUSTOMER_COUNT }, () => {
   const female = random() < 0.52;
+
   return {
     id: id("pat"),
     orgId,
     code: "",
     name: `${pick(female ? FEMALE_GIVEN : MALE_GIVEN)} ${pick(FAMILY)}`,
     phone: `9${between(700000000, 899999999)}`,
-    sex: (female ? "female" : "male") as "female" | "male",
+    sex: female ? ("female" as const) : ("male" as const),
     dateOfBirth: `${between(1942, 2022)}-${String(between(1, 12)).padStart(2, "0")}-${String(between(1, 28)).padStart(2, "0")}`,
     dobEstimated: random() < 0.08,
     address: `${pick(AREAS)}, Pune`,
@@ -246,9 +265,13 @@ const fyOf = (day: string) =>
   fiscalYearLabel(new Date(`${day}T06:00:00Z`), settings.fiscalYearStartMonth);
 
 const appointmentRows: (typeof opdAppointments.$inferInsert)[] = [];
+
 const chargeRows: (typeof charges.$inferInsert)[] = [];
+
 const invoiceRows: (typeof invoices.$inferInsert)[] = [];
+
 const invoiceLineRows: (typeof invoiceLines.$inferInsert)[] = [];
+
 const paymentRows: (typeof payments.$inferInsert)[] = [];
 
 type Settlement = "paid" | "part" | "unpaid" | "unbilled";
@@ -285,12 +308,14 @@ function visit(
 
   const fee = consultItems.find((item) => item.id === doctor.consultFeeItemId)!;
   const extras = random() < 0.38 ? [pick(procedureItems)] : [];
+
   const lines = [
     { item: fee, source: "consult_fee" as const },
     ...extras.map((item) => ({ item, source: "item" as const })),
   ];
 
   const invoiceId = settlement === "unbilled" ? null : id("inv");
+
   const rows = lines.map(({ item, source }) => ({
     id: id("chg"),
     orgId,
@@ -310,10 +335,12 @@ function visit(
     createdAt: arrivedAt,
     updatedAt: arrivedAt,
   }));
+
   chargeRows.push(...rows);
+
   if (!invoiceId) return;
 
-  const subtotal = rows.reduce((sum, row) => sum + Number(row.unitPrice), 0);
+  const subtotal = rows.reduce((sum, row) => sum + row.unitPrice, 0n);
   invoiceRows.push({
     id: invoiceId,
     orgId,
@@ -322,11 +349,11 @@ function visit(
     invoiceNumber: "",
     fiscalYear: fyOf(day),
     businessDate: day,
-    discountAmount: "0.00",
+    discountAmount: 0n,
     note: null,
-    subtotal: subtotal.toFixed(2),
-    taxTotal: "0.00",
-    grandTotal: subtotal.toFixed(2),
+    subtotal,
+    taxTotal: 0n,
+    grandTotal: subtotal,
     orgLegalName: "Meridian Traders Pvt. Ltd.",
     orgAddress: "12 Business Road, Pune, Maharashtra 411001",
     orgTaxId: "27AAACM1234A1Z5",
@@ -348,9 +375,9 @@ function visit(
       qty: 1,
       unitPrice: row.unitPrice,
       lineSubtotal: row.unitPrice,
-      allocatedDiscount: "0.00",
+      allocatedDiscount: 0n,
       taxableValue: row.unitPrice,
-      taxAmount: "0.00",
+      taxAmount: 0n,
       gross: row.unitPrice,
       taxRatePercent: "0",
       taxCode: null,
@@ -359,13 +386,13 @@ function visit(
   );
 
   if (settlement === "unpaid") return;
-  const paid = settlement === "part" ? Math.round(subtotal / 2) : subtotal;
+  const paid = settlement === "part" ? subtotal / 2n : subtotal;
   paymentRows.push({
     id: id("pay"),
     orgId,
     invoiceId,
     method: pick(["cash", "cash", "upi", "upi", "upi", "card", "bank"] as const),
-    amount: paid.toFixed(2),
+    amount: paid,
     reference: null,
     receiptNumber: "",
     fiscalYear: fyOf(day),
@@ -376,6 +403,7 @@ function visit(
 }
 
 let customerCursor = 0;
+
 const nextCustomer = () => customerRows[customerCursor++ % customerRows.length]!;
 
 for (let offset = HISTORY_DAYS; offset >= 0; offset--) {
@@ -388,8 +416,10 @@ for (let offset = HISTORY_DAYS; offset >= 0; offset--) {
   for (let i = 0; i < load; i++) {
     const doctor = pick(DOCTOR_POOL);
     const roll = random();
+
     const settlement: Settlement =
       roll < 0.82 ? "paid" : roll < 0.9 ? "part" : roll < 0.95 ? "unpaid" : "unbilled";
+
     const minuteOfDay = 9 * 60 + Math.floor(random() * 9 * 60);
     visit(day, doctor, {
       customer: nextCustomer(),
@@ -421,6 +451,7 @@ for (let offset = HISTORY_DAYS; offset >= 0; offset--) {
         updatedAt: at(day, 8, 0),
       });
     }
+
     // One of each closed state, so the "All" filter is not a wall of one status.
     for (const status of ["cancelled", "no_show"] as const) {
       const doctor = pick(DOCTOR_POOL);
@@ -468,7 +499,9 @@ await db.transaction(async (tx) => {
     const sequence = await nextCounter(tx, orgId, "code");
     customer.code = `${settings.codePrefix}${String(sequence).padStart(6, "0")}`;
   }
+
   const customerById = new Map(customerRows.map((customer) => [customer.id, customer]));
+
   for (const appointment of appointmentRows) {
     if (appointment.status === "checked_in") {
       appointment.tokenNumber = await nextCounter(
@@ -478,11 +511,13 @@ await db.transaction(async (tx) => {
       );
     }
   }
+
   for (const invoice of invoiceRows) {
     const sequence = await nextCounter(tx, orgId, `invoice:${invoice.fiscalYear}`);
     invoice.invoiceNumber = documentNumber(settings.invoicePrefix, invoice.fiscalYear, sequence);
     invoice.customerCode = customerById.get(invoice.customerId)!.code;
   }
+
   for (const payment of paymentRows) {
     const sequence = await nextCounter(tx, orgId, `receipt:${payment.fiscalYear}`);
     payment.receiptNumber = documentNumber(settings.receiptPrefix, payment.fiscalYear, sequence);
@@ -501,16 +536,17 @@ await db.transaction(async (tx) => {
 
 const collectedToday = paymentRows
   .filter((row) => row.businessDate === today)
-  .reduce((sum, row) => sum + Number(row.amount), 0);
+  .reduce((sum, row) => sum + row.amount, 0n);
 
 console.info(
   [
     "",
     "Demo practice seeded.",
     `  ${HISTORY_DAYS + 1} days, ${appointmentRows.length} appointments, ${invoiceRows.length} invoices, ${paymentRows.length} receipts.`,
-    `  Today (${today}): ₹${collectedToday.toLocaleString("en-IN")} collected.`,
+    `  Today (${today}): ₹${formatMoney(collectedToday)} collected.`,
     `  Sign in as owner@example.com / password123 and open /${SLUG}/dashboard`,
     "",
   ].join("\n"),
 );
+
 process.exit(0);

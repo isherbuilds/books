@@ -1,4 +1,4 @@
-import { toPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import {
   Dialog,
   DialogContent,
@@ -55,11 +55,15 @@ type SettlementOverlayProps = {
 
 function focusProblemField(fieldId: string, selectOnFocus?: boolean) {
   const field = document.getElementById(fieldId);
+
   if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
     field.focus();
+
     if (selectOnFocus) field.select();
+
     return;
   }
+
   field?.focus();
 }
 
@@ -78,26 +82,32 @@ export function SettlementOverlay({
   const mobile = useIsMobile();
   const [discount, setDiscount] = useState("");
   const [note, setNote] = useState("");
+
   const [payments, setPayments] = useState<PaymentLine[]>(() => [
     { id: 1, method: "cash", amount: quote.grandTotal, reference: "" },
   ]);
+
   // Quiet problems stay quiet until the operator has tried to confirm.
   const [attempted, setAttempted] = useState(false);
 
   const normalizedDiscount = discount.trim() || "0";
+
   const discountPaise = MONEY_INPUT_PATTERN.test(normalizedDiscount)
     ? parseMoneyInput(normalizedDiscount)
     : null;
+
   // An invalid discount is reported by `settlementProblems`; the bill stays on the
   // undiscounted figures until it is fixed.
   const discounted =
-    discountPaise !== null && discountPaise <= toPaise(quote.subtotal)
+    discountPaise !== null && discountPaise <= parseMoney(quote.subtotal)
       ? applyDiscount(quote, normalizedDiscount)
       : quote;
-  const due = toPaise(discounted.grandTotal);
+
+  const due = parseMoney(discounted.grandTotal);
+
   const problems = settlementProblems({
     due,
-    subtotal: toPaise(quote.subtotal),
+    subtotal: parseMoney(quote.subtotal),
     discount,
     note,
     payments,
@@ -109,6 +119,7 @@ export function SettlementOverlay({
     if (blockedReason) return;
     setAttempted(true);
     const [blocking] = problems;
+
     if (blocking) return focusProblemField(blocking.fieldId, blocking.selectOnFocus);
 
     onConfirm({
@@ -116,7 +127,7 @@ export function SettlementOverlay({
       expectedGrandTotal: discounted.grandTotal,
       note: note.trim() || undefined,
       payments: payments
-        .filter((payment) => (amountOf(payment) ?? 0) > 0)
+        .filter((payment) => (amountOf(payment) ?? 0n) > 0n)
         .map((payment) => ({
           method: payment.method,
           amount: payment.amount.trim(),

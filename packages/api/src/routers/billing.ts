@@ -13,6 +13,7 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatDecimal as formatMoney } from "../core/money";
 import { audit } from "../audit";
 import { businessDate, businessDateAnchor } from "../lib/business-date";
 import { impossible } from "../lib/conflict";
@@ -23,9 +24,6 @@ import {
   derivePartialCredit,
   documentNumber,
   fiscalYearLabel,
-  fromPaise,
-  toPaise,
-  toSignedPaise,
 } from "../lib/invoice-math";
 import {
   postJournalEntry,
@@ -51,13 +49,49 @@ const creditLineInput = z.union([
   z.object({ invoiceLineId: z.string(), gross: positiveMoney }).strict(),
 ]);
 
+/** Spreading a generic row intersects types (bigint & string = never), so the formatted keys are replaced explicitly. */
+type MoneyKey<T> = { [P in keyof T]: T[P] extends bigint ? P : never }[keyof T];
+
+function formatMoneyKeys<T extends Record<K, bigint>, K extends MoneyKey<T>>(
+  record: T,
+  keys: readonly K[],
+): Omit<T, K> & Record<K, string> {
+  // SAFETY: The following loop assigns every requested key before this record is returned.
+  const formatted: Record<K, string> = {} as Record<K, string>;
+
+  for (const key of keys) {
+    formatted[key] = formatMoney(record[key]);
+  }
+
+  return { ...record, ...formatted };
+}
+
+const INVOICE_MONEY = ["discountAmount", "subtotal", "taxTotal", "grandTotal"] as const;
+
+const INVOICE_LINE_MONEY = [
+  "unitPrice",
+  "lineSubtotal",
+  "allocatedDiscount",
+  "taxableValue",
+  "taxAmount",
+  "gross",
+] as const;
+
+const CREDIT_NOTE_MONEY = ["subtotal", "taxTotal", "total"] as const;
+
+const CREDIT_LINE_MONEY = ["taxableValue", "taxAmount", "gross"] as const;
+
+const AMOUNT_MONEY = ["amount"] as const;
+
 export async function billingDocumentContext(orgId: string) {
   const settings = await readOrgSettings(orgId);
   const now = new Date();
+
   const fiscalYear = fiscalYearLabel(
     businessDateAnchor(now, settings.timeZone),
     settings.fiscalYearStartMonth,
   );
+
   return { settings, now, fiscalYear };
 }
 
@@ -76,6 +110,7 @@ async function lockInvoice(tx: DbTransaction, orgId: string, invoiceId: string) 
   if (!invoice) {
     throw new ORPCError("NOT_FOUND", { message: "That invoice no longer exists." });
   }
+
   return invoice;
 }
 
@@ -86,7 +121,7 @@ async function issueInvoiceTx(
   args: {
     scope: { orgId: string; userId: string };
     appointmentId: string;
-    discountAmount: string;
+    discountAmount: bigint;
     note?: string;
     settings: Awaited<ReturnType<typeof billingDocumentContext>>["settings"];
     now: Date;
@@ -96,10 +131,12 @@ async function issueInvoiceTx(
   },
 ) {
   const { scope, settings, now, fiscalYear, invoiceId } = args;
+
   // Held here so every caller obeys it — no entry point may discount without a reason.
-  if (toPaise(args.discountAmount) > 0 && !args.note) {
+  if (args.discountAmount > 0n && !args.note) {
     throw new ORPCError("BAD_REQUEST", { message: "Add a reason for the discount" });
   }
+
   const [appointmentAndCustomer] = await tx
     .select({
       appointmentStatus: opdAppointments.status,
@@ -123,9 +160,11 @@ async function issueInvoiceTx(
   if (!appointmentAndCustomer) {
     throw new ORPCError("NOT_FOUND", { message: "That appointment no longer exists." });
   }
+
   if (appointmentAndCustomer.appointmentStatus !== "checked_in") {
     throw new ORPCError("CONFLICT", { message: "This appointment can no longer be billed." });
   }
+
   if (
     args.expectedChargeRevision !== "fresh" &&
     appointmentAndCustomer.chargeRevision !== args.expectedChargeRevision
@@ -161,29 +200,37 @@ async function issueInvoiceTx(
       message: "These charges were already settled or voided.",
     });
   }
+
   const subtotalPaise = pendingCharges.reduce(
-    (sum, charge) => sum + charge.qty * toPaise(charge.unitPrice),
-    0,
+    (sum, charge) => sum + BigInt(charge.qty) * charge.unitPrice,
+    0n,
   );
-  if (toPaise(args.discountAmount) > subtotalPaise) {
+
+  if (args.discountAmount > subtotalPaise) {
     throw new ORPCError("BAD_REQUEST", {
       message: "The charges changed. Review the invoice and try again",
     });
   }
 
   const computed = computeInvoiceLines(pendingCharges, args.discountAmount);
+
   const categoryByChargeId = new Map(
     pendingCharges.map((charge) => [charge.chargeId, charge.revenueCategory]),
   );
+
   const computedWithRevenue = computed.lines.map((line) => {
     const revenueCategory = categoryByChargeId.get(line.chargeId);
+
     if (revenueCategory === undefined) {
       throw new Error(`Revenue category missing for charge ${line.chargeId}`);
     }
+
     return { ...line, revenueCategory };
   });
+
   const sequence = await nextCounter(tx, scope.orgId, `invoice:${fiscalYear}`);
   const invoiceNumber = documentNumber(settings.invoicePrefix, fiscalYear, sequence);
+
   const [invoice] = await tx
     .insert(invoices)
     .values({
@@ -246,18 +293,15 @@ async function issueInvoiceTx(
   if (flippedCharges.length !== computedWithRevenue.length) {
     throw impossible("locked pending charges changed status mid-transaction");
   }
-  const revenueByAccount = new Map<SystemAccountKey, number>();
+
+  const revenueByAccount = new Map<SystemAccountKey, bigint>();
+
   for (const line of computedWithRevenue) {
     const account = revenueAccountFor(line.revenueCategory);
-    revenueByAccount.set(
-      account,
-      (revenueByAccount.get(account) ?? 0) + toPaise(line.taxableValue),
-    );
+    revenueByAccount.set(account, (revenueByAccount.get(account) ?? 0n) + line.taxableValue);
   }
 
-  const grandTotalPaise = toPaise(computed.grandTotal);
-  if (grandTotalPaise > 0) {
-    const taxTotalPaise = toPaise(computed.taxTotal);
+  if (computed.grandTotal > 0n) {
     await postJournalEntry(tx, {
       orgId: scope.orgId,
       sourceType: "invoice",
@@ -267,13 +311,13 @@ async function issueInvoiceTx(
       now,
       timeZone: settings.timeZone,
       lines: [
-        { account: "customer_receivables", debit: fromPaise(grandTotalPaise) },
+        { account: "customer_receivables", debit: computed.grandTotal },
         ...[...revenueByAccount].map(([account, amount]) => ({
           account,
-          credit: fromPaise(amount),
+          credit: amount,
         })),
-        ...(taxTotalPaise > 0
-          ? [{ account: "gst_output" as const, credit: fromPaise(taxTotalPaise) }]
+        ...(computed.taxTotal > 0n
+          ? [{ account: "gst_output" as const, credit: computed.taxTotal }]
           : []),
       ],
     });
@@ -289,6 +333,7 @@ async function issueInvoiceTx(
       ),
     )
     .returning({ chargeRevision: opdAppointments.chargeRevision });
+
   if (!versionedAppointment) throw impossible("locked appointment vanished before versioning");
 
   return { invoice, lines: insertedLines, chargeRevision: versionedAppointment.chargeRevision };
@@ -299,7 +344,7 @@ async function recordPaymentsTx(
   args: {
     scope: { orgId: string; userId: string };
     invoiceId: string;
-    payments: Array<{ method: PaymentMethod; amount: string; reference?: string }>;
+    payments: Array<{ method: PaymentMethod; amount: bigint; reference?: string }>;
     settings: Awaited<ReturnType<typeof billingDocumentContext>>["settings"];
     now: Date;
     fiscalYear: string;
@@ -309,21 +354,23 @@ async function recordPaymentsTx(
   const invoice = await lockInvoice(tx, scope.orgId, args.invoiceId);
 
   const balance = await invoiceBalanceFor(tx, scope.orgId, invoice);
-  const outstandingPaise = toSignedPaise(balance.outstanding);
-  const collectedPaise = args.payments.reduce((sum, payment) => sum + toPaise(payment.amount), 0);
+  const collectedPaise = args.payments.reduce((sum, payment) => sum + payment.amount, 0n);
+
   // The form already caps at what it was shown, so reaching here means another
   // terminal moved the balance: CONFLICT, and the client refreshes.
-  if (collectedPaise > Math.max(0, outstandingPaise)) {
+  if (collectedPaise > (balance.outstanding > 0n ? balance.outstanding : 0n)) {
     throw new ORPCError("CONFLICT", {
       message: "That payment is more than the invoice still owes.",
     });
   }
 
   const recorded = [];
+
   for (const payment of args.payments) {
     const paymentId = Bun.randomUUIDv7();
     const sequence = await nextCounter(tx, scope.orgId, `receipt:${fiscalYear}`);
     const receiptNumber = documentNumber(settings.receiptPrefix, fiscalYear, sequence);
+
     const [inserted] = await tx
       .insert(payments)
       .values({
@@ -357,6 +404,7 @@ async function recordPaymentsTx(
     });
     recorded.push(inserted);
   }
+
   return recorded;
 }
 
@@ -367,40 +415,45 @@ export async function settleInvoiceTx(
   args: {
     scope: { orgId: string; userId: string };
     appointmentId: string;
-    discountAmount: string;
+    discountAmount: bigint;
     note?: string;
-    payments: Array<{ method: PaymentMethod; amount: string; reference?: string }>;
+    payments: Array<{ method: PaymentMethod; amount: bigint; reference?: string }>;
     settings: Awaited<ReturnType<typeof billingDocumentContext>>["settings"];
     now: Date;
     fiscalYear: string;
     invoiceId: string;
-    expectedGrandTotal: string;
+    expectedGrandTotal: bigint;
     // "fresh" declares the care row was created in this transaction, so no concurrent charge writer exists.
     expectedChargeRevision: number | "fresh";
   },
 ) {
   const issued = await issueInvoiceTx(tx, args);
-  if (toPaise(issued.invoice.grandTotal) !== toPaise(args.expectedGrandTotal)) {
+
+  if (issued.invoice.grandTotal !== args.expectedGrandTotal) {
     throw new ORPCError("CONFLICT", {
       message: "The charges changed. Review the invoice and try again",
     });
   }
 
-  const collected = args.payments.reduce((sum, payment) => sum + toPaise(payment.amount), 0);
-  const due = toPaise(issued.invoice.grandTotal);
+  const collected = args.payments.reduce((sum, payment) => sum + payment.amount, 0n);
+  const due = issued.invoice.grandTotal;
+
   if (collected > due) {
     throw new ORPCError("BAD_REQUEST", {
       message: "Collected amount cannot exceed the invoice total",
     });
   }
+
   if (collected < due && !args.note) {
     throw new ORPCError("BAD_REQUEST", {
       message: "Add a reason for the outstanding balance",
     });
   }
+
   if (args.payments.length === 0) {
     return { ...issued, payments: [] };
   }
+
   const recorded = await recordPaymentsTx(tx, {
     scope: args.scope,
     invoiceId: args.invoiceId,
@@ -409,6 +462,7 @@ export async function settleInvoiceTx(
     now: args.now,
     fiscalYear: args.fiscalYear,
   });
+
   return { ...issued, payments: recorded };
 }
 
@@ -419,6 +473,7 @@ export const billingRouter = {
     orgInput.extend({ chargeId: z.string(), reason }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
+
     const charge = await db.transaction(async (tx) => {
       const [candidate] = await tx
         .select({ appointmentId: charges.opdAppointmentId })
@@ -433,6 +488,7 @@ export const billingRouter = {
         .where(and(eq(charges.orgId, scope.orgId), eq(charges.id, input.chargeId)))
         .limit(1)
         .for("update", { of: opdAppointments });
+
       if (!candidate) {
         throw new ORPCError("NOT_FOUND", { message: "That charge no longer exists." });
       }
@@ -448,6 +504,7 @@ export const billingRouter = {
           ),
         )
         .returning();
+
       if (!voided) {
         throw new ORPCError("CONFLICT", {
           message: "This charge was already settled or voided.",
@@ -463,6 +520,7 @@ export const billingRouter = {
             eq(opdAppointments.id, candidate.appointmentId),
           ),
         );
+
       return voided;
     });
 
@@ -473,7 +531,8 @@ export const billingRouter = {
       target: `charge:${input.chargeId}`,
       meta: { reason: input.reason },
     });
-    return charge;
+
+    return { ...charge, unitPrice: formatMoney(charge.unitPrice) };
   }),
 
   settleCharges: orgProcedure(
@@ -482,7 +541,7 @@ export const billingRouter = {
       appointmentId: z.string(),
       expectedChargeRevision: z.number().int().nonnegative(),
       expectedGrandTotal: money,
-      discountAmount: money.default("0"),
+      discountAmount: money.default(0n),
       note,
       payments: z.array(paymentLine).max(4).default([]),
     }),
@@ -512,21 +571,26 @@ export const billingRouter = {
       actorId: scope.userId,
       orgId: scope.orgId,
       target: `invoice:${invoiceId}`,
-      meta: { invoiceNumber: result.invoice.invoiceNumber, grandTotal: result.invoice.grandTotal },
+      meta: {
+        invoiceNumber: result.invoice.invoiceNumber,
+        grandTotal: formatMoney(result.invoice.grandTotal),
+      },
     });
+
     for (const payment of result.payments) {
       audit({
         action: "payment.record",
         actorId: scope.userId,
         orgId: scope.orgId,
         target: `payment:${payment.id}`,
-        meta: { receiptNumber: payment.receiptNumber, amount: payment.amount },
+        meta: { receiptNumber: payment.receiptNumber, amount: formatMoney(payment.amount) },
       });
     }
+
     return {
-      invoice: result.invoice,
-      lines: result.lines,
-      payments: result.payments,
+      invoice: formatMoneyKeys(result.invoice, INVOICE_MONEY),
+      lines: result.lines.map((line) => formatMoneyKeys(line, INVOICE_LINE_MONEY)),
+      payments: result.payments.map((row) => formatMoneyKeys(row, AMOUNT_MONEY)),
       chargeRevision: result.chargeRevision,
     };
   }),
@@ -540,6 +604,7 @@ export const billingRouter = {
   ).handler(async ({ context, input }) => {
     const { scope } = context;
     const { settings, now, fiscalYear } = await billingDocumentContext(scope.orgId);
+
     const recorded = await db.transaction((tx) =>
       recordPaymentsTx(tx, {
         scope,
@@ -557,10 +622,11 @@ export const billingRouter = {
         actorId: scope.userId,
         orgId: scope.orgId,
         target: `payment:${payment.id}`,
-        meta: { receiptNumber: payment.receiptNumber, amount: payment.amount },
+        meta: { receiptNumber: payment.receiptNumber, amount: formatMoney(payment.amount) },
       });
     }
-    return recorded;
+
+    return recorded.map((row) => formatMoneyKeys(row, AMOUNT_MONEY));
   }),
 
   issueCreditNote: orgProcedure(
@@ -573,6 +639,7 @@ export const billingRouter = {
   ).handler(async ({ context, input }) => {
     const { scope } = context;
     const requestedIds = input.lines.map((line) => line.invoiceLineId);
+
     if (new Set(requestedIds).size !== requestedIds.length) {
       throw new ORPCError("BAD_REQUEST", { message: "Credit each invoice line once" });
     }
@@ -603,7 +670,7 @@ export const billingRouter = {
             ),
           ),
         tx
-          .select({ total: sql<string>`coalesce(sum(${creditNotes.total}), 0)::text` })
+          .select({ total: sql<string>`coalesce(sum(${creditNotes.total}), 0)::bigint` })
           .from(creditNotes)
           .where(
             and(eq(creditNotes.orgId, scope.orgId), eq(creditNotes.invoiceId, input.invoiceId)),
@@ -627,6 +694,7 @@ export const billingRouter = {
             and(eq(creditNoteLines.orgId, scope.orgId), eq(creditNotes.invoiceId, input.invoiceId)),
           ),
       ]);
+
       if (sourceLines.length !== requestedIds.length) {
         throw new ORPCError("NOT_FOUND", {
           message: "One of those invoice lines no longer exists.",
@@ -635,55 +703,57 @@ export const billingRouter = {
 
       const creditedByLine = new Map<
         string,
-        { taxableValue: number; taxAmount: number; gross: number }
+        { taxableValue: bigint; taxAmount: bigint; gross: bigint }
       >();
+
       for (const line of priorLines) {
         const credited = creditedByLine.get(line.invoiceLineId) ?? {
-          taxableValue: 0,
-          taxAmount: 0,
-          gross: 0,
+          taxableValue: 0n,
+          taxAmount: 0n,
+          gross: 0n,
         };
-        credited.taxableValue += toPaise(line.taxableValue);
-        credited.taxAmount += toPaise(line.taxAmount);
-        credited.gross += toPaise(line.gross);
+
+        credited.taxableValue += line.taxableValue;
+        credited.taxAmount += line.taxAmount;
+        credited.gross += line.gross;
         creditedByLine.set(line.invoiceLineId, credited);
       }
 
       const sourceById = new Map(sourceLines.map((line) => [line.id, line]));
+
       const computedLines = input.lines.map((requested) => {
         const source = sourceById.get(requested.invoiceLineId)!;
+
         const prior = creditedByLine.get(source.id) ?? {
-          taxableValue: 0,
-          taxAmount: 0,
-          gross: 0,
-        };
-        const sourcePaise = {
-          taxableValue: toPaise(source.taxableValue),
-          taxAmount: toPaise(source.taxAmount),
-          gross: toPaise(source.gross),
+          taxableValue: 0n,
+          taxAmount: 0n,
+          gross: 0n,
         };
 
-        let values: { taxableValue: string; taxAmount: string; gross: string };
+        let values: ReturnType<typeof derivePartialCredit>;
+
         if ("full" in requested) {
-          const remainingGross = sourcePaise.gross - prior.gross;
-          if (remainingGross <= 0) {
+          const remainingGross = source.gross - prior.gross;
+
+          if (remainingGross <= 0n) {
             throw new ORPCError("BAD_REQUEST", {
               message: "This line is already fully credited.",
             });
           }
+
           values = {
-            taxableValue: fromPaise(sourcePaise.taxableValue - prior.taxableValue),
-            taxAmount: fromPaise(sourcePaise.taxAmount - prior.taxAmount),
-            gross: fromPaise(remainingGross),
+            taxableValue: source.taxableValue - prior.taxableValue,
+            taxAmount: source.taxAmount - prior.taxAmount,
+            gross: remainingGross,
           };
         } else {
           values = derivePartialCredit(requested.gross, source.taxRatePercent);
         }
 
         if (
-          prior.taxableValue + toPaise(values.taxableValue) > sourcePaise.taxableValue ||
-          prior.taxAmount + toPaise(values.taxAmount) > sourcePaise.taxAmount ||
-          prior.gross + toPaise(values.gross) > sourcePaise.gross
+          prior.taxableValue + values.taxableValue > source.taxableValue ||
+          prior.taxAmount + values.taxAmount > source.taxAmount ||
+          prior.gross + values.gross > source.gross
         ) {
           throw new ORPCError("BAD_REQUEST", {
             message: "That credit is more than the invoice line is worth.",
@@ -693,14 +763,12 @@ export const billingRouter = {
         return { invoiceLineId: source.id, revenueCategory: source.revenueCategory, ...values };
       });
 
-      const subtotalPaise = computedLines.reduce(
-        (sum, line) => sum + toPaise(line.taxableValue),
-        0,
-      );
-      const taxTotalPaise = computedLines.reduce((sum, line) => sum + toPaise(line.taxAmount), 0);
-      const totalPaise = computedLines.reduce((sum, line) => sum + toPaise(line.gross), 0);
-      const priorCreditPaise = toPaise(priorCredit?.total ?? "0");
-      if (priorCreditPaise + totalPaise > toPaise(invoice.grandTotal)) {
+      const subtotalPaise = computedLines.reduce((sum, line) => sum + line.taxableValue, 0n);
+      const taxTotalPaise = computedLines.reduce((sum, line) => sum + line.taxAmount, 0n);
+      const totalPaise = computedLines.reduce((sum, line) => sum + line.gross, 0n);
+      const priorCreditPaise = BigInt(priorCredit?.total ?? "0");
+
+      if (priorCreditPaise + totalPaise > invoice.grandTotal) {
         throw new ORPCError("BAD_REQUEST", {
           message: "Total credits would exceed the invoice.",
         });
@@ -708,6 +776,7 @@ export const billingRouter = {
 
       const sequence = await nextCounter(tx, scope.orgId, `creditNote:${fiscalYear}`);
       const creditNoteNumber = documentNumber(settings.creditNotePrefix, fiscalYear, sequence);
+
       const [creditNote] = await tx
         .insert(creditNotes)
         .values({
@@ -718,9 +787,9 @@ export const billingRouter = {
           fiscalYear,
           businessDate: businessDate(now, settings.timeZone),
           reason: input.reason,
-          subtotal: fromPaise(subtotalPaise),
-          taxTotal: fromPaise(taxTotalPaise),
-          total: fromPaise(totalPaise),
+          subtotal: subtotalPaise,
+          taxTotal: taxTotalPaise,
+          total: totalPaise,
           issuedBy: scope.userId,
           createdAt: now,
         })
@@ -739,14 +808,14 @@ export const billingRouter = {
           })),
         )
         .returning();
-      const revenueByAccount = new Map<SystemAccountKey, number>();
+
+      const revenueByAccount = new Map<SystemAccountKey, bigint>();
+
       for (const line of computedLines) {
         const account = revenueAccountFor(line.revenueCategory);
-        revenueByAccount.set(
-          account,
-          (revenueByAccount.get(account) ?? 0) + toPaise(line.taxableValue),
-        );
+        revenueByAccount.set(account, (revenueByAccount.get(account) ?? 0n) + line.taxableValue);
       }
+
       await postJournalEntry(tx, {
         orgId: scope.orgId,
         sourceType: "credit_note",
@@ -758,12 +827,10 @@ export const billingRouter = {
         lines: [
           ...[...revenueByAccount].map(([account, amount]) => ({
             account,
-            debit: fromPaise(amount),
+            debit: amount,
           })),
-          ...(taxTotalPaise > 0
-            ? [{ account: "gst_output" as const, debit: fromPaise(taxTotalPaise) }]
-            : []),
-          { account: "customer_receivables", credit: fromPaise(totalPaise) },
+          ...(taxTotalPaise > 0n ? [{ account: "gst_output" as const, debit: taxTotalPaise }] : []),
+          { account: "customer_receivables", credit: totalPaise },
         ],
       });
 
@@ -777,10 +844,14 @@ export const billingRouter = {
       target: `creditNote:${creditNoteId}`,
       meta: {
         creditNoteNumber: result.creditNote.creditNoteNumber,
-        total: result.creditNote.total,
+        total: formatMoney(result.creditNote.total),
       },
     });
-    return result;
+
+    return {
+      creditNote: formatMoneyKeys(result.creditNote, CREDIT_NOTE_MONEY),
+      lines: result.lines.map((line) => formatMoneyKeys(line, CREDIT_LINE_MONEY)),
+    };
   }),
 
   recordRefund: orgProcedure(
@@ -812,20 +883,20 @@ export const billingRouter = {
       const [balance, [noteRefunded]] = await Promise.all([
         invoiceBalanceFor(tx, scope.orgId, invoice),
         tx
-          .select({ amount: sql<string>`coalesce(sum(${refunds.amount}), 0)::text` })
+          .select({ amount: sql<string>`coalesce(sum(${refunds.amount}), 0)::bigint` })
           .from(refunds)
           .where(and(eq(refunds.orgId, scope.orgId), eq(refunds.creditNoteId, input.creditNoteId))),
       ]);
-      const refundDuePaise = Math.max(0, -toSignedPaise(balance.outstanding));
-      if (toPaise(input.amount) > refundDuePaise) {
+
+      const refundDuePaise = balance.outstanding < 0n ? -balance.outstanding : 0n;
+
+      if (input.amount > refundDuePaise) {
         throw new ORPCError("BAD_REQUEST", {
           message: "That refund is more than the invoice owes back.",
         });
       }
-      if (
-        toPaise(noteRefunded?.amount ?? "0") + toPaise(input.amount) >
-        toPaise(creditNote.total)
-      ) {
+
+      if (BigInt(noteRefunded?.amount ?? "0") + input.amount > creditNote.total) {
         throw new ORPCError("BAD_REQUEST", {
           message: "That refund is more than this credit note is worth.",
         });
@@ -833,6 +904,7 @@ export const billingRouter = {
 
       const sequence = await nextCounter(tx, scope.orgId, `refund:${fiscalYear}`);
       const refundNumber = documentNumber("RF", fiscalYear, sequence);
+
       const [inserted] = await tx
         .insert(refunds)
         .values({
@@ -865,6 +937,7 @@ export const billingRouter = {
           { account: settlementAccountFor(input.method), credit: inserted.amount },
         ],
       });
+
       return inserted;
     });
 
@@ -873,9 +946,10 @@ export const billingRouter = {
       actorId: scope.userId,
       orgId: scope.orgId,
       target: `refund:${refundId}`,
-      meta: { refundNumber: refund.refundNumber, amount: refund.amount },
+      meta: { refundNumber: refund.refundNumber, amount: formatMoney(refund.amount) },
     });
-    return refund;
+
+    return formatMoneyKeys(refund, AMOUNT_MONEY);
   }),
 
   listInvoices: orgProcedure(
@@ -883,6 +957,7 @@ export const billingRouter = {
     orgInput.extend({ appointmentId: z.string() }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
+
     const [appointment] = await db
       .select({ id: opdAppointments.id })
       .from(opdAppointments)
@@ -910,8 +985,15 @@ export const billingRouter = {
 
     return rows.map((invoice) => {
       const balance = balances.get(invoice.id);
+
       if (!balance) throw impossible(`balance missing for invoice ${invoice.id}`);
-      return { ...invoice, paymentsTotal: balance.paymentsTotal, outstanding: balance.outstanding };
+
+      return {
+        ...invoice,
+        grandTotal: formatMoney(invoice.grandTotal),
+        paymentsTotal: formatMoney(balance.paymentsTotal),
+        outstanding: formatMoney(balance.outstanding),
+      };
     });
   }),
 
@@ -920,6 +1002,7 @@ export const billingRouter = {
     orgInput.extend({ invoiceId: z.string() }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
+
     const [invoice] = await db
       .select()
       .from(invoices)
@@ -965,29 +1048,44 @@ export const billingRouter = {
     ]);
 
     type NoteRow = (typeof noteRows)[number];
+
     const notesById = new Map<
       string,
       NoteRow["creditNote"] & { lines: NonNullable<NoteRow["line"]>[] }
     >();
+
     for (const { creditNote, line } of noteRows) {
       const note = notesById.get(creditNote.id) ?? { ...creditNote, lines: [] };
+
       if (line) note.lines.push(line);
       notesById.set(creditNote.id, note);
     }
+
     const notesWithLines = [...notesById.values()];
 
+    const balance = calculateInvoiceBalance({
+      grandTotal: invoice.grandTotal,
+      creditTotal: notesWithLines.reduce((sum, note) => sum + note.total, 0n),
+      paymentsTotal: invoicePayments.reduce((sum, payment) => sum + payment.amount, 0n),
+      refundsTotal: invoiceRefunds.reduce((sum, refund) => sum + refund.amount, 0n),
+    });
+
     return {
-      invoice,
-      lines,
-      payments: invoicePayments,
-      creditNotes: notesWithLines,
-      refunds: invoiceRefunds,
-      balance: calculateInvoiceBalance({
-        grandTotal: invoice.grandTotal,
-        credits: notesWithLines.map((note) => note.total),
-        payments: invoicePayments.map((payment) => payment.amount),
-        refunds: invoiceRefunds.map((refund) => refund.amount),
-      }),
+      invoice: formatMoneyKeys(invoice, INVOICE_MONEY),
+      lines: lines.map((line) => formatMoneyKeys(line, INVOICE_LINE_MONEY)),
+      payments: invoicePayments.map((row) => formatMoneyKeys(row, AMOUNT_MONEY)),
+      creditNotes: notesWithLines.map((note) => ({
+        ...formatMoneyKeys(note, CREDIT_NOTE_MONEY),
+        lines: note.lines.map((line) => formatMoneyKeys(line, CREDIT_LINE_MONEY)),
+      })),
+      refunds: invoiceRefunds.map((row) => formatMoneyKeys(row, AMOUNT_MONEY)),
+      balance: {
+        grandTotal: formatMoney(balance.grandTotal),
+        creditTotal: formatMoney(balance.creditTotal),
+        paymentsTotal: formatMoney(balance.paymentsTotal),
+        refundsTotal: formatMoney(balance.refundsTotal),
+        outstanding: formatMoney(balance.outstanding),
+      },
     };
   }),
 };

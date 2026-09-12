@@ -9,6 +9,7 @@ import type { TestUser } from "./auth";
 // must be re-proven per request, such as revocation.
 export function clientFor(identity: TestUser): AppRouterClient {
   const headers = new Headers({ cookie: identity.cookie });
+
   return createRouterClient(appRouter, {
     context: () => createRequestContext(headers),
   });
@@ -19,18 +20,20 @@ export function clientFor(identity: TestUser): AppRouterClient {
 export function requestScopedClientFor(identity: TestUser): AppRouterClient {
   const headers = new Headers({ cookie: identity.cookie });
   const context = createRequestContext(headers);
+
   return createRouterClient(appRouter, { context: () => context });
 }
 
-async function rejection(promise: Promise<unknown>, what: string): Promise<unknown> {
-  let error: unknown;
+async function rejection(promise: Promise<unknown>, what: string): Promise<Error> {
   try {
     await promise;
-  } catch (caught) {
-    error = caught;
+  } catch (error) {
+    if (!(error instanceof Error)) throw new Error(`expected ${what} to reject with an Error`);
+
+    return error;
   }
-  expect(error, `expected ${what} to reject`).toBeDefined();
-  return error;
+
+  throw new Error(`expected ${what} to reject`);
 }
 
 export async function expectORPCCode(
@@ -39,7 +42,7 @@ export async function expectORPCCode(
   label = "the call",
 ): Promise<void> {
   const error = await rejection(promise, `${label} with ${code}`);
-  expect((error as { code?: string }).code, `${label} should be ${code}`).toBe(code);
+  expect(error, `${label} should be ${code}`).toHaveProperty("code", code);
 }
 
 export async function expectAuthStatus(
@@ -48,19 +51,23 @@ export async function expectAuthStatus(
   bodyCode?: string,
 ): Promise<void> {
   const error = await rejection(promise, `the Better Auth call with ${status}`);
-  expect((error as { status?: string }).status).toBe(status);
+  expect(error).toHaveProperty("status", status);
+
   if (bodyCode !== undefined) {
-    expect((error as { body?: { code?: string } }).body?.code).toBe(bodyCode);
+    expect(error).toHaveProperty("body.code", bodyCode);
   }
 }
 
 export async function eventually<T>(probe: () => Promise<T | undefined>): Promise<T> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const result = await probe();
+
     if (result !== undefined) {
       return result;
     }
+
     await Bun.sleep(20);
   }
+
   throw new Error("condition not reached within 1s");
 }

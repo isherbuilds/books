@@ -1,11 +1,13 @@
 import { env as serverEnv } from "@accly/env/server";
 import { env as webEnv } from "@accly/env/web";
-import { defineEventHandler, setResponseHeaders } from "nitro/h3";
+import { defineEventHandler, setResponseHeader, setResponseHeaders } from "nitro/h3";
 
 const apiOrigin = new URL(webEnv.VITE_SERVER_URL).origin;
+
 const storageOrigin = serverEnv.SEAWEEDFS_ENDPOINT
   ? new URL(serverEnv.SEAWEEDFS_ENDPOINT).origin
   : undefined;
+
 const isDevelopment = import.meta.env.DEV;
 
 const connectSrc = [
@@ -40,8 +42,9 @@ const contentSecurityPolicy = [
 export default defineEventHandler((event) => {
   setResponseHeaders(event, {
     "Content-Security-Policy": contentSecurityPolicy,
-    ...(serverEnv.NODE_ENV === "production"
-      ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" }
-      : {}),
   });
+
+  if (serverEnv.NODE_ENV === "production") {
+    setResponseHeader(event, "Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
 });

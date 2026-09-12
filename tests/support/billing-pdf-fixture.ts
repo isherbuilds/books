@@ -1,12 +1,13 @@
+import { formatDecimal as formatMoney } from "@accly/api/core/money";
 import type { InvoiceBundle } from "../../apps/web/src/components/pdf/billing-documents";
 
 export function billingPdfFixture({
   lineCount = 1,
   unicode = true,
 }: { lineCount?: number; unicode?: boolean } = {}): InvoiceBundle {
-  const subtotal = (100 * lineCount).toFixed(2);
-  const tax = (18 * lineCount).toFixed(2);
-  const total = (118 * lineCount).toFixed(2);
+  const subtotal = formatMoney(10_000n * BigInt(lineCount));
+  const tax = formatMoney(1_800n * BigInt(lineCount));
+  const total = formatMoney(11_800n * BigInt(lineCount));
 
   return {
     invoice: {

@@ -2,6 +2,8 @@ import { db } from "@accly/db";
 import { account, user } from "@accly/db/schema/auth";
 import { createLocalAccountIssuer } from "better-auth/db";
 import { hashPassword } from "better-auth/crypto";
+import { z } from "zod";
+
 // Mirrors what Better Auth's sign-up endpoint does internally — one `user` row and
 // one credential `account` row — so `signIn.email` accepts the account unchanged.
 // `emailVerified` is set so a future Google sign-in links instead of being rejected.
@@ -11,6 +13,7 @@ export async function createUserWithPassword(input: {
   password: string;
 }): Promise<{ id: string }> {
   const id = Bun.randomUUIDv7();
+
   // Hash before the transaction so a hashing failure leaves no rows behind.
   const password = await hashPassword(input.password);
 
@@ -19,14 +22,16 @@ export async function createUserWithPassword(input: {
       .insert(user)
       .values({
         id,
-        name: input.name,
+        name: z.string().trim().min(1).max(200).parse(input.name),
         email: input.email.toLowerCase(),
         emailVerified: true,
       })
       .returning({ id: user.id });
+
     if (!row) {
       throw new Error(`Failed to create user ${input.email}`);
     }
+
     await tx.insert(account).values({
       id: Bun.randomUUIDv7(),
       userId: id,
@@ -37,6 +42,7 @@ export async function createUserWithPassword(input: {
       issuer: createLocalAccountIssuer("credential"),
       password,
     });
+
     return row;
   });
 

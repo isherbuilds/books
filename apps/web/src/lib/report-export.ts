@@ -14,6 +14,7 @@ const BOLD_HEADER = { style: { font: { bold: true } } };
 // reported here rather than as an unhandled rejection.
 export async function downloadXlsx(filename: string, sheets: ReportSheet[]): Promise<void> {
   let buffer: Uint8Array;
+
   try {
     // Export-only, so load it on demand. The `/xlsx` subpath is the narrowest entry
     // hucre exports; today it buys a readable chunk name rather than a size win.
@@ -33,14 +34,16 @@ export async function downloadXlsx(filename: string, sheets: ReportSheet[]): Pro
   } catch (error) {
     console.error("xlsx export failed", error);
     toast.error("Could not build the spreadsheet");
+
     return;
   }
 
-  // `WriteOutput` is `Uint8Array<ArrayBufferLike>`, which `BlobPart` rejects
-  // because it also admits `SharedArrayBuffer`. hucre allocates a plain one.
+  // SAFETY: hucre 1.1.0 ZipWriter.build allocates new Uint8Array(totalSize),
+  // so this unencrypted writeXlsx result has an ArrayBuffer, never SharedArrayBuffer.
   const blob = new Blob([buffer as Uint8Array<ArrayBuffer>], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

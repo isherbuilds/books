@@ -1,4 +1,4 @@
-import { fromPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import { cn } from "@accly/ui/lib/utils";
 import { Trash2Icon } from "lucide-react";
@@ -85,22 +85,24 @@ export function PaymentBalance({
   onFill,
 }: {
   /** Paise: positive is short of the bill, negative is over it. */
-  remaining: number;
+  remaining: bigint;
   currency: string;
   disabled?: boolean;
   onFill: () => void;
 }) {
-  if (remaining === 0) return null;
-  if (remaining < 0) {
+  if (remaining === 0n) return null;
+
+  if (remaining < 0n) {
     return (
       <span role="status" className="text-destructive tabular-nums">
-        Over by {formatMoney(fromPaise(-remaining), currency)}
+        Over by {formatMoney(formatDecimal(-remaining), currency)}
       </span>
     );
   }
+
   return (
     <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onFill}>
-      <span className="tabular-nums">Fill {formatMoney(fromPaise(remaining), currency)}</span>
+      <span className="tabular-nums">Fill {formatMoney(formatDecimal(remaining), currency)}</span>
     </Button>
   );
 }

@@ -1,17 +1,9 @@
 import { useState } from "react";
 
 // Dependency-free SVG: one series, one ink, no axes library. Mark spec in docs/design.md.
-export type BarDatum = { label: string; value: number; caption: string };
+export type BarDatum = { label: string; value: number; caption: string; formattedValue: string };
 
-export function BarChart({
-  data,
-  formatValue,
-  height = 96,
-}: {
-  data: readonly BarDatum[];
-  formatValue: (value: number) => string;
-  height?: number;
-}) {
+export function BarChart({ data, height = 96 }: { data: readonly BarDatum[]; height?: number }) {
   const [active, setActive] = useState<number | null>(null);
 
   const max = Math.max(...data.map((d) => d.value), 0);
@@ -37,7 +29,7 @@ export function BarChart({
           revealing it never reflows the chart below it. */}
       <div className="flex h-8 items-baseline gap-2">
         <span className="text-lg font-medium tabular-nums">
-          {formatValue(data[active ?? peak]?.value ?? 0)}
+          {data[active ?? peak]?.formattedValue}
         </span>
         <span className="text-muted-foreground">{data[active ?? peak]?.caption}</span>
       </div>
@@ -47,7 +39,7 @@ export function BarChart({
         style={{ height }}
         // `group`, not `img`: an img role hides the focusable day buttons from AT.
         role="group"
-        aria-label={`Daily collections. Highest ${formatValue(data[peak]?.value ?? 0)} on ${data[peak]?.caption}.`}
+        aria-label={`Daily collections. Highest ${data[peak]?.formattedValue} on ${data[peak]?.caption}.`}
         onMouseLeave={() => setActive(null)}
       >
         {data.map((datum, index) => (
@@ -59,7 +51,7 @@ export function BarChart({
             onMouseEnter={() => setActive(index)}
             onFocus={() => setActive(index)}
             onBlur={() => setActive(null)}
-            aria-label={`${datum.caption}: ${formatValue(datum.value)}`}
+            aria-label={`${datum.caption}: ${datum.formattedValue}`}
           >
             {/* A day with no payments still gets a 2px stub, so fourteen days
                 read as fourteen slots rather than as one bar floating in

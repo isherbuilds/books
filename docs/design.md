@@ -97,6 +97,10 @@ A dense data surface. `text-xs` is the body size, not a small size.
   amounts.
 - **`tabular-nums` on every number that can change** — counts, money, times. Without
   it a live-updating figure jitters.
+- **Normalized names use `capitalize`.** Member names and short master-data names
+  are stored in lowercase; their inputs and visible labels use Tailwind's
+  `capitalize` utility. Do not apply it to legal names, addresses, notes,
+  references, identifiers, or email addresses.
 
 Customer facts must look as honest as they are stored: every age derived from an
 estimated birth date carries a `~` prefix, and registration never preselects a
@@ -348,9 +352,13 @@ A new bespoke layout wrapper is a signal that one of these is missing a prop.
 
 ## 13. Money and numbers
 
-- **Amounts cross the wire as `numeric` strings**, never JS numbers — rounding money
-  through a float is a bug waiting to happen.
-- **Format at the edge** with `Intl.NumberFormat`, currency from org settings.
+- **Amounts are `bigint` paise from the database to the screen**, never JS numbers:
+  rounding money through a float is a bug waiting to happen. Only XLSX cells
+  (`Number(paise) / 100`) and chart scales convert to a number.
+- **Format once, at render,** with `formatMoney(paise)` from `@accly/api/core/money`:
+  one `en-IN` INR formatter, exact at any size. Legacy outpatient and billing
+  screens format the server's decimal strings through `apps/web/src/lib/money.ts`
+  until accounting-core slice 7 deletes them.
 - **Right-align numeric table columns**; left-align text.
 
 ## Checklist before calling a screen done

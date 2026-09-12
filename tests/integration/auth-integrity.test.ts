@@ -11,9 +11,15 @@ import { env } from "@accly/env/server";
 import { and, eq } from "drizzle-orm";
 
 import { app } from "../../apps/server/src/index";
-import { createOrganization, createTestUser, joinOrganization } from "../support/auth";
-import { expectAuthStatus } from "../support/client";
+import {
+  createAccountingOrganization,
+  createOrganization,
+  createTestUser,
+  joinOrganization,
+} from "../support/auth";
+import { expectAuthStatus, expectORPCCode } from "../support/client";
 import { resetTestDatabase } from "../support/database";
+
 beforeAll(async () => {
   await resetTestDatabase();
 });
@@ -42,6 +48,7 @@ test("organization invitations enter through the join route", () => {
 
 test("an operator-created account can sign in and is email-verified for account linking", async () => {
   const email = `operator-${Bun.randomUUIDv7()}@example.com`;
+
   const { id } = await createUserWithPassword({
     email,
     name: "Operator user",
@@ -52,12 +59,14 @@ test("an operator-created account can sign in and is email-verified for account 
     .select({ emailVerified: user.emailVerified })
     .from(user)
     .where(eq(user.id, id));
+
   expect(created?.emailVerified).toBe(true);
 
   const { headers } = await auth.api.signInEmail({
     body: { email, password: "integration-test-password" },
     returnHeaders: true,
   });
+
   expect(headers.get("set-cookie")).toContain("session");
 });
 
@@ -67,62 +76,64 @@ test("only the founding email can create an organization", async () => {
     name: "Founding operator",
     password: "integration-test-password",
   });
+
   const signIn = await auth.api.signInEmail({
     body: { email: env.FOUNDING_EMAIL, password: "integration-test-password" },
     returnHeaders: true,
   });
+
   const cookie = signIn.headers.get("set-cookie")?.split(";")[0];
   expect(cookie).toBeDefined();
   const founder = new Headers({ cookie: cookie! });
 
   const stranger = await createTestUser("bootstrap-stranger");
-  await expectAuthStatus(
-    auth.api.createOrganization({
-      body: { name: "Too early", slug: "too-early" },
-      headers: stranger.headers,
-    }),
+  await expectORPCCode(
+    createAccountingOrganization(stranger.headers, { name: "Too early", slug: "too-early" }),
     "FORBIDDEN",
-    "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION",
   );
 
-  const first = await auth.api.createOrganization({
-    body: { name: "First Org", slug: "first-org" },
-    headers: founder,
+  const first = await createAccountingOrganization(founder, {
+    name: "First Org",
+    slug: "first-org",
   });
-  expect(first).toBeDefined();
+
   const [membership] = await db
     .select({ role: member.role })
     .from(member)
-    .where(eq(member.organizationId, first!.id));
+    .where(eq(member.organizationId, first.id));
+
   expect(membership?.role).toBe("owner");
 
-  const second = await auth.api.createOrganization({
-    body: { name: "Second Org", slug: "second-org" },
-    headers: founder,
+  const second = await createAccountingOrganization(founder, {
+    name: "Second Org",
+    slug: "second-org",
   });
-  expect(second).toBeDefined();
+
+  expect(second.id).not.toBe(first.id);
 
   const owner = await createTestUser("gate-owner");
-  const ownerOrg = await createOrganization(owner, "gate");
-  expect(ownerOrg).toBeDefined();
-  await expectAuthStatus(
-    auth.api.createOrganization({
-      body: { name: "Not Even For Owners", slug: "not-even-owners" },
-      headers: owner.headers,
+  await createOrganization(owner, "gate");
+  await expectORPCCode(
+    createAccountingOrganization(owner.headers, {
+      name: "Not Even For Owners",
+      slug: "not-even-owners",
     }),
     "FORBIDDEN",
-    "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION",
   );
 });
 
 test("short and reserved root slugs cannot create organizations", async () => {
-  const owner = await createTestUser("static-route-slug-owner");
+  const { headers } = await auth.api.signInEmail({
+    body: { email: env.FOUNDING_EMAIL, password: "integration-test-password" },
+    returnHeaders: true,
+  });
+
+  const cookie = headers.get("set-cookie")?.split(";")[0];
+  expect(cookie).toBeDefined();
 
   for (const slug of ["abc", "CREATE", "docs", "blog"]) {
-    await expectAuthStatus(
-      auth.api.createOrganization({
-        body: { name: "Invalid organization URL", slug, userId: owner.user.id },
-      }),
+    await expectORPCCode(
+      createAccountingOrganization(new Headers({ cookie: cookie! }), { slug }),
       "BAD_REQUEST",
     );
   }
@@ -130,6 +141,7 @@ test("short and reserved root slugs cannot create organizations", async () => {
 
 test("the unused organization slug-check endpoint is not exposed", async () => {
   const user = await createTestUser("slug-check-disabled");
+
   const response = await app.request("http://localhost/api/auth/organization/check-slug", {
     method: "POST",
     headers: {
@@ -213,13 +225,13 @@ test("the direct Better Auth surface enforces the same permissions and skips the
 
   const denied = await removeDirectly(plainMember.cookie, target.user.email);
   expect(denied.ok).toBe(false);
-  expect(((await denied.json()) as { code?: string }).code).toBe(
-    "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER",
-  );
+  expect(await denied.json()).toHaveProperty("code", "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER");
+
   const stillMember = await db
     .select({ id: member.id })
     .from(member)
     .where(eq(member.userId, target.user.id));
+
   expect(stillMember).toHaveLength(1);
 
   // Control case: without it the assertion above would pass against an endpoint
@@ -230,10 +242,12 @@ test("the direct Better Auth surface enforces the same permissions and skips the
   ).toHaveLength(0);
 
   await drainAuditWrites();
+
   const [audited] = await db
     .select({ id: auditLog.id })
     .from(auditLog)
     .where(eq(auditLog.orgId, organization.id));
+
   expect(audited).toBeUndefined();
 });
 
@@ -242,15 +256,19 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
   const owner = await createTestUser("onboarding-owner");
   const organizationName = "onboarding-organization";
   const organization = await createOrganization(owner, organizationName);
+
   const invited = await auth.api.createInvitation({
     body: { email, role: "reception", organizationId: organization.id },
     headers: owner.headers,
   });
+
   const queries = spyOn(db.$client, "query");
+
   try {
     const status = await app.request(
       `/api/auth/invitation/claim-status?invitationId=${invited.id}`,
     );
+
     expect(status.status).toBe(200);
     expect(await status.json()).toEqual({
       accountExists: false,
@@ -264,17 +282,22 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
   }
 
   const password = "integration-test-password";
+
   const response = await app.request("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "content-type": "application/json", origin: env.CORS_ORIGIN },
     body: JSON.stringify({ email, name: "Invited User", password, invitationId: invited.id }),
   });
+
   expect(response.status).toBe(200);
+
   const cookie = response.headers
     .getSetCookie()
     .map((value) => value.split(";")[0])
     .join("; ");
+
   expect(cookie).toContain("session");
+  // SAFETY: This successful native sign-up response has the Better Auth user contract; assertions below verify its fields.
   const created = (await response.json()) as { user: { id: string; emailVerified: boolean } };
   expect(created.user.emailVerified).toBe(false);
   expect(await auth.api.invitationClaimStatus({ query: { invitationId: invited.id } })).toEqual({
@@ -286,10 +309,12 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
 
   const headers = new Headers({ cookie, origin: env.CORS_ORIGIN });
   await auth.api.acceptInvitation({ body: { invitationId: invited.id }, headers });
+
   const [membership] = await db
     .select({ role: member.role })
     .from(member)
     .where(and(eq(member.organizationId, organization.id), eq(member.userId, created.user.id)));
+
   expect(membership?.role).toBe("reception");
   expect((await auth.api.signInEmail({ body: { email, password } })).user.id).toBe(created.user.id);
 });
@@ -298,10 +323,12 @@ test("an invitation id creates only its own invited email while it is live", asy
   const email = `revoked-onboarding-${Bun.randomUUIDv7()}@example.com`;
   const owner = await createTestUser("revoked-onboarding-owner");
   const organization = await createOrganization(owner, "revoked-onboarding");
+
   const invited = await auth.api.createInvitation({
     body: { email, role: "reception", organizationId: organization.id },
     headers: owner.headers,
   });
+
   const signUp = (body: { email: string; invitationId: string }) =>
     auth.api.signUpEmail({
       body: { name: "Impersonator", password: "integration-test-password", ...body },
@@ -324,13 +351,16 @@ test("an invitation id creates only its own invited email while it is live", asy
     body: { email, role: "reception", organizationId: organization.id },
     headers: owner.headers,
   });
+
   await db
     .update(invitation)
     .set({ expiresAt: new Date(Date.now() - 60_000) })
     .where(eq(invitation.id, expired.id));
+
   const expiredStatus = await app.request(
     `/api/auth/invitation/claim-status?invitationId=${expired.id}`,
   );
+
   expect(expiredStatus.status).toBe(404);
   await expectAuthStatus(
     signUp({ email, invitationId: expired.id }),

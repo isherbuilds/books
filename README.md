@@ -30,3 +30,12 @@ the canonical command list.
 Start at the [documentation index](docs/README.md) for the source-of-truth map
 and current work registry. Contributor and agent rules are in
 [AGENTS.md](AGENTS.md); end-user help lives in `apps/fumadocs`.
+
+## License
+
+Accly Books is licensed under the GNU Affero General Public License, version 3
+only. See [LICENSE](LICENSE). Copyright (C) 2026 Accly. Anyone who runs a
+modified version as a network service must offer its source to the users of
+that service. Third-party code copied into this repository keeps its own
+copyright notice at the top of the file and is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -158,6 +158,11 @@ WebSocket/SSE layer.
 
 ## Data and migrations
 
+One `organization_settings` row per Organization owns legal identity, address,
+financial-year fields, and operational settings. Its `orgId` is both the primary
+key and a foreign key to Better Auth's `organization`. The profile API reads
+from this row; settings updates write it in one scoped statement.
+
 - Every Organization-owned domain or infrastructure row has `orgId NOT NULL`.
   Keys and timestamps follow the record's job: UUIDv7 text ids and paired
   `createdAt`/`updatedAt` are common, but counters use composite keys, immutable
@@ -178,6 +183,10 @@ WebSocket/SSE layer.
   `_test`.
 
 ## Domain boundary
+
+User-entered member names and short master-data names are trimmed and stored in
+lowercase by their Zod input schemas. Formal legal names, addresses, notes,
+document references, and identifiers keep their entered casing.
 
 Customer codes use an organization-scoped transactional counter plus configured
 prefix. The customer code is a local display identifier, not primary identity or a
@@ -248,8 +257,8 @@ missing object. No anonymous bucket policy or unsigned read path is allowed.
 Invoices, Payments, Credit Notes, and Refunds post balanced journals in the
 same transaction. Stable `systemKey` accounts include Cash, Bank, Customer
 Receivables, GST Output, and category revenue accounts. A unique
-`(orgId, sourceType, sourceId)` prevents duplicate posting; all math uses integer
-paise while API/storage amounts remain decimal strings.
+`(orgId, sourceType, sourceId)` prevents duplicate posting; storage and all math use
+`bigint` paise; decimal strings appear only at the API boundary.
 Payments use four methods: Cash, UPI, Card, and Bank transfer.
 
 Split collection is one tenant-scoped transaction containing up to four

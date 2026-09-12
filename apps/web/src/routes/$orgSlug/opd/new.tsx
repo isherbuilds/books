@@ -40,6 +40,7 @@ export const Route = createFileRoute("/$orgSlug/opd/new")({
       queryClient.query(orpc.staff.listDepartments.queryOptions({ input: { orgSlug } })),
       queryClient.query(orpc.staff.listPractitioners.queryOptions({ input: { orgSlug } })),
     ]);
+
     return {
       seedCustomer: customer
         ? { id: customer.id, name: customer.name, code: customer.code }
@@ -53,9 +54,11 @@ function NewOpdAppointmentRoute() {
   const { orgSlug } = Route.useParams();
   const { seedCustomer } = Route.useLoaderData();
   const { today } = useOrgDateTime();
+
   const departments = useSuspenseQuery(
     orpc.staff.listDepartments.queryOptions({ input: { orgSlug } }),
   ).data;
+
   const practitioners = useSuspenseQuery(
     orpc.staff.listPractitioners.queryOptions({ input: { orgSlug } }),
   ).data;

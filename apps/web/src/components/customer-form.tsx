@@ -130,12 +130,14 @@ function CustomerPhoneDuplicateWarning({
   const { control } = useFormContext<CustomerFormValues>();
   const phone = useWatch({ control, name: "phone", exact: true });
   const debouncedPhone = useDebouncedValue(phone.trim(), 300);
+
   const duplicates = useQuery({
     ...orpc.customer.search.queryOptions({
       input: { orgSlug, phone: debouncedPhone, limit: 100 },
     }),
     enabled: debouncedPhone.length >= 4,
   });
+
   const matches =
     phone.trim() === debouncedPhone && debouncedPhone.length >= 4
       ? (duplicates.data?.items ?? []).filter((customer) => customer.id !== selfId)
@@ -238,6 +240,7 @@ function SponsorFields({
   // A deactivated payer takes no new links, so it is offered only to the record that
   // already holds it — otherwise its name silently disappears and the save drops it.
   const options = list.filter((payer) => payer.active || payer.id === current);
+
   const inactive =
     !payers.isPending &&
     payerId !== "" &&
@@ -347,6 +350,7 @@ export function CustomerForm({
   // would hand the save a compare-and-swap token newer than the values on screen and
   // quietly overwrite whoever changed the record meanwhile.
   const [record] = useState(customer);
+
   const form = useZodForm(customerFormSchema, {
     defaultValues: defaultValues(record, seed, today),
   });
@@ -358,12 +362,15 @@ export function CustomerForm({
           queryKey: orpc.customer.search.key({ input: { orgSlug } }),
         });
         toast.success(`Customer registered as ${created.code}`);
+
         // Registering inside another task hands the record straight back.
         if (onRegistered) {
           onRegistered(created);
           onSaved();
+
           return;
         }
+
         await navigate({
           to: "/$orgSlug/customers/$customerId",
           params: { orgSlug, customerId: created.id },
@@ -400,10 +407,13 @@ export function CustomerForm({
     ({ age, sponsorPayerId, sponsorPolicyNumber, sponsorEmployeeNumber, ...fields }) => {
       const dateOfBirth =
         fields.dateOfBirth ?? (age === null ? null : ageYearsToEstimatedDateOfBirth(age, today));
+
       if (dateOfBirth === null) {
         form.setError("dateOfBirth", { message: "Enter a date of birth or age" });
+
         return;
       }
+
       // The procedure takes the whole record, not a patch, so both paths send the
       // same body — the update adds only the id and the token it must match.
       const values = {
@@ -422,11 +432,14 @@ export function CustomerForm({
 
       if (record) {
         update.mutate({ ...values, customerId: record.id, updatedAt: record.updatedAt });
+
         return;
       }
+
       register.mutate(values);
     },
   );
+
   return (
     <Form {...form}>
       {/* `noValidate`: Zod owns every message, so the browser must not pre-empt
@@ -442,7 +455,12 @@ export function CustomerForm({
               <FormItem>
                 <FormLabel>Full name</FormLabel>
                 <FormControl>
-                  <Input {...field} autoComplete="name" placeholder="Enter the customer's name" />
+                  <Input
+                    {...field}
+
+                    autoComplete="name"
+                    placeholder="Enter the customer's name"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -505,6 +523,7 @@ export function CustomerForm({
                     type="date"
                     onChange={(event) => {
                       field.onChange(event);
+
                       if (event.target.value !== "") form.setValue("age", "");
                     }}
                   />
@@ -528,6 +547,7 @@ export function CustomerForm({
                     placeholder="Enter an estimated age"
                     onChange={(event) => {
                       field.onChange(event);
+
                       if (event.target.value !== "") form.setValue("dateOfBirth", "");
                     }}
                   />

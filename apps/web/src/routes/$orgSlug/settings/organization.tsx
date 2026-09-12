@@ -1,3 +1,12 @@
+import {
+  pan,
+  optionalGstin,
+  indianStateCode,
+  indianPinCode,
+  validateGstinIdentity,
+  timeZone,
+} from "@accly/api/lib/schemas";
+import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { SettingsFields } from "@accly/api/routers/settings";
 import {
   Form,
@@ -11,7 +20,6 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { SubmitButton } from "@accly/ui/components/submit-button";
-import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -45,46 +53,54 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
 
 const supportedTimeZones = Intl.supportedValuesOf("timeZone");
 
-// Probe rather than list membership: engines disagree on canonical ids
-// (JavaScriptCore lists Asia/Calcutta, V8 Asia/Kolkata). Mirrors the router.
-function isSupportedTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const formSchema = z.object({
-  legalName: z.string().trim().max(200, "Keep the legal name under 200 characters"),
-  address: z.string().trim().max(500, "Keep the address under 500 characters"),
-  taxId: z.string().trim().max(50, "Keep the tax id under 50 characters"),
-  currency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Use a three-letter code like INR"),
-  timeZone: z.string().refine(isSupportedTimeZone, {
-    message: "Use a valid IANA time zone like Asia/Kolkata",
-  }),
-  codePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
-  invoicePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
-  receiptPrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
-  creditNotePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
-  fiscalYearStartMonth: numberText(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
-  followUpValidityDays: numberText(
-    z.number().int().min(1, "Between 1 and 365 days").max(365, "Between 1 and 365 days"),
-  ),
-  unbilledAlertHours: numberText(
-    z.number().int().min(1, "Between 1 and 168 hours").max(168, "Between 1 and 168 hours"),
-  ),
-});
+const formSchema = z
+  .object({
+    legalName: z
+      .string()
+      .trim()
+      .min(1, "Enter the legal name")
+      .max(200, "Keep the legal name under 200 characters"),
+    pan,
+    gstin: optionalGstin.unwrap(),
+    stateCode: indianStateCode,
+    addressLine1: z
+      .string()
+      .trim()
+      .min(1, "Enter the registered address")
+      .max(200, "Keep the address under 200 characters"),
+    addressLine2: z
+      .string()
+      .trim()
+      .max(200, "Keep the address under 200 characters")
+      .transform((value) => value || undefined),
+    city: z.string().trim().min(1, "Enter the city").max(120, "Keep the city under 120 characters"),
+    pinCode: indianPinCode,
+    financialYearStart: numberText(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/, "Use a three-letter code like INR"),
+    timeZone,
+    codePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
+    invoicePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
+    receiptPrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
+    creditNotePrefix: z.string().trim().max(10, "Prefixes are at most 10 characters"),
+    followUpValidityDays: numberText(
+      z.number().int().min(1, "Between 1 and 365 days").max(365, "Between 1 and 365 days"),
+    ),
+    unbilledAlertHours: numberText(
+      z.number().int().min(1, "Between 1 and 168 hours").max(168, "Between 1 and 168 hours"),
+    ),
+  })
+  .superRefine(validateGstinIdentity);
 
 function toFormValues(settings: SettingsFields) {
   return {
     ...settings,
-    fiscalYearStartMonth: String(settings.fiscalYearStartMonth),
+    gstin: settings.gstin ?? "",
+    addressLine2: settings.addressLine2 ?? "",
+    financialYearStart: String(settings.financialYearStart),
     followUpValidityDays: String(settings.followUpValidityDays),
     unbilledAlertHours: String(settings.unbilledAlertHours),
   };
@@ -193,19 +209,13 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 <FormItem>
                   <FormLabel>Legal name</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="As it should appear on invoices" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <RegisteredFormField
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} rows={3} placeholder="Printed under the legal name" />
+                    <Input
+                      {...field}
+                      required
+                      maxLength={200}
+                      autoComplete="organization"
+                      placeholder="As it should appear on invoices"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -213,17 +223,125 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <RegisteredFormField
-                name="taxId"
+                name="pan"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tax id (GSTIN/PAN)</FormLabel>
+                    <FormLabel>PAN</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        required
+                        className="font-mono uppercase"
+                        maxLength={10}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        placeholder="ABCDE1234F"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              <RegisteredFormField
+                name="gstin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GSTIN (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="font-mono uppercase"
+                        maxLength={15}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        placeholder="27ABCDE1234F1Z5"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <RegisteredFormField
+              name="addressLine1"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address line 1</FormLabel>
+                  <FormControl>
+                    <Input {...field} required maxLength={200} autoComplete="address-line1" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <RegisteredFormField
+              name="addressLine2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address line 2 (optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} maxLength={200} autoComplete="address-line2" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <RegisteredFormField
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input {...field} required maxLength={120} autoComplete="address-level2" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <RegisteredFormField
+                name="stateCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State code</FormLabel>
+                    <FormControl>
+                      <NativeSelect {...field} required className="text-xs">
+                        {Object.entries(INDIAN_STATES).map(([code, name]) => (
+                          <option key={code} value={code}>
+                            {code} — {name}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <RegisteredFormField
+                name="pinCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>PIN code</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        required
+                        className="font-mono"
+                        maxLength={6}
+                        inputMode="numeric"
+                        pattern="[1-9][0-9]{5}"
+                        autoComplete="postal-code"
+                        placeholder="400001"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
               <RegisteredFormField
                 name="currency"
                 render={({ field }) => (
@@ -239,33 +357,33 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                   </FormItem>
                 )}
               />
+              <RegisteredFormField
+                name="timeZone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time zone</FormLabel>
+                    <FormControl>
+                      <NativeSelect {...field}>
+                        {/* Keep a stored zone selectable even when this browser's canonical list omits it. */}
+                        {defaults.timeZone && !supportedTimeZones.includes(defaults.timeZone) ? (
+                          <option value={defaults.timeZone}>{defaults.timeZone}</option>
+                        ) : null}
+                        {supportedTimeZones.map((timeZone) => (
+                          <option key={timeZone} value={timeZone}>
+                            {timeZone}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </FormControl>
+                    <FormDescription>
+                      Sets the local date used for queues, numbering, and reports. Changing it
+                      applies to new records; existing ones keep their date.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <RegisteredFormField
-              name="timeZone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Time zone</FormLabel>
-                  <FormControl>
-                    <NativeSelect {...field}>
-                      {/* Keep a stored zone selectable even when this browser's canonical list omits it. */}
-                      {defaults.timeZone && !supportedTimeZones.includes(defaults.timeZone) ? (
-                        <option value={defaults.timeZone}>{defaults.timeZone}</option>
-                      ) : null}
-                      {supportedTimeZones.map((timeZone) => (
-                        <option key={timeZone} value={timeZone}>
-                          {timeZone}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </FormControl>
-                  <FormDescription>
-                    Sets the local date used for queues, numbering, and reports. Changing it applies
-                    to new records; existing ones keep their date.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </section>
 
           <section className="flex flex-col gap-3">
@@ -322,7 +440,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <RegisteredFormField
-                name="fiscalYearStartMonth"
+                name="financialYearStart"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Fiscal year starts in</FormLabel>

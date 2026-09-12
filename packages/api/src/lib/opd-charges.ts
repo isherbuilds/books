@@ -24,6 +24,7 @@ export async function resolveOpdPricing(options: {
   now: Date;
 }) {
   const { orgId, customerId } = options;
+
   const [careTeam] = await db
     .select({
       id: practitioners.id,
@@ -40,11 +41,13 @@ export async function resolveOpdPricing(options: {
     )
     .where(and(eq(practitioners.orgId, orgId), eq(practitioners.id, options.practitionerId)))
     .limit(1);
+
   if (!careTeam) {
     throw new ORPCError("NOT_FOUND", { message: "That practitioner no longer exists." });
   }
 
   const serviceIds = options.services.map((service) => service.itemId);
+
   const feeIds =
     options.consultation === "auto"
       ? [
@@ -53,6 +56,7 @@ export async function resolveOpdPricing(options: {
           careTeam.defaultConsultFeeItemId,
         ].filter((id): id is string => id != null)
       : [];
+
   const itemIds = [...new Set([...feeIds, ...serviceIds])];
   const followUpDays = careTeam.followUpValidityDays ?? options.followUpValidityDays;
 
@@ -94,7 +98,7 @@ export async function resolveOpdPricing(options: {
           })
           .from(items)
           .where(and(eq(items.orgId, orgId), eq(items.active, true), inArray(items.id, itemIds)))
-      : Promise.resolve([] as OpdItemSnapshot[]),
+      : Promise.resolve([]),
   ]);
 
   if (customerId != null && !customerRows[0]) {
@@ -104,6 +108,7 @@ export async function resolveOpdPricing(options: {
   const itemsById: Record<string, OpdItemSnapshot> = Object.fromEntries(
     itemRows.map((item) => [item.id, item]),
   );
+
   const feeItem =
     options.consultation === "auto"
       ? ((recentRows[0] && careTeam.followUpFeeItemId
@@ -114,9 +119,11 @@ export async function resolveOpdPricing(options: {
           ? itemsById[careTeam.defaultConsultFeeItemId]
           : undefined))
       : undefined;
+
   const serviceItems = options.services.map((service) => {
     const item = itemsById[service.itemId];
     const billable = item && OPD_BILLABLE_CATEGORIES.some((category) => category === item.category);
+
     if (
       !item ||
       !billable ||
@@ -124,6 +131,7 @@ export async function resolveOpdPricing(options: {
     ) {
       throw new ORPCError("NOT_FOUND", { message: "That service is no longer available." });
     }
+
     return { item, qty: service.qty };
   });
 

@@ -4,6 +4,7 @@ import { BILLING_DOCUMENT_LAYOUTS } from "@/lib/billing-document";
 import type { BillingDocumentRequest } from "@/lib/billing-document";
 
 const download = z.literal("1").optional();
+
 const invoiceSearch = z
   .object({
     kind: z.literal("invoice"),
@@ -11,6 +12,7 @@ const invoiceSearch = z
     download,
   })
   .strict();
+
 const childSearch = z
   .object({
     kind: z.enum(["receipt", "credit-note", "refund"]),
@@ -25,6 +27,7 @@ export function parseBillingDocumentRequest(
 ): { document: BillingDocumentRequest; download: boolean } | null {
   const raw = Object.fromEntries(searchParams);
   const parsed = z.union([invoiceSearch, childSearch]).safeParse(raw);
+
   if (!parsed.success) return null;
 
   if (parsed.data.kind === "invoice") {

@@ -75,6 +75,7 @@ export const Route = createFileRoute("/$orgSlug/settings/members")({
 /** A role is a comma-joined union, so it renders as one badge per role. */
 function RoleBadge({ role }: { role: string }) {
   const roles = parseRoles(role);
+
   return (
     <span className="flex flex-wrap gap-1">
       {roles.map((one) => (
@@ -101,9 +102,11 @@ function InviteDialog({
   orgSlug: string;
 }) {
   const queryClient = useQueryClient();
+
   const form = useZodForm(inviteSchema, {
     defaultValues: { email: "" },
   });
+
   const [lastLink, setLastLink] = useState<string | null>(null);
 
   const invite = useMutation(
@@ -112,6 +115,7 @@ function InviteDialog({
         form.reset();
         setLastLink(result.url);
         toast.success(`Invitation created for ${result.email}`);
+
         // Returned, so the form stays pending until the list shows the invitation.
         return queryClient.invalidateQueries({
           queryKey: orpc.member.list.key({ input: { orgSlug } }),
@@ -133,6 +137,7 @@ function InviteDialog({
       form.reset();
       setLastLink(null);
     }
+
     onOpenChange(next);
   };
 
@@ -251,14 +256,16 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
   const { timeZone } = useOrgDateTime();
   const queryClient = useQueryClient();
   const [confirm, confirmDialog] = useConfirm();
+
   const members = useQuery(
     orpc.member.list.queryOptions({
-      input: { orgSlug, limit: MEMBER_PAGE_LIMIT, ...(q ? { q } : {}) },
+      input: { orgSlug, limit: MEMBER_PAGE_LIMIT, q: q || undefined },
     }),
   );
 
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: orpc.member.list.key({ input: { orgSlug } }) });
+
   const onError = (error: Error) => toast.error(errorMessage(error, "Could not update the roster"));
   // The roster is readable org-wide; only its actions need the grant.
   const canManage = useCan(orgSlug, { member: ["update", "delete"] });
@@ -278,6 +285,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
       onError,
     }),
   );
+
   const removeMember = useMutation(
     orpc.member.remove.mutationOptions({
       onSuccess: async () => {
@@ -292,6 +300,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
       onError,
     }),
   );
+
   const revoke = useMutation(
     orpc.member.revokeInvitation.mutationOptions({
       onSuccess: async () => {

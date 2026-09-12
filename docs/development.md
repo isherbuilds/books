@@ -19,6 +19,18 @@ migrations, and runs the web, API, and end-user-docs workspace tasks. `dev:web`
 and `dev:server` run only the selected Turbo task, so use `db:up` and
 `db:migrate` first when invoking either directly.
 
+### Database connection and migrations
+
+The pre-production MVP uses one `DATABASE_URL` for application queries,
+Drizzle Kit, startup migrations, operator scripts, and test reset. Local
+development uses the Compose `postgres` account. A separate runtime role can
+be introduced with the production hardening work when its operational cost is
+justified.
+
+Migration history is disposable until real financial data exists. The current
+schema has one generated baseline. After pilot data exists, migrations become
+append-only and schema changes use `bun run db:generate`.
+
 The web app loads the pinned React Scan 0.5.7 browser build before hydration
 from the development-only root document branch. The script has a fixed SRI hash.
 Its toolbar, FPS display, and notification count stay enabled for local
@@ -114,7 +126,12 @@ receipts. Cleanup and inserts commit in one transaction, scoped to that
 organization. A rerun advances counters; a reference from manually created
 data causes the transaction to fail without partial cleanup.
 
-Only `FOUNDING_EMAIL` may create Organizations. Other accounts receive
+Only `FOUNDING_EMAIL` may create Organizations through `organization.create`.
+The route and trusted seed/test callers share the atomic bootstrap in
+`packages/api/src/core/organizations.ts`; native Better Auth creation is closed.
+One `organization_settings` row owns legal identity, financial-year fields,
+time zone, currency, and document prefixes. `organization.getProfile` reads the
+legal profile from that row; Better Auth owns the separate `organization` table. Other accounts receive
 membership through invitation or an operator-managed membership.
 
 ## Repository map
@@ -137,27 +154,28 @@ membership through invitation or an operator-managed membership.
 | Command                      | Purpose                                                              |
 | ---------------------------- | -------------------------------------------------------------------- |
 | `bun run dev`                | Start database/storage, migrate, and run all apps                    |
-| `bun run dev:status`         | Check local services, app URLs, database, and migration status       |
+| `bun run dev:status`         | Check services, URLs, database access, and migration history         |
 | `bun run check-types`        | Typecheck TypeScript packages and `tests/`                           |
 | `bun run check`              | Run oxlint and oxfmt (writes formatting)                             |
 | `bun run test`               | Run real-Postgres integration and isolated tests; wipes `accly_test` |
 | `bun run build`              | Build all workspaces                                                 |
 | `bun run db:up`              | Start local PostgreSQL and SeaweedFS                                 |
-| `bun run db:generate`        | Generate a Drizzle migration from schema changes                     |
-| `bun run db:migrate`         | Apply migrations                                                     |
+| `bun run db:generate`        | Generate a Drizzle migration from the current schema                 |
+| `bun run db:migrate`         | Apply migrations through `DATABASE_URL`                              |
 | `bun run db:seed -- --reset` | Reset and seed development data                                      |
 | `bun run db:studio`          | Open Drizzle Studio                                                  |
 
 `dev:status` is read-only and uses three-second timeouts. It checks the Compose
 service health and published ports, the configured web and API origins, the
-primary checkout's fixed `https://docs.accly.localhost` URL, a database query, and
-an exact match between local Drizzle migrations and the database migration
-records. It does not start or stop services, apply migrations, seed data, or reset
-data. A missing service, an unreachable URL or database, or migration history that
+primary checkout's fixed `https://docs.accly.localhost` URL, a `select 1`
+through `DATABASE_URL`, and an exact match between local Drizzle migrations and
+the recorded migration history. The command
+does not start or stop services, apply migrations, seed data, or reset data. A
+missing service, an unreachable URL or credential, or migration history that
 cannot be verified returns a nonzero exit code. The HTTP probes do not exercise
 interactive UI, and migration record agreement does not detect manual schema
-drift. Linked worktrees with prefixed Portless hosts must interpret the fixed docs
-URL result separately.
+drift. Linked worktrees with prefixed Portless hosts must interpret the fixed
+docs URL result separately.
 
 Use `bun run check-types`, `bun run check`, and `bun run test` as the
 repository-wide integration gates. A focused change runs the smallest existing
@@ -200,6 +218,19 @@ range; a passing TypeScript build cannot prove an auth database is migratable.
   delete unused exports.
 - Fail loudly on config, auth, money, and data-integrity errors. Avoid silent
   defaults and broad catches.
+- Money is `bigint` paise from the database to the screen; legacy outpatient
+  procedures keep decimal strings until accounting-core slice 7
+  ([call 2](./specs/accounting-core.md)). Divide only with `divideHalfUp`.
+  Format with `formatMoney` for display and `formatDecimal` for plain text.
+  The 13-digit limit applies to form/API input only. `parseMoney` also accepts
+  larger calculated totals without converting through a JavaScript number.
+- Postgres `sum()` returns `numeric`, and `db.execute` returns `int8` as a
+  string. Cast to `bigint` in SQL and read the value with `BigInt(...)`;
+  `sql<bigint>` only labels the type.
+- `JSON.stringify` throws on `bigint`, so audit metadata holds `formatDecimal`
+  text and query inputs hold typed text. Amounts become numbers only in the
+  XLSX writer and in chart scales; React's development build stringifies a
+  changed `bigint[]` prop and throws.
 - Use named function declarations for reusable functions and arrows for
   callbacks. Prefer named exports, `type` aliases, and `satisfies` for contracts.
 - Use `null` for explicit absence in state/API results and `undefined` for
@@ -210,7 +241,10 @@ range; a passing TypeScript build cannot prove an auth database is migratable.
 - Use keyset pagination and tenant-leading indexes. Scope writes with one
   `UPDATE/DELETE ... RETURNING` where possible.
 - Never hand-edit generated migrations or `apps/web/src/routeTree.gen.ts`.
-- Migration history is append-only once any environment retains data. Before then a baseline squash is allowed; recreate any pre-existing local database with `bun run db:seed -- --reset` after one.
+  Hand-authored SQL lives in its own migration file.
+- Migration history is append-only once any environment retains data. Before
+  then a baseline squash is allowed; recreate any pre-existing local database
+  with `bun run db:seed -- --reset` after one.
 
 - No secret or server-only value import may reach client assets.
 
@@ -235,17 +269,18 @@ divergence, and it needs a reason in the diff.
 | A committed, shareable search or open tab        | route search params, via `validateSearch`        |
 | Ephemeral text, hover, which row is open         | `useState` in the smallest child that renders it |
 
-Nothing persists to `localStorage` or `sessionStorage`. There is no query
-persister and no form-draft store. If a draft ever must survive a reload, add
-one keyed helper beside `use-zod-form.ts` rather than a `localStorage` call
-inside a component.
+Nothing persists to `localStorage` or `sessionStorage`. If a draft ever must
+survive a reload, add one keyed helper beside `use-zod-form.ts` rather than a
+storage call inside a component.
 
 #### Forms
 
 Every form starts at `useZodForm(schema)`; no route calls `useForm` directly.
 Native inputs hand back strings, so the schema does the coercion through the
 `lib/form-schema.ts` helpers — no `valueAsNumber`, no parsing in the submit
-handler.
+handler. Money fields are the exception: they stay rupee text, the schema checks
+them with `NON_NEGATIVE_MONEY_PATTERN`, a comparison parses them with
+`parseMoneyInput`, and the procedure's `money` input fragment parses them once.
 
 RHF subscriptions stay as narrow as the rendered dependency: dynamic lists use
 `useFieldArray`, conditional fragments use `Watch`, and field state uses exact

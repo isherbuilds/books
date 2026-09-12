@@ -3,7 +3,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { orpc } from "./orpc";
 
 type QueryInvalidator = {
-  invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<unknown>;
+  invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<void>;
 };
 
 export type OpdAppointmentTransition = "create" | "cancel" | "checkIn" | "noShow" | "reschedule";
@@ -13,7 +13,7 @@ export function invalidateOpdAppointmentState(
   orgSlug: string,
   appointmentId: string,
   transition: OpdAppointmentTransition,
-): Promise<unknown[]> {
+) {
   // The visit list on the customer record shows status, token, and balance, so
   // every transition ages it; the key is org-wide because the customer is not
   // always known here.
@@ -41,6 +41,7 @@ export function invalidateOpdAppointmentState(
       }),
     );
   }
+
   if (transition === "create" || transition === "checkIn" || transition === "cancel") {
     invalidations.push(
       queryClient.invalidateQueries({
@@ -48,6 +49,7 @@ export function invalidateOpdAppointmentState(
       }),
     );
   }
+
   if (transition !== "reschedule") {
     invalidations.push(
       queryClient.invalidateQueries({
@@ -58,13 +60,11 @@ export function invalidateOpdAppointmentState(
       }),
     );
   }
+
   return Promise.all(invalidations);
 }
 
-export function invalidateAccountingReports(
-  queryClient: QueryInvalidator,
-  orgSlug: string,
-): Promise<unknown[]> {
+export function invalidateAccountingReports(queryClient: QueryInvalidator, orgSlug: string) {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: orpc.report.dailyCollections.key({ input: { orgSlug } }),
@@ -85,7 +85,7 @@ export function invalidateCustomerState(
   queryClient: QueryInvalidator,
   orgSlug: string,
   customerId: string,
-): Promise<unknown[]> {
+) {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: orpc.customer.get.key({ input: { orgSlug, customerId } }),
@@ -101,7 +101,7 @@ export function invalidateBillingState(
   orgSlug: string,
   appointmentId: string,
   invoiceId?: string,
-): Promise<unknown[]> {
+) {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: orpc.billing.listInvoices.key({ input: { orgSlug, appointmentId } }),

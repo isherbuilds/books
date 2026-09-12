@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { foreignKey, pgTable, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { organization } from "./auth";
@@ -22,6 +23,6 @@ export const departments = pgTable(
       columns: [table.orgId, table.defaultConsultFeeItemId],
       foreignColumns: [items.orgId, items.id],
     }),
-    uniqueIndex("departments_org_name_idx").on(table.orgId, table.name),
+    uniqueIndex("departments_org_name_idx").on(table.orgId, sql`lower(${table.name})`),
   ],
 );

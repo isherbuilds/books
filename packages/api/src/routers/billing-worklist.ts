@@ -10,6 +10,7 @@ import { refunds } from "@accly/db/schema/refunds";
 import { and, asc, eq, gt, ilike, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatDecimal as formatMoney } from "../core/money";
 import { businessDate } from "../lib/business-date";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern, searchQuery } from "../lib/schemas";
@@ -19,21 +20,22 @@ import { readOrgSettings } from "../lib/settings-cache";
 // and today's collections. `openInvoices` grows forever, so it pages on a keyset.
 
 const OVERDUE_DAYS = 7;
+
 const STALE_DAYS = 30;
 
 function paidExpression(orgId: string) {
   return sql`coalesce((select sum(${payments.amount}) from ${payments}
-        where ${payments.orgId} = ${orgId} and ${payments.invoiceId} = ${invoices.id}), 0)`;
+        where ${payments.orgId} = ${orgId} and ${payments.invoiceId} = ${invoices.id}), 0)::bigint`;
 }
 
 function settledExpression(orgId: string) {
   return sql`
     ${invoices.grandTotal}
     - coalesce((select sum(${creditNotes.total}) from ${creditNotes}
-        where ${creditNotes.orgId} = ${orgId} and ${creditNotes.invoiceId} = ${invoices.id}), 0)
+        where ${creditNotes.orgId} = ${orgId} and ${creditNotes.invoiceId} = ${invoices.id}), 0)::bigint
     - ${paidExpression(orgId)}
     + coalesce((select sum(${refunds.amount}) from ${refunds}
-        where ${refunds.orgId} = ${orgId} and ${refunds.invoiceId} = ${invoices.id}), 0)`;
+        where ${refunds.orgId} = ${orgId} and ${refunds.invoiceId} = ${invoices.id}), 0)::bigint`;
 }
 
 const daysAgo = (count: number) => new Date(Date.now() - count * 86_400_000);
@@ -64,10 +66,10 @@ export const billingWorklistRouter = {
           customerPhone: customers.phone,
           practitionerName: practitioners.name,
           chargeCount: sql<number>`count(*)::integer`,
-          pendingValue: sql<string>`sum(${charges.unitPrice} * ${charges.qty})`,
+          pendingValue: sql<string>`sum(${charges.unitPrice} * ${charges.qty})::bigint`,
           oldestChargeAt: sql<Date>`min(${charges.createdAt})`,
           matchCount: sql<number>`count(*) over()::integer`,
-          matchValue: sql<string>`sum(sum(${charges.unitPrice} * ${charges.qty})) over()`,
+          matchValue: sql<string>`sum(sum(${charges.unitPrice} * ${charges.qty})) over()::bigint`,
         })
         .from(charges)
         .innerJoin(
@@ -111,16 +113,16 @@ export const billingWorklistRouter = {
       // One scan answers all four figures; four procedures would be four scans per poll.
       db
         .select({
-          outstanding: sql<string>`coalesce(sum(case when (${settled}) > 0 then (${settled}) else 0 end), 0)`,
+          outstanding: sql<string>`coalesce(sum(case when (${settled}) > 0 then (${settled}) else 0 end), 0)::bigint`,
           openCount: sql<number>`count(*) filter (where (${settled}) > 0)::integer`,
-          staleTotal: sql<string>`coalesce(sum(case when (${settled}) > 0 and ${invoices.createdAt} < ${staleBefore} then (${settled}) else 0 end), 0)`,
+          staleTotal: sql<string>`coalesce(sum(case when (${settled}) > 0 and ${invoices.createdAt} < ${staleBefore} then (${settled}) else 0 end), 0)::bigint`,
           staleCount: sql<number>`count(*) filter (where (${settled}) > 0 and ${invoices.createdAt} < ${staleBefore})::integer`,
         })
         .from(invoices)
         .where(eq(invoices.orgId, scope.orgId)),
       db
         .select({
-          total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
+          total: sql<string>`coalesce(sum(${payments.amount}), 0)::bigint`,
           receiptCount: sql<number>`count(*)::integer`,
         })
         .from(payments)
@@ -129,21 +131,25 @@ export const billingWorklistRouter = {
 
     const match = unbilledMatches[0];
     const hasMore = unbilledMatches.length > input.limit;
+
     const unbilled = unbilledMatches
       .slice(0, input.limit)
-      .map(({ matchCount: _count, matchValue: _value, ...row }) => row);
+      .map(({ matchCount: _count, matchValue: _value, ...row }) => ({
+        ...row,
+        pendingValue: formatMoney(BigInt(row.pendingValue)),
+      }));
 
     return {
       unbilled,
       hasMore,
       summary: {
-        toBillTotal: match?.matchValue ?? "0",
+        toBillTotal: formatMoney(BigInt(match?.matchValue ?? "0")),
         toBillCount: match?.matchCount ?? 0,
-        collectedToday: collected?.total ?? "0",
+        collectedToday: formatMoney(BigInt(collected?.total ?? "0")),
         receiptCount: collected?.receiptCount ?? 0,
-        outstanding: openMoney?.outstanding ?? "0",
+        outstanding: formatMoney(BigInt(openMoney?.outstanding ?? "0")),
         openCount: openMoney?.openCount ?? 0,
-        staleTotal: openMoney?.staleTotal ?? "0",
+        staleTotal: formatMoney(BigInt(openMoney?.staleTotal ?? "0")),
         staleCount: openMoney?.staleCount ?? 0,
       },
     };
@@ -164,6 +170,7 @@ export const billingWorklistRouter = {
     const search = input.query ? likePattern(input.query) : undefined;
     const settled = settledExpression(scope.orgId);
     const paid = paidExpression(scope.orgId);
+
     const rows = await db
       .select({
         id: invoices.id,
@@ -173,8 +180,8 @@ export const billingWorklistRouter = {
         customerCode: invoices.customerCode,
         customerPhone: invoices.customerPhone,
         grandTotal: invoices.grandTotal,
-        paid: sql<string>`(${paid})::text`,
-        outstanding: sql<string>`(${settled})::text`,
+        paid: sql<string>`(${paid})::bigint`,
+        outstanding: sql<string>`(${settled})::bigint`,
         createdAt: invoices.createdAt,
       })
       .from(invoices)
@@ -197,12 +204,18 @@ export const billingWorklistRouter = {
       .limit(input.limit + 1);
 
     const hasNextPage = rows.length > input.limit;
+
     if (hasNextPage) rows.pop();
 
     const last = rows[rows.length - 1];
 
     return {
-      items: rows,
+      items: rows.map((row) => ({
+        ...row,
+        grandTotal: formatMoney(row.grandTotal),
+        paid: formatMoney(BigInt(row.paid)),
+        outstanding: formatMoney(BigInt(row.outstanding)),
+      })),
       nextCursor: hasNextPage && last ? last.id : null,
     };
   }),
@@ -217,6 +230,7 @@ export const billingWorklistRouter = {
     const { orgId } = context.scope;
     const search = input.query ? likePattern(input.query) : undefined;
     const settled = settledExpression(orgId);
+
     const rows = await db
       .select({
         id: invoices.id,
@@ -224,7 +238,7 @@ export const billingWorklistRouter = {
         customerName: invoices.customerName,
         customerCode: invoices.customerCode,
         businessDate: invoices.businessDate,
-        refundDue: sql<string>`(-(${settled}))::text`,
+        refundDue: sql<string>`(-(${settled}))::bigint`,
       })
       .from(invoices)
       .where(
@@ -244,10 +258,15 @@ export const billingWorklistRouter = {
       .limit(input.limit + 1);
 
     const hasMore = rows.length > input.limit;
+
     if (hasMore) rows.pop();
 
     return {
-      rows: rows.map(({ id, ...row }) => ({ ...row, invoiceId: id })),
+      rows: rows.map(({ id, ...row }) => ({
+        ...row,
+        invoiceId: id,
+        refundDue: formatMoney(BigInt(row.refundDue)),
+      })),
       hasMore,
     };
   }),

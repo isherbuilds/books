@@ -154,11 +154,13 @@ function StaffRoute() {
   const [query, setQuery] = useState("");
 
   const departments = useQuery(orpc.staff.listDepartments.queryOptions({ input: { orgSlug } }));
+
   const practitioners = useQuery(
     orpc.staff.listPractitioners.queryOptions({
       input: { orgSlug, query: query || undefined },
     }),
   );
+
   const members = useQuery(orpc.member.list.queryOptions({ input: { orgSlug } }));
   const item = useInfiniteQuery(feeItemsQuery(orgSlug));
   const items = item.data?.pages.flatMap((page) => page.items) ?? [];
@@ -166,9 +168,11 @@ function StaffRoute() {
   const departmentById = new Map(
     (departments.data ?? []).map((department) => [department.id, department]),
   );
+
   const memberByUserId = new Map(
     (members.data?.members ?? []).map((member) => [member.userId, member]),
   );
+
   const itemById = new Map(items.map((item) => [item.id, item]));
   const itemFooter = <LoadMore query={item} shown={items.length} />;
 
@@ -279,6 +283,7 @@ function StaffRoute() {
                     const linkedMember = practitioner.memberUserId
                       ? memberByUserId.get(practitioner.memberUserId)
                       : undefined;
+
                     return (
                       <TableRow key={practitioner.id}>
                         <TableCell className="font-medium">{practitioner.name}</TableCell>
@@ -373,6 +378,7 @@ function DepartmentDialog({
 }) {
   const queryClient = useQueryClient();
   const department = state.mode === "edit" ? state.department : null;
+
   const form = useZodForm(departmentSchema, {
     defaultValues: {
       name: department?.name ?? "",
@@ -394,12 +400,16 @@ function DepartmentDialog({
   const createDepartment = useMutation(
     orpc.staff.createDepartment.mutationOptions(mutationFeedback("Department created")),
   );
+
   const updateDepartment = useMutation(
     orpc.staff.updateDepartment.mutationOptions(mutationFeedback("Department updated")),
   );
+
   const isSubmitting = createDepartment.isPending || updateDepartment.isPending;
+
   const submit = form.handleSubmit(({ name, defaultConsultFeeItemId }) => {
     const fields = { name, defaultConsultFeeItemId };
+
     if (department) {
       updateDepartment.mutate({ orgSlug, departmentId: department.id, ...fields });
     } else {
@@ -441,7 +451,11 @@ function DepartmentDialog({
                 <FormItem>
                   <FormLabel>Default consult fee (optional)</FormLabel>
                   <FormControl>
-                    <NativeSelect {...field} disabled={isSubmitting || itemPending}>
+                    <NativeSelect
+                      {...field}
+
+                      disabled={isSubmitting || itemPending}
+                    >
                       <option value="">None</option>
                       {items.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -493,6 +507,7 @@ function PractitionerDialog({
 }) {
   const queryClient = useQueryClient();
   const practitioner = state.mode === "edit" ? state.practitioner : null;
+
   const form = useZodForm(practitionerSchema, {
     defaultValues: {
       name: practitioner?.name ?? "",
@@ -523,10 +538,13 @@ function PractitionerDialog({
   const createPractitioner = useMutation(
     orpc.staff.createPractitioner.mutationOptions(mutationFeedback("Practitioner created")),
   );
+
   const updatePractitioner = useMutation(
     orpc.staff.updatePractitioner.mutationOptions(mutationFeedback("Practitioner updated")),
   );
+
   const isSubmitting = createPractitioner.isPending || updatePractitioner.isPending;
+
   const submit = form.handleSubmit((values) => {
     const fields = {
       name: values.name,
@@ -537,6 +555,7 @@ function PractitionerDialog({
       followUpFeeItemId: values.followUpFeeItemId,
       followUpValidityDays: values.followUpValidityDays,
     };
+
     if (practitioner) {
       updatePractitioner.mutate({ orgSlug, practitionerId: practitioner.id, ...fields });
     } else {
@@ -634,7 +653,11 @@ function PractitionerDialog({
                 <FormItem>
                   <FormLabel>Consult fee item (optional)</FormLabel>
                   <FormControl>
-                    <NativeSelect {...field} disabled={isSubmitting || itemPending}>
+                    <NativeSelect
+                      {...field}
+
+                      disabled={isSubmitting || itemPending}
+                    >
                       <option value="">None</option>
                       {items.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -655,7 +678,11 @@ function PractitionerDialog({
                   <FormItem>
                     <FormLabel>Follow-up fee (optional)</FormLabel>
                     <FormControl>
-                      <NativeSelect {...field} disabled={isSubmitting || itemPending}>
+                      <NativeSelect
+                        {...field}
+
+                        disabled={isSubmitting || itemPending}
+                      >
                         <option value="">None</option>
                         {items.map((item) => (
                           <option key={item.id} value={item.id}>

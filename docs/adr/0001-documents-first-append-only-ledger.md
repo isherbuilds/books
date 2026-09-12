@@ -1,4 +1,4 @@
-# ADR 0001: Documents first, ledger derived and append-only, commands logged
+# ADR 0001: Documents first, ledger derived and append-only
 
 Date: 2026-09-08
 Status: accepted
@@ -9,12 +9,12 @@ The accounting core must be keyboard-fast, audit-grade, able to absorb Indian ta
 
 ## Decision
 
-Documents are the only write model. Posting derives journal entries and lines, party ledger lines and balances in the same Postgres transaction. Posted rows are append-only: the application database role has no UPDATE or DELETE on ledger tables, corrections are reversing entries, and a constraint trigger rejects unbalanced entries. Every mutation is a named, idempotent command with a client-generated id, device id and device sequence, stored in a command log. Money is `bigint` paise. Tax and posting rules are dated data rows that documents reference.
+Documents are the only write model. Posting derives journal entries and lines, party ledger lines and balances in the same Postgres transaction. Posted rows change only through the posting and reversal procedures, and a constraint trigger rejects unbalanced entries. Corrections are reversing entries. Money is `bigint` paise. Tax and posting rules are dated data rows that documents reference. The pre-production MVP uses one database credential. RLS, a restricted runtime role, and idempotent command ingestion are deferred.
 
 ## Consequences
 
 - The ledger is trustworthy by construction and reports are reproducible, matching what every mature system converged on.
-- Offline sync later replays commands and reserves per-site number series; no projection rebuild machinery is needed now.
+- Offline sync later defines its replay contract, idempotency keys, and any location-specific number series; no projection rebuild machinery is needed now.
 - A backdated document before a lock updates later balances synchronously; after a lock it is refused unless an exception exists. There is no queued reposting.
-- Event sourcing's replayable history is given up; the command log and reversing entries carry the audit story instead. A hash chain can be added later without changing the model.
+- Event sourcing's replayable history is given up; documents and reversing entries carry the accounting story. A hash chain can be added later without changing the model.
 - Any future feature that wants to edit a posted row must instead add a document type or a reversal; this is deliberate.

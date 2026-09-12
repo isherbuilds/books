@@ -1,3 +1,4 @@
+import { formatDecimal, parseMoney } from "@accly/api/core/money";
 import { computeInvoiceLines } from "@accly/api/lib/invoice-math";
 
 export type WalkInQuote = {
@@ -18,6 +19,7 @@ export type WalkInQuote = {
   taxTotal: string;
   grandTotal: string;
 };
+
 type LineMetadata = Pick<WalkInQuote["lines"][number], "category" | "source">;
 
 function attachLineMetadata<T extends object>(
@@ -27,7 +29,9 @@ function attachLineMetadata<T extends object>(
 ): Array<T & LineMetadata> {
   return lines.map((line, index) => {
     const source = sources[index];
+
     if (!source) throw new Error(missingSourceMessage);
+
     return { ...line, category: source.category, source: source.source };
   });
 }
@@ -38,20 +42,32 @@ export function applyDiscount(quote: WalkInQuote, discountAmount: string): WalkI
       chargeId: line.chargeId,
       description: line.description,
       qty: line.qty,
-      unitPrice: line.unitPrice,
+      unitPrice: parseMoney(line.unitPrice),
       taxRatePercent: line.taxRatePercent,
       taxCode: line.taxCode,
     })),
-    discountAmount,
+    parseMoney(discountAmount),
   );
 
   return {
     ...quote,
-    lines: attachLineMetadata(computed.lines, quote.lines, "Discounted line has no quoted line"),
-    subtotal: computed.subtotal,
+    lines: attachLineMetadata(
+      computed.lines.map((line) => ({
+        ...line,
+        unitPrice: formatDecimal(line.unitPrice),
+        lineSubtotal: formatDecimal(line.lineSubtotal),
+        allocatedDiscount: formatDecimal(line.allocatedDiscount),
+        taxableValue: formatDecimal(line.taxableValue),
+        taxAmount: formatDecimal(line.taxAmount),
+        gross: formatDecimal(line.gross),
+      })),
+      quote.lines,
+      "Discounted line has no quoted line",
+    ),
+    subtotal: formatDecimal(computed.subtotal),
     discountAmount,
-    taxTotal: computed.taxTotal,
-    grandTotal: computed.grandTotal,
+    taxTotal: formatDecimal(computed.taxTotal),
+    grandTotal: formatDecimal(computed.grandTotal),
   };
 }
 
@@ -71,22 +87,31 @@ export function servicePreview(services: PreviewService[], currency: string): Wa
     category: service.category,
     source: "service" as const,
     qty: service.qty,
-    unitPrice: service.unitPrice,
+    unitPrice: parseMoney(service.unitPrice),
     taxRatePercent: service.taxRatePercent,
     taxCode: null,
   }));
-  const computed = computeInvoiceLines(previewLines, "0");
+
+  const computed = computeInvoiceLines(previewLines, 0n);
 
   return {
     currency,
     lines: attachLineMetadata(
-      computed.lines,
+      computed.lines.map((line) => ({
+        ...line,
+        unitPrice: formatDecimal(line.unitPrice),
+        lineSubtotal: formatDecimal(line.lineSubtotal),
+        allocatedDiscount: formatDecimal(line.allocatedDiscount),
+        taxableValue: formatDecimal(line.taxableValue),
+        taxAmount: formatDecimal(line.taxAmount),
+        gross: formatDecimal(line.gross),
+      })),
       previewLines,
       "Computed preview line has no source line",
     ),
-    subtotal: computed.subtotal,
+    subtotal: formatDecimal(computed.subtotal),
     discountAmount: "0.00",
-    taxTotal: computed.taxTotal,
-    grandTotal: computed.grandTotal,
+    taxTotal: formatDecimal(computed.taxTotal),
+    grandTotal: formatDecimal(computed.grandTotal),
   };
 }

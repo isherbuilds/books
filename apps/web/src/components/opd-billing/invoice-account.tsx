@@ -1,4 +1,4 @@
-import { toSignedPaise, fromPaise } from "@accly/api/lib/invoice-math";
+import { formatDecimal, parseMoney } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import { Checkbox } from "@accly/ui/components/checkbox";
 import {
@@ -65,15 +65,16 @@ const creditSchema = z
     ),
   })
   .superRefine((value, context) => {
-    if (!value.lines.some((line) => line.full || (parseMoneyInput(line.gross ?? "") ?? 0) > 0)) {
+    if (!value.lines.some((line) => line.full || (parseMoneyInput(line.gross ?? "") ?? 0n) > 0n)) {
       context.addIssue({
         code: "custom",
         path: ["lines"],
         message: "Credit at least one full line or partial amount",
       });
     }
+
     value.lines.forEach((line, index) => {
-      if (!line.full && line.gross && (parseMoneyInput(line.gross) ?? 0) <= 0) {
+      if (!line.full && line.gross && (parseMoneyInput(line.gross) ?? 0n) <= 0n) {
         context.addIssue({
           code: "custom",
           path: ["lines", index, "gross"],
@@ -108,12 +109,14 @@ export function InvoiceAccount({
   const [action, setAction] = useState<"payment" | "credit" | "refund" | null>(null);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const needsDetail = documentsOpen || action === "credit" || action === "refund";
+
   const detail = useQuery({
     ...orpc.billing.getInvoice.queryOptions({ input: { orgSlug, invoiceId: invoice.id } }),
     enabled: needsDetail,
   });
-  const outstandingPaise = toSignedPaise(invoice.outstanding);
-  const isRefundDue = outstandingPaise < 0;
+
+  const outstandingPaise = parseMoney(invoice.outstanding);
+  const isRefundDue = outstandingPaise < 0n;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
@@ -132,7 +135,7 @@ export function InvoiceAccount({
           </p>
           <p className={isRefundDue ? "font-medium text-destructive" : "font-medium"}>
             {isRefundDue
-              ? `Refund due ${formatMoney(fromPaise(-outstandingPaise), invoice.currency)}`
+              ? `Refund due ${formatMoney(formatDecimal(-outstandingPaise), invoice.currency)}`
               : `Outstanding ${formatMoney(invoice.outstanding, invoice.currency)}`}
           </p>
         </div>
@@ -141,7 +144,7 @@ export function InvoiceAccount({
             <Button
               size="xs"
               variant="outline"
-              disabled={outstandingPaise <= 0}
+              disabled={outstandingPaise <= 0n}
               onClick={() => setAction("payment")}
             >
               Record payment
@@ -326,16 +329,19 @@ function CreditDialog({
 }) {
   const invalidate = useBillingInvalidation(orgSlug, appointmentId);
   const onOpdError = useOpdErrorToast(orgSlug);
+
   const form = useZodForm(creditSchema, {
     defaultValues: {
       reason: "",
       lines: lines.map((line) => ({ invoiceLineId: line.id, full: false, gross: "" })),
     },
   });
+
   const creditLinesError = useFormState({
     control: form.control,
     name: "lines",
   }).errors.lines?.root?.message;
+
   const mutation = useMutation(
     orpc.billing.issueCreditNote.mutationOptions({
       onSuccess: async () => {
@@ -349,6 +355,7 @@ function CreditDialog({
       },
     }),
   );
+
   const submit = form.handleSubmit((value) =>
     mutation.mutate({
       orgSlug,
@@ -477,9 +484,11 @@ function RefundDialog({
 }) {
   const invalidate = useBillingInvalidation(orgSlug, appointmentId);
   const onOpdError = useOpdErrorToast(orgSlug);
+
   const form = useZodForm(refundSchema, {
     defaultValues: { creditNoteId: "", method: "cash", amount: "", reference: "" },
   });
+
   const mutation = useMutation(
     orpc.billing.recordRefund.mutationOptions({
       onSuccess: async () => {

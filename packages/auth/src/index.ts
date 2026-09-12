@@ -8,7 +8,6 @@ import { APIError } from "better-auth/api";
 
 import { ac, roles } from "./access";
 import { invitationClaim } from "./invitation-claim";
-import { organizationSlugIssue } from "./organization-slug";
 
 export function invitationUrl(invitationId: string): string {
   return new URL(`/join?invitation=${invitationId}`, env.CORS_ORIGIN).toString();
@@ -22,9 +21,8 @@ function createAuth() {
       schema: schema,
     }),
     trustedOrigins: [env.CORS_ORIGIN],
-    // Creation performs the authoritative check; exposing this probe would let any
-    // signed-in account enumerate organization URLs.
-    disabledPaths: ["/organization/check-slug"],
+    // The accounting bootstrap owns creation. The slug probe would expose organization URLs.
+    disabledPaths: ["/organization/check-slug", "/organization/create"],
     emailAndPassword: {
       enabled: true,
       // Sign-up is open only to an invitation id plus its invited email; the
@@ -67,21 +65,14 @@ function createAuth() {
         // invitation id is the proof. Explicit: with a custom generateId
         // Better Auth would otherwise default this to true.
         requireEmailVerificationOnInvitation: false,
-        allowUserToCreateOrganization: (user) => {
-          // Emails are stored lowercased, so normalize the env value before comparing.
-          return user.email === env.FOUNDING_EMAIL.toLowerCase();
-        },
         // Object storage cannot join the database cascade. Keep this closed until deletion
         // has an explicit object-cleanup flow.
         disableOrganizationDeletion: true,
         organizationHooks: {
-          beforeCreateOrganization: async ({ organization: candidate }) => {
-            const issue = organizationSlugIssue(candidate.slug);
-            if (issue) {
-              throw new APIError("BAD_REQUEST", {
-                message: issue,
-              });
-            }
+          beforeCreateOrganization: async () => {
+            throw new APIError("FORBIDDEN", {
+              message: "Create organizations through the accounting bootstrap.",
+            });
           },
           // The slug is the tenant claim every request carries, so it must be stable, not
           // merely unique: Better Auth never reserves a vacated slug, so a rename would free
@@ -101,4 +92,5 @@ function createAuth() {
 }
 
 export const auth = createAuth();
+
 export type AuthSession = typeof auth.$Infer.Session;

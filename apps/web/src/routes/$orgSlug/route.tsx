@@ -9,15 +9,18 @@ export const Route = createFileRoute("/$orgSlug")({
   ssr: true,
   loader: async ({ context: { queryClient }, location, params: { orgSlug } }) => {
     let membership;
+
     try {
       membership = await queryClient.query(orpc.member.me.queryOptions({ input: { orgSlug } }));
     } catch (error) {
       if (hasErrorCode(error, "UNAUTHORIZED")) {
         throw redirect({ to: "/login", search: { redirect: location.href } });
       }
+
       if (hasErrorCode(error, "FORBIDDEN")) {
         throw redirect({ to: "/join" });
       }
+
       throw error;
     }
 

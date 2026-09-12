@@ -6,6 +6,8 @@ import { itemRouter } from "./item";
 import { dashboardRouter } from "./dashboard";
 import { fileRouter } from "./file";
 import { memberRouter } from "./member";
+import { organizationRouter } from "./organization";
+import { partyRouter } from "./party";
 import { customerRouter } from "./customer";
 import { payerRouter } from "./payer";
 import { reportRouter } from "./report";
@@ -20,6 +22,8 @@ export const appRouter = {
   dashboard: dashboardRouter,
   file: fileRouter,
   member: memberRouter,
+  organization: organizationRouter,
+  party: partyRouter,
   customer: customerRouter,
   payer: payerRouter,
   report: reportRouter,
@@ -27,5 +31,7 @@ export const appRouter = {
   staff: staffRouter,
   opd: opdRouter,
 };
+
 export type AppRouter = typeof appRouter;
+
 export type AppRouterClient = RouterClient<typeof appRouter>;

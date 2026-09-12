@@ -1,4 +1,4 @@
-import { fromPaise, toPaise } from "@accly/api/lib/invoice-math";
+import { parseMoney } from "@accly/api/core/money";
 import { authorize } from "@accly/auth/access";
 import { Badge } from "@accly/ui/components/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/$orgSlug/dashboard")({
     const { roles } = await queryClient.query(orpc.member.me.queryOptions({ input: { orgSlug } }));
 
     const prefetches: Promise<unknown>[] = [];
+
     if (authorize(roles, { opd: ["read"] })) {
       prefetches.push(
         queryClient
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/$orgSlug/dashboard")({
           .catch(() => {}),
       );
     }
+
     if (authorize(roles, { billing: ["read"] })) {
       prefetches.push(
         queryClient
@@ -100,9 +102,11 @@ function StatCard({
   );
 
   const shell = "flex flex-col rounded-xl bg-muted p-1";
+
   if (!to) {
     return <div className={shell}>{body}</div>;
   }
+
   return (
     <Link
       to={to}
@@ -118,6 +122,7 @@ function DashboardRoute() {
   const { orgSlug } = Route.useParams();
   const roles = useMembership(orgSlug, (membership) => membership.roles);
   const currency = useMembership(orgSlug, (membership) => membership.currency);
+
   const money = (value: string | undefined) =>
     value === undefined ? "—" : formatMoney(value, currency);
 
@@ -125,16 +130,19 @@ function DashboardRoute() {
   // not money still gets the clinical half rather than an error page.
   const canReadOpdAppointments = authorize(roles, { opd: ["read"] });
   const canReadBilling = authorize(roles, { billing: ["read"] });
+
   const today = useQuery({
     ...orpc.dashboard.today.queryOptions({ input: { orgSlug } }),
     ...OPERATIONAL_REFETCH,
     enabled: canReadOpdAppointments,
   });
+
   const collections = useQuery({
     ...orpc.dashboard.collections.queryOptions({ input: { orgSlug } }),
     ...OPERATIONAL_REFETCH,
     enabled: canReadBilling,
   });
+
   const queue = useQuery({
     ...orpc.opd.day.queryOptions({
       input: { orgSlug, limit: 6 },
@@ -145,13 +153,14 @@ function DashboardRoute() {
 
   const mix = today.data?.mix ?? [];
   const mixTotal = mix.reduce((sum, row) => sum + row.count, 0);
+
   const trend: BarDatum[] = (collections.data?.trend ?? []).map(({ day, amount }) => {
     const label = formatDay(day);
-    return {
-      label,
-      value: toPaise(amount),
-      caption: label,
-    };
+    const paise = parseMoney(amount);
+    // The chart geometry requires numbers; money stays bigint everywhere else.
+    const value = Number(paise);
+
+    return { label, value, caption: label, formattedValue: formatMoney(amount, currency) };
   });
 
   return (
@@ -223,11 +232,7 @@ function DashboardRoute() {
                   // The series is gap-filled in SQL, so the chart owns its own empty copy.
                   empty={null}
                 >
-                  <BarChart
-                    data={trend}
-                    formatValue={(value) => formatMoney(fromPaise(value), currency)}
-                    height={72}
-                  />
+                  <BarChart data={trend} height={72} />
                 </ListState>
               </Panel>
             )}
