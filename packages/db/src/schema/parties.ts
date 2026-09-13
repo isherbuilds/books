@@ -32,7 +32,7 @@ export const parties = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     normalizedName: text("normalized_name").notNull(),
-    roles: text("roles").array().notNull(),
+    roles: text("roles").array().$type<PartyRole[]>().notNull(),
     gstin: text("gstin"),
     pan: text("pan"),
     addressLine1: text("address_line_1"),
@@ -44,7 +44,8 @@ export const parties = pgTable(
     phone: text("phone"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // Millisecond precision: the value round-trips through JSON as the edit token.
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
   },
   (table) => [
     check(

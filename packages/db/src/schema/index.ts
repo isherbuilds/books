@@ -45,3 +45,17 @@ export * from "./accounts";
 export * from "./journal-entries";
 
 export * from "./journal-lines";
+
+export * from "./payment-methods";
+
+export * from "./documents";
+
+export * from "./document-lines";
+
+export * from "./party-ledger-lines";
+
+export * from "./allocations";
+
+export * from "./balances";
+
+export * from "./number-series";

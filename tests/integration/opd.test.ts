@@ -98,8 +98,8 @@ async function journalFor(orgId: string, sourceType: string, sourceId: string) {
     .where(
       and(
         eq(journalEntries.orgId, orgId),
-        eq(journalEntries.sourceType, sourceType),
-        eq(journalEntries.sourceId, sourceId),
+        eq(journalEntries.documentType, sourceType),
+        eq(journalEntries.documentId, sourceId),
       ),
     );
 

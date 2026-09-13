@@ -6,7 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group"
 import { cn } from "@accly/ui/lib/utils";
 import { createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
+import { useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
 
 import { useDebouncedCallback } from "@/hooks/use-debounced-value";
 import { errorMessage } from "@/lib/orpc-error";
@@ -143,32 +143,89 @@ export const PageTab = createLink(function PageTabAnchor({
   );
 });
 
-export function ListToolbar({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-2">{children}</div>;
+/** `end` holds table controls such as the column menu; like the table, it shows from `md`. */
+export function ListToolbar({ children, end }: { children: ReactNode; end?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {children}
+      {end ? <div className="ml-auto hidden items-center gap-2 md:flex">{end}</div> : null}
+    </div>
+  );
 }
 
 export function SearchInput({
   label,
   placeholder,
+  value,
+  delay = 300,
   onQueryChange,
+  fieldRef,
+  trailing,
 }: {
   label: string;
   placeholder: string;
+  /** The applied query from the URL, so a reload shows what filters the list. */
+  value?: string;
+  /** 300 ms for a server-searched list, 150 ms for an in-memory master list. */
+  delay?: number;
+  /** The trimmed text; an empty string clears the search. */
   onQueryChange: (query: string) => void;
+  fieldRef?: Ref<HTMLDivElement>;
+  /** The filter trigger, drawn inside the field's right edge. */
+  trailing?: ReactNode;
 }) {
+  const input = useRef<HTMLInputElement>(null);
   // The list re-renders after each pause, not after each keystroke.
-  const handleChange = useDebouncedCallback(onQueryChange, 300);
+  const apply = useDebouncedCallback((text: string) => onQueryChange(text.trim()), delay);
+
+  // Clear, Back, or a palette link changes the URL; the box follows, but never
+  // while the operator types in it.
+  useEffect(() => {
+    const element = input.current;
+
+    if (element && document.activeElement !== element) element.value = value ?? "";
+  }, [value]);
 
   return (
-    <div className="relative w-full max-w-md">
+    <div ref={fieldRef} className="relative w-full sm:w-88">
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
+        ref={input}
         type="search"
         aria-label={label}
         placeholder={placeholder}
-        className="pl-8"
-        onChange={(event) => handleChange(event.currentTarget.value.trim())}
+        defaultValue={value}
+        // The server's searchQuery cap: a longer query would validate to no search.
+        maxLength={100}
+        autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        className={cn(
+          "pl-8",
+          trailing !== undefined && "pr-8 [&::-webkit-search-cancel-button]:appearance-none",
+        )}
+        onChange={(event) => apply.schedule(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return;
+
+          if (event.key === "Enter") {
+            event.preventDefault();
+            apply.now(event.currentTarget.value);
+          }
+
+          // Esc clears the text only; filters never clear on Esc.
+          if (event.key === "Escape" && event.currentTarget.value) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.value = "";
+            apply.now("");
+          }
+        }}
       />
+      {trailing === undefined ? null : (
+        <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>
+      )}
     </div>
   );
 }

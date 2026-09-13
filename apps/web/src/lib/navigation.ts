@@ -3,12 +3,14 @@ import {
   Building2Icon,
   ClipboardListIcon,
   ChartColumnIcon,
+  ContactRoundIcon,
   ChartNoAxesColumnIncreasingIcon,
   FileIcon,
   LandmarkIcon,
   LayoutDashboardIcon,
   ListChecksIcon,
   ListOrderedIcon,
+  ReceiptIndianRupeeIcon,
   ReceiptTextIcon,
   WalletIcon,
   StethoscopeIcon,
@@ -31,6 +33,8 @@ type NavGroup = (typeof NAV_GROUPS)[number];
 
 type PrimaryNavItem = NavEntry<
   | "/$orgSlug/dashboard"
+  | "/$orgSlug/receipts"
+  | "/$orgSlug/parties"
   | "/$orgSlug/customers"
   | "/$orgSlug/opd"
   | "/$orgSlug/billing"
@@ -47,6 +51,20 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
     icon: LayoutDashboardIcon,
     group: "Sales",
     permission: { member: ["read"] },
+  },
+  {
+    to: "/$orgSlug/receipts",
+    label: "Receipts",
+    icon: ReceiptIndianRupeeIcon,
+    group: "Sales",
+    permission: { receipt: ["read"] },
+  },
+  {
+    to: "/$orgSlug/parties",
+    label: "Parties",
+    icon: ContactRoundIcon,
+    group: "Sales",
+    permission: { party: ["read"] },
   },
   // Legacy outpatient desk, kept while its billing wiring is the only path from a
   // service to an invoice. It moves out when documents are raised directly.

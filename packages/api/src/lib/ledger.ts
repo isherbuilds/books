@@ -209,8 +209,9 @@ export async function postJournalEntry(
     id: entryId,
     orgId: args.orgId,
     entryDate: businessDate(args.now, args.timeZone),
-    sourceType: args.sourceType,
-    sourceId: args.sourceId,
+    documentType: args.sourceType,
+    documentId: args.sourceId,
+    kind: "post",
     narration: args.narration,
     createdBy: args.createdBy,
   });

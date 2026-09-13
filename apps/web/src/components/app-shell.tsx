@@ -30,6 +30,7 @@ import { CheckIcon, ChevronsUpDownIcon, LogInIcon, LogOutIcon, SettingsIcon } fr
 import { type ReactNode } from "react";
 
 import { Monogram } from "@/components/monogram";
+import { PaletteTrigger } from "@/components/palette/palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 import { useMembership } from "@/lib/membership";
@@ -141,6 +142,9 @@ function OrgSidebar({ orgSlug }: { orgSlug: string }) {
           <SidebarMenuItem>
             <OrgSwitcher activeOrgSlug={orgSlug} />
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <PaletteTrigger />
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
@@ -163,9 +167,7 @@ function OrgSidebar({ orgSlug }: { orgSlug: string }) {
                       <SidebarMenuButton
                         tooltip={label}
                         className="[&_svg]:text-muted-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground data-[status=active]:[&_svg]:text-foreground"
-                        render={
-                          <Link to={to} params={{ orgSlug }} preload="intent" preloadDelay={0} />
-                        }
+                        render={<Link to={to} params={{ orgSlug }} preloadDelay={0} />}
                       >
                         <Icon />
                         <span>{label}</span>
@@ -186,14 +188,7 @@ function OrgSidebar({ orgSlug }: { orgSlug: string }) {
               <SidebarMenuButton
                 tooltip="Settings"
                 className="data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground data-[status=active]:[&_svg]:text-foreground"
-                render={
-                  <Link
-                    to="/$orgSlug/settings"
-                    params={{ orgSlug }}
-                    preload="intent"
-                    preloadDelay={0}
-                  />
-                }
+                render={<Link to="/$orgSlug/settings" params={{ orgSlug }} preloadDelay={0} />}
               >
                 <SettingsIcon />
                 <span>Settings</span>

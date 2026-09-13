@@ -14,7 +14,7 @@ import {
 
 import { organization, user } from "./auth";
 import { invoices } from "./invoices";
-import { PAYMENT_METHODS, type PaymentMethod } from "./payment-methods";
+import { PAYMENT_METHODS, type PaymentMethod } from "./legacy-payment-methods";
 
 // drizzle-kit serializes check SQL verbatim, so the list must be literal, not bound.
 export function paymentMethodCheck(column: AnyPgColumn): SQL {

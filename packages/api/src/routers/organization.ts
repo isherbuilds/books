@@ -42,7 +42,6 @@ export const organizationRouter = {
         gstin: organizationSettings.gstin,
         stateCode: organizationSettings.stateCode,
         financialYearStart: organizationSettings.financialYearStart,
-        advanceTaxTreatment: organizationSettings.advanceTaxTreatment,
         addressLine1: organizationSettings.addressLine1,
         addressLine2: organizationSettings.addressLine2,
         city: organizationSettings.city,

@@ -9,7 +9,7 @@ The accounting core must be keyboard-fast, audit-grade, able to absorb Indian ta
 
 ## Decision
 
-Documents are the only write model. Posting derives journal entries and lines, party ledger lines and balances in the same Postgres transaction. Posted rows change only through the posting and reversal procedures, and a constraint trigger rejects unbalanced entries. Corrections are reversing entries. Money is `bigint` paise. Tax and posting rules are dated data rows that documents reference. The pre-production MVP uses one database credential. RLS, a restricted runtime role, and idempotent command ingestion are deferred.
+Documents are the only write model. Posting derives journal entries and lines, party ledger lines and balances in the same Postgres transaction. Posted rows change only through the posting and reversal procedures. `recordEntry` refuses an unbalanced entry before insert, and no code path updates or deletes a posted row (amended 2026-09-13: the database triggers were dropped while the application is the only writer). Corrections are reversing entries. Money is `bigint` paise. Tax and posting rules are dated data rows that documents reference. The pre-production MVP uses one database credential. RLS, a restricted runtime role, and idempotent command ingestion are deferred.
 
 ## Consequences
 

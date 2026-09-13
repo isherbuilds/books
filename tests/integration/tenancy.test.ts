@@ -115,7 +115,7 @@ test("a foreign org claim cannot write into that tenant's audit trail", async ()
   expect(audit.items.some((entry) => entry.actorId === visitor.user.id)).toBe(false);
 });
 
-test("one client can work in different orgs concurrently", async () => {
+test("one client can update settings and post receipts in different orgs concurrently", async () => {
   const user = await createTestUser("multi");
   const one = await createOrganization(user, "tab-one");
   const two = await createOrganization(user, "tab-two");
@@ -135,6 +135,53 @@ test("one client can work in different orgs concurrently", async () => {
 
   const seenInOne = await api.settings.get({ orgSlug: one.slug });
   expect(seenInOne.legalName).toBe("from tab one");
+
+  const [oneMethods, twoMethods, oneAccounts, twoAccounts] = await Promise.all([
+    api.paymentMethod.list({ orgSlug: one.slug }),
+    api.paymentMethod.list({ orgSlug: two.slug }),
+    api.account.list({ orgSlug: one.slug }),
+    api.account.list({ orgSlug: two.slug }),
+  ]);
+
+  const oneMethod = oneMethods.find(({ name }) => name === "Cash");
+  const twoMethod = twoMethods.find(({ name }) => name === "Cash");
+
+  const oneIncome = oneAccounts.find(
+    ({ type, supplyClass }) => type === "income" && supplyClass === "exempt",
+  );
+
+  const twoIncome = twoAccounts.find(
+    ({ type, supplyClass }) => type === "income" && supplyClass === "exempt",
+  );
+
+  if (!oneMethod || !twoMethod || !oneIncome || !twoIncome) {
+    throw new Error("Accounting organization fixtures are incomplete");
+  }
+
+  const [receiptOne, receiptTwo] = await Promise.all([
+    api.receipt.post({
+      orgSlug: one.slug,
+      settlementKind: "direct",
+      amount: "11.00",
+      paymentMethodId: oneMethod.id,
+      incomeAccountId: oneIncome.id,
+    }),
+    api.receipt.post({
+      orgSlug: two.slug,
+      settlementKind: "direct",
+      amount: "22.00",
+      paymentMethodId: twoMethod.id,
+      incomeAccountId: twoIncome.id,
+    }),
+  ]);
+
+  const [receiptsOne, receiptsTwo] = await Promise.all([
+    api.receipt.list({ orgSlug: one.slug }),
+    api.receipt.list({ orgSlug: two.slug }),
+  ]);
+
+  expect(receiptsOne.rows.map(({ id }) => id)).toEqual([receiptOne.id]);
+  expect(receiptsTwo.rows.map(({ id }) => id)).toEqual([receiptTwo.id]);
 });
 
 test("today's queue and collections are scoped, concurrent, and revoke with membership", async () => {
@@ -398,9 +445,30 @@ const GUARDED_CALLS = {
       stateCode: "27",
       active: true,
       allowNamesake: false,
+      updatedAt: new Date().toISOString(),
     }),
   "party.get": (api, claim) => api.party.get({ ...claim, partyId: crypto.randomUUID() }),
   "party.list": (api, claim) => api.party.list({ ...claim }),
+  "party.statement": (api, claim) =>
+    api.party.statement({ ...claim, partyId: crypto.randomUUID() }),
+  "account.list": (api, claim) => api.account.list({ ...claim }),
+  "paymentMethod.list": (api, claim) => api.paymentMethod.list({ ...claim }),
+  "paymentMethod.create": (api, claim) =>
+    api.paymentMethod.create({ ...claim, name: "Intrusion", accountId: crypto.randomUUID() }),
+  "receipt.post": (api, claim) =>
+    api.receipt.post({
+      ...claim,
+      settlementKind: "direct",
+      amount: "1.00",
+      paymentMethodId: crypto.randomUUID(),
+      incomeAccountId: crypto.randomUUID(),
+    }),
+  "receipt.get": (api, claim) => api.receipt.get({ ...claim, receiptId: crypto.randomUUID() }),
+  "receipt.list": (api, claim) => api.receipt.list({ ...claim }),
+  "receipt.partyTotals": (api, claim) => api.receipt.partyTotals({ ...claim }),
+  "receipt.cancel": (api, claim) =>
+    api.receipt.cancel({ ...claim, receiptId: crypto.randomUUID(), reason: "intrusion" }),
+  "export.dayBookXlsx": (api, claim) => api.export.dayBookXlsx({ ...claim, date: "2026-09-12" }),
   "dashboard.today": (api, claim) => api.dashboard.today({ ...claim }),
   "dashboard.collections": (api, claim) => api.dashboard.collections({ ...claim }),
   "settings.get": (api, claim) => api.settings.get({ ...claim }),

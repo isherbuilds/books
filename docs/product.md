@@ -20,12 +20,12 @@ set:
 
 ## Scope
 
-| Status             | Capabilities                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Live**           | Tenant/auth spine, customers and customer codes, items with price and tax, charges, invoices, payments, receipts, credit notes, refunds, double-entry ledger, GST outward register, trial balance, balance sheet, daily collections, unbilled-alert and refund-due worklists, dashboard, files, audit, member administration with reception/cashier/accountant/administrator roles, security headers, upload cleanup, four payment methods (Cash, UPI, Card, Bank transfer), and measurement-only sponsor capture |
-| **Legacy**         | The outpatient desk (`opd_appointments`, practitioners, departments) and its register report. It still owns the only path from a service to an invoice, so it stays until documents can be raised directly against a customer                                                                                                                                                                                                                                                                                     |
-| **Next**           | Raising an invoice directly against a customer, printer validation, release evidence for the hardened images and headers, and the pilot runbook                                                                                                                                                                                                                                                                                                                                                                   |
-| **Evidence-gated** | Purchases and vendor bills, inventory, bank reconciliation, manual journals, period close, recurring invoices, e-invoicing (IRP/IRN), e-way bills, payment gateway, customer portal, offline mode, and AI assistance                                                                                                                                                                                                                                                                                              |
+| Status             | Capabilities                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live**           | Tenant/auth spine, customers and customer codes, items with price and tax, charges, invoices, payments, receipts, credit notes, refunds, double-entry ledger, GST outward register, trial balance, balance sheet, daily collections, unbilled-alert and refund-due worklists, dashboard, files, audit, member administration with reception/cashier/accountant/administrator roles, security headers, upload cleanup, Parties with ledger, accounting-core Receipts (advance/direct), day-book XLSX, and measurement-only sponsor capture |
+| **Legacy**         | The outpatient desk (`opd_appointments`, practitioners, departments) and its register report. It still owns the only path from a service to an invoice, so it stays until documents can be raised directly against a customer                                                                                                                                                                                                                                                                                                             |
+| **Next**           | Raising an invoice directly against a customer, printer validation, release evidence for the hardened images and headers, and the pilot runbook                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Evidence-gated** | Purchases and vendor bills, inventory, bank reconciliation, manual journals, period close, recurring invoices, e-invoicing (IRP/IRN), e-way bills, payment gateway, customer portal, offline mode, and AI assistance                                                                                                                                                                                                                                                                                                                      |
 
 Evidence-gated work gets no placeholder route, table, permission, or navigation
 entry. It starts only with a paid/observed need, a named operational owner, and
@@ -38,6 +38,7 @@ generic Transaction, Entry, Document, or Account when the actual record is known
 
 | Staff label | URL                        | Record / code     | Meaning                                                           |
 | ----------- | -------------------------- | ----------------- | ----------------------------------------------------------------- |
+| Parties     | `/$orgSlug/parties`        | Party             | Any counterparty: customer, vendor, tenant, donor, employee       |
 | Customers   | `/$orgSlug/customers`      | Customer          | Organization-local customer identity and code                     |
 | Billing     | `/$orgSlug/billing`        | Charge / Invoice  | Organization-wide financial worklists and source documents        |
 | Items       | `/$orgSlug/settings/items` | Item              | A priced, taxed thing you sell                                    |
@@ -93,13 +94,11 @@ Handover is XLSX/print first; a one-way Tally adapter is evidence-gated.
 
 - Pre-production schema and API changes are clean cutovers. Remove obsolete
   shapes; do not add aliases, dual reads/writes, or compatibility columns.
-- Migration history becomes append-only at the first live financial document.
+- Migrations follow the [migration policy](./development.md#code-rules).
 - A pilot cutover may import agreed master data. It does not recreate historic
   invoices or use dual entry; the old system becomes read-only.
 - New domains ship vertically: schema, permission, guarded API, UI, audit,
   tests, docs, and a real owner together.
-- The current broad `member` grant is development-only. Reception, cashier, and
-  accountant permissions split before pilot staff onboarding.
 
 ## Roadmap gates
 

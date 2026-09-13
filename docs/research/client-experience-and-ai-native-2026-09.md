@@ -1,6 +1,6 @@
 # Client experience and AI-native patterns: what to match, what nobody has built
 
-Date: 2026-09-09. Status: canonical for the client spec (`docs/specs/keyboard-first-entry.md`, not yet written) and for the first AI interactions. Merged from two same-day investigations (entry speed with pinned-commit inventories; AI-native patterns with Zoho demo and Midday API inspection); both earlier files are superseded by this one. Complements [ledger-architecture.md](./ledger-architecture.md), which owns the posting and storage conclusions and is not repeated here.
+Date: 2026-09-09. Status: canonical for the client spec ([client-patterns.md](../specs/client-patterns.md)) and for the first AI interactions. Merged from two same-day investigations (entry speed with pinned-commit inventories; AI-native patterns with Zoho demo and Midday API inspection); both earlier files are superseded by this one. Complements [ledger-architecture.md](./ledger-architecture.md), which owns the posting and storage conclusions and is not repeated here.
 
 Source labels: [official] vendor help; [source] code at a pinned commit; [community] forum or issue tracker; [inference] our reading, not observed.
 

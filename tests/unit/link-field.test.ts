@@ -1,0 +1,33 @@
+import { expect, test } from "bun:test";
+
+import { linkRows } from "../../apps/web/src/lib/link-rows";
+
+type Row = { name: string; code?: string };
+
+const sharma: Row = { name: "Sharma Traders", code: "27AAAPS1234C1Z5" };
+
+const asha: Row = { name: "Asha Sharma" };
+
+const kapoor: Row = { name: "Kapoor Stores" };
+
+const rows = [kapoor, asha, sharma];
+
+const options = (query: string, overrides: Partial<Parameters<typeof linkRows<Row>>[0]> = {}) => ({
+  items: rows,
+  query,
+  selectedLabel: "",
+  canCreate: true,
+  getLabel: (row: Row) => row.name,
+  getCode: (row: Row) => row.code,
+  ...overrides,
+});
+
+test("prefix matches lead, substring matches follow, and Create comes last", () => {
+  expect(linkRows(options("sha"))).toEqual([sharma, asha, { __create: "sha" }]);
+});
+
+test("an existing name, a committed value, or no create grant offers no Create row", () => {
+  expect(linkRows(options("kapoor stores"))).toEqual([kapoor]);
+  expect(linkRows(options("Kapoor Stores", { selectedLabel: "Kapoor Stores" }))).toEqual(rows);
+  expect(linkRows(options("sha", { canCreate: false }))).toEqual([sharma, asha]);
+});

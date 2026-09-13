@@ -9,6 +9,13 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
 
+function DialogTrigger(props: DialogPrimitive.Trigger.Props) {
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+}
+
+// Binds detached triggers and imperative open/close to one Dialog root.
+const createDialogHandle = DialogPrimitive.createHandle;
+
 function DialogContent({
   className,
   children,
@@ -86,4 +93,13 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
   );
 }
 
-export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle };
+export {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  createDialogHandle,
+};

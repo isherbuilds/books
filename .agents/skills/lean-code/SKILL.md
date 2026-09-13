@@ -63,10 +63,12 @@ proves the session, resolves membership, checks the permission, and exposes
 
 ## 3. Frontend rules
 
-- **One query, passed as props.** A server result the page needs is one `useQuery`
-  in the component that owns the form, handed down as props. No context pair to
-  split "the data" from "the status", no re-reading the query cache by a rebuilt
-  key, no `useMemo` keyed on a joined string to dodge a re-render nobody measured.
+- **One `queryOptions` per fact.** Components subscribe with the same
+  `queryOptions` the loader primed, per
+  [Architecture: Web data flow](../../../docs/architecture.md#web-data-flow). No
+  context pair to split "the data" from "the status", no re-reading the query
+  cache by a hand-built key, no `useMemo` keyed on a joined string to dodge a
+  re-render nobody measured.
 - **One source of truth for money.** Amounts on a settlement screen come from the
   server quote. A client-side preview is allowed only where no quote exists yet
   (a booking collects nothing) or for a local draft over a trusted quote (live
@@ -92,8 +94,10 @@ proves the session, resolves membership, checks the permission, and exposes
   identical scaffold lines earn one shell component; two do not.
 - **Overlays that survive a reload live in the URL.** A sheet or dialog that edits a
   record is opened by a search param (`?customerId=`, `?action=payment`) via
-  `validateSearch` + `navigate({ search })`, not `useState`. Back closes it; the link
-  is shareable. Transient confirmations stay in state.
+  `validateSearch` + `navigate({ search })`, or by a child route that renders a
+  record Sheet over its still-mounted list (`/receipts/$receiptId`), not
+  `useState`. Back closes it; the link is shareable. Transient confirmations stay in
+  state.
 - **CONFLICT closes the overlay.** Any billing or OPD mutation `onError` on CONFLICT:
   close the dialog/overlay first (it holds a stale snapshot the server will keep
   rejecting), then invalidate, then toast the server message. One handler

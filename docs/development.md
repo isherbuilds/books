@@ -64,11 +64,11 @@ collides with a system Postgres on 5432.
 
 | Port    | Bound by     | Declared in                           |
 | ------- | ------------ | ------------------------------------- |
-| `55442` | Postgres     | `packages/db/docker-compose.dev.yaml` |
 | `55443` | API (Hono)   | `apps/server/src/index.ts`            |
 | `55444` | Web (Vite)   | `apps/web/vite.config.ts`             |
 | `55445` | Docs (Astro) | `apps/fumadocs/astro.config.mjs`      |
-| `55451` | SeaweedFS S3 | `packages/db/docker-compose.dev.yaml` |
+| `55446` | Postgres     | `packages/db/docker-compose.dev.yaml` |
+| `55447` | SeaweedFS S3 | `packages/db/docker-compose.dev.yaml` |
 
 Vite runs with `strictPort`, so a taken 55444 fails loudly rather than sliding
 onto a neighbour's port. The Docker Compose project is named `accly-db-dev`, so
@@ -120,6 +120,12 @@ bun run create-user <email> <name> <password>
 bun run db:seed
 ```
 
+`bun run db:seed` fills an empty database only. It creates the owner, admin,
+staff and a pending invitation, plus two organizations: Meridian Traders
+(company) and Ridgeview Academy (trust). Each gets parties and up to six months
+of receipts posted through the real Receipt core, including advances and
+cancellations; the script prints the accounts and counts.
+
 `bun scripts/seed-demo.ts` adds screenshot data to the seeded Meridian Traders
 organization. It uses the app counters for customer codes, invoices, and
 receipts. Cleanup and inserts commit in one transaction, scoped to that
@@ -129,9 +135,8 @@ data causes the transaction to fail without partial cleanup.
 Only `FOUNDING_EMAIL` may create Organizations through `organization.create`.
 The route and trusted seed/test callers share the atomic bootstrap in
 `packages/api/src/core/organizations.ts`; native Better Auth creation is closed.
-One `organization_settings` row owns legal identity, financial-year fields,
-time zone, currency, and document prefixes. `organization.getProfile` reads the
-legal profile from that row; Better Auth owns the separate `organization` table. Other accounts receive
+[Architecture](./architecture.md#data-and-migrations) owns the organization
+settings row. Other accounts receive
 membership through invitation or an operator-managed membership.
 
 ## Repository map
@@ -163,6 +168,7 @@ membership through invitation or an operator-managed membership.
 | `bun run db:generate`        | Generate a Drizzle migration from the current schema                 |
 | `bun run db:migrate`         | Apply migrations through `DATABASE_URL`                              |
 | `bun run db:seed -- --reset` | Reset and seed development data                                      |
+| `bun run db:seed:volume`     | Post 10,000 receipts per seeded organization; pass a count for more  |
 | `bun run db:studio`          | Open Drizzle Studio                                                  |
 
 `dev:status` is read-only and uses three-second timeouts. It checks the Compose
@@ -238,8 +244,8 @@ range; a passing TypeScript build cannot prove an auth database is migratable.
 - Comment why the obvious approach is wrong, not what the next line does.
 - Use `@accly/ui` primitives for shared controls. Feature layout stays near the
   route; shared visual contracts stay in `packages/ui`.
-- Use keyset pagination and tenant-leading indexes. Scope writes with one
-  `UPDATE/DELETE ... RETURNING` where possible.
+- Pagination, indexes and scoped writes follow
+  [Architecture: Data and migrations](./architecture.md#data-and-migrations).
 - Never hand-edit generated migrations or `apps/web/src/routeTree.gen.ts`.
   Hand-authored SQL lives in its own migration file.
 - Migration history is append-only once any environment retains data. Before
@@ -250,10 +256,19 @@ range; a passing TypeScript build cannot prove an auth database is migratable.
 
 ### React and forms
 
-React Compiler is enabled for the web app. Keep transient search, tab, and form
-state in the smallest subtree that renders it; extract the owner boundary before
-adding manual `memo` or `useMemo`, and let each one that survives cite the
-measurement that justified it.
+React Compiler is enabled for the web app through Babel
+(`reactCompilerPreset` in `apps/web/vite.config.ts`). Do not switch to the
+plugin's Rust `compiler: true` option: `oxc-transform-react` 0.149 rewrites
+every bigint literal inside a compiled component to `undefined`, so
+`paise === 0n` silently becomes `paise === undefined`. Keep transient search,
+tab, and form state in the smallest subtree that renders it; extract the owner
+boundary before adding manual `memo` or `useMemo`, and let each one that
+survives cite the measurement that justified it. `DataTable` uses TanStack Table
+9.2.4 with only its sorting and column-visibility features, registered in
+`data-table.tsx`. v9's `useTable` is compatible with React Compiler, so
+`DataTable` needs no `"use no memo"`. Column arrays stay at module scope. Keep
+table and row objects inside that owner; its compiled children receive only
+plain values.
 
 Each rule below answers one question, so the shape of a screen is decided rather
 than chosen. Anything not on a list here is not a third option — it is a
@@ -261,13 +276,13 @@ divergence, and it needs a reason in the diff.
 
 #### Who owns the value
 
-| Value                                            | Owner                                            |
-| ------------------------------------------------ | ------------------------------------------------ |
-| A native input's draft, until submit             | the DOM, via `RegisteredFormField`               |
-| A widget's value, or one that changes at runtime | RHF, via `FormField` (a `Controller`)            |
-| Anything the server returns                      | TanStack Query — never copied into `useState`    |
-| A committed, shareable search or open tab        | route search params, via `validateSearch`        |
-| Ephemeral text, hover, which row is open         | `useState` in the smallest child that renders it |
+| Value                                                               | Owner                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------ |
+| A native input's draft, until submit                                | the DOM, via `RegisteredFormField`               |
+| A widget's value, or one that changes at runtime                    | RHF, via `FormField` (a `Controller`)            |
+| Anything the server returns                                         | TanStack Query — never copied into `useState`    |
+| A committed, shareable search, filter, sort, column set or open tab | route search params, via `validateSearch`        |
+| Ephemeral text, hover                                               | `useState` in the smallest child that renders it |
 
 Nothing persists to `localStorage` or `sessionStorage`. If a draft ever must
 survive a reload, add one keyed helper beside `use-zod-form.ts` rather than a

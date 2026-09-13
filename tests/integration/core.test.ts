@@ -196,6 +196,27 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   );
 });
 
+test("a party edit from a stale copy is refused", async () => {
+  const organization = await createAccountingOrganization(founder.headers, {
+    slug: `party-edit-${uniqueSuffix()}`,
+  });
+
+  const api = clientFor(founder);
+  const party = await api.party.create(partyCreateInput(organization.slug, "Stale Copy"));
+
+  const edit = {
+    ...partyCreateInput(organization.slug, "Stale Copy Renamed"),
+    partyId: party.id,
+    active: true,
+    updatedAt: party.updatedAt.toISOString(),
+  };
+
+  expect(await api.party.update(edit)).toMatchObject({ name: "Stale Copy Renamed" });
+
+  const stale = await expectCoreError(api.party.update({ ...edit, name: "Lost edit" }), "CONFLICT");
+  expect(stale.data).toMatchObject({ reason: "stale_record" });
+});
+
 test("membership removal is enforced on the next party request", async () => {
   const organization = await createAccountingOrganization(founder.headers, {
     slug: `party-membership-${uniqueSuffix()}`,

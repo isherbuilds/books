@@ -1,12 +1,15 @@
 import type { DbTransaction } from "@accly/db/counter";
 import { accounts, type AccountType, type SupplyClass } from "@accly/db/schema/accounts";
+import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { LegalType } from "@accly/db/schema/organization-settings";
 
 export const SYSTEM_ACCOUNT_KEYS = [
   "cash",
   "bank",
   "receivables",
+  "supplierAdvances",
   "payables",
+  "customerAdvances",
   "cgstOutput",
   "sgstOutput",
   "igstOutput",
@@ -22,6 +25,8 @@ export const SYSTEM_ACCOUNT_KEYS = [
 ] as const;
 
 export type SystemAccountKey = (typeof SYSTEM_ACCOUNT_KEYS)[number];
+
+export type SystemAccountIds = Record<SystemAccountKey, string>;
 
 type TemplateAccount = {
   code: string;
@@ -42,6 +47,13 @@ const coreAccounts = (equityName: string): TemplateAccount[] => [
     type: "asset",
     parentCode: "100",
     systemKey: "receivables",
+  },
+  {
+    code: "1350",
+    name: "Supplier Advances",
+    type: "asset",
+    parentCode: "100",
+    systemKey: "supplierAdvances",
   },
   {
     code: "1400",
@@ -85,6 +97,13 @@ const coreAccounts = (equityName: string): TemplateAccount[] => [
     type: "liability",
     parentCode: "200",
     systemKey: "payables",
+  },
+  {
+    code: "2150",
+    name: "Customer Advances",
+    type: "liability",
+    parentCode: "200",
+    systemKey: "customerAdvances",
   },
   {
     code: "2210",
@@ -165,9 +184,22 @@ export async function seedChartOfAccounts(
   tx: DbTransaction,
   orgId: string,
   legalType: LegalType,
-): Promise<void> {
+): Promise<SystemAccountIds> {
   const template = CHART_TEMPLATES[legalType];
   const idsByCode = new Map(template.map((account) => [account.code, Bun.randomUUIDv7()]));
+  const systemIds = new Map<SystemAccountKey, string>();
+
+  for (const account of template) {
+    if (account.systemKey) {
+      systemIds.set(account.systemKey, idsByCode.get(account.code)!);
+    }
+  }
+
+  for (const key of SYSTEM_ACCOUNT_KEYS) {
+    if (!systemIds.has(key)) {
+      throw new Error(`Chart template is missing system account "${key}"`);
+    }
+  }
 
   await tx.insert(accounts).values(
     template.map((account) => {
@@ -190,4 +222,22 @@ export async function seedChartOfAccounts(
       };
     }),
   );
+
+  // SAFETY: the loop above proved every SystemAccountKey has an id.
+  return Object.fromEntries(
+    SYSTEM_ACCOUNT_KEYS.map((key) => [key, systemIds.get(key)!]),
+  ) as SystemAccountIds;
+}
+
+export async function seedPaymentMethods(
+  tx: DbTransaction,
+  orgId: string,
+  accountIds: SystemAccountIds,
+): Promise<void> {
+  await tx.insert(paymentMethods).values([
+    { id: Bun.randomUUIDv7(), orgId, name: "Cash", accountId: accountIds.cash },
+    { id: Bun.randomUUIDv7(), orgId, name: "UPI", accountId: accountIds.bank },
+    { id: Bun.randomUUIDv7(), orgId, name: "Card", accountId: accountIds.bank },
+    { id: Bun.randomUUIDv7(), orgId, name: "Bank transfer", accountId: accountIds.bank },
+  ]);
 }

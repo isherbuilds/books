@@ -7,8 +7,7 @@ Books, Zoho Books, Odoo, and another relevant accounting application. Identify
 what to adopt, the costs, and the decisions needed before the affected slices.
 
 Research date: 2026-09-10. This report changes neither spec nor implementation.
-It supplements the earlier [reference comparison](./reference-spec-alignment-2026-09-10.md)
-with transaction-level evidence. Recommendations below supersede the earlier
+Recommendations below supersede the earlier
 conversation's recommendation to expand the generic Posting Rule key; they do
 not supersede accepted specifications without a subsequent decision.
 

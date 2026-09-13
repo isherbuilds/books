@@ -2,7 +2,8 @@ import { resolve } from "node:path";
 import mdx from "@mdx-js/rollup";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import viteReact from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
+import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
@@ -42,9 +43,10 @@ export default defineConfig({
       compressPublicAssets: { gzip: true, brotli: true },
       inlineDynamicImports: true,
     }),
-    // React Compiler runs natively through oxc-transform-react (Rust), not Babel.
-    // Still marked experimental upstream — if memoization ever looks wrong, drop
-    // back to `viteReact()` plus @rolldown/plugin-babel + reactCompilerPreset().
-    viteReact({ compiler: true }),
+    // React Compiler through Babel, not `viteReact({ compiler: true })`: its oxc port
+    // (oxc-transform-react 0.149) rewrites every bigint literal inside a compiled
+    // component to `undefined`, so `paise === 0n` silently became `paise === undefined`.
+    viteReact(),
+    babel({ presets: [reactCompilerPreset()] }),
   ],
 });

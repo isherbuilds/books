@@ -58,7 +58,9 @@ function isServerFault(error: unknown): boolean {
  * record the payment" beats the generic default at the moment it actually shows.
  */
 export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
-  if (isServerFault(error)) return fallback;
+  // fetch rejects a dropped connection with a TypeError ("Failed to fetch", "Load
+  // failed"): a browser sentence, not one an operator can act on.
+  if (isServerFault(error) || error instanceof TypeError) return fallback;
 
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -71,9 +73,6 @@ export function applyOrpcFieldError<TFieldValues extends FieldValues, TContext, 
   map: Partial<Record<ConflictReason, { field: FieldPath<TFieldValues>; message: string }>>,
 ): string | undefined {
   const reason = errorReason(error);
-
-  if (reason === undefined) return undefined;
-
   const fieldError = Object.entries(map).find(([key]) => key === reason)?.[1];
 
   if (!fieldError) return undefined;

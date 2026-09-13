@@ -1,5 +1,5 @@
 import { PAYER_TYPES, type PayerType } from "@accly/db/schema/payer-types";
-import { PAYMENT_METHODS, type PaymentMethod } from "@accly/db/schema/payment-methods";
+import { PAYMENT_METHODS, type PaymentMethod } from "@accly/db/schema/legacy-payment-methods";
 import { z } from "zod";
 
 import { NON_NEGATIVE_MONEY_PATTERN, parseMoney } from "../core/money";
@@ -14,6 +14,22 @@ export const positiveMoney = money.refine((value) => value > 0n);
 
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
+
+/** An optional date range; pair with `.superRefine(orderedPeriod)`. */
+export const period = { from: dateOnly.optional(), to: dateOnly.optional() };
+
+export function orderedPeriod(
+  value: { from?: string; to?: string },
+  context: z.RefinementCtx,
+): void {
+  if (value.from && value.to && value.from > value.to) {
+    context.addIssue({
+      code: "custom",
+      path: ["to"],
+      message: "End date must not be before the start date",
+    });
+  }
+}
 
 // Case is kept: names appear on legal documents. Matching is case-insensitive at the database.
 export const shortName = z
@@ -96,14 +112,13 @@ export const optionalPan = z
   .transform((value) => value || undefined)
   .optional();
 
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
 export const optionalGstin = z
   .string()
   .trim()
   .toUpperCase()
-  .refine(
-    (value) => value === "" || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value),
-    "Use a valid GSTIN",
-  )
+  .refine((value) => value === "" || GSTIN_PATTERN.test(value), "Use a valid GSTIN")
   .transform((value) => value || undefined)
   .optional();
 

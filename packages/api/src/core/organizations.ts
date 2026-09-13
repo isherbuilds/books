@@ -18,7 +18,7 @@ import {
   timeZone,
   validateGstinIdentity,
 } from "../lib/schemas";
-import { seedChartOfAccounts } from "./chart-templates";
+import { seedChartOfAccounts, seedPaymentMethods } from "./chart-templates";
 
 export const createOrganizationInput = z
   .object({
@@ -84,13 +84,13 @@ export async function createOrganization(
         gstin,
         stateCode: input.stateCode,
         financialYearStart: input.financialYearStart,
-        advanceTaxTreatment: gstin ? "required" : "none",
         addressLine1: input.addressLine1,
         addressLine2: input.addressLine2 ?? null,
         city: input.city,
         pinCode: input.pinCode,
       });
-      await seedChartOfAccounts(tx, id, input.legalType);
+      const accountIds = await seedChartOfAccounts(tx, id, input.legalType);
+      await seedPaymentMethods(tx, id, accountIds);
     });
   } catch (error) {
     if (uniqueViolationConstraint(error) === "organization_slug_uidx") {

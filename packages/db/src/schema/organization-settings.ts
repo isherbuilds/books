@@ -15,8 +15,6 @@ export const LEGAL_TYPES = [
 
 export type LegalType = (typeof LEGAL_TYPES)[number];
 
-const ADVANCE_TAX_TREATMENTS = ["required", "none"] as const;
-
 // One row per Organization owns legal identity and operational settings.
 export const SETTINGS_DEFAULTS = {
   currency: "INR",
@@ -41,9 +39,6 @@ export const organizationSettings = pgTable(
     gstin: text("gstin"),
     stateCode: text("state_code").notNull(),
     financialYearStart: integer("financial_year_start").notNull().default(4),
-    advanceTaxTreatment: text("advance_tax_treatment", {
-      enum: ADVANCE_TAX_TREATMENTS,
-    }).notNull(),
     addressLine1: text("address_line_1").notNull(),
     addressLine2: text("address_line_2"),
     city: text("city").notNull(),
@@ -69,10 +64,6 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_financial_year_start_check",
       sql`${table.financialYearStart} between 1 and 12`,
-    ),
-    check(
-      "organization_settings_advance_tax_treatment_check",
-      sql`${table.advanceTaxTreatment} in ('required', 'none')`,
     ),
     check(
       "organization_settings_follow_up_days_check",

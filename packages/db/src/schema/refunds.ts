@@ -14,7 +14,7 @@ import {
 import { organization, user } from "./auth";
 import { creditNotes } from "./credit-notes";
 import { invoices } from "./invoices";
-import { type PaymentMethod } from "./payment-methods";
+import { type PaymentMethod } from "./legacy-payment-methods";
 import { paymentMethodCheck } from "./payments";
 
 export const refunds = pgTable(

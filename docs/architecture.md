@@ -173,9 +173,8 @@ from this row; settings updates write it in one scoped statement.
 - Tenant-leading indexes follow the actual filter/order/keyset shape. Descending
   nullable cursor columns specify matching null ordering explicitly.
 - Use scoped `UPDATE/DELETE ... RETURNING` instead of select-then-write.
-- Never hand-edit generated Drizzle migrations. Schema changes use
-  `bun run db:generate`; intentionally hand-authored SQL gets a separate
-  migration.
+- Migration authoring and history follow the
+  [migration policy](./development.md#code-rules).
 - Development and production apply migrations before app startup. Production
   startup retains the advisory lock; deployment migrations must remain
   compatible with an old instance that may still be draining.
@@ -198,8 +197,8 @@ prefix. Registration requires an explicit sex choice. Phone matching and input
 classification compare digits only, while the stored and displayed phone text
 keeps the operator's formatting.
 
-Customer edits are an Organization-scoped compare-and-swap against the loaded,
-millisecond-exact `updatedAt`. A zero-row update is a stale-record `CONFLICT`
+Customer and Party edits are an Organization-scoped compare-and-swap against the
+loaded, millisecond-exact `updatedAt` (`timestamptz(3)`). A zero-row update is a stale-record `CONFLICT`
 with no second read; the client offers a refresh, which also reveals a Customer
 that no longer exists. The server does not retry a stale write.
 
@@ -257,9 +256,22 @@ missing object. No anonymous bucket policy or unsigned read path is allowed.
 Invoices, Payments, Credit Notes, and Refunds post balanced journals in the
 same transaction. Stable `systemKey` accounts include Cash, Bank, Customer
 Receivables, GST Output, and category revenue accounts. A unique
-`(orgId, sourceType, sourceId)` prevents duplicate posting; storage and all math use
-`bigint` paise; decimal strings appear only at the API boundary.
-Payments use four methods: Cash, UPI, Card, and Bank transfer.
+`(orgId, documentType, documentId, kind)` prevents duplicate posting; storage and all
+math use `bigint` paise; decimal strings appear only at the API boundary.
+Payment methods are listed in [Product](./product.md).
+
+The accounting core ([spec](./specs/accounting-core.md)) shares the
+`journal_entries` and `journal_lines` tables with this legacy ledger until slice
+7 retires it. Its Receipt path is documents-first: `receipt.post` writes the
+`documents` row, its line, the party ledger line, one `post` journal entry with
+its lines, the month `balances` rows and the `number_series` increment in one
+transaction; `receipt.cancel` appends a `reverse` entry built from the stored
+lines (never from the posting function) and flips the document to `cancelled`.
+Procedures return `bigint` paise; the receipt PDF renders only the print
+snapshot captured at post. The ledger is guarded in the application:
+`recordEntry` refuses an unbalanced entry (`assertBalanced`) before it inserts,
+and no code path updates or deletes journal lines, so a correction is always a
+reversing entry. Add a database guard only when a second writer appears.
 
 Split collection is one tenant-scoped transaction containing up to four
 Payments. Every line gets its own Receipt and journal source; UPI and card lines

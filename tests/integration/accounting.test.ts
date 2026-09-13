@@ -240,8 +240,8 @@ async function journalFor(fixture: AccountingFixture, sourceType: string, source
     .where(
       and(
         eq(journalEntries.orgId, fixture.organization.id),
-        eq(journalEntries.sourceType, sourceType),
-        eq(journalEntries.sourceId, sourceId),
+        eq(journalEntries.documentType, sourceType),
+        eq(journalEntries.documentId, sourceId),
       ),
     );
 
@@ -647,8 +647,8 @@ test("trial balance is balanced, agrees with invoice outstanding, and carries pr
     .where(
       and(
         eq(journalEntries.orgId, fixture.organization.id),
-        eq(journalEntries.sourceType, "invoice"),
-        eq(journalEntries.sourceId, issued.invoice.id),
+        eq(journalEntries.documentType, "invoice"),
+        eq(journalEntries.documentId, issued.invoice.id),
       ),
     );
 
@@ -939,8 +939,9 @@ test("journal lines reject accounts and entries from another organization", asyn
       id: entryAId,
       orgId: organizationA.id,
       entryDate: "2030-03-15",
-      sourceType: "tenant-integrity",
-      sourceId: "tenant-a",
+      documentType: "tenant-integrity",
+      documentId: "tenant-a",
+      kind: "post",
       narration: "Tenant A entry",
       createdBy: ownerA.user.id,
     },
@@ -948,8 +949,9 @@ test("journal lines reject accounts and entries from another organization", asyn
       id: entryBId,
       orgId: organizationB.id,
       entryDate: "2030-03-15",
-      sourceType: "tenant-integrity",
-      sourceId: "tenant-b",
+      documentType: "tenant-integrity",
+      documentId: "tenant-b",
+      kind: "post",
       narration: "Tenant B entry",
       createdBy: ownerB.user.id,
     },

@@ -103,7 +103,6 @@ export const settingsRouter = {
         ...settings,
         gstin: settings.gstin ?? null,
         addressLine2: settings.addressLine2 ?? null,
-        advanceTaxTreatment: settings.gstin ? "required" : "none",
         updatedAt: new Date(),
       })
       .where(

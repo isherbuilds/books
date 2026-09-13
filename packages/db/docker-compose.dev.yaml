@@ -14,7 +14,7 @@ services:
       timeout: 3s
       retries: 15
     ports:
-      - "55442:5432"
+      - "55446:5432"
     volumes:
       - accly-db-dev-postgres:/var/lib/postgresql
 
@@ -37,7 +37,7 @@ services:
       retries: 15
       start_period: 5s
     ports:
-      - "55451:8333"
+      - "55447:8333"
     volumes:
       - accly-db-dev-seaweedfs:/data
 

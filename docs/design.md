@@ -19,10 +19,12 @@ collapses silently when two of them drift together.
 | Shell   | `bg-muted`                  | The tinted wrapper that carries a card's label.            |
 | Card    | `bg-card` + `border-border` | The raised surface that carries the content.               |
 
-**Card trays are rationed against stacking, not against use.** An operational
-list — a table of rows staff work through — gets exactly one tray. That is the
-standard list treatment, not an exception: the OPD day list, the customers
-registry, and record Charges or Billing tables all use it. Rationing means a
+**Card trays are rationed against stacking, not against use.** A legacy
+operational list (the OPD day list, the customers registry, record Charges or
+Billing tables) gets exactly one tray. Accounting-core lists (Parties, Receipts
+and every Document list after them) use the `DataTable` instead: one flat
+`rounded-lg border bg-card` box with no shell and no label row, because the page
+title already names the list (§8). Rationing means a
 screen does not stack many trays and boxes in one composition: flat sections
 with typographic hierarchy and hairlines are the default for everything that is
 not a row group. A tray uses `rounded-xl bg-muted p-1`, an `h-9` label row, and
@@ -69,16 +71,16 @@ One scale. Five steps carry everything:
 
 A dense data surface. `text-xs` is the body size, not a small size.
 
-| Size                      | Where                                                                   |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `text-[0.6875rem]` (11px) | `Badge` and `TableHead` primitives only: dense status/column labels     |
-| `text-xs` (12px)          | Default: table cells, labels, body copy, buttons, inputs                |
-| `text-sm` (14px)          | Page and section titles                                                 |
-| `text-base` (16px)        | Dialog and Sheet task titles                                            |
-| `text-lg` (18px)          | Public pages and a chart's fixed-height interactive readout             |
-| `text-xl` (20px)          | Public pages only                                                       |
-| `text-2xl`/`text-3xl`     | The headline number on a dashboard stat card only                       |
-| `text-4xl`/`text-5xl`     | Display: marketing headlines on public pages only, never inside the app |
+| Size                      | Where                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `text-[0.6875rem]` (11px) | `Badge`, `TableHead` and palette group headings only: dense labels                      |
+| `text-xs` (12px)          | Default: table cells, labels, body copy, buttons, inputs                                |
+| `text-sm` (14px)          | Page and section titles, and the command palette input                                  |
+| `text-base` (16px)        | Dialog and Sheet task titles                                                            |
+| `text-lg` (18px)          | Public pages and a chart's fixed-height interactive readout                             |
+| `text-xl` (20px)          | Public pages only                                                                       |
+| `text-2xl`/`text-3xl`     | The headline number on a dashboard stat card, and the amount on a Document record Sheet |
+| `text-4xl`/`text-5xl`     | Display: marketing headlines on public pages only, never inside the app                 |
 
 - **Display sizes stop at the app's edge.** `text-4xl`/`text-5xl` exist so the
   public pages — `/` and the per-feature marketing routes — can carry a headline
@@ -93,7 +95,7 @@ A dense data surface. `text-xs` is the body size, not a small size.
 - **`text-muted-foreground` is the only secondary colour** — not an opacity, not a
   lighter grey.
 - **`font-mono` is for identifiers compared character by character**: customer code,
-  phone, invoice number, token, actor id, item code. Never prose, never
+  phone, invoice number, token, actor id, item code, GSTIN, PAN. Never prose, never
   amounts.
 - **`tabular-nums` on every number that can change** — counts, money, times. Without
   it a live-updating figure jitters.
@@ -118,7 +120,7 @@ Set by the component layer, never at a call site.
 | Radius         | Where                                                                                                      |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | `rounded-md`   | The default. Every component in `packages/ui`: controls, dialogs, sheets, popovers, tooltips, empty states |
-| `rounded-sm`   | Checkbox only — `rounded-md` on a `size-4` box reads as a circle                                           |
+| `rounded-sm`   | Checkbox and `Kbd` only — `rounded-md` on a box this small reads as a circle or a pill                     |
 | `rounded-lg`   | Page-level cards in `apps/web`                                                                             |
 | `rounded-xl`   | The card shell in `apps/web`                                                                               |
 | `rounded-full` | `Button shape="pill"` only — currently the sign-in CTA alone                                               |
@@ -169,16 +171,17 @@ border-black` because paper is white with black ink in every theme; the login
 
 Lucide only. Never a second icon set.
 
-| Size              | Where                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| `size-3.5` (14px) | Inside the app shell: sidebar, table rows, card labels. Optically matches `text-xs`. |
-| `size-4` (16px)   | Inside a `Button` or input — the component sets this; do not override.               |
-| `size-5`+         | Empty-state illustration only, never an interface icon.                              |
+| Size              | Where                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `size-3.5` (14px) | Inside the app shell: sidebar, table rows, card labels, picker and palette rows. Optically matches `text-xs`. |
+| `size-4` (16px)   | Inside a `Button` or input — the component sets this; do not override.                                        |
+| `size-5`+         | Empty-state illustration only, never an interface icon.                                                       |
 
 A bare icon button needs `aria-label`. An icon beside text needs nothing.
 
 **Where there is no picture, there is a `Monogram`** — the initials square used
-for an organization, a member and a customer. One size (`size-6`), two tones. A
+for an organization, a member, a customer and a Party. One size (`size-6`), two
+tones; on a `bg-card` row use `tone="accent"`, because the muted tone is `bg-card`. A
 second hand-rolled initials box is the bug, not a style choice.
 
 ## 7. Sidebar
@@ -194,6 +197,9 @@ content panel is the card that rises off it. The rail is not a card.
 - At widths below `lg` (including tablets), the rail is an off-canvas Sheet.
   `PageHeader` owns its trigger; pages and fixed footers never compensate for a
   collapsed desktop rail themselves.
+- The second row of the sidebar header, under the organization switcher, is the
+  command palette trigger: "Find anything…" with its Mod+K `Kbd`. It opens the
+  same palette as the shortcut.
 - Primary and Settings destinations use zero-delay intent preloading. Pointer
   hover or keyboard focus warms route code and query data without eagerly
   running every sidebar destination loader when the shell mounts.
@@ -235,7 +241,9 @@ including secondary actions and operational date navigation. This keeps sibling
 pages aligned without route-specific height overrides. In-body section and row
 actions use `size="xs"`.
 Creation actions are text-first. Labels such as `New`, `Add`, `Register`,
-`Invite`, and `Create` do not repeat their meaning with a leading plus icon.
+`Invite`, and `Create` do not repeat their meaning with a leading plus icon. The
+one exception is the synthetic Create row inside a picker list, which carries a
+plus in its check column to mark an action among records.
 Button labels render in Title Case through the shared button primitive; routes
 do not add one-off text transforms.
 Every section label — flat or in a tray — is muted `text-xs` at plain weight, so
@@ -257,30 +265,49 @@ style choice.
 - **`ErrorNote`** — the one way a page reports a failed read.
 - **`PageTabs` / `PageTab`** — the one tab strip below `PageHeader`. `PageTab`
   keeps typed route links, active state, and tab styling consistent.
-- **`ListToolbar`** — the row above a list. Search comes first, followed by
-  filters.
-- **`SearchInput`** — the one uncontrolled search box. It trims the query and
-  applies it after a 300 ms pause.
+- **`ListToolbar`** — the row above a list. Search comes first, then active
+  filter chips; an optional `end` slot on the right holds a list's column menu.
+- **`SearchInput`** — the one search box. It shows the URL `q`, applies after a
+  pause (300 ms for a server-searched list, 150 ms for an in-memory master
+  list), applies at once on Enter, and Esc clears the text only. A `trailing`
+  slot draws the filter trigger inside its right edge.
+- **`FilterMenu` / `FilterSubmenu` / `FilterChips`**
+  (`apps/web/src/components/list-filter.tsx`, Midday-derived) — the filter
+  grammar of accounting-core lists. One filter button inside the search field
+  opens a menu with a submenu per dimension and checkbox rows; a single-value
+  dimension can be deselected. Each active filter is a removable muted chip after
+  the field, followed by Clear.
 - **`FilterGroup`** — a segmented, one-of-N list filter that cannot be
-  deselected. For a fixed set of two to five options.
+  deselected. For a fixed set of two to five options on legacy and settings
+  lists.
 - **`FilterSelect`** — the same filter as a native select. For options that come
-  from data, or more than five.
+  from data, or more than five, on legacy and settings lists.
+- **`DataTable`** (`apps/web/src/components/data-table/`, Midday-derived) — the
+  list of accounting-core records: a flat bordered box, a sticky sentence-case
+  muted header, hairline cells, single-line rows whose first cell is the row
+  `Link` (the whole row is clickable), an optional row actions menu, sortable
+  headers with `aria-sort` on complete master lists, and card rows below `md`.
+  It renders its states through `ListState` and a `TableEmpty` title, line and
+  action.
 - **`Panel` / `PanelEmpty`** — the muted tray, label row, raised card, optional
-  footer, and centered empty copy used by every list. `grow` fills the page for
-  the one list on an operational desk.
+  footer, and centered empty copy for legacy lists, settings trays and reports.
+  `grow` fills the page for the one list on an operational desk.
 - **`ListState`** — the only pending, error, retry, and empty-state branch for a
   list.
-- **`LoadMore`** — the count and the only control that grows a cursor list. It
-  belongs in the panel footer.
+- **`LoadMore`** — the count, and the keyboard and error fallback that grows a
+  list. On a `DataTable` a scroll sentinel also grows it; on a `Panel` it sits in
+  the panel footer.
 
 **List grammar.** Every list page puts `ListToolbar`, with search first and
-filters after it, above a `Panel`. Search is temporary client state. It applies
-after a 300 ms pause and has no submit button. Filters are URL search state. A
-fixed set of two to five options is a `FilterGroup`; a boolean is a two-option
-group such as `All | Active`. Options that come from data, such as item
-categories, or that run past five are a `FilterSelect`. Read states come only
-from `ListState`. A cursor list grows only through `LoadMore` in the panel
-footer, which also shows the count. Operational tables never scroll
+filters after it, above its list. Search, filters, sort and visible columns are
+URL search state, so reload, Back and a shared link keep them. Accounting-core
+lists use `DataTable` with the filter menu and chips; legacy and settings lists
+keep a `Panel` with `FilterGroup` and `FilterSelect`. A record opens in a right
+Sheet over the still-mounted list, never in a pane beside it: from its child
+route (a Receipt) or a search param (`?party=`, the Party quick look). Closing
+returns focus to its row. Read states come only from
+`ListState`. A cursor list grows through `LoadMore`, which also shows the
+count. Operational tables never scroll
 horizontally: below `md` a list renders one compact card per row (`text-xs`,
 `px-3 py-2`, `border-b`, the row's own link or activation handler) with the
 identifier, primary name, and status on the first line and secondary facts
@@ -291,7 +318,9 @@ A long text cell wraps with `break-words` when its content is why the reader is
 there, or uses `max-w-0` with an inner `truncate` `div` and a `title` when it
 is secondary. Identifiers stay whole: when one can outgrow the row, the table is
 `table-fixed` with declared column widths and the identifier cell wraps with
-`break-all`.
+`break-all`. In a `DataTable` rows are single-line: text truncates with a
+`title`, identifiers stay whole, and optional columns hide below a breakpoint
+instead of scrolling.
 
 A new bespoke layout wrapper is a signal that one of these is missing a prop.
 
@@ -305,24 +334,43 @@ A new bespoke layout wrapper is a signal that one of these is missing a prop.
 - **Nothing stands in for data that has not arrived.** A page renders only the
   chrome it can build from route params: its header band. The data region stays
   empty until the data lands. The panel's `min-h-*` makes that blank region read
-  as an empty panel, not a collapsed page.
+  as an empty panel, not a collapsed page. A `DataTable`'s column header row is
+  static chrome and may render first; skeleton rows stay forbidden.
+- **One narrow exception:** the command palette keeps the previous receipt
+  results while the next search runs. They belong to the same organization (the
+  palette body is keyed on it) and are re-ranked against the live text, so only
+  matching rows show.
 
 ## 10. Task overlays
 
 - Mobile and tablet navigation use the same shared Sheet primitive; there is no
   breakpoint-specific duplicate. Every Sheet is inset from the viewport, uses
-  the large radius, and carries a 2 px muted boundary around its full perimeter.
+  the large radius, and carries an 8 px muted boundary (`border-8 border-muted`)
+  around its full perimeter.
+- Create and edit overlays for accounting records (Receipt, Party) open as a
+  right Sheet at every width. A quick-create started inside one opens a
+  same-width Sheet over it, so the operator sees one stack, never a panel over
+  a centred dialog. Dialogs are for confirmations and short prompts.
+- A record opens as a right Sheet over the list (§8). Its facts are flat
+  sections split by `Separator`, never a `Panel` inside the Sheet, and editing
+  is a mode of the same Sheet (`?edit=true`). A record whose history outgrows a
+  Sheet (a Party) keeps a read-only quick look and adds a full page with tabs
+  (Overview, Receipts, Ledger); the page owns editing through the edit Sheet. A
+  Document record Sheet leads with its amount at `text-2xl tabular-nums`, struck
+  through when cancelled.
 - Focused forms use the same header, scrollable content and footer composition
   in both Dialog and Sheet presentations. Their content column is capped at
   `max-w-lg`; switching presentation must not rearrange the form.
 - Overlay task titles are `text-base`; descriptions, labels, controls and errors
-  are `text-xs`. Financial totals use weight and tabular numerals for hierarchy,
-  not an additional display-size type scale.
+  are `text-xs`. Financial totals use weight and tabular numerals for hierarchy;
+  the one display size is a Document record Sheet's amount (§3).
 - Sheet and dialog chrome owns its spacing. Headers, bodies and footers use
   `p-4`; feature forms compose `SheetHeader`/`SheetFooter` or
   `DialogHeader`/`DialogFooter` rather than recreating their borders and padding.
-- Forms compose `FieldGroup`, `Field`, `FieldSet` and `FieldError`. Sets of two
-  to five choices use `ToggleGroup`, and section boundaries use `Separator`.
+- Forms compose `Form`, `FormItem`, `RegisteredFormField` (native inputs) and
+  `FormField` (widgets). Sets of two to five choices use `ToggleGroup`; a long
+  form splits into flat sections, each a muted `h3` after a `Separator`, never an
+  accordion.
 - Sheet motion is limited to the existing 150 ms opacity and directional
   transform transition. It communicates where the occasional overlay came from;
   frequent list and keyboard interactions remain static.
@@ -352,14 +400,8 @@ A new bespoke layout wrapper is a signal that one of these is missing a prop.
 
 ## 13. Money and numbers
 
-- **Amounts are `bigint` paise from the database to the screen**, never JS numbers:
-  rounding money through a float is a bug waiting to happen. Only XLSX cells
-  (`Number(paise) / 100`) and chart scales convert to a number.
-- **Format once, at render,** with `formatMoney(paise)` from `@accly/api/core/money`:
-  one `en-IN` INR formatter, exact at any size. Legacy outpatient and billing
-  screens format the server's decimal strings through `apps/web/src/lib/money.ts`
-  until accounting-core slice 7 deletes them.
 - **Right-align numeric table columns**; left-align text.
+- Money types and formatting follow [Development: Code rules](./development.md#code-rules).
 
 ## Checklist before calling a screen done
 
@@ -373,3 +415,5 @@ A new bespoke layout wrapper is a signal that one of these is missing a prop.
 - [ ] Panels hold their height when empty, and say what would be there.
 - [ ] No placeholder stands in for loading data.
 - [ ] The page uses `PageBody` / `PageHeader`, not a bespoke wrapper.
+- [ ] Accounting-core lists use `DataTable`; search, filters, sort and columns live in the URL; nothing scrolls sideways at `md` and up.
+- [ ] A record opens in a right Sheet over its list; there is no side pane.

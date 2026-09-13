@@ -64,5 +64,6 @@ Tests prove this change; they do not fill historical gaps or build a test system
 
 - `packages/ui` is `shadcn` `base-lyra` on Base UI: `text-xs` body, compact controls, radius scale in `docs/design.md` §4. Match it.
 - Base UI primitives emit `data-pressed`, `data-checked`, `data-disabled`, never Radix's `data-state="on"`. A `data-[state=…]:` variant styles nothing; use `data-pressed:` / `data-checked:`.
+- cmdk (the command palette only) emits `data-selected` and `data-disabled` as `"true"`/`"false"` on every item, so style them with `data-[selected=true]:`, never a bare `data-selected:`. Never use cmdk's Radix `Command.Dialog`; compose the Base UI Dialog.
 - All-day console, so motion is rationed: none on frequent or keyboard-driven actions; `ease-out` enter/exit under 200ms only where it carries spatial continuity. `prefers-reduced-motion` is honoured globally.
 - Keyboard focus comes from an unlayered `:focus-visible` rule in `globals.css`; do not remove it. Hover effects are gated to `(hover: hover) and (pointer: fine)`.

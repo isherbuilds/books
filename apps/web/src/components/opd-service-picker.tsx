@@ -89,7 +89,7 @@ export function ServicePicker({
             items={results}
             getItemKey={(item) => item.id}
             getItemLabel={(item) => item.name}
-            onInputValueChange={(value) => settle(value.trim())}
+            onInputValueChange={(value) => settle.schedule(value.trim())}
             onSelect={(item) => {
               onAdd({
                 itemId: item.id,

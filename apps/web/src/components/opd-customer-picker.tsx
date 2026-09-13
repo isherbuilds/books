@@ -111,7 +111,7 @@ function CustomerSearchInput({
           getItemKey={(match) => match.id}
           getItemLabel={(match) => match.name}
           defaultInputValue={initialQuery}
-          onInputValueChange={(value) => settle(value.trim())}
+          onInputValueChange={(value) => settle.schedule(value.trim())}
           onSelect={(match) => {
             setOpen(false);
             onSelect({ id: match.id, name: match.name, code: match.code });

@@ -1,6 +1,7 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { ClientOnly, Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app-shell";
+import { Palette } from "@/components/palette/palette";
 import { orgToday } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { hasErrorCode } from "@/lib/orpc-error";
@@ -38,6 +39,9 @@ function OrgLayout() {
   return (
     <AppShell orgSlug={orgSlug}>
       <Outlet />
+      <ClientOnly fallback={null}>
+        <Palette orgSlug={orgSlug} />
+      </ClientOnly>
     </AppShell>
   );
 }

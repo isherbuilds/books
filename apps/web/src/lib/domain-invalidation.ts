@@ -1,4 +1,4 @@
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { orpc } from "./orpc";
 
@@ -139,4 +139,37 @@ export function invalidateBillingState(
         ]
       : []),
   ]);
+}
+
+export async function invalidateReceiptState(
+  queryClient: QueryClient,
+  orgSlug: string,
+  receiptId: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: orpc.receipt.list.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.receipt.get.key({ input: { orgSlug, receiptId } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.receipt.partyTotals.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.party.statement.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.dashboard.collections.key({ input: { orgSlug } }),
+    }),
+    invalidateAccountingReports(queryClient, orgSlug),
+  ]);
+}
+
+// Every party read for one org: the master list, the record, and anything keyed
+// under `party`. Receipt totals do not change when a party is edited.
+export function invalidatePartyState(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({
+    queryKey: orpc.party.key({ input: { orgSlug } }),
+  });
 }
