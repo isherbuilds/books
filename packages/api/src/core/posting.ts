@@ -47,6 +47,10 @@ export function postReceipt(
     throw new Error("Receipt amount must be positive");
   }
 
+  if (document.settlementKind === "advance" && document.advanceSupply === "taxableService") {
+    throw new Error("A taxable service advance cannot be posted until GST advance documents exist");
+  }
+
   const debit: JournalLineInput = {
     accountId: accounts.paymentMethodAccountId,
     partyId: null,
