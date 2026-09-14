@@ -1,4 +1,3 @@
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type RefObject } from "react";
 
@@ -12,8 +11,6 @@ type PartyOption = {
   id: string;
   name: string;
   gstin?: string | null;
-  city?: string | null;
-  stateCode?: string;
 };
 
 export function PartyLinkField({
@@ -58,9 +55,6 @@ export function PartyLinkField({
         getKey={(party) => party.id}
         getLabel={(party) => party.name}
         getCode={(party) => party.gstin ?? undefined}
-        getDescription={(party) =>
-          party.city ?? (party.stateCode ? INDIAN_STATES[party.stateCode] : undefined)
-        }
         value={value}
         onSelect={onSelect}
         onCommit={onCommit}

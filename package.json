@@ -50,6 +50,7 @@
     "db:seed": "bun scripts/seed.ts",
     "db:seed:volume": "bun scripts/seed-volume.ts",
     "benchmark:browser": "bun scripts/benchmark-browser.ts",
+    "benchmark:navigation": "bun scripts/benchmark-navigation.ts",
     "benchmark:server": "bun scripts/benchmark-server.ts",
     "benchmark:rpc": "bun scripts/benchmark-rpc.ts",
     "create-user": "bun scripts/create-user.ts",

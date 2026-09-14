@@ -180,7 +180,7 @@ test("a user can have only one membership row per organization", async () => {
         id: Bun.randomUUIDv7(),
         organizationId: organization.id,
         userId: owner.user.id,
-        role: "reception",
+        role: "operator",
         createdAt: new Date(),
       })
       .execute(),
@@ -258,7 +258,7 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
   const organization = await createOrganization(owner, organizationName);
 
   const invited = await auth.api.createInvitation({
-    body: { email, role: "reception", organizationId: organization.id },
+    body: { email, role: "operator", organizationId: organization.id },
     headers: owner.headers,
   });
 
@@ -315,7 +315,7 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
     .from(member)
     .where(and(eq(member.organizationId, organization.id), eq(member.userId, created.user.id)));
 
-  expect(membership?.role).toBe("reception");
+  expect(membership?.role).toBe("operator");
   expect((await auth.api.signInEmail({ body: { email, password } })).user.id).toBe(created.user.id);
 });
 
@@ -325,7 +325,7 @@ test("an invitation id creates only its own invited email while it is live", asy
   const organization = await createOrganization(owner, "revoked-onboarding");
 
   const invited = await auth.api.createInvitation({
-    body: { email, role: "reception", organizationId: organization.id },
+    body: { email, role: "operator", organizationId: organization.id },
     headers: owner.headers,
   });
 
@@ -348,7 +348,7 @@ test("an invitation id creates only its own invited email while it is live", asy
   expect(await db.select({ id: user.id }).from(user).where(eq(user.email, email))).toHaveLength(0);
 
   const expired = await auth.api.createInvitation({
-    body: { email, role: "reception", organizationId: organization.id },
+    body: { email, role: "operator", organizationId: organization.id },
     headers: owner.headers,
   });
 

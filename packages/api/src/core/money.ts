@@ -41,18 +41,3 @@ export function formatMoney(paise: bigint): string {
   // formats the exact value of a numeric string rather than a binary float.
   return rupeeFormat.format(`${paise}E-2` as Intl.StringNumericLiteral);
 }
-
-/** Half-up integer division for allocations and tax; denominator must be positive. */
-export function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
-  if (denominator <= 0n) {
-    throw new Error("Division denominator must be positive");
-  }
-
-  const negative = numerator < 0n;
-  const absolute = negative ? -numerator : numerator;
-  const quotient = absolute / denominator;
-  const remainder = absolute % denominator;
-  const rounded = remainder * 2n >= denominator ? quotient + 1n : quotient;
-
-  return negative ? -rounded : rounded;
-}

@@ -166,7 +166,7 @@ function ReceiptSheetRoute() {
   usePaletteActions(paletteActions);
 
   // Write the returned row first, so the Sheet strikes the amount and drops Cancel at
-  // once; a second click would only get ALREADY_CANCELLED.
+  // once; a second click would only get CONFLICT.
   const cancel = useMutation(
     orpc.receipt.cancel.mutationOptions({
       onSuccess: (detail) => {
@@ -174,7 +174,7 @@ function ReceiptSheetRoute() {
           orpc.receipt.get.queryKey({ input: { orgSlug, receiptId } }),
           detail,
         );
-        void invalidateReceiptState(queryClient, orgSlug, receiptId);
+        void invalidateReceiptState(queryClient, orgSlug);
         setCancelOpen(false);
         setReason("");
         toast.success("Receipt cancelled");
@@ -184,7 +184,12 @@ function ReceiptSheetRoute() {
         if (hasErrorCode(error, "CONFLICT")) {
           setCancelOpen(false);
           setReason("");
-          void invalidateReceiptState(queryClient, orgSlug, receiptId);
+          void Promise.all([
+            invalidateReceiptState(queryClient, orgSlug),
+            queryClient.invalidateQueries({
+              queryKey: orpc.receipt.get.key({ input: { orgSlug, receiptId } }),
+            }),
+          ]);
         }
 
         toast.error(errorMessage(error, "Could not cancel the receipt"));
@@ -261,9 +266,7 @@ function ReceiptSheetRoute() {
                   partyName
                 )}
               </Row>
-              <Row label="Payment method">
-                {receipt.printSnapshot?.paymentMethod ?? receipt.paymentMethodName}
-              </Row>
+              <Row label="Payment method">{receipt.printSnapshot?.paymentMethod}</Row>
               <Row label="Settlement">
                 <span className="capitalize">{receipt.settlementKind}</span>
               </Row>

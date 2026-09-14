@@ -32,6 +32,6 @@ export async function redirectSignedInHome(href?: string): Promise<void> {
 
   if (href) throw redirect({ href });
 
-  if (orgSlug) throw redirect({ to: "/$orgSlug/dashboard", params: { orgSlug } });
+  if (orgSlug) throw redirect({ to: "/$orgSlug/receipts", params: { orgSlug } });
   throw redirect({ to: "/join" });
 }

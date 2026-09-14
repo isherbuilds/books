@@ -12,8 +12,6 @@ const badgeVariants = cva(
         outline: "text-foreground ring-1 ring-border ring-inset",
         muted: "bg-muted text-muted-foreground",
         destructive: "bg-destructive/15 text-destructive",
-        pending: "bg-pending/15 text-pending",
-        overdue: "bg-overdue/15 text-overdue",
       },
     },
     defaultVariants: {

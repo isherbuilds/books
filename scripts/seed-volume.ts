@@ -1,6 +1,5 @@
 import { businessDate } from "@accly/api/lib/business-date";
 import { db } from "@accly/db";
-import { balances } from "@accly/db/schema/balances";
 import { documents } from "@accly/db/schema/documents";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
@@ -21,9 +20,9 @@ import {
 // Tops each seeded organization up to RECEIPT_COUNT receipts over the last year, through
 // the same core posting path as the app. A rerun with enough receipts does nothing.
 
-// `bun run db:seed:volume -- 50000` sizes each organization for the posting speed
-// baseline (about 100,000 journal lines); the default feeds the list volume check.
-const RECEIPT_COUNT = Number(process.argv[2] ?? 10_000);
+// The default, 100,000 receipts per organization (about 200,000 journal lines), is the
+// smallest set a performance baseline may quote. Pass a smaller count for a quick check.
+const RECEIPT_COUNT = Number(process.argv[2] ?? 100_000);
 
 if (!Number.isInteger(RECEIPT_COUNT) || RECEIPT_COUNT < 1) {
   throw new Error(`Pass a positive whole receipt count, not "${process.argv[2]}"`);
@@ -71,14 +70,13 @@ async function seedOrganization(profile: OrgProfile, index: number): Promise<str
     console.info(`${slug}: found ${existing?.value ?? 0} receipts; skipping.`);
   }
 
-  const [receipts, lines, [ledger], [balanceRows]] = await Promise.all([
+  const [receipts, lines, [ledger]] = await Promise.all([
     countWhere(documents, orgId),
     countWhere(journalLines, orgId),
     db.select({ value: count() }).from(partyLedgerLines).where(eq(partyLedgerLines.orgId, orgId)),
-    db.select({ value: count() }).from(balances).where(eq(balances.orgId, orgId)),
   ]);
 
-  return `  ${slug}: ${receipts} documents, ${lines} journal lines, ${ledger?.value ?? 0} party ledger lines, ${balanceRows?.value ?? 0} balances`;
+  return `  ${slug}: ${receipts} documents, ${lines} journal lines, ${ledger?.value ?? 0} party ledger lines`;
 }
 
 if (env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");

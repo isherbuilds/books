@@ -17,7 +17,7 @@ import { FEATURES } from "./features";
    are plain text at weight 400 with no box and no pill; only a hover colour
    shift. The open Product trigger gets no fill — the band beneath it is the
    state. The two actions are a thin outline "Contact us" beside a filled
-   "Sign in" (docs/research/landing-header-anatomy.md), and both sit at normal
+   "Sign in", and both sit at normal
    weight so they don't outweigh the nav. The theme control lives in the footer,
    not here; the bigger ask stays in the hero and the closing panel. */
 

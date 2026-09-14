@@ -1,157 +1,166 @@
 # Spec: Client patterns
 
-Status: ready
-Revision: 2026-09-10 contract corrections from a 2026-09-10 reference comparison (Frappe Books, Zoho, SFab, Midday), then [accounting contract decisions](../research/accounting-contract-decisions-2026-09-10.md): full-payload Receipt and versioned draft posting, arrow focus versus Enter, and current posting states. Acceptance remains unverified until the listed slices run. 2026-09-13: Midday port (cmdk palette, DataTable lists with filter menu and chips, record Sheets over full-width lists, Midday-style Link Field) per the founder's 2026-09-13 direction. 2026-09-13: the shortcut registry is removed (call 6).
-Authority: founder's 2026-09-13 direction (copy Midday's components where possible onto Base UI, cmdk and TanStack; no side panels; records in Sheets) and 2026-09-09 direction (command palette and conventional fast forms, no shortcut grammar before measurement; references are for patterns and architecture) recorded in [docs/research/client-experience-and-ai-native-2026-09.md](../research/client-experience-and-ai-native-2026-09.md); the accounting core contract in [accounting-core.md](./accounting-core.md); validation packet [docs/validation/ca-first-ledger.md](../validation/ca-first-ledger.md) gate H4.
-Supersedes: the placeholder reference `docs/specs/keyboard-first-entry.md` in accounting-core.md (never written). This spec also delivers the web part of accounting-core slice 2 and slice 4 forms, so those slices own no route files.
+Status: slices 1–2 implemented, slice 3 partly, slices 4–5 open. Authority: the
+founder's direction: a command palette and conventional fast forms, no shortcut
+grammar before measurement, Midday's components on Base UI, cmdk and TanStack,
+records in Sheets, no side panes.
 
-## Problem
+## Speed gate (H4)
 
-An accountant who enters forty receipts a morning in Tally never touches the mouse, never waits for a screen, and never wonders whether a voucher was saved. Cloud tools make every entry a page load, a dropdown hunt and a spinner, and a dropped connection leaves the operator unsure whether money was recorded twice or not at all. A two-person team cannot build a Tally-style shortcut system first; it needs a small set of client patterns that make ordinary forms fast, honest about state, and reusable for every Document.
+One operator enters the same ten transactions by hand in TallyPrime and in
+Accly Books, with a stopwatch and a keystroke logger, in counterbalanced order
+after a warm-up. Both start ready: the Books receipts list with Parties loaded,
+and TallyPrime at Gateway with the company open. Set 1 is ten `advance`
+bank-transfer receipts with a reference (in Tally, F6 with reference type
+Advance). Set 2 is ten five-line Invoices against a measured Tally baseline.
+Done means posted, with the number visible. Pass within 10 percent. A result
+more than 25 percent slower kills the approach, and only that reopens
+shortcuts. Each interaction (select Party, add line, post) paints within
+200 ms; INP p75 comes from the pilot. Record the figures here.
 
-## Solution
+## Calls
 
-Five patterns, built concretely for the Receipt first and extracted into shared components at their second real use (the Invoice), so no generic interface precedes a demonstrated need:
+1. **State** follows [Development](../development.md#react-and-forms): no browser
+   storage, draft store or zustand.
+2. **Cached masters.** `party.list`, `account.list` and `paymentMethod.list`
+   (and later `item.list`) return complete lists up to 5,000 rows, stale after
+   five minutes. `party.list` carries only what lists show (name, roles, GSTIN,
+   active); the quick look and the party page read `party.get`. A save writes
+   the returned row into the cache, then invalidates. Link Fields filter in memory. Over the bound,
+   `MASTER_LIST_LIMIT` shows a capacity error. A list that is over the bound,
+   loading or failed never offers Create or "No matches".
+3. **Plain mutations.** After a lost response, the operator checks the list
+   before re-entry.
+4. **Posting state** (`draft`, `posting`, `posted`, `rejected`) renders in
+   place. Posting disables the action and fields. Posted shows the number,
+   Print and "Post and next". Rejected keeps the values and shows the reason.
+   No number shows before the server returns it. Nothing is optimistic: no
+   inserted row, balance or outstanding. Invalidate only after success.
+5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
+   match), except in a textarea or during IME composition. Mod+Enter posts. Esc
+   closes the innermost popup, then the panel, then the overlay, one per press.
+   Tab commits a highlighted match; Create needs Enter or a click.
+6. **Two bindings**: Mod+K for the palette, and Mod+Enter per form. No
+   registry, customizer or F-keys until H4 fails.
+7. **Palette**: a cmdk `Command` (`shouldFilter={false}`) in the Base UI
+   `Dialog`, opened by Mod+K or the sidebar trigger. Groups: route actions,
+   navigation, Organization switch, cached Parties, and Receipts from
+   `receipt.list({ q })` debounced 200 ms. `rankCommands` ranks groups by best
+   match and caps Parties and Receipts at eight rows. Cancel opens the reason
+   dialog. Query keys carry `orgSlug`.
+8. **Overlays by URL.** List routes take `create` and record routes take
+   `edit`; every overlay is a right Sheet. The list is a layout route with an
+   `Outlet`, and the record is its child (`receipts/$receiptId.tsx`). There is no
+   index route, because it would unmount the list. Closing clears the param and
+   refocuses the row. Parties open a quick look (`?party=`), and
+   `parties_.$partyId` owns editing.
+9. **Link Field**: a `Combobox` over the cached master, with rows from
+   `linkRows` (prefix, then substring, on label and code). "Create <text>" comes
+   last, hides on an exact match, and needs a complete list and the create
+   grant. Create stacks the master's own form and returns the saved row.
+10. **Lists** use `DataTable`. ↑ and ↓ move row focus and Enter opens the
+    record; inside a Sheet, ↑ and ↓ step between rows. A page is 25 rows
+    (`pageLimit`). Parties sort and filter in memory and mount 25 rows at a
+    time. Receipts, files and the audit log use `useInfiniteQuery` on a keyset
+    cursor with server filters. Only the `LoadMore` button grows a list;
+    nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
+    `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
+    Receipt also the method, and focuses the first Link Field. Enter on the
+    last Invoice cell adds a line; an empty last line is dropped.
 
-1. **Command palette.** Mod+K from anywhere: go to any list or record, create any Document, run actions on the open record, find a Party or Receipt by typing. No model involved.
-2. **Overlays opened by the URL.** Create and edit panels open from route search params, so a link is shareable and Back closes the panel. A record opens in a right Sheet rendered by its child route over the still-mounted list, so list position, search and filters survive.
-3. **Link field with inline create.** Party, Item, Account and Payment Method are picked from a client-cached master list filtered as you type; Enter or Tab selects the highlighted existing match; after a complete successful lookup, the last option for a member with create permission is "Create <typed text>", which opens a quick-create panel and returns the new value into the field without losing what was entered.
-4. **One Document form pattern.** Enter moves to the next field, Mod+Enter posts, Esc backs out one level. Posting has four visible states: draft, posting, posted, rejected. A lost response is resolved by the operator checking the list before re-entering. After a post the form shows the number and print action and offers post-and-next, which keeps date and Payment Method and returns focus to Party.
-5. **One list pattern.** The design owner's list grammar (toolbar with search, filter menu and chips, `DataTable`, list state, card rows below `md`) plus keyboard focus: ↑ and ↓ move the focused row and Enter opens its record Sheet.
+## Midday adaptation
 
-## Validation / Evidence
+Midday commit `5158731` (AGPL-3.0) supplied the search modal, the combobox and
+command primitives, the tables, column menu, filters and date presets, and the
+detail views. Each file keeps its header and is listed in
+`THIRD_PARTY_NOTICES.md`. A commercial licence from Midday Labs comes before
+the first external release. Base UI, oRPC and router state replace Radix, tRPC,
+nuqs and zustand. Framer-motion, react-virtual, dnd-kit and optimistic
+financial rollback are not adopted.
 
-Owner-funded pilot on the founder's entities. Speed gate H4 from the validation packet, run as one protocol in both tools: the same operator, the same ten transactions, the same starting point (Books receipts list with the Party list loaded; TallyPrime Gateway with the company open), the same completion condition (document posted and its number visible), both entered by hand and timed by stopwatch, keystrokes counted by a logger on the same machine. Pass within 10 percent; kill above 25 percent slower. Tool order is counterbalanced: half the transactions are entered in Tally first and half in Books first, after one untimed warm-up in each. Two sets: slice 1 times ten `advance` receipts by bank transfer with a reference (Tally: F6 with reference type Advance); slice 4 times ten five-line Invoices, the transaction H4 names. The research's desk-derived counts (about 35 keys for a Tally receipt against a bill, 44 for a two-line invoice) and this spec's budgets of 38 and 48 keys are estimates until that run replaces them with measured figures. Only a failed H4 reopens the shortcut question. Laboratory responsiveness is measured per interaction (input to next paint for select Party, add line, post) with a 200 ms ceiling; Interaction to Next Paint at p75 is a field metric over page visits and is collected from the pilot, not from this run.
+## Slices
 
-## User Stories / Scenarios
+1. **Receipt entry.** Implemented: list shell, create Sheet, Receipt form,
+   Party Link Field with inline create, income account and "Advance for"
+   fields. Open: H4 set 1.
+2. **Palette.** Implemented, with `tests/unit/palette.test.ts`.
+3. **Lists and Sheets.** Implemented: Parties and Receipts on `DataTable`, the
+   Party quick look and page (Overview, Receipts, Ledger), Party edit. Open:
+   keyboard row focus, the receipts list on `db:seed:volume` data, and an
+   empty-query Link Field at 5,000 Parties under 200 ms.
+4. **Invoice form.** Open.
+   - Acceptance: the Receipt and Invoice forms both use the extracted
+     `DocumentForm`, `PostBar` and `LineGrid`. Item is a Link Field with inline
+     create. Place of supply defaults from the Party, stays editable and is
+     passed to `computeTax`. Due date defaults to the document date, is
+     editable before post and never precedes it. Enter on the last cell of the
+     last line appends a line and focuses its Item; an empty last line is
+     dropped at post. Totals and tax come only from `computeTax`, never a
+     second client formula. Save draft calls `invoice.saveDraft`, then
+     `invoice.updateDraft` with the loaded `version`; a stale version shows the
+     refresh conflict; a draft reopened from the list restores every field and
+     line. A post from a draft sends `mode: "draft"` with `documentId` and
+     `version`; a fresh form sends `mode: "new"`. A Receipt with `against`
+     lists the Party's open Invoices with outstanding, allocates by amount with
+     Enter, refuses more than outstanding on the field, and shows the
+     remainder as advance before post. The Invoice record Sheet applies an open
+     advance through `allocation.apply` and reverses it there. The list and
+     record Sheet show due date, gross, allocated, outstanding, settlement
+     status and overdue (core call 18); filters include settlement status and
+     overdue. The record Sheet also shows lines, tax split, allocations and
+     Print. Cancelling a settled Invoice shows the core conflict with its
+     allocations, offers their permitted reversal, and keeps a shared Receipt
+     and its other allocation. H4 set 2 is recorded here.
+   - Depends on: slices 1–2 and accounting-core slice 4.
+   - Owns: `routes/$orgSlug/invoices/`, `components/document-form/`,
+     `components/allocation-list.tsx`, `components/item-form.tsx`, adoption in
+     `receipt-form.tsx`, `lib/domain-invalidation.ts`.
+   - Interfaces: `DocumentForm({ form, state, onPost, onPostAndNext, carry })`;
+     `LineGrid({ name, columns, onAppend })` on `useFieldArray`;
+     `AllocationList({ open, value, onChange })`;
+     `invalidateInvoiceState(queryClient, orgSlug, invoiceId, "post" | "cancel")`;
+     `invalidateAllocationState(queryClient, orgSlug, partyId)`.
+   - Legacy reference (a716b6c). Read it; do not copy it.
+     - Allocation remainder: a live "Fill ₹x" or "Over by ₹x" control
+       (`a716b6c:apps/web/src/components/payment-lines.tsx:77-108`). Port it
+       onto bigint `formatMoney`.
+     - Print preview: an iframe of the server PDF, so the preview is the same
+       bytes the Party gets
+       (`a716b6c:apps/web/src/components/billing-document-view.tsx:70-106`). It
+       needs same-origin `frame-src`.
+     - List totals: `count(*) over()` and `sum(sum(x)) over()` beside a
+       `limit + 1` page, in one query
+       (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The
+       window reads every match before `LIMIT`; measure at pilot volume.
+5. **Remaining forms.** Open.
+   - Acceptance: Payment (`direct`, `advance`, `against` open Bills with
+     allocations, a TDS section Link Field); Bill (lines with `itcEligible`, an
+     optional TDS section, due date, and the Invoice settlement display and
+     cancellation flow); Credit Note and Debit Note against a source Document;
+     Journal (balanced lines; an unbalanced Journal is refused on the field);
+     Opening Balance; lock and Lock Exception forms; import (template download,
+     upload, row errors listed, nothing written on any error). Each uses
+     `DocumentForm` or the settings form pattern with the four posting states,
+     has a list route with the same shell, `DataTable` and record Sheet, and is
+     reachable from the palette.
+   - Depends on: slice 4 and accounting-core slices 3, 5 and 7.
+   - Owns: `routes/$orgSlug/{payments,bills,notes,journals}/`,
+     `routes/$orgSlug/settings/{locks,import}.tsx`, their `*-form.tsx`,
+     `lib/domain-invalidation.ts`.
+   - Interfaces: one `invalidate<Type>State` per Document type; the forms
+     consume the slice 4 parts unchanged.
 
-1. As an accountant, I want to open the receipts list, press Mod+K, type "new receipt", and land in a Receipt form with Party focused, so that starting an entry costs three actions.
-2. As an accountant, I want to type three letters of a Party name and press Enter to select it, so that picking a Party costs four keys.
-3. As an accountant (not an operator, who has no Party create grant), I want to type a name that does not exist and choose "Create Sharma Traders", fill two fields, and return to the Receipt with the new Party selected and my amount still there, so that a new customer never breaks the flow.
-4. As an accountant, I want to press Mod+Enter to post, see the Receipt number appear in place, and press Enter on "Post and next" to start the next one with today's date and the same Payment Method, so that forty receipts are forty short loops.
-5. As a cashier, I want to search and filter a year of receipts, grow the list with LoadMore, move the focus with ↑ and ↓, press Enter, and see that receipt in a Sheet over the list, so that review does not lose my place.
-6. As a member of several Organizations, I want the palette to switch Organization and to search only the current one, so that I never post into the wrong entity.
-7. As an accountant, I want the same form pattern on the Invoice, with Enter on the last cell of the last line adding a line, so that the second Document type costs no new habits.
-8. As an accountant, I want a Receipt against open Invoices to show them with their outstanding and let me allocate, and an open advance to be applied to a later Invoice without recording cash again, so that the party statement is right.
-9. As an accountant, and as a CA for locks and exceptions, I want thin screens for Payment, Bill, Credit Note, Debit Note, Journal, Opening Balance, locks and imports on the same pattern, so that every action the core promises is reachable in the pilot.
+Check each slice in the running app on desktop and mobile, in both themes. Pure
+helpers get unit tests; there is no UI test framework.
 
-### Who does what, and which slice owns the screen
+## Deferred
 
-| Actor                 | Action                                                                                              | Core procedure                                           | Owning client slice                                              |
-| --------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------- |
-| owner, accountant     | Create Party inline or from the parties list (operators read Parties and see no Create row)         | `party.create`                                           | 1                                                                |
-| accountant, operator  | Post Receipt (`advance`, `direct`) with print and post-and-next                                     | `receipt.post`, `/api/$orgSlug/receipts/$receiptId/pdf`  | 1                                                                |
-| accountant, operator  | Find a record or run an action from anywhere                                                        | `party.list`, `receipt.list`                             | 2                                                                |
-| everyone              | Review lists with search, filters, LoadMore, ↑/↓ and a record Sheet                                 | list procedures                                          | 3                                                                |
-| accountant            | Post Invoice with lines and tax (`mode: "new"`), save and reopen a draft, post it (`mode: "draft"`) | `invoice.*`                                              | 4                                                                |
-| accountant            | Receipt `against` open Invoices with allocations; apply an open advance                             | `receipt.post`, `allocation.apply`, `allocation.reverse` | 4                                                                |
-| accountant            | Post Payment (`direct`, `advance`, `against` Bills) with TDS                                        | `payment.*`                                              | 5                                                                |
-| accountant            | Post Bill with `itcEligible` and TDS at credit; Credit Note; Debit Note                             | `bill.*`, `note.*`                                       | 5                                                                |
-| owner, accountant     | Manual Journal; Opening Balance (the `ca` role reads and never posts)                               | `journal.*`, `openingBalance.post`                       | 5                                                                |
-| owner, CA             | Set a lock; grant a Lock Exception                                                                  | `lock.set`, `lock.grantException`                        | 5                                                                |
-| owner                 | Import masters, opening balances and opening items                                                  | `import.*`                                               | 5                                                                |
-| owner, accountant, CA | Reports and exports                                                                                 | `report.*`, `export.*`                                   | accounting-core slice 6 (report pages are read views, not forms) |
+- **Draft autosave.** Gate: an operator loses invoice work.
+- **Remote master lookup above 5,000 rows.** Gate: an Organization needs it.
+- **Global record search** (`search.records`, pg_trgm, one tenant-predicated
+  branch per type). Gate: a second document list, or `receipt.list` search
+  over 200 ms at pilot volume. Confirm pg_trgm on the production host first.
 
-Actors are the roles in accounting-core call 10; `owner` holds every grant, `operator` creates and posts Receipt, Payment and Invoice and reads Parties and Items, `ca` never posts. A screen or Palette action renders only with the grant it needs, through `useCan` as the customers list does today.
-
-## Implementation Decisions
-
-Canonical language (per `CONTEXT.md`): Organization, Party, Document, Receipt, Invoice, Payment Method. New terms introduced here: **Palette** (the Mod+K surface), **Link Field** (a master picker with inline create), **Overlay** (a Sheet or Dialog opened by the URL), **Record Sheet** (the child route rendered as a right Sheet over its list).
-
-Architecture calls:
-
-1. **Value ownership follows `docs/development.md`.** Native input drafts live in the DOM through `RegisteredFormField`; widget values in react-hook-form through `FormField`; server data in TanStack Query; open overlay and selected record in route search params or the child route; ephemeral text in the smallest child. No `localStorage`, no draft store, no zustand.
-2. **Masters are cached on the client and filtered locally.** `party.list`, `item.list`, `account.list` and `paymentMethod.list` return the complete list for the Organization, bounded at 5,000 rows, with `staleTime` of five minutes; create and update write the server's returned row into the list cache, then invalidate through `lib/domain-invalidation.ts` without awaiting. Link Fields filter that list in memory on every keystroke; the server round-trip happens on post only. Above the bound, the procedure returns `BAD_REQUEST` with `data.reason: "MASTER_LIST_LIMIT"` and no partial list. The picker and master list show an explicit capacity error; they do not show No matches or offer inline Create. Loading and failed queries likewise cannot offer Create. Remote lookup above this capacity is deferred. The same contract applies to all four masters when each is introduced by the core.
-3. **Plain mutations.** Mutations are plain TanStack mutations; a lost response is resolved by the operator checking the list before re-entering. Command ids, `sessionStorage` recovery and `command.get` are post-MVP.
-4. **Posting state is explicit and rendered in place.** A Document form exposes `state: "draft" | "posting" | "posted" | "rejected"` from the mutation. While `posting`, the primary action is disabled and the fields are read-only; `posted` shows the assigned number, a Print link (the web route `/api/$orgSlug/receipts/$receiptId/pdf` for a Receipt) and "Post and next"; `rejected` keeps every value, shows the server's reason on the field or in a toast, and is editable. The number is never shown before the server returns it. Do not optimistically insert a posted Document or change balances or outstanding. Invalidate affected queries only after confirmed success.
-5. **Keyboard behaviour is three rules, not a grammar.** Enter in a single-line field moves focus to the next field in DOM order (a Link Field first commits the highlighted existing match); Enter remains a newline in a textarea or editable multiline region and is not intercepted during IME composition; Enter on the primary button activates it; Mod+Enter posts from anywhere in the form; Esc closes the innermost open thing (list popup, then quick-create panel, then overlay). Tab keeps native focus movement after committing a highlighted existing Link match; the Create row requires Enter or click, so Tab cannot unexpectedly open a panel. Nothing else is bound inside forms.
-6. **Two bindings, no registry.** The palette binds Mod+K; each form owns Mod+Enter on its element. No shortcut registry exists until the H4 measurement shows a need ([client experience research](../research/client-experience-and-ai-native-2026-09.md)). Base UI owns Esc for the innermost popup, panel or overlay, including while an input has focus; consume the handled event so the same key does not close a parent. The palette footer shows static Navigate, Open and Close hints. No customizer.
-7. **Palette.** A cmdk `Command` (`shouldFilter={false}`, `vimBindings={false}`) inside the Base UI `Dialog`, pinned at the top and adapted from Midday's search modal; opens and closes with Mod+K and from a visible "Find anything…" trigger in the sidebar header; sources, in order: registered actions for the current route (create Receipt, print, cancel), navigation targets (every org route), Organization switch, then record search over the cached Party list and a remote `receipt.list({ q })` type-ahead debounced at 200 ms, as Midday does. A Receipt opens its record Sheet; a Party opens its full page. Selecting an action runs it and closes, except that cancel opens the reason-and-confirm dialog and never cancels directly. Ranking is the pure `rankCommands(items, query) => PaletteSection[]` in `apps/web/src/lib/palette.ts`: one heading per group, groups ranked by their best match then group order, Party and Receipt groups capped at eight rows.
-8. **Overlays by URL.** List routes declare `validateSearch` with `create: boolean`, and a record child route edits with `edit: boolean`; the overlay is a right `Sheet` at every width per design.md §10, composed from `SheetHeader`/`SheetFooter`, and a quick-create opened from inside it stacks a same-width Sheet over it. Closing clears the param; the trigger button regains focus. The persistent list shell lives in a layout route, `receipts/route.tsx`, which owns the toolbar, filters, selection, scroll position and the `Outlet`; `receipts/$receiptId.tsx` renders the record Sheet through that `Outlet`, and there is no index route. An index route and a `$param` route are siblings in TanStack Router, so a detail route beside an index route would unmount the list, which is what the legacy customers routes do today and this spec does not repeat. The record Sheet shows at every width; Esc, the close button and Back close it and return focus to its row. Parties differ: the list opens a read-only quick look (`?party=`) over the list, and the full page `parties_.$partyId.tsx` owns editing (`?edit=true`).
-9. **Link Field.** `LinkField<T>` composes `Combobox` with `items`, `status`, `noun`, `getKey`, `getLabel`, optional `getCode` and `getDescription`, `value`, `onSelect`, `onCommit`, `clearable`, and `onCreate` (opens the quick-create Sheet from local state with the typed text as seed and receives the saved row; an unsaved Document cannot survive a reload, so the URL gains nothing here). Rows come from the pure `linkRows` (prefix-then-substring over label and code) and look like Midday's pickers: a trigger chevron, a check on the current value, muted context, a monospace code and a plus-icon Create row. Enter or Tab commits the highlighted existing match; the "Create <text>" row is always last, is the only match when nothing else matches, is hidden when the typed text names an existing record, and renders only after a complete successful master query and when the member holds the create grant for that master (`useCan`), so an operator sees no Create row. The quick-create panel is the same form component the master's own create Overlay uses, rendered with `onSaved`, so there is one Party form.
-10. **List.** Accounting-core lists render through `DataTable` (`apps/web/src/components/data-table/`, adapted from Midday's customers and transactions tables on `@tanstack/react-table` 9.2.4, with its feature registry in `data-table.tsx`) under design.md §8: a toolbar with `SearchInput`, the filter menu and chips, a flat bordered table with a sticky header, sortable headers on complete master lists, an optional column menu, a row actions menu, and one card per row below `md`. Search, filters, sort and columns are URL search state. Rows are links: ↑/↓ move DOM focus between row links and Enter opens the record Sheet; ↑/↓ inside an open record Sheet or the party quick look steps to the adjacent visible row. A complete bounded master list (Parties, from the same `party.list` the Link Field caches, filtered and sorted in memory, mounted in 100-row steps) and a cursor list (Receipts, `useInfiniteQuery` with `OPERATIONAL_INFINITE_REFETCH`, filtered on the server) render through the same component, grown by a scroll sentinel and `LoadMore`. No virtualization until a 5,000-row measurement breaks the 200 ms ceiling. Cells are read-only; editing happens in the record Sheet or an Overlay.
-11. **Document form.** Slice 1 builds the Receipt form concretely; `DocumentForm`, `PostBar` and `LinkField` are extracted in slice 4 when the Invoice is the second real use, and the names below are the extraction targets, not slice 1 deliverables. `DocumentForm` is a composition, not a framework: `useZodForm(schema)` with the schema owning coercion, `Form`, `FormItem`, `RegisteredFormField` and `FormField` from the UI kit, a `PostBar` rendering the four states and the primary action, and a plain TanStack mutation. Post-and-next calls `form.reset` with the carried values (`documentDate`, `paymentMethodId`) and focuses the first Link Field. Invoice lines use `useFieldArray`; Enter on the last cell of the last line appends a line; an empty last line is dropped at post.
-12. **Motion and density follow design.md.** Overlay enter is the existing 150 ms transition; list, palette and form interactions have no transition; Link Field popups render `text-xs` rows with a check column, muted context and the code right-aligned in `font-mono`.
-13. **Measurement is part of the definition of done.** Slice 1 records keystrokes and seconds for ten receipts in this spec next to the Tally figures, gathered by the same human operator with a stopwatch and keystroke logger in both tools per H4. Browser tooling records interaction paint latency separately; automation time is not the entry-speed baseline.
-
-Modules:
-
-- `apps/web/src/components/palette/`: `Palette`, `PaletteTrigger`, `paletteHandle`, `usePaletteActions` (route-scoped action registration), `lib/palette.ts` (`rankCommands`).
-- `apps/web/src/components/link-field.tsx`, `apps/web/src/components/document-form/` (`DocumentForm`, `PostBar`, `LineGrid`), extracted in slice 4; `apps/web/src/components/data-table/` (`DataTable`, `TableEmpty`, `RowActionsMenu`, `ColumnVisibilityMenu`), the per-list column files (`party-columns.tsx`, `receipt-columns.tsx`), `list-filter.tsx`, `lib/date-presets.ts` and `lib/row-focus.ts`.
-- `apps/web/src/routes/$orgSlug/receipts/` (`route.tsx` list shell with `validateSearch` and `Outlet`, `$receiptId.tsx` record Sheet, no index route), `parties/route.tsx` with the quick look and `parties_.$partyId.tsx` with its Overview, Receipts and Ledger tabs, the receipts shape for `invoices/`, `payments/`, `bills/`, `notes/`, `journals/`, and `settings/locks.tsx`, `settings/import.tsx`.
-- `apps/web/src/lib/domain-invalidation.ts`: one helper per Document transition (`invalidateReceiptState`, `invalidatePartyState`, later one per Document type and `invalidateAllocationState`).
-- `packages/ui`: `Command` (cmdk 1.1.1) and `Kbd` are added; `Combobox` gains a trigger, a clear button and a highlight callback and loses its `inline` branch; the menu wrapper gains submenu and checkbox parts; `Sheet`, `Dialog`, `Table` and `Empty` are composed.
-- Midday files adapted (commit `5158731`, AGPL-3.0; a commercial licence from Midday Labs is required before release, and `THIRD_PARTY_NOTICES.md` lists each file): the search modal and footer (palette); the combobox, combobox-dropdown and command primitives (Link Field and palette); the customers, core and invoices tables and the column-visibility menu (`DataTable`); the transactions and invoice search filters, the filter list and the date presets (filters); and the customer form, customer details and invoice details (Sheets). Each adapted file keeps Midday's copyright header. Radix is replaced by Base UI, tRPC by oRPC, nuqs by router search params and zustand by router or local state; cmdk and `@tanstack/react-table` are the accepted dependencies; framer-motion, react-virtual and dnd-kit are not adopted. The transaction editor's optimistic `onMutate`/`onError` rollback is not adapted for financial posting; call 4 owns that behavior.
-- Server: procedures come from the accounting-core slices named in the ownership table, including the complete-master/overflow contract in core slice 1. `receipt.list` takes the list filters and returns list columns only, and `receipt.partyTotals` feeds the Parties money columns (accounting-core slice 2 interfaces).
-
-## Test Seams
-
-- **Pure functions in `tests/unit`** (prior art `access.test.ts`): `rankCommands` sections and caps (`tests/unit/palette.test.ts`), the Link Field `linkRows` Create rule (`tests/unit/link-field.test.ts`) and the date presets (`tests/unit/date-presets.test.ts`).
-- **Running app** (no UI test framework exists and none is added): every slice lists the interactions to exercise on desktop and mobile widths in both themes, driven with the chrome-devtools-axi skill where a count is needed. Missing runtime evidence is Verification, not completion, per the repository rules.
-
-## Task Plan
-
-- [ ] Slice 1: Receipt entry, the proof slice
-  - Status 2026-09-12: implemented. Layout superseded 2026-09-13 by calls 8–10. `apps/web/src/routes/$orgSlug/receipts/{route,index,$receiptId}.tsx` (list shell with `validateSearch` `{ create, q }`, cursor list of 50 through `receipt.list`, Detail Pane beside the list at `lg` and replacing it below with Back, URL-driven create Overlay as Sheet below `lg` and Dialog above), `components/receipt-form.tsx` (four posting states, Post and next carrying date and Payment Method, Mod+Enter, Enter-to-next-field with the Link Field committing on Enter and Tab), `components/link-field.tsx` (`LinkField`, pure `filterLinkItems`, status text for pending, error and overflow, Create row last and only when the member holds the create grant), `components/party-link-field.tsx` + `components/party-form.tsx` (`PartyQuickCreate` Dialog, name-collision "Create anyway", GSTIN conflict on the field), `hooks/use-shortcuts.ts`, `lib/domain-invalidation.ts` `invalidateReceiptState`, `account.list` in the core (income Account Link Field for `direct`), and a Receipts entry in the primary navigation. The `packages/ui` Combobox gained `value`, `inputValue`, `autoHighlight` and `inline` props. Running-app evidence (Chrome, 1440 and 390 widths, dark and light): keyboard-only path list → New → type three letters → Enter selects the Party and lands on Amount → Enter → Enter → Tab → Tab → reference → Mod+Enter posts `RCT2026-27/1` and shows Print; Post and next resets with date and method kept and Party focused; Create "Acme Traders" from the Link Field opens the Party dialog seeded with the text and returns to the Receipt with the Party selected; Direct reveals the income Account field and posts against Interest Income; Esc closes popup, then Overlay, and focus returns to New; a post without a Party is refused on the field; the Detail Pane cancels with a reason and the list shows `cancelled`; the PDF route returns `application/pdf`; the console after a hard reload of the list shows no hydration warning; amounts arrive as `bigint` and render through `formatMoney`. Pending: the H4 stopwatch and keystroke-logger run by the human operator against TallyPrime, recorded here.
-  - Acceptance: from `/$orgSlug/receipts`, the whole path list → create Overlay → Party (existing) → amount → Payment Method → settlement kind → reference → post → post-and-next completes with the keyboard only, for the benchmark scenario (`advance`, bank transfer, reference typed); 38 keystrokes is a planning estimate, while the measured H4 comparison determines acceptance; choosing `direct` reveals an income Account Link Field limited per accounting-core call 16 and posting without it is refused on the field; the Link Field selects on Enter and Tab and shows "Create <text>" last; creating a Party inline returns to the Receipt with the amount intact; the four posting states render as in call 4; a rejected post keeps its values and becomes editable; Esc with focus in a field closes only the innermost popup, then panel, then Overlay on separate keypresses and restores focus; a master at 5,000 rows is complete, while 5,001 produces a capacity error without partial results or Create; the H4 protocol for ten `advance` receipts is run in both tools and the keystrokes, seconds and per-interaction paint latencies are recorded in this section; the amount field stays rupee text until `receipt.post` parses it, and the list's server-rendered amounts arrive as `bigint`, render through `formatMoney` and hydrate without a React hydration warning (accounting-core call 2).
-  - Verify: `bun run check-types`; the running app on desktop and mobile widths in both themes; the H4 protocol by hand with a keystroke logger; the browser console after a hard reload of the receipts list shows no hydration warning.
-  - Depends on: accounting-core slices 1 and 2 (server procedures and Payment Method master).
-  - Owns/Touches: `apps/web/src/routes/$orgSlug/receipts/route.tsx`, `$receiptId.tsx`, `apps/web/src/components/receipt-form.tsx`, `apps/web/src/components/party-form.tsx`, `apps/web/src/components/party-link-field.tsx`, `apps/web/src/lib/domain-invalidation.ts` (coordinator-owned), this spec's measurement record.
-  - Interfaces: `invalidateReceiptState(queryClient, orgSlug, receiptId, "post" | "cancel")`. The Party Link Field and Receipt form are concrete here; slice 4 extracts `LinkField<T>({ items, status, noun, getKey, getLabel, getCode?, getDescription?, value, onSelect, onCommit?, onCreate?, clearable? })` and `DocumentForm({ form, state, onPost, onPostAndNext, carry })` with `PostBar` from them.
-
-- [ ] Slice 2: Command palette
-  - Status 2026-09-12: implemented. `components/palette/palette.tsx` (cmdk `Command` inside the Base UI Dialog, styled from shadcn base-lyra with Midday's footer; sources in order: registered route actions, navigation from `PRIMARY_NAV` and `SETTINGS_TABS` filtered by `authorize`, Organization switch from `member.me`, Parties from the cached `party.list`, Receipts from `receipt.list({ q })` debounced 200 ms; a static Navigate, Open and Close footer), `components/palette/use-palette-actions.ts` (route-scoped registry), `lib/palette.ts` `rankCommands` (label prefix 4, word prefix 3, substring 2, keyword 1; each group stays contiguous under one heading and ranks by its best match, then group order, score and input order; a Receipt also matches its reference as a keyword; a Party opens its full page) with `tests/unit/palette.test.ts`. Mounted in `$orgSlug/route.tsx`; receipts routes register New receipt, Print receipt and Cancel receipt (which opens the reason dialog). Running-app evidence: Mod+K opens on the receipts list and with the create Overlay open; "rec" ranks New receipt above Go to Receipts; "acme" lists the Party then its three Receipts with `bigint` amounts formatted; Enter navigates to the Receipt and closes; Esc closes; "k" typed in the search box does not open it.
-  - Acceptance: Mod+K opens the Palette on every `$orgSlug` route, including inside an Overlay; typing shows route actions, navigation, Organization switch, Parties (from the cached list) and Receipts (remote `q`, debounced 200 ms) as contiguous groups, the group with the best match first and ties in that order; Enter runs or navigates and closes; Esc closes; keys inside inputs never open it without the modifier; the Palette footer shows the static Navigate, Open and Close hints; searching in Organization A never shows Organization B's records (query keys carry `orgSlug`).
-  - Verify: `bun run check-types`; `bun run test` (`tests/unit/palette.test.ts` for `rankCommands`); the running app on desktop and mobile widths in both themes.
-  - Depends on: Slice 1 (routes exist).
-  - Owns/Touches: `apps/web/src/components/palette/`, `apps/web/src/lib/palette.ts`, `apps/web/src/routes/$orgSlug/route.tsx` (mount point), `tests/unit/palette.test.ts`; `receipt.list` `q` parameter in `packages/api/src/routers/receipt.ts` if absent (coordinator-owned).
-  - Interfaces: `rankCommands(items: PaletteItem[], query: string) => PaletteSection[]`; `usePaletteActions(actions: PaletteItem[])`; `PaletteItem = { id, label, group: "action" | "go" | "organization" | "party" | "receipt", keywords?, detail?, hint?, icon?, run }`.
-
-- [ ] Slice 3: Lists, filters and record Sheets
-  - Status 2026-09-13: parties and receipts lists render through `DataTable` with filters, chips and card rows; a Party opens a read-only quick look (`?party=`) over the list and a full page `parties_.$partyId.tsx` with Overview (totals, balance, facts, recent receipts), Receipts and Ledger (`party.statement` with a period menu, running Dr/Cr balance) tabs; editing is the Party Sheet (`?edit=true`) with the stale-edit check. Running-app evidence: ledger rows for Acme Traders show blank opposite cells and a running Cr balance; a Party with no receipts shows ₹0.00. The volume check and keyboard row focus remain.
-  - Acceptance: the receipts and parties lists render through `DataTable` per design.md §8 with the filter menu, chips and Clear; with 10,000 receipts seeded by `scripts/seed-volume.ts` (owned by accounting-core slice 2) the first page renders 50 rows, the scroll sentinel and `LoadMore` grow it and show the count, and search and filters narrow it on the server; the parties list renders from the same cached complete `party.list` the Link Field uses, filters, searches and sorts in memory, and shows Received and Last receipt from `receipt.partyTotals`; reload and Back keep search, filters, sort and columns; ↑ and ↓ move the focused row without navigating and Enter opens the record Sheet child route or the party quick look; ↑/↓ inside an open record Sheet or the party quick look steps to the adjacent visible row; Esc closes the Sheet and returns focus to the row with scroll position and filters intact; the Party full page edits through `?edit=true` with the stale-edit check; the empty state offers the create action and a no-result state offers Clear filters.
-  - Verify: `bun run check-types`; the running app on desktop and mobile widths in both themes with the volume seed.
-  - Depends on: Slice 1.
-  - Owns/Touches: `apps/web/src/components/data-table/`, `apps/web/src/components/{party-columns,receipt-columns,list-filter}.tsx`, `apps/web/src/lib/{date-presets,row-focus,parties}.ts`, `apps/web/src/components/page.tsx` (`SearchInput`, `ListToolbar`), `packages/ui/src/components/dropdown-menu.tsx`, `apps/web/src/routes/$orgSlug/{receipts,parties}/`.
-  - Interfaces: `DataTable({ columns, data, getRowId, meta, rowLink, renderCard, query, errorTitle, empty, sorting?, onSortingChange?, columnVisibility?, activeRowId?, rowLimit?, growth? })`; rows carry `data-row-id` and their link `data-row-link`, and `focusRowLink(id)` returns focus after a record Sheet closes.
-
-- [ ] Slice 4: Invoice form on the same pattern
-  - Acceptance: `DocumentForm`, `LinkField` and `PostBar` are extracted from the Receipt form and both forms use them; Item is a Link Field with inline create; place of supply is a field defaulted from the Party and editable and passed explicitly to `computeTax`; due date defaults to document date, is editable before post and cannot precede it; Enter on the last cell of the last line appends a line and focuses its Item; an empty trailing line is dropped at post; totals and tax render from the pure `computeTax` (accounting-core slice 4), never a second client formula; Save draft calls `invoice.saveDraft` and later `invoice.updateDraft` with the loaded `version`, a stale version shows the refresh conflict, reopening the draft from the list restores every field including lines, posting from the draft sends `mode: "draft"` with `documentId` and `version` and assigns the number, and a post from a fresh form sends `mode: "new"` with the payload; a Receipt with `against` lists the Party's open Invoices with outstanding, allocates by amount with Enter, refuses an amount above outstanding on the field, and shows any remainder as advance before posting; an open advance is applied to an Invoice from the Invoice record Sheet through `allocation.apply`, and reversed from the same place; the H4 protocol for ten five-line Invoices is run in both tools and recorded here, against the measured five-line Tally baseline (the same five-line Invoice timed in TallyPrime by the same operator, never the desk-derived two-line estimate); the two-line 48-key estimate is not an acceptance threshold; post-and-next carries date only; the Invoice list and record Sheet show due date, gross, allocated, outstanding, derived settlement status and overdue per core call 18; filters include settlement status and overdue; the record Sheet also shows lines, tax split, allocations and Print; cancelling a settled Invoice shows the core conflict and linked allocations, offers their permitted reversal, and preserves the shared Receipt and its other allocation; multiline notes keep Enter as newline.
-  - Verify: `bun run check-types`; the running app on desktop and mobile widths in both themes; keystroke count recorded in this section.
-  - Depends on: Slices 1 and 2; accounting-core slice 4.
-  - Owns/Touches: `apps/web/src/routes/$orgSlug/invoices/`, `apps/web/src/components/document-form/`, `apps/web/src/components/link-field.tsx`, `apps/web/src/components/receipt-form.tsx` (adoption), `apps/web/src/components/allocation-list.tsx`, `apps/web/src/components/item-form.tsx`, `apps/web/src/lib/domain-invalidation.ts` (coordinator-owned).
-  - Interfaces: `LineGrid({ name, columns, onAppend })` bound to `useFieldArray`; `AllocationList({ open, value, onChange })`; `invalidateInvoiceState(queryClient, orgSlug, invoiceId, "post" | "cancel")`; `invalidateAllocationState(queryClient, orgSlug, partyId)`.
-
-- [ ] Slice 5: Remaining Document forms and settings screens
-  - Acceptance: Payment (`direct`, `advance`, `against` open Bills with allocations, TDS section Link Field), Bill (lines with `itcEligible` and optional TDS section, due date, and the same settlement display and cancellation flow as Invoice), Credit Note and Debit Note (against a source Document), Journal (balanced lines, refuses unbalanced on the field), Opening Balance, lock and Lock Exception forms, and the import screen (template download, upload, row-level errors listed, nothing written on error) each render through `DocumentForm` or the settings form pattern with the four posting states; each has a list route with the same shell, `DataTable` and record Sheet; every action in the ownership table is reachable from the Palette; each form is exercised once on desktop and mobile widths in both themes.
-  - Verify: `bun run check-types`; the running app on desktop and mobile widths in both themes; no new unit tests unless a pure helper appears.
-  - Depends on: Slice 4; accounting-core slices 3, 5 and 7.
-  - Owns/Touches: `apps/web/src/routes/$orgSlug/{payments,bills,notes,journals}/`, `apps/web/src/routes/$orgSlug/settings/{locks,import}.tsx`, the matching `*-form.tsx` components, `apps/web/src/lib/domain-invalidation.ts` (coordinator-owned).
-  - Interfaces: one `invalidate<Type>State` helper per Document type; forms consume the slice 4 components unchanged.
-
-## Out of Scope
-
-A Tally-style shortcut grammar (F-keys, Alt chords, Alt+2 duplicate); a shortcut customizer; inline cell editing, column drag and resize, bulk actions, virtualized lists until the 5,000-row gate (design.md owns list growth); a global `search.records` procedure across all Document types; offline entry and the local master database (sync spec); the assistant and its tools (the read model is a later spec per accounting-core); print template editing; mobile-specific layouts beyond the Sheet and card-row rules in design.md; idempotent command log and client command ids (post-MVP).
-
-## Explicitly Deferred
-
-- **Draft autosave.** No observed need at receipt scale: the Receipt is estimated at under 40 keystrokes and posts immediately. An Invoice that must survive a closed tab uses the server Document `draft` state through the explicit "Save draft" action accepted in slice 4; a debounced autosave like Midday's is added only if operators lose invoice work in the pilot. Gate: an observed loss.
-- **Remote master lookup above 5,000 rows.** This spec fails explicitly at overflow; it never presents a truncated list as complete. Pilot import volume must fit the bound. Gate: an Organization needs a larger master; then specify remote type-ahead before admitting that volume.
-- **Global record search across every Document type.** The Palette does not fan out one query per type. Gate: Invoice or Bill gets a list, or `receipt.list` search exceeds the 200 ms interaction ceiling at pilot volume. Then build `search.records`: pg_trgm indexes, one `UNION ALL` branch per type with the tenant predicate in each branch, and 5–8 rows per type.
-- **Measured server and client latency budgets beyond INP** (immediate response, confirmed save, whole task) are recorded from the slice 1 run and become targets in the next revision of this spec, not before.
-
-## Open Questions
-
-None on the client side; accounting-core Open Questions carries the CA's advance decision, which does not change these screens. The keystroke budgets (38 and 48) are estimates from the research's desk-derived Tally counts plus 10 percent; the H4 runs in slices 1 and 4 replace them with measured figures, and only a kill on H4 reopens shortcuts.
-
-Reference check, 2026-09-10: the [Zoho walkthrough](../research/zoho-advance-walkthrough-2026-09-10.md)
-answers the accounting reference question with separate advance accounts and
-application entries; the founder chose that model on 2026-09-12. `allocation.apply`
-writes one Allocation and the party ledger movement; applying an advance also posts
-the transfer entry (accounting-core call 16). The visible apply/unapply flow is
-unchanged. Zoho's demo does not verify H4, keystroke budgets or Accly's keyboard
-behavior.
-
-Open from the 2026-09-13 Midday review: measure the Link Field with an empty query
-at 5,000 Parties (the volume seed writes 200) against the 200 ms ceiling, and
-confirm pg_trgm on the production host before any trigram index.
+Out of scope: a shortcut grammar or customizer, inline cell editing, column
+drag, bulk actions, offline entry, the assistant and print template editing.

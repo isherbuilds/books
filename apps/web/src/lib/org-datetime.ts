@@ -27,31 +27,6 @@ function formatter(
   return created;
 }
 
-export function localInputValue(date: Date, timeZone: string): string {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(date)
-      .map((part) => [part.type, part.value]),
-  );
-
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-}
-
-export function nextHalfHour(timeZone: string): string {
-  const date = new Date();
-  date.setMinutes(date.getMinutes() + (30 - (date.getMinutes() % 30)), 0, 0);
-
-  return localInputValue(date, timeZone);
-}
-
 export function formatDateTime(value: string | Date, timeZone: string): string {
   return formatter(`dateTime|${timeZone}`, "en-IN", {
     dateStyle: "medium",
@@ -63,14 +38,6 @@ export function formatDateTime(value: string | Date, timeZone: string): string {
 export function formatDate(value: string | Date, timeZone: string): string {
   return formatter(`date|${timeZone}`, "en-IN", {
     dateStyle: "medium",
-    timeZone,
-  }).format(new Date(value));
-}
-
-export function formatTime(value: string | Date, timeZone: string): string {
-  return formatter(`time|${timeZone}`, "en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
     timeZone,
   }).format(new Date(value));
 }
@@ -95,12 +62,6 @@ export function orgToday(timeZone: string, now = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).format(now);
-}
-
-export function orgMonthToDate(timeZone: string) {
-  const to = orgToday(timeZone);
-
-  return { from: `${to.slice(0, 8)}01`, to };
 }
 
 // Both resolved by the layout loader, so server and client agree across hydration.

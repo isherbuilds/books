@@ -4,41 +4,9 @@ export * from "./audit";
 
 export * from "./file";
 
-export * from "./counter";
-
 export * from "./organization-settings";
 
 export * from "./parties";
-
-export * from "./customers";
-
-export * from "./payers";
-
-export * from "./customer-payers";
-
-export * from "./departments";
-
-export * from "./items";
-
-export * from "./practitioners";
-
-export * from "./opd-appointments";
-
-export * from "./attachments";
-
-export * from "./charges";
-
-export * from "./invoices";
-
-export * from "./invoice-lines";
-
-export * from "./credit-notes";
-
-export * from "./credit-note-lines";
-
-export * from "./payments";
-
-export * from "./refunds";
 
 export * from "./accounts";
 
@@ -48,14 +16,16 @@ export * from "./journal-lines";
 
 export * from "./payment-methods";
 
+export * from "./tds-sections";
+
 export * from "./documents";
 
 export * from "./document-lines";
 
+export * from "./tds-deductions";
+
 export * from "./party-ledger-lines";
 
 export * from "./allocations";
-
-export * from "./balances";
 
 export * from "./number-series";

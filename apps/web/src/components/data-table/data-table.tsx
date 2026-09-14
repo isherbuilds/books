@@ -53,8 +53,6 @@ const ALL_VISIBLE: ColumnVisibilityState = {};
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
 
-type RowGrowth = { hasMore: boolean; pending: boolean; loadMore: () => void };
-
 type RowLink<T> = (row: T) => LinkOptions;
 
 /**
@@ -76,7 +74,6 @@ export function DataTable<T extends RowData>({
   columnVisibility,
   activeRowId,
   rowLimit,
-  growth,
 }: {
   /** A module constant: react-table rebuilds its row model when this changes. */
   columns: ColumnDef<typeof DATA_TABLE_FEATURES, T, any>[];
@@ -94,9 +91,8 @@ export function DataTable<T extends RowData>({
   columnVisibility?: ColumnVisibilityState;
   /** The open record's id, from the child route. */
   activeRowId?: string;
-  /** Mount at most this many rows; `growth` raises it. */
+  /** Mount at most this many rows; the page's Load more raises it. */
   rowLimit?: number;
-  growth?: RowGrowth;
 }) {
   const table = useTable({
     features: DATA_TABLE_FEATURES,
@@ -195,8 +191,6 @@ export function DataTable<T extends RowData>({
       <ListState query={query} errorTitle={errorTitle} isEmpty={!hasRows} empty={empty}>
         {null}
       </ListState>
-      {/* After a failure only Try again or Load more fetches, so nothing retries in a loop. */}
-      {hasRows && !query.isError && growth?.hasMore ? <GrowSentinel growth={growth} /> : null}
     </div>
   );
 }
@@ -318,30 +312,4 @@ function moveRowFocus(event: KeyboardEvent<HTMLElement>) {
 
   event.preventDefault();
   links[index + (event.key === "ArrowDown" ? 1 : -1)]?.focus();
-}
-
-// Midday grows its pages from a scroll listener on the virtualizer; this observes a
-// sentinel against PageBody, the scroller, so the 600 px margin applies. The ref
-// re-observes when `pending` flips, which keeps loading until the view is full.
-function GrowSentinel({ growth }: { growth: RowGrowth }) {
-  return (
-    <div
-      aria-hidden
-      className="h-px"
-      ref={(node) => {
-        if (!node || growth.pending) return;
-
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) growth.loadMore();
-          },
-          { root: node.closest("[data-slot=page-body]"), rootMargin: "0px 0px 600px 0px" },
-        );
-
-        observer.observe(node);
-
-        return () => observer.disconnect();
-      }}
-    />
-  );
 }

@@ -1,6 +1,6 @@
 import { createRequestContext } from "@accly/api/lib/context";
 import { appRouter, type AppRouterClient } from "@accly/api/routers/index";
-import { createRouterClient } from "@orpc/server";
+import { createRouterClient, ORPCError } from "@orpc/server";
 import { expect } from "bun:test";
 
 import type { TestUser } from "./auth";
@@ -40,9 +40,19 @@ export async function expectORPCCode(
   promise: Promise<unknown>,
   code: string,
   label = "the call",
-): Promise<void> {
+): Promise<ORPCError<string, unknown>> {
   const error = await rejection(promise, `${label} with ${code}`);
-  expect(error, `${label} should be ${code}`).toHaveProperty("code", code);
+
+  if (!(error instanceof ORPCError)) throw new Error(`expected ${label} to reject with ORPCError`);
+
+  expect(error.code, `${label} should be ${code}`).toBe(code);
+
+  return error;
+}
+
+export async function expectReason(promise: Promise<unknown>, reason: string): Promise<void> {
+  const error = await expectORPCCode(promise, "BAD_REQUEST");
+  expect(error.data).toMatchObject({ reason });
 }
 
 export async function expectAuthStatus(

@@ -60,11 +60,11 @@ function OrganizationOnboardingRoute() {
         </section>
 
         <Link
-          to="/$orgSlug/dashboard"
+          to="/$orgSlug/receipts"
           params={{ orgSlug }}
           className={buttonVariants({ className: "w-fit" })}
         >
-          Open dashboard
+          Open receipts
           <ArrowRightIcon />
         </Link>
       </PageBody>

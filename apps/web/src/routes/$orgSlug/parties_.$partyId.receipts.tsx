@@ -50,11 +50,6 @@ function PartyReceipts() {
             description="Receipts from this party appear here, newest first."
           />
         }
-        growth={{
-          hasMore: receipts.hasNextPage,
-          pending: receipts.isFetchingNextPage,
-          loadMore: () => void receipts.fetchNextPage(),
-        }}
       />
       <LoadMore query={receipts} shown={rows.length} />
     </>

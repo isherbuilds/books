@@ -48,13 +48,14 @@ export const thing = pgTable(
 bun run db:generate
 ```
 
-Never hand-edit the output. Hand-authored SQL gets its own migration file.
+Never hand-edit or hand-write a migration: the schema is the only source. A rule
+Drizzle cannot express is not built.
 
 ## 3. Permission — `packages/auth/src/access.ts`
 
-Add the statement to `ac`, then add the grant **explicitly** to each role that
-should have it. Do not inherit from a lesser role; `owner` and `admin` looking
-alike is intended.
+Add the statement to `ac`, then add the grant **explicitly** to each of `owner`,
+`accountant`, `ca` and `operator` that should have it. Do not inherit from a
+lesser role.
 
 ```ts
 export const ac = createAccessControl({ ..., thing: ["create", "read", "update", "delete"] } as const);

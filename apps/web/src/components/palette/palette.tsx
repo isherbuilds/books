@@ -189,7 +189,7 @@ function PaletteBody({
       label: `Switch to ${organization.name}`,
       group: "organization",
       run: () =>
-        void navigate({ to: "/$orgSlug/dashboard", params: { orgSlug: organization.slug } }),
+        void navigate({ to: "/$orgSlug/receipts", params: { orgSlug: organization.slug } }),
     }));
 
   const partyItems = typed
@@ -199,7 +199,7 @@ function PaletteBody({
         group: "party",
         detail: party.gstin ?? undefined,
         hint: party.active ? undefined : "Inactive",
-        keywords: [party.gstin, party.phone, party.email].filter((value) => value !== null),
+        keywords: party.gstin ? [party.gstin] : [],
         run: () =>
           void navigate({
             to: "/$orgSlug/parties/$partyId",

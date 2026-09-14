@@ -1,9 +1,3 @@
 {
-  "pages": [
-    "index",
-    "getting-started",
-    "opd-desk",
-    "billing-and-corrections",
-    "administration-and-handover"
-  ]
+  "pages": ["index", "getting-started", "administration-and-handover"]
 }

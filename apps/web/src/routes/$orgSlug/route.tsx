@@ -2,8 +2,8 @@ import { ClientOnly, Outlet, createFileRoute, redirect } from "@tanstack/react-r
 
 import { AppShell } from "@/components/app-shell";
 import { Palette } from "@/components/palette/palette";
+import { membershipOptions } from "@/lib/membership";
 import { orgToday } from "@/lib/org-datetime";
-import { orpc } from "@/lib/orpc";
 import { hasErrorCode } from "@/lib/orpc-error";
 
 export const Route = createFileRoute("/$orgSlug")({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/$orgSlug")({
     let membership;
 
     try {
-      membership = await queryClient.query(orpc.member.me.queryOptions({ input: { orgSlug } }));
+      membership = await queryClient.query(membershipOptions(orgSlug));
     } catch (error) {
       if (hasErrorCode(error, "UNAUTHORIZED")) {
         throw redirect({ to: "/login", search: { redirect: location.href } });

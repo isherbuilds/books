@@ -1,171 +1,225 @@
-import type { DbTransaction } from "@accly/db/counter";
+import type { DbTransaction } from "@accly/db";
+import type { SupplyClass } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { documents, type PrintSnapshot } from "@accly/db/schema/documents";
-import { journalEntries } from "@accly/db/schema/journal-entries";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
+import { parties } from "@accly/db/schema/parties";
+import { paymentMethods } from "@accly/db/schema/payment-methods";
+import { tdsDeductions } from "@accly/db/schema/tds-deductions";
+import { ORPCError } from "@orpc/server";
 import { and, eq, sql } from "drizzle-orm";
 
 import { businessDate } from "../lib/business-date";
+import { badRequest } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
-import { assignNumber, financialYearOf } from "./numbering";
+import { financialYearOf, postNumbered } from "./numbering";
 import { reversePartyLedgerLines, writePartyLedgerLine } from "./party-ledger";
-import { recordEntry, type ReceiptPosting } from "./posting";
+import { recordEntry, type DocumentPosting } from "./posting";
 
-export type DocumentSettings = {
+type DocumentNumbering = {
+  prefix: string;
   fiscalYearStartMonth: number;
-  receiptPrefix: string;
-  timeZone: string;
 };
+
+// The Payment Method's account and name come from the locked read in `postDocument`.
+type WithoutMethod<T> = T extends unknown ? Omit<T, "methodAccountId"> : never;
 
 export type PostDocumentInput = {
   documentDate: string;
   paymentMethodId: string;
-  paymentMethodAccountId: string;
   reference: string | null;
   narration: string | null;
   affectsTax: boolean;
-  printSnapshot: PrintSnapshot;
+  printSnapshot: Omit<PrintSnapshot, "paymentMethod">;
   lineDescription: string;
-} & ReceiptPosting;
+  posting: WithoutMethod<DocumentPosting>;
+};
 
-export class DocumentNotFoundError extends Error {}
+export function receiptTax(
+  gstin: string | null,
+  supplyClass: SupplyClass | null,
+): { refused: boolean; affectsTax: boolean } {
+  const registered = gstin !== null;
 
-export class DocumentAlreadyCancelledError extends Error {}
+  return {
+    refused: registered && supplyClass === "taxable",
+    affectsTax: registered && supplyClass !== null && supplyClass !== "notASupply",
+  };
+}
+
+function addressLine(
+  addressLine1: string | null,
+  addressLine2: string | null,
+  city: string | null,
+  pinCode: string | null,
+): string {
+  return [addressLine1, addressLine2, [city, pinCode].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function organizationSnapshot(
+  settings: Pick<
+    typeof organizationSettings.$inferSelect,
+    "legalName" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
+  >,
+): PrintSnapshot["organization"] {
+  return {
+    legalName: settings.legalName,
+    address: addressLine(
+      settings.addressLine1,
+      settings.addressLine2,
+      settings.city,
+      settings.pinCode,
+    ),
+    gstin: settings.gstin,
+    pan: settings.pan,
+  };
+}
+
+export function partySnapshot(
+  party:
+    | Pick<
+        typeof parties.$inferSelect,
+        "name" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
+      >
+    | undefined
+    | null,
+): PrintSnapshot["party"] {
+  if (!party) return null;
+
+  return {
+    name: party.name,
+    address: addressLine(party.addressLine1, party.addressLine2, party.city, party.pinCode),
+    gstin: party.gstin,
+    pan: party.pan,
+  };
+}
 
 export async function postDocument(
   tx: DbTransaction,
   scope: Scope,
-  settings: DocumentSettings,
+  numbering: DocumentNumbering,
   input: PostDocumentInput,
-): Promise<{ documentId: string; entryId: string; number: string }> {
-  const financialYear = financialYearOf(input.documentDate, settings.fiscalYearStartMonth);
+): Promise<{ id: string; number: string }> {
+  if (
+    input.posting.type === "receipt" &&
+    input.posting.settlementKind === "advance" &&
+    input.posting.advanceSupply === "taxableService"
+  ) {
+    throw badRequest(
+      "ADVANCE_TAX_UNSUPPORTED",
+      "A taxable service advance needs GST advance documents, which are not available yet.",
+    );
+  }
 
-  const number = await assignNumber(
-    tx,
-    scope.orgId,
-    "receipt",
-    financialYear,
-    settings.receiptPrefix,
-  );
+  // FOR SHARE: concurrent posts share the row, while an archive waits for them to
+  // commit, so no document posts against a method archived mid-transaction.
+  const [method] = await tx
+    .select({ name: paymentMethods.name, accountId: paymentMethods.accountId })
+    .from(paymentMethods)
+    .where(
+      and(
+        eq(paymentMethods.orgId, scope.orgId),
+        eq(paymentMethods.id, input.paymentMethodId),
+        eq(paymentMethods.active, true),
+      ),
+    )
+    .for("share");
 
-  const documentId = Bun.randomUUIDv7();
-  const postedAt = new Date();
+  if (!method) throw badRequest("PAYMENT_METHOD_INVALID", "Choose an active payment method.");
 
+  const posting = { ...input.posting, methodAccountId: method.accountId };
+  const id = Bun.randomUUIDv7();
+  const financialYear = financialYearOf(input.documentDate, numbering.fiscalYearStartMonth);
+
+  // Written as a draft; postNumbered numbers and posts it in the last statement.
   await tx.insert(documents).values({
-    id: documentId,
+    id,
     orgId: scope.orgId,
-    type: "receipt",
-    state: "posted",
-    number,
-    series: settings.receiptPrefix,
+    type: posting.type,
+    state: "draft",
+    series: numbering.prefix,
     financialYear,
     documentDate: input.documentDate,
-    partyId: input.partyId,
-    exposureSide: input.exposureSide,
-    settlementKind: input.settlementKind,
-    advanceSupply: input.settlementKind === "advance" ? input.advanceSupply : null,
+    partyId: posting.partyId,
+    exposureSide: posting.exposureSide,
+    settlementKind: posting.settlementKind,
+    advanceSupply:
+      posting.type === "receipt" && posting.settlementKind === "advance"
+        ? posting.advanceSupply
+        : null,
     paymentMethodId: input.paymentMethodId,
     reference: input.reference,
     narration: input.narration,
-    totalPaise: input.amountPaise,
+    totalPaise: posting.amountPaise,
     affectsTax: input.affectsTax,
-    printSnapshot: input.printSnapshot,
-    postedAt,
+    printSnapshot: { ...input.printSnapshot, paymentMethod: method.name },
     createdBy: scope.userId,
   });
 
   await tx.insert(documentLines).values({
     id: Bun.randomUUIDv7(),
     orgId: scope.orgId,
-    documentId,
+    documentId: id,
     position: 1,
     kind: "account",
-    accountId: input.incomeAccountId,
+    accountId: posting.accountId,
     description: input.lineDescription,
-    amountPaise: input.amountPaise,
+    amountPaise: posting.amountPaise,
   });
 
-  if (input.settlementKind === "advance") {
+  if (posting.settlementKind === "advance") {
     await writePartyLedgerLine(tx, scope.orgId, {
-      partyId: input.partyId,
-      documentId,
-      side: input.exposureSide,
+      partyId: posting.partyId,
+      documentId: id,
+      side: posting.exposureSide,
       kind: "post",
-      amountPaise: -input.amountPaise,
+      // Party statements are positive when the party owes the organization.
+      amountPaise: posting.exposureSide === "payable" ? posting.amountPaise : -posting.amountPaise,
       entryDate: input.documentDate,
     });
   }
 
-  const { entryId } = await recordEntry(tx, scope, {
+  if (posting.type === "payment" && posting.tds !== null) {
+    await tx.insert(tdsDeductions).values({
+      id: Bun.randomUUIDv7(),
+      orgId: scope.orgId,
+      documentId: id,
+      tdsSectionId: posting.tds.sectionId,
+      amountPaise: posting.tds.amountPaise,
+    });
+  }
+
+  await recordEntry(tx, scope, {
     kind: "post",
-    document: {
-      id: documentId,
-      type: "receipt",
-      entryDate: input.documentDate,
-      narration: input.narration ?? input.lineDescription,
-      posting: input,
-      paymentMethodAccountId: input.paymentMethodAccountId,
-    },
+    document: { id, posting },
+    entryDate: input.documentDate,
+    narration: input.narration ?? input.lineDescription,
   });
 
-  return { documentId, entryId, number };
+  const number = await postNumbered(
+    tx,
+    scope.orgId,
+    id,
+    posting.type,
+    financialYear,
+    numbering.prefix,
+  );
+
+  return { id, number };
 }
 
+// One conditional update cancels the document, so a second cancel or a foreign id is a
+// CONFLICT; the reversal is dated at cancellation and swaps the stored lines.
 export async function reverseDocument(
   tx: DbTransaction,
   scope: Scope,
-  settings: DocumentSettings,
+  timeZone: string,
+  type: DocumentPosting["type"],
   documentId: string,
   reason: string,
-): Promise<{ entryId: string }> {
-  const [document] = await tx
-    .select({ id: documents.id, type: documents.type, state: documents.state })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.orgId, scope.orgId),
-        eq(documents.id, documentId),
-        eq(documents.type, "receipt"),
-      ),
-    )
-    .limit(1)
-    .for("update");
-
-  if (!document) throw new DocumentNotFoundError("Document not found");
-
-  if (document.state === "cancelled") {
-    throw new DocumentAlreadyCancelledError("Document is already cancelled");
-  }
-
-  if (document.state !== "posted") {
-    throw new Error(`Document ${documentId} is not posted`);
-  }
-
-  const entryDate = businessDate(new Date(), settings.timeZone);
-  await reversePartyLedgerLines(tx, scope.orgId, documentId, entryDate);
-
-  const [postEntry] = await tx
-    .select({ id: journalEntries.id })
-    .from(journalEntries)
-    .where(
-      and(
-        eq(journalEntries.orgId, scope.orgId),
-        eq(journalEntries.documentType, document.type),
-        eq(journalEntries.documentId, documentId),
-        eq(journalEntries.kind, "post"),
-      ),
-    )
-    .limit(1);
-
-  if (!postEntry) throw new Error(`Document ${documentId} is missing its post journal entry`);
-
-  const result = await recordEntry(tx, scope, {
-    kind: "reverse",
-    document: { id: documentId, type: document.type },
-    reversesEntryId: postEntry.id,
-    entryDate,
-    narration: reason,
-  });
-
+): Promise<typeof documents.$inferSelect> {
   const cancelledAt = new Date();
 
   const [cancelled] = await tx
@@ -180,12 +234,24 @@ export async function reverseDocument(
       and(
         eq(documents.orgId, scope.orgId),
         eq(documents.id, documentId),
-        eq(documents.type, "receipt"),
+        eq(documents.type, type),
+        eq(documents.state, "posted"),
       ),
     )
-    .returning({ id: documents.id });
+    .returning();
 
-  if (!cancelled) throw new Error(`Locked document ${documentId} disappeared during cancellation`);
+  if (!cancelled) {
+    throw new ORPCError("CONFLICT", { message: "This document is not posted." });
+  }
 
-  return result;
+  const entryDate = businessDate(cancelledAt, timeZone);
+  await reversePartyLedgerLines(tx, scope.orgId, documentId, entryDate);
+  await recordEntry(tx, scope, {
+    kind: "reverse",
+    document: { id: documentId, type },
+    entryDate,
+    narration: reason,
+  });
+
+  return cancelled;
 }

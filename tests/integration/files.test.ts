@@ -113,7 +113,7 @@ test("another org's file key is FORBIDDEN, not merely missing", async () => {
   );
 });
 
-test("a plain member cannot delete a file, an admin in the same org can", async () => {
+test("a member without file:delete cannot delete a file, the owner can", async () => {
   const owner = await createTestUser("owner");
   const org = await createOrganization(owner, "files-roles");
   const ownerApi = clientFor(owner);
@@ -134,9 +134,7 @@ test("a plain member cannot delete a file, an admin in the same org can", async 
     "FORBIDDEN",
   );
 
-  const admin = await createTestUser("admin");
-  await joinOrganization(admin, org.id, "admin");
-  await clientFor(admin).file.delete({ orgSlug: org.slug, key: upload.key });
+  await ownerApi.file.delete({ orgSlug: org.slug, key: upload.key });
   expect((await ownerApi.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
 });
 

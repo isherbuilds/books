@@ -1,5 +1,4 @@
 import { NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
-import type { ReceiptDetail } from "@accly/api/routers/receipt";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -16,14 +15,7 @@ import { SheetFooter } from "@accly/ui/components/sheet";
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-  type SyntheticEvent,
-} from "react";
+import { useEffect, useRef, type FormEvent, type KeyboardEvent, type SyntheticEvent } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -34,6 +26,7 @@ import { useWatch } from "react-hook-form";
 import { invalidateReceiptState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { errorMessage, errorReason } from "@/lib/orpc-error";
+import { paymentMethodListOptions } from "@/lib/receipts";
 
 const receiptSchema = z
   .object({
@@ -118,13 +111,11 @@ export function ReceiptForm({
     controls[index + 1]?.focus();
   };
 
-  const [posted, setPosted] = useState<ReceiptDetail | null>(null);
   const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
 
   // The receipts list's cache entry; only an active method can take a new receipt.
   const paymentMethods = useQuery({
-    ...orpc.paymentMethod.list.queryOptions({ input: { orgSlug } }),
-    staleTime: 5 * 60_000,
+    ...paymentMethodListOptions(orgSlug),
     select: (methods) => methods.filter((method) => method.active),
   });
 
@@ -145,10 +136,7 @@ export function ReceiptForm({
 
   const post = useMutation(
     orpc.receipt.post.mutationOptions({
-      onSuccess: (receipt) => {
-        setPosted(receipt);
-        void invalidateReceiptState(queryClient, orgSlug, receipt.id);
-      },
+      onSuccess: () => void invalidateReceiptState(queryClient, orgSlug),
       onError: (error) => {
         const reason = errorReason(error);
 
@@ -173,6 +161,9 @@ export function ReceiptForm({
       },
     }),
   );
+
+  // Held until "Post and next" resets the mutation.
+  const posted = post.data;
 
   const submit = form.handleSubmit((values) => {
     const common = {
@@ -233,7 +224,6 @@ export function ReceiptForm({
     form.reset(defaults(documentDate, paymentMethodId));
     post.reset();
     focusPartyNext.current = true;
-    setPosted(null);
   };
 
   // React bubbles portal events through the tree, so the quick-create sheet's

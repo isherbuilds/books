@@ -19,38 +19,7 @@ export type TestUser = {
 
 const TEST_PASSWORD = "integration-test-password";
 
-export async function createTestUser(prefix: string): Promise<TestUser> {
-  const email = `${prefix}-${Bun.randomUUIDv7()}@example.com`;
-  const name = `${prefix} test user`;
-  const { id } = await createUserWithPassword({ email, name, password: TEST_PASSWORD });
-
-  const { headers: responseHeaders } = await auth.api.signInEmail({
-    body: { email, password: TEST_PASSWORD },
-    returnHeaders: true,
-  });
-
-  const setCookie = responseHeaders.get("set-cookie");
-  const cookie = setCookie?.split(";")[0];
-
-  if (!cookie) {
-    throw new Error("Better Auth sign-in did not return a session cookie");
-  }
-
-  return {
-    cookie,
-    headers: new Headers({ cookie }),
-    user: { id, email, name },
-  };
-}
-
-export async function createFounderSession(): Promise<TestUser> {
-  const email = process.env.FOUNDING_EMAIL;
-
-  if (!email) {
-    throw new Error("FOUNDING_EMAIL is required for integration tests");
-  }
-
-  const name = "Founding operator";
+async function signInNewUser(email: string, name: string): Promise<TestUser> {
   const { id } = await createUserWithPassword({ email, name, password: TEST_PASSWORD });
 
   const { headers: responseHeaders } = await auth.api.signInEmail({
@@ -61,7 +30,7 @@ export async function createFounderSession(): Promise<TestUser> {
   const cookie = responseHeaders.get("set-cookie")?.split(";")[0];
 
   if (!cookie) {
-    throw new Error("Better Auth sign-in did not return a founder session cookie");
+    throw new Error(`Better Auth sign-in did not return a session cookie for ${email}`);
   }
 
   return {
@@ -70,6 +39,29 @@ export async function createFounderSession(): Promise<TestUser> {
     user: { id, email, name },
   };
 }
+
+export function createTestUser(prefix: string): Promise<TestUser> {
+  return signInNewUser(`${prefix}-${Bun.randomUUIDv7()}@example.com`, `${prefix} test user`);
+}
+
+export function createFounderSession(): Promise<TestUser> {
+  const email = process.env.FOUNDING_EMAIL;
+
+  if (!email) {
+    throw new Error("FOUNDING_EMAIL is required for integration tests");
+  }
+
+  return signInNewUser(email, "Founding operator");
+}
+
+const ORGANIZATION_ADDRESS = {
+  legalType: "company",
+  pan: "ABCDE1234F",
+  stateCode: "27",
+  addressLine1: "1 Test Street",
+  city: "Pune",
+  pinCode: "411001",
+} as const;
 
 type AccountingOrganizationInput = Parameters<AppRouterClient["organization"]["create"]>[0];
 
@@ -84,15 +76,10 @@ export async function createAccountingOrganization(
   });
 
   return api.organization.create({
+    ...ORGANIZATION_ADDRESS,
     name: `Accounting organization ${suffix}`,
     slug: `accounting-${suffix}`,
-    legalType: "company",
     legalName: `Accounting Organization ${suffix} Private Limited`,
-    pan: "ABCDE1234F",
-    stateCode: "27",
-    addressLine1: "1 Test Street",
-    city: "Pune",
-    pinCode: "411001",
     ...overrides,
   });
 }
@@ -104,15 +91,10 @@ export async function createOrganization(
   return bootstrapOrganization(
     owner.user.id,
     createOrganizationInput.parse({
+      ...ORGANIZATION_ADDRESS,
       name,
       slug: `${name}-${uniqueSuffix()}`,
-      legalType: "company",
       legalName: name,
-      pan: "ABCDE1234F",
-      stateCode: "27",
-      addressLine1: "1 Test Street",
-      city: "Pune",
-      pinCode: "411001",
     }),
   );
 }
@@ -120,7 +102,7 @@ export async function createOrganization(
 export async function joinOrganization(
   joiner: TestUser,
   organizationId: string,
-  role: RoleKey = "reception",
+  role: RoleKey = "operator",
 ): Promise<void> {
   await auth.api.addMember({
     body: { userId: joiner.user.id, organizationId, role },

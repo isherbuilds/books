@@ -1,3 +1,4 @@
+import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -23,12 +24,11 @@ import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
 import { dateRangeLabel } from "@/lib/date-presets";
-import { useCan } from "@/lib/membership";
+import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
-import { orpc } from "@/lib/orpc";
 import { partyListOptions } from "@/lib/parties";
-import { receiptListOptions } from "@/lib/receipts";
+import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
 
 // Mirror receipt.list's enums, kept local so no server schema module reaches the
 // client (hard rule 6). "against" joins once it can be posted.
@@ -44,10 +44,10 @@ const SETTLEMENT_LABELS = { advance: "Advance", direct: "Direct" } as const;
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
   q: z.string().trim().min(1).max(100).optional().catch(undefined),
-  partyId: z.string().uuid().optional().catch(undefined),
+  partyId: z.uuid().optional().catch(undefined),
   from: z.iso.date().optional().catch(undefined),
   to: z.iso.date().optional().catch(undefined),
-  paymentMethodIds: z.array(z.string().uuid()).min(1).max(20).optional().catch(undefined),
+  paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional().catch(undefined),
   state: z.enum(RECEIPT_STATES).optional().catch(undefined),
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
 });
@@ -59,7 +59,15 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
   validateSearch: receiptSearch,
   // `create` stays out: opening the overlay must not refetch the list.
   loaderDeps: ({ search: { create: _create, ...filters } }) => filters,
+  // The method master starts here, not after mount, so it rides the list's batch
+  // instead of a second round trip. Only the list blocks the page.
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
+    const membership = await queryClient.query(membershipOptions(orgSlug));
+
+    if (authorize(membership.roles, { paymentMethod: ["read"] })) {
+      void queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {});
+    }
+
     await queryClient.infiniteQuery(receiptListOptions(orgSlug, deps)).catch(() => {});
   },
   component: ReceiptsRoute,
@@ -84,11 +92,7 @@ function ReceiptsRoute() {
   });
 
   // Every method, not only active ones: old receipts name retired methods.
-  const methods = useQuery({
-    ...orpc.paymentMethod.list.queryOptions({ input: { orgSlug } }),
-    staleTime: 5 * 60_000,
-    enabled: canReadMethods,
-  });
+  const methods = useQuery({ ...paymentMethodListOptions(orgSlug), enabled: canReadMethods });
 
   // The party chip needs a name; the master is cached and shared with the palette.
   const parties = useQuery({
@@ -322,11 +326,6 @@ function ReceiptsRoute() {
           errorTitle="Could not load receipts"
           empty={empty}
           activeRowId={activeRowId}
-          growth={{
-            hasMore: receipts.hasNextPage,
-            pending: receipts.isFetchingNextPage,
-            loadMore: () => void receipts.fetchNextPage(),
-          }}
         />
         <LoadMore query={receipts} shown={rows.length} />
         {/* The record Sheet opens over the list, which stays mounted. */}

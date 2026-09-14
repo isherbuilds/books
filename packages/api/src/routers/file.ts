@@ -1,5 +1,4 @@
 import { db } from "@accly/db";
-import { attachments } from "@accly/db/schema/attachments";
 import { file as fileTable } from "@accly/db/schema/file";
 import { createReadUrl, createUploadUrl, deleteObject, maxUploadBytes } from "@accly/storage";
 import { ORPCError } from "@orpc/server";
@@ -209,41 +208,14 @@ export const fileRouter = {
   delete: orgProcedure({ file: ["delete"] }, keyInput).handler(async ({ context, input }) => {
     assertKeyInScope(input.key, context.scope, "file.delete");
 
-    // `attachPrescription` takes a compatible key-share lock before inserting the FK,
-    // so attach and delete serialize instead of raising a constraint error.
-    await db.transaction(async (tx) => {
-      const [lockedFile] = await tx
-        .select({ id: fileTable.id })
-        .from(fileTable)
-        .where(and(eq(fileTable.id, input.key), eq(fileTable.orgId, context.scope.orgId)))
-        .limit(1)
-        .for("update");
+    const [deleted] = await db
+      .delete(fileTable)
+      .where(and(eq(fileTable.id, input.key), eq(fileTable.orgId, context.scope.orgId)))
+      .returning({ id: fileTable.id });
 
-      if (!lockedFile) {
-        throw new ORPCError("NOT_FOUND", { message: "File not found" });
-      }
-
-      const [attached] = await tx
-        .select({ id: attachments.id })
-        .from(attachments)
-        .where(and(eq(attachments.orgId, context.scope.orgId), eq(attachments.fileId, input.key)))
-        .limit(1);
-
-      if (attached) {
-        throw new ORPCError("CONFLICT", {
-          message: "This file is attached to a record. Detach it there before deleting it.",
-        });
-      }
-
-      const [deleted] = await tx
-        .delete(fileTable)
-        .where(and(eq(fileTable.id, input.key), eq(fileTable.orgId, context.scope.orgId)))
-        .returning({ id: fileTable.id });
-
-      if (!deleted) {
-        throw new ORPCError("NOT_FOUND", { message: "File not found" });
-      }
-    });
+    if (!deleted) {
+      throw new ORPCError("NOT_FOUND", { message: "File not found" });
+    }
 
     // Issued right after the committed delete, so no storage failure can sit between
     // the delete and its record.

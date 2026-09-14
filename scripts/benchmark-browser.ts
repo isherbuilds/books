@@ -1,3 +1,5 @@
+import { axi as runAxi, parseEvalResult } from "./chrome-axi";
+
 const BASE_URL = process.env.PERF_BASE_URL ?? "http://127.0.0.1:3101";
 
 const PROFILE_DIR = process.env.PERF_CHROME_PROFILE ?? "/tmp/accly-perf-chrome-profile";
@@ -11,19 +13,19 @@ const NETWORK = process.env.PERF_NETWORK;
 const BROWSER_LABEL = process.env.PERF_BROWSER_LABEL ?? "Headless Chrome via chrome-devtools-axi";
 
 const defaultRoutes = [
-  "/meridian-traders/dashboard",
-  "/meridian-traders/opd",
+  "/meridian-traders/receipts",
+  "/meridian-traders/parties",
+  "/meridian-traders/settings/banks",
   "/meridian-traders/settings/members",
-  "/meridian-traders/billing",
 ] as const;
 
 const routes = process.env.PERF_ROUTES?.split(",").filter(Boolean) ?? defaultRoutes;
 
 const expectedHeadings: Record<string, string> = {
-  "/meridian-traders/dashboard": "Dashboard",
-  "/meridian-traders/opd": "OPD",
+  "/meridian-traders/receipts": "Receipts",
+  "/meridian-traders/parties": "Parties",
+  "/meridian-traders/settings/banks": "Banks",
   "/meridian-traders/settings/members": "Members",
-  "/meridian-traders/billing": "Billing",
 };
 
 const browserEnv = {
@@ -71,26 +73,7 @@ const measurementExpression = `async () => {
   };
 }`;
 
-async function axi(args: string[], tolerateFailure = false): Promise<string> {
-  const process = Bun.spawn(["./node_modules/.bin/chrome-devtools-axi", ...args], {
-    cwd: import.meta.dir + "/..",
-    env: browserEnv,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-
-  if (exitCode !== 0 && !tolerateFailure) {
-    throw new Error(`chrome-devtools-axi ${args[0]} failed: ${stderr || stdout}`);
-  }
-
-  return stdout;
-}
+const axi = (args: string[], tolerateFailure = false) => runAxi(browserEnv, args, tolerateFailure);
 
 function assertMeasurement(route: string, measurement: Record<string, unknown>): void {
   const expectedPath = new URL(route, BASE_URL).pathname;
@@ -126,15 +109,6 @@ function assertMeasurement(route: string, measurement: Record<string, unknown>):
   }
 }
 
-function parseMeasurement(output: string): Record<string, unknown> {
-  const line = output.split("\n").find((candidate) => candidate.startsWith("result: "));
-
-  if (!line) throw new Error(`No measurement result in:\n${output}`);
-  const encoded = JSON.parse(line.slice("result: ".length));
-
-  return JSON.parse(encoded);
-}
-
 await axi(["stop"], true);
 
 const samples: Record<string, Array<Record<string, unknown>>> = {};
@@ -156,7 +130,7 @@ try {
       if (NETWORK) await axi(["emulate", "--network", NETWORK]);
       await axi(["open", new URL(route, BASE_URL).toString()]);
       await axi(["wait", "500"]);
-      const result = parseMeasurement(await axi(["eval", measurementExpression]));
+      const result = parseEvalResult(await axi(["eval", measurementExpression]));
       assertMeasurement(route, result);
 
       if (index > 0) samples[route]?.push(result);

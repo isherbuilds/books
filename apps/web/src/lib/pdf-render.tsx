@@ -73,24 +73,17 @@ function footerBand(caption: string) {
 
 export async function renderPdf(
   element: NodeInput,
-  options: { fileName: string; title: string; width?: number },
+  options: { fileName: string; title: string },
 ): Promise<{ bytes: Uint8Array; fileName: string }> {
-  const common = {
+  const bytes = await render(element, {
     fontFamilies: ["sans-serif", "Inter", "Noto Sans Devanagari"],
     fonts,
     lang: "en-IN",
     metadata: { creator: "Accly Books", title: options.title },
-  };
-
-  const bytes =
-    options.width === undefined
-      ? await render(element, {
-          ...common,
-          footer: footerBand(options.title),
-          margin: PAGE_MARGIN,
-          size: "a4",
-        })
-      : await render(element, { ...common, viewport: { width: options.width } });
+    footer: footerBand(options.title),
+    margin: PAGE_MARGIN,
+    size: "a4",
+  });
 
   return { bytes, fileName: options.fileName };
 }

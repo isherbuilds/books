@@ -22,7 +22,6 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as OrgSlugIndexRouteImport } from './routes/$orgSlug/index'
-import { Route as OrgSlugDashboardRouteImport } from './routes/$orgSlug/dashboard'
 import { Route as OrgSlugFilesRouteImport } from './routes/$orgSlug/files'
 import { Route as OrgSlugOnboardingRouteImport } from './routes/$orgSlug/onboarding'
 import { Route as OrgSlugPartiesRouteRouteImport } from './routes/$orgSlug/parties/route'
@@ -30,38 +29,17 @@ import { Route as OrgSlugReceiptsRouteRouteImport } from './routes/$orgSlug/rece
 import { Route as OrgSlugSettingsRouteRouteImport } from './routes/$orgSlug/settings/route'
 import { Route as ChangelogIndexRouteImport } from './routes/changelog.index'
 import { Route as ChangelogSlugRouteImport } from './routes/changelog.$slug'
-import { Route as OrgSlugBillingIndexRouteImport } from './routes/$orgSlug/billing/index'
-import { Route as OrgSlugCustomersIndexRouteImport } from './routes/$orgSlug/customers/index'
-import { Route as OrgSlugCustomersCustomerIdRouteImport } from './routes/$orgSlug/customers/$customerId'
-import { Route as OrgSlugOpdIndexRouteImport } from './routes/$orgSlug/opd/index'
-import { Route as OrgSlugOpdAppointmentIdRouteRouteImport } from './routes/$orgSlug/opd/$appointmentId/route'
-import { Route as OrgSlugOpdNewRouteImport } from './routes/$orgSlug/opd/new'
 import { Route as OrgSlugPartiesPartyIdRouteImport } from './routes/$orgSlug/parties_.$partyId'
 import { Route as OrgSlugReceiptsReceiptIdRouteImport } from './routes/$orgSlug/receipts/$receiptId'
-import { Route as OrgSlugReportsIndexRouteImport } from './routes/$orgSlug/reports/index'
-import { Route as OrgSlugReportsBalanceSheetRouteImport } from './routes/$orgSlug/reports/balance-sheet'
-import { Route as OrgSlugReportsDailyCollectionsRouteImport } from './routes/$orgSlug/reports/daily-collections'
-import { Route as OrgSlugReportsGstRouteImport } from './routes/$orgSlug/reports/gst'
-import { Route as OrgSlugReportsOpdRegisterRouteImport } from './routes/$orgSlug/reports/opd-register'
-import { Route as OrgSlugReportsTrialBalanceRouteImport } from './routes/$orgSlug/reports/trial-balance'
 import { Route as OrgSlugSettingsIndexRouteImport } from './routes/$orgSlug/settings/index'
 import { Route as OrgSlugSettingsAuditRouteImport } from './routes/$orgSlug/settings/audit'
-import { Route as OrgSlugSettingsItemsRouteImport } from './routes/$orgSlug/settings/items'
+import { Route as OrgSlugSettingsBanksRouteImport } from './routes/$orgSlug/settings/banks'
 import { Route as OrgSlugSettingsMembersRouteImport } from './routes/$orgSlug/settings/members'
 import { Route as OrgSlugSettingsOrganizationRouteImport } from './routes/$orgSlug/settings/organization'
-import { Route as OrgSlugSettingsPayersRouteImport } from './routes/$orgSlug/settings/payers'
-import { Route as OrgSlugSettingsStaffRouteImport } from './routes/$orgSlug/settings/staff'
-import { Route as OrgSlugBillingInvoicesInvoiceIdRouteImport } from './routes/$orgSlug/billing/invoices.$invoiceId'
-import { Route as OrgSlugOpdAppointmentIdIndexRouteImport } from './routes/$orgSlug/opd/$appointmentId/index'
-import { Route as OrgSlugOpdAppointmentIdBillingRouteImport } from './routes/$orgSlug/opd/$appointmentId/billing'
 import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlug/parties_.$partyId.index'
 import { Route as OrgSlugPartiesPartyIdLedgerRouteImport } from './routes/$orgSlug/parties_.$partyId.ledger'
 import { Route as OrgSlugPartiesPartyIdReceiptsRouteImport } from './routes/$orgSlug/parties_.$partyId.receipts'
 import { Route as ApiOrgSlugReceiptsReceiptIdPdfRouteImport } from './routes/api.$orgSlug.receipts.$receiptId.pdf'
-import { Route as OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRouteImport } from './routes/$orgSlug/billing/invoices.$invoiceId_.credit-note.$creditNoteId'
-import { Route as OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRouteImport } from './routes/$orgSlug/billing/invoices.$invoiceId_.receipt.$paymentId'
-import { Route as OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRouteImport } from './routes/$orgSlug/billing/invoices.$invoiceId_.refund.$refundId'
-import { Route as ApiOrgSlugBillingInvoicesInvoiceIdPdfRouteImport } from './routes/api.$orgSlug.billing.invoices.$invoiceId.pdf'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -128,11 +106,6 @@ const OrgSlugIndexRoute = OrgSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => OrgSlugRouteRoute,
 } as any)
-const OrgSlugDashboardRoute = OrgSlugDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
 const OrgSlugFilesRoute = OrgSlugFilesRouteImport.update({
   id: '/files',
   path: '/files',
@@ -168,38 +141,6 @@ const ChangelogSlugRoute = ChangelogSlugRouteImport.update({
   path: '/changelog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgSlugBillingIndexRoute = OrgSlugBillingIndexRouteImport.update({
-  id: '/billing/',
-  path: '/billing/',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
-const OrgSlugCustomersIndexRoute = OrgSlugCustomersIndexRouteImport.update({
-  id: '/customers/',
-  path: '/customers/',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
-const OrgSlugCustomersCustomerIdRoute =
-  OrgSlugCustomersCustomerIdRouteImport.update({
-    id: '/customers/$customerId',
-    path: '/customers/$customerId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugOpdIndexRoute = OrgSlugOpdIndexRouteImport.update({
-  id: '/opd/',
-  path: '/opd/',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
-const OrgSlugOpdAppointmentIdRouteRoute =
-  OrgSlugOpdAppointmentIdRouteRouteImport.update({
-    id: '/opd/$appointmentId',
-    path: '/opd/$appointmentId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugOpdNewRoute = OrgSlugOpdNewRouteImport.update({
-  id: '/opd/new',
-  path: '/opd/new',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
 const OrgSlugPartiesPartyIdRoute = OrgSlugPartiesPartyIdRouteImport.update({
   id: '/parties_/$partyId',
   path: '/parties/$partyId',
@@ -211,40 +152,6 @@ const OrgSlugReceiptsReceiptIdRoute =
     path: '/$receiptId',
     getParentRoute: () => OrgSlugReceiptsRouteRoute,
   } as any)
-const OrgSlugReportsIndexRoute = OrgSlugReportsIndexRouteImport.update({
-  id: '/reports/',
-  path: '/reports/',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
-const OrgSlugReportsBalanceSheetRoute =
-  OrgSlugReportsBalanceSheetRouteImport.update({
-    id: '/reports/balance-sheet',
-    path: '/reports/balance-sheet',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugReportsDailyCollectionsRoute =
-  OrgSlugReportsDailyCollectionsRouteImport.update({
-    id: '/reports/daily-collections',
-    path: '/reports/daily-collections',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugReportsGstRoute = OrgSlugReportsGstRouteImport.update({
-  id: '/reports/gst',
-  path: '/reports/gst',
-  getParentRoute: () => OrgSlugRouteRoute,
-} as any)
-const OrgSlugReportsOpdRegisterRoute =
-  OrgSlugReportsOpdRegisterRouteImport.update({
-    id: '/reports/opd-register',
-    path: '/reports/opd-register',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugReportsTrialBalanceRoute =
-  OrgSlugReportsTrialBalanceRouteImport.update({
-    id: '/reports/trial-balance',
-    path: '/reports/trial-balance',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
 const OrgSlugSettingsIndexRoute = OrgSlugSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -255,9 +162,9 @@ const OrgSlugSettingsAuditRoute = OrgSlugSettingsAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
-const OrgSlugSettingsItemsRoute = OrgSlugSettingsItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
+const OrgSlugSettingsBanksRoute = OrgSlugSettingsBanksRouteImport.update({
+  id: '/banks',
+  path: '/banks',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
 const OrgSlugSettingsMembersRoute = OrgSlugSettingsMembersRouteImport.update({
@@ -270,34 +177,6 @@ const OrgSlugSettingsOrganizationRoute =
     id: '/organization',
     path: '/organization',
     getParentRoute: () => OrgSlugSettingsRouteRoute,
-  } as any)
-const OrgSlugSettingsPayersRoute = OrgSlugSettingsPayersRouteImport.update({
-  id: '/payers',
-  path: '/payers',
-  getParentRoute: () => OrgSlugSettingsRouteRoute,
-} as any)
-const OrgSlugSettingsStaffRoute = OrgSlugSettingsStaffRouteImport.update({
-  id: '/staff',
-  path: '/staff',
-  getParentRoute: () => OrgSlugSettingsRouteRoute,
-} as any)
-const OrgSlugBillingInvoicesInvoiceIdRoute =
-  OrgSlugBillingInvoicesInvoiceIdRouteImport.update({
-    id: '/billing/invoices/$invoiceId',
-    path: '/billing/invoices/$invoiceId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugOpdAppointmentIdIndexRoute =
-  OrgSlugOpdAppointmentIdIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => OrgSlugOpdAppointmentIdRouteRoute,
-  } as any)
-const OrgSlugOpdAppointmentIdBillingRoute =
-  OrgSlugOpdAppointmentIdBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => OrgSlugOpdAppointmentIdRouteRoute,
   } as any)
 const OrgSlugPartiesPartyIdIndexRoute =
   OrgSlugPartiesPartyIdIndexRouteImport.update({
@@ -323,30 +202,6 @@ const ApiOrgSlugReceiptsReceiptIdPdfRoute =
     path: '/api/$orgSlug/receipts/$receiptId/pdf',
     getParentRoute: () => rootRouteImport,
   } as any)
-const OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute =
-  OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRouteImport.update({
-    id: '/billing/invoices/$invoiceId_/credit-note/$creditNoteId',
-    path: '/billing/invoices/$invoiceId/credit-note/$creditNoteId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute =
-  OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRouteImport.update({
-    id: '/billing/invoices/$invoiceId_/receipt/$paymentId',
-    path: '/billing/invoices/$invoiceId/receipt/$paymentId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute =
-  OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRouteImport.update({
-    id: '/billing/invoices/$invoiceId_/refund/$refundId',
-    path: '/billing/invoices/$invoiceId/refund/$refundId',
-    getParentRoute: () => OrgSlugRouteRoute,
-  } as any)
-const ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute =
-  ApiOrgSlugBillingInvoicesInvoiceIdPdfRouteImport.update({
-    id: '/api/$orgSlug/billing/invoices/$invoiceId/pdf',
-    path: '/api/$orgSlug/billing/invoices/$invoiceId/pdf',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -364,44 +219,22 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
   '/$orgSlug/settings': typeof OrgSlugSettingsRouteRouteWithChildren
-  '/$orgSlug/dashboard': typeof OrgSlugDashboardRoute
   '/$orgSlug/files': typeof OrgSlugFilesRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/changelog/': typeof ChangelogIndexRoute
-  '/$orgSlug/opd/$appointmentId': typeof OrgSlugOpdAppointmentIdRouteRouteWithChildren
-  '/$orgSlug/customers/$customerId': typeof OrgSlugCustomersCustomerIdRoute
-  '/$orgSlug/opd/new': typeof OrgSlugOpdNewRoute
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
-  '/$orgSlug/reports/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
-  '/$orgSlug/reports/daily-collections': typeof OrgSlugReportsDailyCollectionsRoute
-  '/$orgSlug/reports/gst': typeof OrgSlugReportsGstRoute
-  '/$orgSlug/reports/opd-register': typeof OrgSlugReportsOpdRegisterRoute
-  '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
-  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
-  '/$orgSlug/settings/payers': typeof OrgSlugSettingsPayersRoute
-  '/$orgSlug/settings/staff': typeof OrgSlugSettingsStaffRoute
-  '/$orgSlug/billing/': typeof OrgSlugBillingIndexRoute
-  '/$orgSlug/customers/': typeof OrgSlugCustomersIndexRoute
-  '/$orgSlug/opd/': typeof OrgSlugOpdIndexRoute
-  '/$orgSlug/reports/': typeof OrgSlugReportsIndexRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
-  '/$orgSlug/billing/invoices/$invoiceId': typeof OrgSlugBillingInvoicesInvoiceIdRoute
-  '/$orgSlug/opd/$appointmentId/billing': typeof OrgSlugOpdAppointmentIdBillingRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
   '/$orgSlug/parties/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
-  '/$orgSlug/opd/$appointmentId/': typeof OrgSlugOpdAppointmentIdIndexRoute
   '/$orgSlug/parties/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
-  '/$orgSlug/billing/invoices/$invoiceId/credit-note/$creditNoteId': typeof OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId/receipt/$paymentId': typeof OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId/refund/$refundId': typeof OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute
-  '/api/$orgSlug/billing/invoices/$invoiceId/pdf': typeof ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -417,42 +250,21 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
-  '/$orgSlug/dashboard': typeof OrgSlugDashboardRoute
   '/$orgSlug/files': typeof OrgSlugFilesRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug': typeof OrgSlugIndexRoute
   '/changelog': typeof ChangelogIndexRoute
-  '/$orgSlug/customers/$customerId': typeof OrgSlugCustomersCustomerIdRoute
-  '/$orgSlug/opd/new': typeof OrgSlugOpdNewRoute
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
-  '/$orgSlug/reports/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
-  '/$orgSlug/reports/daily-collections': typeof OrgSlugReportsDailyCollectionsRoute
-  '/$orgSlug/reports/gst': typeof OrgSlugReportsGstRoute
-  '/$orgSlug/reports/opd-register': typeof OrgSlugReportsOpdRegisterRoute
-  '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
-  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
-  '/$orgSlug/settings/payers': typeof OrgSlugSettingsPayersRoute
-  '/$orgSlug/settings/staff': typeof OrgSlugSettingsStaffRoute
-  '/$orgSlug/billing': typeof OrgSlugBillingIndexRoute
-  '/$orgSlug/customers': typeof OrgSlugCustomersIndexRoute
-  '/$orgSlug/opd': typeof OrgSlugOpdIndexRoute
-  '/$orgSlug/reports': typeof OrgSlugReportsIndexRoute
   '/$orgSlug/settings': typeof OrgSlugSettingsIndexRoute
-  '/$orgSlug/billing/invoices/$invoiceId': typeof OrgSlugBillingInvoicesInvoiceIdRoute
-  '/$orgSlug/opd/$appointmentId/billing': typeof OrgSlugOpdAppointmentIdBillingRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
   '/$orgSlug/parties/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
-  '/$orgSlug/opd/$appointmentId': typeof OrgSlugOpdAppointmentIdIndexRoute
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
-  '/$orgSlug/billing/invoices/$invoiceId/credit-note/$creditNoteId': typeof OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId/receipt/$paymentId': typeof OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId/refund/$refundId': typeof OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute
-  '/api/$orgSlug/billing/invoices/$invoiceId/pdf': typeof ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -471,44 +283,22 @@ export interface FileRoutesById {
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
   '/$orgSlug/settings': typeof OrgSlugSettingsRouteRouteWithChildren
-  '/$orgSlug/dashboard': typeof OrgSlugDashboardRoute
   '/$orgSlug/files': typeof OrgSlugFilesRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/changelog/': typeof ChangelogIndexRoute
-  '/$orgSlug/opd/$appointmentId': typeof OrgSlugOpdAppointmentIdRouteRouteWithChildren
-  '/$orgSlug/customers/$customerId': typeof OrgSlugCustomersCustomerIdRoute
-  '/$orgSlug/opd/new': typeof OrgSlugOpdNewRoute
   '/$orgSlug/parties_/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
-  '/$orgSlug/reports/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
-  '/$orgSlug/reports/daily-collections': typeof OrgSlugReportsDailyCollectionsRoute
-  '/$orgSlug/reports/gst': typeof OrgSlugReportsGstRoute
-  '/$orgSlug/reports/opd-register': typeof OrgSlugReportsOpdRegisterRoute
-  '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
-  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
-  '/$orgSlug/settings/payers': typeof OrgSlugSettingsPayersRoute
-  '/$orgSlug/settings/staff': typeof OrgSlugSettingsStaffRoute
-  '/$orgSlug/billing/': typeof OrgSlugBillingIndexRoute
-  '/$orgSlug/customers/': typeof OrgSlugCustomersIndexRoute
-  '/$orgSlug/opd/': typeof OrgSlugOpdIndexRoute
-  '/$orgSlug/reports/': typeof OrgSlugReportsIndexRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
-  '/$orgSlug/billing/invoices/$invoiceId': typeof OrgSlugBillingInvoicesInvoiceIdRoute
-  '/$orgSlug/opd/$appointmentId/billing': typeof OrgSlugOpdAppointmentIdBillingRoute
   '/$orgSlug/parties_/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
   '/$orgSlug/parties_/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
-  '/$orgSlug/opd/$appointmentId/': typeof OrgSlugOpdAppointmentIdIndexRoute
   '/$orgSlug/parties_/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
-  '/$orgSlug/billing/invoices/$invoiceId_/credit-note/$creditNoteId': typeof OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId_/receipt/$paymentId': typeof OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute
-  '/$orgSlug/billing/invoices/$invoiceId_/refund/$refundId': typeof OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute
-  '/api/$orgSlug/billing/invoices/$invoiceId/pdf': typeof ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -528,44 +318,22 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
     | '/$orgSlug/settings'
-    | '/$orgSlug/dashboard'
     | '/$orgSlug/files'
     | '/$orgSlug/onboarding'
     | '/changelog/$slug'
     | '/$orgSlug/'
     | '/changelog/'
-    | '/$orgSlug/opd/$appointmentId'
-    | '/$orgSlug/customers/$customerId'
-    | '/$orgSlug/opd/new'
     | '/$orgSlug/parties/$partyId'
     | '/$orgSlug/receipts/$receiptId'
-    | '/$orgSlug/reports/balance-sheet'
-    | '/$orgSlug/reports/daily-collections'
-    | '/$orgSlug/reports/gst'
-    | '/$orgSlug/reports/opd-register'
-    | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
-    | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
-    | '/$orgSlug/settings/payers'
-    | '/$orgSlug/settings/staff'
-    | '/$orgSlug/billing/'
-    | '/$orgSlug/customers/'
-    | '/$orgSlug/opd/'
-    | '/$orgSlug/reports/'
     | '/$orgSlug/settings/'
-    | '/$orgSlug/billing/invoices/$invoiceId'
-    | '/$orgSlug/opd/$appointmentId/billing'
     | '/$orgSlug/parties/$partyId/ledger'
     | '/$orgSlug/parties/$partyId/receipts'
-    | '/$orgSlug/opd/$appointmentId/'
     | '/$orgSlug/parties/$partyId/'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
-    | '/$orgSlug/billing/invoices/$invoiceId/credit-note/$creditNoteId'
-    | '/$orgSlug/billing/invoices/$invoiceId/receipt/$paymentId'
-    | '/$orgSlug/billing/invoices/$invoiceId/refund/$refundId'
-    | '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -581,42 +349,21 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
-    | '/$orgSlug/dashboard'
     | '/$orgSlug/files'
     | '/$orgSlug/onboarding'
     | '/changelog/$slug'
     | '/$orgSlug'
     | '/changelog'
-    | '/$orgSlug/customers/$customerId'
-    | '/$orgSlug/opd/new'
     | '/$orgSlug/receipts/$receiptId'
-    | '/$orgSlug/reports/balance-sheet'
-    | '/$orgSlug/reports/daily-collections'
-    | '/$orgSlug/reports/gst'
-    | '/$orgSlug/reports/opd-register'
-    | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
-    | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
-    | '/$orgSlug/settings/payers'
-    | '/$orgSlug/settings/staff'
-    | '/$orgSlug/billing'
-    | '/$orgSlug/customers'
-    | '/$orgSlug/opd'
-    | '/$orgSlug/reports'
     | '/$orgSlug/settings'
-    | '/$orgSlug/billing/invoices/$invoiceId'
-    | '/$orgSlug/opd/$appointmentId/billing'
     | '/$orgSlug/parties/$partyId/ledger'
     | '/$orgSlug/parties/$partyId/receipts'
-    | '/$orgSlug/opd/$appointmentId'
     | '/$orgSlug/parties/$partyId'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
-    | '/$orgSlug/billing/invoices/$invoiceId/credit-note/$creditNoteId'
-    | '/$orgSlug/billing/invoices/$invoiceId/receipt/$paymentId'
-    | '/$orgSlug/billing/invoices/$invoiceId/refund/$refundId'
-    | '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
   id:
     | '__root__'
     | '/'
@@ -634,44 +381,22 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
     | '/$orgSlug/settings'
-    | '/$orgSlug/dashboard'
     | '/$orgSlug/files'
     | '/$orgSlug/onboarding'
     | '/changelog/$slug'
     | '/$orgSlug/'
     | '/changelog/'
-    | '/$orgSlug/opd/$appointmentId'
-    | '/$orgSlug/customers/$customerId'
-    | '/$orgSlug/opd/new'
     | '/$orgSlug/parties_/$partyId'
     | '/$orgSlug/receipts/$receiptId'
-    | '/$orgSlug/reports/balance-sheet'
-    | '/$orgSlug/reports/daily-collections'
-    | '/$orgSlug/reports/gst'
-    | '/$orgSlug/reports/opd-register'
-    | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
-    | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
-    | '/$orgSlug/settings/payers'
-    | '/$orgSlug/settings/staff'
-    | '/$orgSlug/billing/'
-    | '/$orgSlug/customers/'
-    | '/$orgSlug/opd/'
-    | '/$orgSlug/reports/'
     | '/$orgSlug/settings/'
-    | '/$orgSlug/billing/invoices/$invoiceId'
-    | '/$orgSlug/opd/$appointmentId/billing'
     | '/$orgSlug/parties_/$partyId/ledger'
     | '/$orgSlug/parties_/$partyId/receipts'
-    | '/$orgSlug/opd/$appointmentId/'
     | '/$orgSlug/parties_/$partyId/'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
-    | '/$orgSlug/billing/invoices/$invoiceId_/credit-note/$creditNoteId'
-    | '/$orgSlug/billing/invoices/$invoiceId_/receipt/$paymentId'
-    | '/$orgSlug/billing/invoices/$invoiceId_/refund/$refundId'
-    | '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -690,7 +415,6 @@ export interface RootRouteChildren {
   ChangelogSlugRoute: typeof ChangelogSlugRoute
   ChangelogIndexRoute: typeof ChangelogIndexRoute
   ApiOrgSlugReceiptsReceiptIdPdfRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
-  ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute: typeof ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -786,13 +510,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugIndexRouteImport
       parentRoute: typeof OrgSlugRouteRoute
     }
-    '/$orgSlug/dashboard': {
-      id: '/$orgSlug/dashboard'
-      path: '/dashboard'
-      fullPath: '/$orgSlug/dashboard'
-      preLoaderRoute: typeof OrgSlugDashboardRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
     '/$orgSlug/files': {
       id: '/$orgSlug/files'
       path: '/files'
@@ -842,48 +559,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChangelogSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$orgSlug/billing/': {
-      id: '/$orgSlug/billing/'
-      path: '/billing'
-      fullPath: '/$orgSlug/billing/'
-      preLoaderRoute: typeof OrgSlugBillingIndexRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/customers/': {
-      id: '/$orgSlug/customers/'
-      path: '/customers'
-      fullPath: '/$orgSlug/customers/'
-      preLoaderRoute: typeof OrgSlugCustomersIndexRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/customers/$customerId': {
-      id: '/$orgSlug/customers/$customerId'
-      path: '/customers/$customerId'
-      fullPath: '/$orgSlug/customers/$customerId'
-      preLoaderRoute: typeof OrgSlugCustomersCustomerIdRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/opd/': {
-      id: '/$orgSlug/opd/'
-      path: '/opd'
-      fullPath: '/$orgSlug/opd/'
-      preLoaderRoute: typeof OrgSlugOpdIndexRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/opd/$appointmentId': {
-      id: '/$orgSlug/opd/$appointmentId'
-      path: '/opd/$appointmentId'
-      fullPath: '/$orgSlug/opd/$appointmentId'
-      preLoaderRoute: typeof OrgSlugOpdAppointmentIdRouteRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/opd/new': {
-      id: '/$orgSlug/opd/new'
-      path: '/opd/new'
-      fullPath: '/$orgSlug/opd/new'
-      preLoaderRoute: typeof OrgSlugOpdNewRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
     '/$orgSlug/parties_/$partyId': {
       id: '/$orgSlug/parties_/$partyId'
       path: '/parties/$partyId'
@@ -897,48 +572,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/$orgSlug/receipts/$receiptId'
       preLoaderRoute: typeof OrgSlugReceiptsReceiptIdRouteImport
       parentRoute: typeof OrgSlugReceiptsRouteRoute
-    }
-    '/$orgSlug/reports/': {
-      id: '/$orgSlug/reports/'
-      path: '/reports'
-      fullPath: '/$orgSlug/reports/'
-      preLoaderRoute: typeof OrgSlugReportsIndexRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/reports/balance-sheet': {
-      id: '/$orgSlug/reports/balance-sheet'
-      path: '/reports/balance-sheet'
-      fullPath: '/$orgSlug/reports/balance-sheet'
-      preLoaderRoute: typeof OrgSlugReportsBalanceSheetRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/reports/daily-collections': {
-      id: '/$orgSlug/reports/daily-collections'
-      path: '/reports/daily-collections'
-      fullPath: '/$orgSlug/reports/daily-collections'
-      preLoaderRoute: typeof OrgSlugReportsDailyCollectionsRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/reports/gst': {
-      id: '/$orgSlug/reports/gst'
-      path: '/reports/gst'
-      fullPath: '/$orgSlug/reports/gst'
-      preLoaderRoute: typeof OrgSlugReportsGstRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/reports/opd-register': {
-      id: '/$orgSlug/reports/opd-register'
-      path: '/reports/opd-register'
-      fullPath: '/$orgSlug/reports/opd-register'
-      preLoaderRoute: typeof OrgSlugReportsOpdRegisterRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/reports/trial-balance': {
-      id: '/$orgSlug/reports/trial-balance'
-      path: '/reports/trial-balance'
-      fullPath: '/$orgSlug/reports/trial-balance'
-      preLoaderRoute: typeof OrgSlugReportsTrialBalanceRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
     }
     '/$orgSlug/settings/': {
       id: '/$orgSlug/settings/'
@@ -954,11 +587,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugSettingsAuditRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
-    '/$orgSlug/settings/items': {
-      id: '/$orgSlug/settings/items'
-      path: '/items'
-      fullPath: '/$orgSlug/settings/items'
-      preLoaderRoute: typeof OrgSlugSettingsItemsRouteImport
+    '/$orgSlug/settings/banks': {
+      id: '/$orgSlug/settings/banks'
+      path: '/banks'
+      fullPath: '/$orgSlug/settings/banks'
+      preLoaderRoute: typeof OrgSlugSettingsBanksRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
     '/$orgSlug/settings/members': {
@@ -974,41 +607,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/$orgSlug/settings/organization'
       preLoaderRoute: typeof OrgSlugSettingsOrganizationRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
-    }
-    '/$orgSlug/settings/payers': {
-      id: '/$orgSlug/settings/payers'
-      path: '/payers'
-      fullPath: '/$orgSlug/settings/payers'
-      preLoaderRoute: typeof OrgSlugSettingsPayersRouteImport
-      parentRoute: typeof OrgSlugSettingsRouteRoute
-    }
-    '/$orgSlug/settings/staff': {
-      id: '/$orgSlug/settings/staff'
-      path: '/staff'
-      fullPath: '/$orgSlug/settings/staff'
-      preLoaderRoute: typeof OrgSlugSettingsStaffRouteImport
-      parentRoute: typeof OrgSlugSettingsRouteRoute
-    }
-    '/$orgSlug/billing/invoices/$invoiceId': {
-      id: '/$orgSlug/billing/invoices/$invoiceId'
-      path: '/billing/invoices/$invoiceId'
-      fullPath: '/$orgSlug/billing/invoices/$invoiceId'
-      preLoaderRoute: typeof OrgSlugBillingInvoicesInvoiceIdRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/opd/$appointmentId/': {
-      id: '/$orgSlug/opd/$appointmentId/'
-      path: '/'
-      fullPath: '/$orgSlug/opd/$appointmentId/'
-      preLoaderRoute: typeof OrgSlugOpdAppointmentIdIndexRouteImport
-      parentRoute: typeof OrgSlugOpdAppointmentIdRouteRoute
-    }
-    '/$orgSlug/opd/$appointmentId/billing': {
-      id: '/$orgSlug/opd/$appointmentId/billing'
-      path: '/billing'
-      fullPath: '/$orgSlug/opd/$appointmentId/billing'
-      preLoaderRoute: typeof OrgSlugOpdAppointmentIdBillingRouteImport
-      parentRoute: typeof OrgSlugOpdAppointmentIdRouteRoute
     }
     '/$orgSlug/parties_/$partyId/': {
       id: '/$orgSlug/parties_/$partyId/'
@@ -1038,34 +636,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$orgSlug/billing/invoices/$invoiceId_/credit-note/$creditNoteId': {
-      id: '/$orgSlug/billing/invoices/$invoiceId_/credit-note/$creditNoteId'
-      path: '/billing/invoices/$invoiceId/credit-note/$creditNoteId'
-      fullPath: '/$orgSlug/billing/invoices/$invoiceId/credit-note/$creditNoteId'
-      preLoaderRoute: typeof OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/billing/invoices/$invoiceId_/receipt/$paymentId': {
-      id: '/$orgSlug/billing/invoices/$invoiceId_/receipt/$paymentId'
-      path: '/billing/invoices/$invoiceId/receipt/$paymentId'
-      fullPath: '/$orgSlug/billing/invoices/$invoiceId/receipt/$paymentId'
-      preLoaderRoute: typeof OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/$orgSlug/billing/invoices/$invoiceId_/refund/$refundId': {
-      id: '/$orgSlug/billing/invoices/$invoiceId_/refund/$refundId'
-      path: '/billing/invoices/$invoiceId/refund/$refundId'
-      fullPath: '/$orgSlug/billing/invoices/$invoiceId/refund/$refundId'
-      preLoaderRoute: typeof OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRouteImport
-      parentRoute: typeof OrgSlugRouteRoute
-    }
-    '/api/$orgSlug/billing/invoices/$invoiceId/pdf': {
-      id: '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
-      path: '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
-      fullPath: '/api/$orgSlug/billing/invoices/$invoiceId/pdf'
-      preLoaderRoute: typeof ApiOrgSlugBillingInvoicesInvoiceIdPdfRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -1082,42 +652,22 @@ const OrgSlugReceiptsRouteRouteWithChildren =
 
 interface OrgSlugSettingsRouteRouteChildren {
   OrgSlugSettingsAuditRoute: typeof OrgSlugSettingsAuditRoute
-  OrgSlugSettingsItemsRoute: typeof OrgSlugSettingsItemsRoute
+  OrgSlugSettingsBanksRoute: typeof OrgSlugSettingsBanksRoute
   OrgSlugSettingsMembersRoute: typeof OrgSlugSettingsMembersRoute
   OrgSlugSettingsOrganizationRoute: typeof OrgSlugSettingsOrganizationRoute
-  OrgSlugSettingsPayersRoute: typeof OrgSlugSettingsPayersRoute
-  OrgSlugSettingsStaffRoute: typeof OrgSlugSettingsStaffRoute
   OrgSlugSettingsIndexRoute: typeof OrgSlugSettingsIndexRoute
 }
 
 const OrgSlugSettingsRouteRouteChildren: OrgSlugSettingsRouteRouteChildren = {
   OrgSlugSettingsAuditRoute: OrgSlugSettingsAuditRoute,
-  OrgSlugSettingsItemsRoute: OrgSlugSettingsItemsRoute,
+  OrgSlugSettingsBanksRoute: OrgSlugSettingsBanksRoute,
   OrgSlugSettingsMembersRoute: OrgSlugSettingsMembersRoute,
   OrgSlugSettingsOrganizationRoute: OrgSlugSettingsOrganizationRoute,
-  OrgSlugSettingsPayersRoute: OrgSlugSettingsPayersRoute,
-  OrgSlugSettingsStaffRoute: OrgSlugSettingsStaffRoute,
   OrgSlugSettingsIndexRoute: OrgSlugSettingsIndexRoute,
 }
 
 const OrgSlugSettingsRouteRouteWithChildren =
   OrgSlugSettingsRouteRoute._addFileChildren(OrgSlugSettingsRouteRouteChildren)
-
-interface OrgSlugOpdAppointmentIdRouteRouteChildren {
-  OrgSlugOpdAppointmentIdBillingRoute: typeof OrgSlugOpdAppointmentIdBillingRoute
-  OrgSlugOpdAppointmentIdIndexRoute: typeof OrgSlugOpdAppointmentIdIndexRoute
-}
-
-const OrgSlugOpdAppointmentIdRouteRouteChildren: OrgSlugOpdAppointmentIdRouteRouteChildren =
-  {
-    OrgSlugOpdAppointmentIdBillingRoute: OrgSlugOpdAppointmentIdBillingRoute,
-    OrgSlugOpdAppointmentIdIndexRoute: OrgSlugOpdAppointmentIdIndexRoute,
-  }
-
-const OrgSlugOpdAppointmentIdRouteRouteWithChildren =
-  OrgSlugOpdAppointmentIdRouteRoute._addFileChildren(
-    OrgSlugOpdAppointmentIdRouteRouteChildren,
-  )
 
 interface OrgSlugPartiesPartyIdRouteChildren {
   OrgSlugPartiesPartyIdLedgerRoute: typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -1140,58 +690,20 @@ interface OrgSlugRouteRouteChildren {
   OrgSlugPartiesRouteRoute: typeof OrgSlugPartiesRouteRoute
   OrgSlugReceiptsRouteRoute: typeof OrgSlugReceiptsRouteRouteWithChildren
   OrgSlugSettingsRouteRoute: typeof OrgSlugSettingsRouteRouteWithChildren
-  OrgSlugDashboardRoute: typeof OrgSlugDashboardRoute
   OrgSlugFilesRoute: typeof OrgSlugFilesRoute
   OrgSlugOnboardingRoute: typeof OrgSlugOnboardingRoute
   OrgSlugIndexRoute: typeof OrgSlugIndexRoute
-  OrgSlugOpdAppointmentIdRouteRoute: typeof OrgSlugOpdAppointmentIdRouteRouteWithChildren
-  OrgSlugCustomersCustomerIdRoute: typeof OrgSlugCustomersCustomerIdRoute
-  OrgSlugOpdNewRoute: typeof OrgSlugOpdNewRoute
   OrgSlugPartiesPartyIdRoute: typeof OrgSlugPartiesPartyIdRouteWithChildren
-  OrgSlugReportsBalanceSheetRoute: typeof OrgSlugReportsBalanceSheetRoute
-  OrgSlugReportsDailyCollectionsRoute: typeof OrgSlugReportsDailyCollectionsRoute
-  OrgSlugReportsGstRoute: typeof OrgSlugReportsGstRoute
-  OrgSlugReportsOpdRegisterRoute: typeof OrgSlugReportsOpdRegisterRoute
-  OrgSlugReportsTrialBalanceRoute: typeof OrgSlugReportsTrialBalanceRoute
-  OrgSlugBillingIndexRoute: typeof OrgSlugBillingIndexRoute
-  OrgSlugCustomersIndexRoute: typeof OrgSlugCustomersIndexRoute
-  OrgSlugOpdIndexRoute: typeof OrgSlugOpdIndexRoute
-  OrgSlugReportsIndexRoute: typeof OrgSlugReportsIndexRoute
-  OrgSlugBillingInvoicesInvoiceIdRoute: typeof OrgSlugBillingInvoicesInvoiceIdRoute
-  OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute: typeof OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute
-  OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute: typeof OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute
-  OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute: typeof OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute
 }
 
 const OrgSlugRouteRouteChildren: OrgSlugRouteRouteChildren = {
   OrgSlugPartiesRouteRoute: OrgSlugPartiesRouteRoute,
   OrgSlugReceiptsRouteRoute: OrgSlugReceiptsRouteRouteWithChildren,
   OrgSlugSettingsRouteRoute: OrgSlugSettingsRouteRouteWithChildren,
-  OrgSlugDashboardRoute: OrgSlugDashboardRoute,
   OrgSlugFilesRoute: OrgSlugFilesRoute,
   OrgSlugOnboardingRoute: OrgSlugOnboardingRoute,
   OrgSlugIndexRoute: OrgSlugIndexRoute,
-  OrgSlugOpdAppointmentIdRouteRoute:
-    OrgSlugOpdAppointmentIdRouteRouteWithChildren,
-  OrgSlugCustomersCustomerIdRoute: OrgSlugCustomersCustomerIdRoute,
-  OrgSlugOpdNewRoute: OrgSlugOpdNewRoute,
   OrgSlugPartiesPartyIdRoute: OrgSlugPartiesPartyIdRouteWithChildren,
-  OrgSlugReportsBalanceSheetRoute: OrgSlugReportsBalanceSheetRoute,
-  OrgSlugReportsDailyCollectionsRoute: OrgSlugReportsDailyCollectionsRoute,
-  OrgSlugReportsGstRoute: OrgSlugReportsGstRoute,
-  OrgSlugReportsOpdRegisterRoute: OrgSlugReportsOpdRegisterRoute,
-  OrgSlugReportsTrialBalanceRoute: OrgSlugReportsTrialBalanceRoute,
-  OrgSlugBillingIndexRoute: OrgSlugBillingIndexRoute,
-  OrgSlugCustomersIndexRoute: OrgSlugCustomersIndexRoute,
-  OrgSlugOpdIndexRoute: OrgSlugOpdIndexRoute,
-  OrgSlugReportsIndexRoute: OrgSlugReportsIndexRoute,
-  OrgSlugBillingInvoicesInvoiceIdRoute: OrgSlugBillingInvoicesInvoiceIdRoute,
-  OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute:
-    OrgSlugBillingInvoicesInvoiceIdCreditNoteCreditNoteIdRoute,
-  OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute:
-    OrgSlugBillingInvoicesInvoiceIdReceiptPaymentIdRoute,
-  OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute:
-    OrgSlugBillingInvoicesInvoiceIdRefundRefundIdRoute,
 }
 
 const OrgSlugRouteRouteWithChildren = OrgSlugRouteRoute._addFileChildren(
@@ -1214,8 +726,6 @@ const rootRouteChildren: RootRouteChildren = {
   ChangelogSlugRoute: ChangelogSlugRoute,
   ChangelogIndexRoute: ChangelogIndexRoute,
   ApiOrgSlugReceiptsReceiptIdPdfRoute: ApiOrgSlugReceiptsReceiptIdPdfRoute,
-  ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute:
-    ApiOrgSlugBillingInvoicesInvoiceIdPdfRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

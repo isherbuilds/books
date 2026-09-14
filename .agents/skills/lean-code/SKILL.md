@@ -23,12 +23,12 @@ proves the session, resolves membership, checks the permission, and exposes
 
 - Never re-check the session, membership, or a role. If a handler branches on a
   capability, it is an input to the permission argument, not code in the body.
-- Reference checks are not auth checks. Verifying that a practitioner, customer, or
-  item id belongs to `scope.orgId` is required — but do it once, in
-  as few round trips as the data allows, and use the row you fetched. A foreign id
-  returns `NOT_FOUND`; a Postgres FK error is not an acceptable substitute.
-- The client cannot claim a fact the server can derive. If `practitioners.departmentId`
-  is `NOT NULL`, the input does not carry `departmentId`.
+- Reference checks are not auth checks. Verifying that a Party, account, or Payment
+  Method id belongs to `scope.orgId` is required — but do it once, in as few round
+  trips as the data allows, and use the row you fetched. A foreign id returns
+  `NOT_FOUND`; a Postgres FK error is not an acceptable substitute.
+- The client cannot claim a fact the server can derive. A Receipt's money account
+  comes from its Payment Method, so the input carries no account id for the money leg.
 
 ## 2. Backend rules
 
@@ -46,20 +46,19 @@ proves the session, resolves membership, checks the permission, and exposes
   columns nobody renders.
 - **A helper is created at the second real caller.** An existing one-caller helper is
   inlined only if it merely forwards — wraps a single `throw` or one query behind an
-  options object. Keep it if it names a concept (`assertDepartmentInScope`,
-  `lockInvoice`, `blockingReason`).
+  options object. Keep it if it names a concept (`postableAccount`, `claimPartyName`,
+  `assertBalanced`).
 - **Error reasons are read or they are gone.** `ConflictReason` holds only values a
   web file branches on. If the client's response to every CONFLICT from a screen is
   "refetch and show the message", the reasons on that path are removed.
 - **Shared fragments live in one place.** Zod fragments used by two routers
-  (`money`, `phone`, `reason`, `paymentLine`, `serviceLines`, …) are in
+  (`money`, `reason`, `indianStateCode`, `settlementPostFields`, …) are in
   `packages/api/src/lib/schemas.ts`. Do not re-declare a regex.
 - **Locks are for writes that race.** `FOR UPDATE` on a row you only read to insert
   a child with a unique index is not a lock, it is a comment.
 - Keep: the tenant predicate on every query, `audit()` for sensitive mutations,
-  the settings TTL cache, request-local membership memo, DST-correct
-  business-date code (any IANA zone is accepted; `tests/unit/business-date.test.ts`
-  pins it).
+  the request-local membership memo, DST-correct business-date code (any IANA zone
+  is accepted; `tests/unit/business-date.test.ts` pins it).
 
 ## 3. Frontend rules
 
@@ -69,44 +68,43 @@ proves the session, resolves membership, checks the permission, and exposes
   context pair to split "the data" from "the status", no re-reading the query
   cache by a hand-built key, no `useMemo` keyed on a joined string to dodge a
   re-render nobody measured.
-- **One source of truth for money.** Amounts on a settlement screen come from the
-  server quote. A client-side preview is allowed only where no quote exists yet
-  (a booking collects nothing) or for a local draft over a trusted quote (live
-  discount). Never show a client-computed total beside a server one.
+- **One source of truth for money.** Tax and totals come from the server (slice 4
+  `computeTax`). A form shows the amounts the operator typed, never a
+  client-computed total beside a server one.
 - **`keepPreviousData` is one line; the machinery around it is not.** Keep the
   line, gate submit on `isSuccess && !isFetching`, and delete `isPlaceholderData`
   bookkeeping, `current`/`data`/`waiting` projections, and hide-when-placeholder
   branches.
-- **Copy does not change with state.** One stable empty state ("No services
-  selected"), one control when the operator needs an action (Restore fee). No
-  paragraph that rewrites itself when a doctor is picked.
-- **Form state stays in the form.** The dirty flag for a navigation blocker is
+- **Copy does not change with state.** One stable empty state ("No payment methods
+  yet"), one control when the operator needs an action. No paragraph that rewrites
+  itself when a Party is picked.
+- **Form state stays in the form.** The dirty flag is
   `useFormState({ control }).isDirty` read during render in the component that owns
-  the form, not a DOM attribute another file queries. (RHF's `formState` is a proxy;
-  a callback-only read never subscribes.) A wrapper that does not own the form's
-  `control` (e.g. `CustomerSheet` around `CustomerForm`) may read one `data-dirty`
-  attribute the form publishes; it must not query anything else.
+  the form (`PartyForm` gates Save on it), not a DOM attribute another file
+  queries. (RHF's `formState` is a proxy; a callback-only read never subscribes.) A
+  wrapper that does not own the form's `control` (`PartySheet` around `PartyForm`)
+  reads no form state; it reads `useIsMutating` to stay open while a save runs, so
+  a refusal lands on a mounted form.
 - **Composition is visible.** A route fetches once and passes data down as props. A
-  file that holds route + loader + list + create/edit dialogs + mutations is a god
-  module: move each dialog to a sibling file with explicit props. Split only at a
-  seam that has a name (`item-item-dialog.tsx`, `payment-dialog.tsx`); never split
-  a cohesive 240-line component to chase a line count. Three dialogs sharing 11
+  file that holds route + loader + list + create/edit overlays + mutations is a god
+  module: move each overlay to a sibling file with explicit props. Split only at a
+  seam that has a name (`receipt-overlay.tsx`, `party-quick-look.tsx`); never split
+  a cohesive 240-line component to chase a line count. Three overlays sharing 11
   identical scaffold lines earn one shell component; two do not.
-- **Overlays that survive a reload live in the URL.** A sheet or dialog that edits a
-  record is opened by a search param (`?customerId=`, `?action=payment`) via
+- **Overlays that survive a reload live in the URL.** A Sheet that shows or edits a
+  record is opened by a search param (`?party=`, `?edit=true`) via
   `validateSearch` + `navigate({ search })`, or by a child route that renders a
   record Sheet over its still-mounted list (`/receipts/$receiptId`), not
   `useState`. Back closes it; the link is shareable. Transient confirmations stay in
   state.
-- **CONFLICT closes the overlay.** Any billing or OPD mutation `onError` on CONFLICT:
-  close the dialog/overlay first (it holds a stale snapshot the server will keep
-  rejecting), then invalidate, then toast the server message. One handler
-  (`useOpdErrorToast`) does all three; a dialog that only toasts is a dual path.
-- **A mutation hook is written once.** If a dialog and a row action both check in an
-  appointment, they call the same `useOpdCheckIn`.
-- **CONFLICT means stale.** OPD and billing mutations treat any `CONFLICT` as
-  "invalidate, close any overlay holding a snapshot, toast the server message". Only
-  the customer form and item settings read `data.reason` (field mapping).
+- **CONFLICT means stale, and it closes the overlay.** The overlay holds a snapshot
+  the server will keep rejecting, so `onError` on CONFLICT invalidates, toasts the
+  server message, and closes the overlay or dialog. `PartyForm` does all three for
+  `stale_record`, and the Receipt cancel dialog does them for any CONFLICT; a form
+  that only toasts is a dual path. Read `data.reason` only to map a refusal to a
+  field (`PARTY_GSTIN_TAKEN`, `TAXABLE_DIRECT_RECEIPT`).
+- **A mutation hook is written once.** The Receipt Sheet's Cancel button and its
+  palette action open the same reason dialog and call one `receipt.cancel` mutation.
 - Props that are always the same literal (`open={true}`), callbacks with no caller,
   re-exports with no importer, and components split solely to isolate a render are
   deleted.

@@ -6,12 +6,7 @@ const previousSkip = process.env.SKIP_ENV_VALIDATION;
 
 process.env.SKIP_ENV_VALIDATION = "true";
 
-const {
-  invalidateAccountingReports,
-  invalidateBillingState,
-  invalidateOpdAppointmentState,
-  invalidateCustomerState,
-} = await import("../../apps/web/src/lib/domain-invalidation");
+const { invalidateReceiptState } = await import("../../apps/web/src/lib/domain-invalidation");
 
 if (previousSkip === undefined) {
   delete process.env.SKIP_ENV_VALIDATION;
@@ -32,100 +27,14 @@ function recordingInvalidator() {
   };
 }
 
-function serialize(keys: QueryKey[]): string[] {
-  return keys.map((key) => JSON.stringify(key));
-}
-
-test("appointment invalidation scopes every key to the given org", async () => {
+test("receipt invalidation scopes every key to the org and refreshes money balances", async () => {
   const { client, keys } = recordingInvalidator();
-  await invalidateOpdAppointmentState(client, "org-a", "appointment-1", "create");
+  await invalidateReceiptState(client, "org-a");
 
-  const emitted = serialize(keys);
+  const emitted = keys.map((key) => JSON.stringify(key));
   expect(emitted.length).toBeGreaterThan(0);
 
   for (const key of emitted) expect(key).toContain('"orgSlug":"org-a"');
-  expect(emitted.some((key) => key.includes('"opd","get"'))).toBe(false);
-  expect(emitted.some((key) => key.includes('"collections"'))).toBe(true);
-  expect(emitted.some((key) => key.includes('"report","opdRegister"'))).toBe(true);
-});
-
-test("accounting-report invalidation refreshes every financial read model", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateAccountingReports(client, "org-a");
-
-  const emitted = serialize(keys);
-
-  for (const report of ["dailyCollections", "gst", "trialBalance", "balanceSheet"]) {
-    expect(emitted.some((key) => key.includes(`"report","${report}"`))).toBe(true);
-  }
-});
-
-test("an existing appointment transition invalidates its detail", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateOpdAppointmentState(client, "org-a", "appointment-1", "checkIn");
-
-  expect(
-    serialize(keys).some(
-      (key) => key.includes('"opd","get"') && key.includes('"appointmentId":"appointment-1"'),
-    ),
-  ).toBe(true);
-});
-
-test("a reschedule leaves financial caches alone", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateOpdAppointmentState(client, "org-a", "appointment-1", "reschedule");
-
-  const emitted = serialize(keys);
-  expect(emitted.length).toBeGreaterThan(0);
-  expect(emitted.some((key) => key.includes('"collections"'))).toBe(false);
-  expect(emitted.some((key) => key.includes('"worklist"'))).toBe(false);
-});
-
-test("charge-changing appointment transitions invalidate the paired appointment detail", async () => {
-  for (const transition of ["checkIn", "cancel", "noShow"] as const) {
-    const { client, keys } = recordingInvalidator();
-    await invalidateOpdAppointmentState(client, "org-a", "appointment-1", transition);
-
-    const details = serialize(keys).filter((key) => key.includes('"opd","get"'));
-    expect(details).toHaveLength(1);
-    expect(details[0]).toContain('"orgSlug":"org-a"');
-    expect(details[0]).toContain('"appointmentId":"appointment-1"');
-  }
-});
-
-test("check-in refreshes collections when booked charges become billable", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateOpdAppointmentState(client, "org-a", "appointment-1", "checkIn");
-
-  expect(serialize(keys).filter((key) => key.includes('"collections"'))).toHaveLength(1);
-});
-
-test("billing invalidation scopes every key to the given org", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateBillingState(client, "org-a", "appointment-1", "invoice-1");
-
-  const emitted = serialize(keys);
-  expect(emitted.length).toBeGreaterThan(0);
-
-  for (const key of emitted) expect(key).toContain('"orgSlug":"org-a"');
-  expect(emitted.some((key) => key.includes('"appointmentId":"appointment-1"'))).toBe(true);
-  expect(emitted.some((key) => key.includes('"invoiceId":"invoice-1"'))).toBe(true);
-  expect(emitted.some((key) => key.includes('"billing","refundDue"'))).toBe(true);
-
-  for (const report of ["dailyCollections", "opdRegister", "gst", "trialBalance", "balanceSheet"]) {
-    expect(emitted.some((key) => key.includes(`"report","${report}"`))).toBe(true);
-  }
-});
-
-test("customer invalidation refreshes its detail and the org search", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateCustomerState(client, "org-a", "customer-1");
-
-  const emitted = serialize(keys);
-  expect(emitted).toHaveLength(2);
-  expect(emitted[0]).toContain('"orgSlug":"org-a"');
-  expect(emitted[0]).toContain('"customerId":"customer-1"');
-  expect(emitted[0]).toContain('"customer","get"');
-  expect(emitted[1]).toContain('"orgSlug":"org-a"');
-  expect(emitted[1]).toContain('"customer","search"');
+  expect(emitted.some((key) => key.includes('"receiptId"'))).toBe(false);
+  expect(emitted.some((key) => key.includes('"account","moneyBalances"'))).toBe(true);
 });

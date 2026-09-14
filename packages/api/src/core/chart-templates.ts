@@ -1,4 +1,4 @@
-import type { DbTransaction } from "@accly/db/counter";
+import type { DbTransaction } from "@accly/db";
 import { accounts, type AccountType, type SupplyClass } from "@accly/db/schema/accounts";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { LegalType } from "@accly/db/schema/organization-settings";
@@ -35,12 +35,24 @@ type TemplateAccount = {
   parentCode?: string;
   systemKey?: SystemAccountKey;
   supplyClass?: SupplyClass;
+  /** Payment Methods seeded onto this money leaf. */
+  methods?: readonly string[];
 };
 
 const coreAccounts = (equityName: string): TemplateAccount[] => [
   { code: "100", name: "Current Assets", type: "asset" },
-  { code: "1000", name: "Cash in Hand", type: "asset", parentCode: "100", systemKey: "cash" },
-  { code: "1100", name: "Bank", type: "asset", parentCode: "100", systemKey: "bank" },
+  { code: "1000", name: "Cash", type: "asset", parentCode: "100", systemKey: "cash" },
+  { code: "1001", name: "Cash in Hand", type: "asset", parentCode: "1000", methods: ["Cash"] },
+  { code: "1100", name: "Bank Accounts", type: "asset", parentCode: "100", systemKey: "bank" },
+  // Card, UPI and transfers all land in the bank. A card machine pays out net of MDR a
+  // day later; that fee is a Payment to Bank Charges when the statement shows it.
+  {
+    code: "1101",
+    name: "Bank Account",
+    type: "asset",
+    parentCode: "1100",
+    methods: ["UPI", "Bank transfer", "Card"],
+  },
   {
     code: "1300",
     name: "Accounts Receivable",
@@ -141,6 +153,8 @@ const coreAccounts = (equityName: string): TemplateAccount[] => [
     systemKey: "tdsPayable",
   },
   { code: "3000", name: equityName, type: "equity", systemKey: "openingEquity" },
+  // Card MDR and bank fees with their GST, paid as a Payment from the bank statement.
+  { code: "6800", name: "Bank Charges", type: "expense" },
   { code: "6900", name: "Round Off", type: "expense", systemKey: "roundOff" },
 ];
 
@@ -180,23 +194,18 @@ export const CHART_TEMPLATES: Record<LegalType, readonly TemplateAccount[]> = {
   society: [...coreAccounts("General Fund"), ...institutionIncome],
 };
 
+/** Seeds the legal type's chart and the Payment Methods its money leaves carry. */
 export async function seedChartOfAccounts(
   tx: DbTransaction,
   orgId: string,
   legalType: LegalType,
-): Promise<SystemAccountIds> {
+): Promise<void> {
   const template = CHART_TEMPLATES[legalType];
   const idsByCode = new Map(template.map((account) => [account.code, Bun.randomUUIDv7()]));
-  const systemIds = new Map<SystemAccountKey, string>();
-
-  for (const account of template) {
-    if (account.systemKey) {
-      systemIds.set(account.systemKey, idsByCode.get(account.code)!);
-    }
-  }
+  const keys = new Set(template.flatMap((account) => account.systemKey ?? []));
 
   for (const key of SYSTEM_ACCOUNT_KEYS) {
-    if (!systemIds.has(key)) {
+    if (!keys.has(key)) {
       throw new Error(`Chart template is missing system account "${key}"`);
     }
   }
@@ -223,21 +232,14 @@ export async function seedChartOfAccounts(
     }),
   );
 
-  // SAFETY: the loop above proved every SystemAccountKey has an id.
-  return Object.fromEntries(
-    SYSTEM_ACCOUNT_KEYS.map((key) => [key, systemIds.get(key)!]),
-  ) as SystemAccountIds;
-}
-
-export async function seedPaymentMethods(
-  tx: DbTransaction,
-  orgId: string,
-  accountIds: SystemAccountIds,
-): Promise<void> {
-  await tx.insert(paymentMethods).values([
-    { id: Bun.randomUUIDv7(), orgId, name: "Cash", accountId: accountIds.cash },
-    { id: Bun.randomUUIDv7(), orgId, name: "UPI", accountId: accountIds.bank },
-    { id: Bun.randomUUIDv7(), orgId, name: "Card", accountId: accountIds.bank },
-    { id: Bun.randomUUIDv7(), orgId, name: "Bank transfer", accountId: accountIds.bank },
-  ]);
+  await tx.insert(paymentMethods).values(
+    template.flatMap((account) =>
+      (account.methods ?? []).map((name) => ({
+        id: Bun.randomUUIDv7(),
+        orgId,
+        name,
+        accountId: idsByCode.get(account.code)!,
+      })),
+    ),
+  );
 }

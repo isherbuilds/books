@@ -1,5 +1,4 @@
-import { PAYER_TYPES, type PayerType } from "@accly/db/schema/payer-types";
-import { PAYMENT_METHODS, type PaymentMethod } from "@accly/db/schema/legacy-payment-methods";
+import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { z } from "zod";
 
 import { NON_NEGATIVE_MONEY_PATTERN, parseMoney } from "../core/money";
@@ -39,48 +38,57 @@ export const shortName = z
   .min(1)
   .max(200);
 
-export const phone = z.string().trim().min(4).max(20);
+// GST Rules 46 and 50 cap a number at 16 characters of letters, digits, '-' and '/':
+// up to 4 here, then "26-27/" and a sequence of up to 6 digits. Stored in upper case:
+// GSTR-1 and the IRP compare numbers without case, so "rct" must not start a second
+// series beside "RCT".
+export const documentPrefix = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9/-]{1,4}$/, "Use 1 to 4 letters, digits, '-' or '/'");
 
 export const reason = z.string().trim().min(1).max(500);
 
-export const note = z.string().trim().max(500).optional();
+// One page of a keyset list. 25 rows keep a list page fast to render and to navigate;
+// clients omit `limit` and take this default, and Load more fetches the next page.
+export const pageLimit = z.number().int().min(1).max(100).default(25);
 
 export const searchQuery = z.string().trim().min(1).max(100).optional();
+
+export const settlementPostFields = {
+  documentDate: dateOnly.optional(),
+  amount: positiveMoney,
+  paymentMethodId: z.uuid(),
+  reference: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((value) => value || undefined)
+    .optional(),
+  narration: z
+    .string()
+    .trim()
+    .max(500)
+    .transform((value) => value || undefined)
+    .optional(),
+};
+
+export const settlementListFields = {
+  q: searchQuery,
+  partyId: z.uuid().optional(),
+  paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional(),
+  state: z.enum(["posted", "cancelled"]).optional(),
+  settlementKind: z.enum(SETTLEMENT_KINDS).optional(),
+  ...period,
+  cursor: z.uuid().optional(),
+  limit: pageLimit,
+};
 
 // Escapes LIKE wildcards so a typed `%` matches a literal percent sign.
 export function likePattern(query: string): string {
   return `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 }
-
-export const pageLimit = z.number().int().min(1).max(100).default(50);
-
-export const paymentMethod = z.enum(PAYMENT_METHODS);
-
-export const payerType = z.enum(PAYER_TYPES);
-
-export type { PaymentMethod, PayerType };
-
-/** Everything but cash lands somewhere traceable, so the desk records the trace. */
-export function requirePaymentReference(
-  value: { method: PaymentMethod; reference?: string },
-  context: z.RefinementCtx,
-): void {
-  if (value.method !== "cash" && !value.reference) {
-    context.addIssue({
-      code: "custom",
-      path: ["reference"],
-      message: "Add the transaction reference for a non-cash payment",
-    });
-  }
-}
-
-export const paymentLine = z
-  .object({
-    method: paymentMethod,
-    amount: positiveMoney,
-    reference: z.string().trim().min(1).max(100).optional(),
-  })
-  .superRefine(requirePaymentReference);
 
 // Time zones are validated by probing the formatter because engines disagree
 // on canonical ids such as Asia/Kolkata and Asia/Calcutta.

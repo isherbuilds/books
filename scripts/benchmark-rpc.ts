@@ -121,29 +121,30 @@ const cookie = await signIn();
 
 const client = createClient(cookie);
 
+// Reads only, so a run leaves the fixture unchanged.
 const scenarios: Scenario[] = [
   {
-    name: "customers_first_page",
+    name: "receipts_first_page",
     run: async () => {
-      await client.customer.search({ orgSlug: ORG_SLUG, limit: 20 });
+      await client.receipt.list({ orgSlug: ORG_SLUG });
     },
   },
   {
-    name: "customers_query_ra",
+    name: "receipts_query_utr",
     run: async () => {
-      await client.customer.search({ orgSlug: ORG_SLUG, query: "ra", limit: 20 });
+      await client.receipt.list({ orgSlug: ORG_SLUG, q: "UTR" });
     },
   },
   {
-    name: "customers_phone_9876",
+    name: "party_list",
     run: async () => {
-      await client.customer.search({ orgSlug: ORG_SLUG, phone: "9876", limit: 20 });
+      await client.party.list({ orgSlug: ORG_SLUG });
     },
   },
   {
-    name: "item_list",
+    name: "money_balances",
     run: async () => {
-      await client.item.list({ orgSlug: ORG_SLUG, activeOnly: false });
+      await client.account.moneyBalances({ orgSlug: ORG_SLUG });
     },
   },
 ];

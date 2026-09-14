@@ -58,7 +58,7 @@ function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
           {organizations.map((org) => (
             <DropdownMenuItem
               key={org.id}
-              render={<Link to="/$orgSlug/dashboard" params={{ orgSlug: org.slug }} />}
+              render={<Link to="/$orgSlug/receipts" params={{ orgSlug: org.slug }} />}
               disabled={org.slug === activeOrgSlug}
               className="gap-2"
             >

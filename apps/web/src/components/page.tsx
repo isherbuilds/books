@@ -1,8 +1,6 @@
 import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { SidebarTrigger } from "@accly/ui/components/sidebar";
-import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { cn } from "@accly/ui/lib/utils";
 import { createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
@@ -230,117 +228,28 @@ export function SearchInput({
   );
 }
 
-export function FilterGroup<T extends string>({
-  label,
-  value,
-  options,
-  onValueChange,
-}: {
-  label: string;
-  value: T;
-  options: readonly { value: T; label: string }[];
-  onValueChange: (value: T) => void;
-}) {
-  return (
-    <ToggleGroup
-      aria-label={label}
-      value={[value]}
-      size="sm"
-      spacing={1}
-      className="bg-muted p-0.5"
-      onValueChange={(next) => {
-        const nextValue = options.find((option) => option.value === next[0])?.value;
-
-        if (nextValue !== undefined) onValueChange(nextValue);
-      }}
-    >
-      {options.map((option) => (
-        <ToggleGroupItem key={option.value} value={option.value}>
-          {option.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-/** One-of-N list filter whose options come from data or run past five. */
-export function FilterSelect<T extends string>({
-  label,
-  value,
-  options,
-  onValueChange,
-}: {
-  label: string;
-  value: T;
-  options: readonly { value: T; label: string }[];
-  onValueChange: (value: T) => void;
-}) {
-  return (
-    <NativeSelect
-      aria-label={label}
-      value={value}
-      onChange={(event) => {
-        const selected = options.find((option) => option.value === event.target.value);
-
-        if (selected) onValueChange(selected.value);
-      }}
-      className="w-44"
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </NativeSelect>
-  );
-}
-
 export function Panel({
   label,
   action,
   footer,
-  minHeight = "min-h-32",
-  padded = false,
-  grow = false,
-  className,
   children,
 }: {
   label: string;
   action?: ReactNode;
   footer?: ReactNode;
-  minHeight?: string;
-  padded?: boolean;
-  /** Fill the page: the one list on an operational desk, not a settings tray. */
-  grow?: boolean;
-  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className={cn("flex flex-col rounded-xl bg-muted p-1", grow && "flex-1")}>
+    <section className="flex flex-col rounded-xl bg-muted p-1">
       <div className="flex h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
         <h2 className="min-w-0 truncate">{label}</h2>
         {action}
       </div>
-      <div
-        className={cn(
-          "flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card",
-          minHeight,
-          padded && "gap-3 p-4",
-          className,
-        )}
-      >
+      <div className="flex min-h-32 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         {children}
       </div>
       {footer}
     </section>
-  );
-}
-
-export function PanelEmpty({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
-      {children}
-    </div>
   );
 }
 
@@ -376,7 +285,13 @@ export function ListState({
     );
   }
 
-  if (isEmpty) return <PanelEmpty>{empty}</PanelEmpty>;
+  if (isEmpty) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
+        {empty}
+      </div>
+    );
+  }
 
   return children;
 }

@@ -1,6 +1,6 @@
 # CA interviews and month-end observation
 
-Experiment for [ca-first-ledger.md](./ca-first-ledger.md), hypotheses H1, H2, H7. Five CA firms, 30 to 40 minutes each, plus one observed month-end per firm where possible. Ask about the last time something happened, never whether they would use or pay. Record behaviour and artifacts, not opinions.
+The external-launch gate in [Product](../product.md#position). Five CA firms, 30 to 40 minutes each, plus one observed month-end per firm where possible. It scores H1 (the CA–client exchange costs real time each month), H2 (CAs want live shared books, not exports) and H7 (a CA firm is a working channel). Ask about the last time something happened, never whether they would use or pay. Record behaviour and artifacts, not opinions.
 
 ## Who to recruit
 

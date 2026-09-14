@@ -1,5 +1,3 @@
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
-
 import { orpc } from "@/lib/orpc";
 
 // Mirrors PARTY_ROLES in @accly/db, kept local so no server schema module reaches
@@ -32,9 +30,10 @@ export const partyListOptions = (orgSlug: string) => ({
 });
 
 // Receipt money per party, a separate read so posting a receipt never refetches
-// the master. Sparse: a party with no posted receipt has no row.
-export const partyTotalsOptions = (orgSlug: string) =>
-  orpc.receipt.partyTotals.queryOptions({ input: { orgSlug } });
+// the master. Sparse: a party with no posted receipt has no row. A party page passes
+// its id and gets at most its own row.
+export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
+  orpc.receipt.partyTotals.queryOptions({ input: { orgSlug, partyId } });
 
 // The party page reads the whole statement for its balance and the Ledger tab reads a
 // period; with no period both share one cache entry.
@@ -52,43 +51,28 @@ export type PartyFilters = {
   q?: string;
   status?: (typeof PARTY_STATUSES)[number];
   roles?: PartyRole[];
-  stateCodes?: string[];
   gst?: (typeof GST_FILTERS)[number];
 };
 
 type FilterableParty = {
   name: string;
   roles: PartyRole[];
-  stateCode: string;
   active: boolean;
   gstin: string | null;
-  pan: string | null;
-  phone: string | null;
-  email: string | null;
 };
 
 // Roles match when any selected role applies, as Midday's status filter does.
 export function filterParties<T extends FilterableParty>(parties: T[], filters: PartyFilters): T[] {
-  const { status, roles, stateCodes, gst } = filters;
+  const { status, roles, gst } = filters;
   const needle = filters.q?.toLowerCase();
 
   return parties.filter(
     (party) =>
       (!status || party.active === (status === "active")) &&
       (!roles || party.roles.some((role) => roles.includes(role))) &&
-      (!stateCodes || stateCodes.includes(party.stateCode)) &&
       (!gst || (party.gstin !== null) === (gst === "registered")) &&
       (!needle ||
-        [party.name, party.gstin, party.pan, party.email].some((field) =>
-          field?.toLowerCase().includes(needle),
-        ) ||
-        party.phone?.includes(needle) === true),
+        party.name.toLowerCase().includes(needle) ||
+        party.gstin?.toLowerCase().includes(needle) === true),
   );
-}
-
-/** States in the whole master, not the filtered rows, so options stay while filtering. */
-export function partyStateOptions(parties: { stateCode: string }[]) {
-  return [...new Set(parties.map((party) => party.stateCode))]
-    .map((code) => ({ code, name: INDIAN_STATES[code] ?? code }))
-    .sort((left, right) => left.name.localeCompare(right.name));
 }

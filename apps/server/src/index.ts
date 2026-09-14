@@ -8,6 +8,7 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
+import { BatchHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { sql } from "drizzle-orm";
 import { initLogger } from "evlog";
@@ -99,7 +100,7 @@ async function createLoggedRequestContext(
   return requestContext;
 }
 
-// Expected outcomes reach here too — a duplicate customer is a CONFLICT, not a
+// Expected outcomes reach here too — a duplicate party is a CONFLICT, not a
 // fault. Logging those buries the genuine 500s they outnumber.
 function logORPCError(error: unknown): void {
   if (error instanceof ORPCError && error.status < 500) {
@@ -114,7 +115,10 @@ const procedureBodyLimit = bodyLimit({
   onError: (c) => c.json({ error: "Request too large" }, 413),
 });
 
+// The web client batches calls made together into one request, and every call in it
+// shares one context, so the session and membership resolve once per batch.
 const rpcHandler = new RPCHandler(appRouter, {
+  plugins: [new BatchHandlerPlugin()],
   interceptors: [onError(logORPCError)],
 });
 

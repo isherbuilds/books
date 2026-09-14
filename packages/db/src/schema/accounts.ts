@@ -48,13 +48,10 @@ export const accounts = pgTable(
     uniqueIndex("accounts_org_system_key_idx")
       .on(table.orgId, table.systemKey)
       .where(sql`${table.systemKey} is not null`),
+    // Supply classes follow GST law and are validated in the application.
     check(
       "accounts_type_check",
       sql`${table.type} in ('asset', 'liability', 'equity', 'income', 'expense')`,
-    ),
-    check(
-      "accounts_supply_class_check",
-      sql`${table.supplyClass} is null or ${table.supplyClass} in ('taxable', 'exempt', 'nil', 'nonGst', 'notASupply')`,
     ),
   ],
 );

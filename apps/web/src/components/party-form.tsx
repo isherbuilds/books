@@ -25,23 +25,16 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { Separator } from "@accly/ui/components/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@accly/ui/components/sheet";
+import { SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClientOnly } from "@tanstack/react-router";
 import { useId, useState, type ReactNode } from "react";
 import { useFormState } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidatePartyState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
@@ -178,11 +171,14 @@ function PartyForm({
 
   // The server returns the saved row: write it into both caches so the list and the
   // record show it now, and the next edit carries the new `updatedAt` token. The list
-  // refresh runs in the background instead of making Save wait for up to 5,000 rows.
+  // keeps only its own fields. Its refresh runs in the background instead of making
+  // Save wait for up to 5,000 rows.
   const saved = (row: PartyRecord) => {
+    const { id, name, roles, gstin, active } = row;
+
     queryClient.setQueryData(listKey, (rows) =>
       rows
-        ? [...rows.filter((each) => each.id !== row.id), row].sort(
+        ? [...rows.filter((each) => each.id !== id), { id, name, roles, gstin, active }].sort(
             (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
           )
         : rows,
@@ -202,7 +198,7 @@ function PartyForm({
     }
 
     // The editor held an old copy: refresh the record and the list, and leave the form.
-    if (reason === "stale_record") {
+    if (reason === "STALE_RECORD") {
       void invalidatePartyState(queryClient, orgSlug);
       toast.error(errorMessage(error, "Could not save the party"));
       onCancel();
@@ -525,32 +521,20 @@ export function PartySheet({
     }) > 0;
 
   return (
-    <ClientOnly fallback={null}>
-      <Sheet
-        open={open}
-        // No trigger opens this Sheet, so every change is a close.
-        onOpenChange={() => {
-          if (!saving) onClose();
-        }}
-      >
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>{party ? "Edit party" : "New party"}</SheetTitle>
-            <SheetDescription>
-              {party ? party.name : "Register a customer, vendor, or other counterparty."}
-            </SheetDescription>
-          </SheetHeader>
-          {/* The portal unmounts after the close animation, so each open mounts a fresh
-              form (seed name, edit token) while the closing one keeps its focus. */}
-          <PartyForm
-            orgSlug={orgSlug}
-            party={party}
-            seedName={seedName}
-            onSaved={onSaved}
-            onCancel={onClose}
-          />
-        </SheetContent>
-      </Sheet>
-    </ClientOnly>
+    <FormSheet
+      open={open}
+      onClose={onClose}
+      saving={saving}
+      title={party ? "Edit party" : "New party"}
+      description={party ? party.name : "Register a customer, vendor, or other counterparty."}
+    >
+      <PartyForm
+        orgSlug={orgSlug}
+        party={party}
+        seedName={seedName}
+        onSaved={onSaved}
+        onCancel={onClose}
+      />
+    </FormSheet>
   );
 }

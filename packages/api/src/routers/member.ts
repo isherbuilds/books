@@ -47,10 +47,7 @@ export const memberRouter = {
         .where(eq(member.userId, userId))
         .orderBy(asc(organization.name), asc(organization.id)),
       db
-        .select({
-          timeZone: organizationSettings.timeZone,
-          currency: organizationSettings.currency,
-        })
+        .select({ timeZone: organizationSettings.timeZone })
         .from(organizationSettings)
         .where(eq(organizationSettings.orgId, orgId))
         .limit(1),
@@ -61,7 +58,6 @@ export const memberRouter = {
       user: { name: sessionUser.name, email: sessionUser.email },
       organizations,
       timeZone: settings?.timeZone ?? SETTINGS_DEFAULTS.timeZone,
-      currency: settings?.currency ?? SETTINGS_DEFAULTS.currency,
     };
   }),
 

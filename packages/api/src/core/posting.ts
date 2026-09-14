@@ -1,14 +1,22 @@
-import type { DbTransaction } from "@accly/db/counter";
+import type { DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import type { AdvanceSupply, DocumentType } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Scope } from "../lib/procedures/factory";
-import { applyBalances } from "./balances";
-import { SYSTEM_ACCOUNT_KEYS } from "./chart-templates";
 import type { SystemAccountKey } from "./chart-templates";
+
+type SystemAccounts = ReadonlyMap<SystemAccountKey, string>;
+
+function systemAccount(byKey: SystemAccounts, key: SystemAccountKey): string {
+  const id = byKey.get(key);
+
+  if (!id) throw new Error(`Missing resolved system account ${key}`);
+
+  return id;
+}
 
 export type JournalLineInput = {
   accountId: string;
@@ -17,68 +25,124 @@ export type JournalLineInput = {
   credit: bigint;
 };
 
-export type ReceiptPosting =
+// `methodAccountId` is the Payment Method's cash or bank account.
+export type ReceiptPosting = { type: "receipt"; methodAccountId: string } & (
   | {
       settlementKind: "advance";
       advanceSupply: AdvanceSupply;
       exposureSide: "receivable";
       partyId: string;
+      accountId: null;
       amountPaise: bigint;
-      incomeAccountId: null;
     }
   | {
       settlementKind: "direct";
       exposureSide: null;
       partyId: string | null;
+      accountId: string;
       amountPaise: bigint;
-      incomeAccountId: string;
-    };
+    }
+);
 
-export type ResolvedAccounts = {
-  paymentMethodAccountId: string;
-  byKey: Record<SystemAccountKey, string>;
+type TdsDeduction = {
+  sectionId: string;
+  amountPaise: bigint;
 };
 
-export function postReceipt(
-  document: ReceiptPosting,
-  accounts: ResolvedAccounts,
-): JournalLineInput[] {
+export type PaymentPosting = {
+  type: "payment";
+  methodAccountId: string;
+  tds: TdsDeduction | null;
+} & (
+  | {
+      settlementKind: "advance";
+      exposureSide: "payable";
+      partyId: string;
+      accountId: null;
+      amountPaise: bigint;
+    }
+  | {
+      settlementKind: "direct";
+      exposureSide: null;
+      partyId: string | null;
+      accountId: string;
+      amountPaise: bigint;
+    }
+);
+
+export type DocumentPosting = ReceiptPosting | PaymentPosting;
+
+export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): JournalLineInput[] {
   if (document.amountPaise <= 0n) {
     throw new Error("Receipt amount must be positive");
   }
 
-  if (document.settlementKind === "advance" && document.advanceSupply === "taxableService") {
-    throw new Error("A taxable service advance cannot be posted until GST advance documents exist");
-  }
-
-  const debit: JournalLineInput = {
-    accountId: accounts.paymentMethodAccountId,
-    partyId: null,
-    debit: document.amountPaise,
-    credit: 0n,
-  };
-
-  if (document.settlementKind === "direct") {
-    return [
-      debit,
-      {
-        accountId: document.incomeAccountId,
-        partyId: document.partyId,
-        debit: 0n,
-        credit: document.amountPaise,
-      },
-    ];
-  }
-
   return [
-    debit,
     {
-      accountId: accounts.byKey.customerAdvances,
+      accountId: document.methodAccountId,
+      partyId: null,
+      debit: document.amountPaise,
+      credit: 0n,
+    },
+    {
+      accountId:
+        document.settlementKind === "direct"
+          ? document.accountId
+          : systemAccount(byKey, "customerAdvances"),
       partyId: document.partyId,
       debit: 0n,
       credit: document.amountPaise,
     },
   ];
+}
+
+export function computeTds(amountPaise: bigint, rateBasisPoints: number): bigint {
+  const raw = amountPaise * BigInt(rateBasisPoints);
+  const rupee = (raw + 500_000n) / 1_000_000n;
+
+  return rupee * 100n;
+}
+
+export function postPayment(document: PaymentPosting, byKey: SystemAccounts): JournalLineInput[] {
+  if (document.amountPaise <= 0n) {
+    throw new Error("Payment amount must be positive");
+  }
+
+  if (
+    document.tds !== null &&
+    (document.tds.amountPaise < 0n || document.tds.amountPaise >= document.amountPaise)
+  ) {
+    throw new Error("Payment TDS must be non-negative and less than the payment amount");
+  }
+
+  const lines: JournalLineInput[] = [
+    {
+      accountId:
+        document.settlementKind === "advance"
+          ? systemAccount(byKey, "supplierAdvances")
+          : document.accountId,
+      partyId: document.partyId,
+      debit: document.amountPaise,
+      credit: 0n,
+    },
+    {
+      accountId: document.methodAccountId,
+      partyId: null,
+      debit: 0n,
+      credit: document.amountPaise - (document.tds?.amountPaise ?? 0n),
+    },
+  ];
+
+  if (document.tds !== null && document.tds.amountPaise > 0n) {
+    lines.push({
+      accountId: systemAccount(byKey, "tdsPayable"),
+      partyId: document.partyId,
+      debit: 0n,
+      credit: document.tds.amountPaise,
+    });
+  }
+
+  return lines;
 }
 
 export function assertBalanced(lines: readonly JournalLineInput[]): void {
@@ -115,95 +179,117 @@ export function reverseLines(lines: readonly JournalLineInput[]): JournalLineInp
 export type RecordEntryArgs =
   | {
       kind: "post";
-      document: {
-        id: string;
-        type: "receipt";
-        entryDate: string;
-        narration: string;
-        posting: ReceiptPosting;
-        paymentMethodAccountId: string;
-      };
+      document: { id: string; posting: DocumentPosting };
+      entryDate: string;
+      narration: string;
     }
   | {
       kind: "reverse";
       document: { id: string; type: DocumentType };
-      reversesEntryId: string;
       entryDate: string;
       narration: string;
     };
 
+function requiredSystemAccounts(posting: DocumentPosting): SystemAccountKey[] {
+  const keys: SystemAccountKey[] = [];
+
+  if (posting.settlementKind === "advance") {
+    keys.push(posting.type === "receipt" ? "customerAdvances" : "supplierAdvances");
+  }
+
+  if (posting.type === "payment" && posting.tds !== null && posting.tds.amountPaise > 0n) {
+    keys.push("tdsPayable");
+  }
+
+  return keys;
+}
+
 async function resolveSystemAccounts(
   tx: DbTransaction,
   orgId: string,
-): Promise<Record<SystemAccountKey, string>> {
+  keys: readonly SystemAccountKey[],
+): Promise<SystemAccounts> {
+  if (keys.length === 0) return new Map();
+
   const rows = await tx
     .select({ id: accounts.id, systemKey: accounts.systemKey })
     .from(accounts)
-    .where(and(eq(accounts.orgId, orgId), isNotNull(accounts.systemKey)));
+    .where(and(eq(accounts.orgId, orgId), inArray(accounts.systemKey, keys)));
 
-  const ids = new Map(rows.map((row) => [row.systemKey, row.id]));
+  const ids = new Map<SystemAccountKey, string>();
 
-  for (const key of SYSTEM_ACCOUNT_KEYS) {
+  for (const row of rows) {
+    const key = keys.find((candidate) => candidate === row.systemKey);
+
+    if (key) ids.set(key, row.id);
+  }
+
+  for (const key of keys) {
     if (!ids.has(key)) {
       throw new Error(`Organization ${orgId} is missing system account ${key}`);
     }
   }
 
-  // SAFETY: the loop above proved every SystemAccountKey has an id.
-  return Object.fromEntries(SYSTEM_ACCOUNT_KEYS.map((key) => [key, ids.get(key)!])) as Record<
-    SystemAccountKey,
-    string
-  >;
+  return ids;
 }
 
+// The only call Billing makes into General Accounting. A post runs the document
+// type's posting function; a reverse swaps the stored lines of the post entry and
+// never re-runs the posting function, rates or mappings.
 export async function recordEntry(
   tx: DbTransaction,
   scope: Scope,
   args: RecordEntryArgs,
-): Promise<{ entryId: string }> {
+): Promise<void> {
   let lines: JournalLineInput[];
   let document: { id: string; type: DocumentType };
-  let entryDate: string;
-  let narration: string;
   let reversesEntryId: string | null = null;
 
   if (args.kind === "post") {
-    document = args.document;
-    entryDate = args.document.entryDate;
-    narration = args.document.narration;
-    const byKey = await resolveSystemAccounts(tx, scope.orgId);
-    lines = postReceipt(args.document.posting, {
-      paymentMethodAccountId: args.document.paymentMethodAccountId,
-      byKey,
-    });
+    const { posting } = args.document;
+    document = { id: args.document.id, type: posting.type };
+
+    const byKey = await resolveSystemAccounts(tx, scope.orgId, requiredSystemAccounts(posting));
+    lines = posting.type === "receipt" ? postReceipt(posting, byKey) : postPayment(posting, byKey);
   } else {
     document = args.document;
-    entryDate = args.entryDate;
-    narration = args.narration;
-    reversesEntryId = args.reversesEntryId;
 
     const storedLines = await tx
       .select({
+        entryId: journalLines.entryId,
         accountId: journalLines.accountId,
         partyId: journalLines.partyId,
         debit: journalLines.debit,
         credit: journalLines.credit,
       })
       .from(journalLines)
+      .innerJoin(
+        journalEntries,
+        and(eq(journalEntries.orgId, scope.orgId), eq(journalEntries.id, journalLines.entryId)),
+      )
       .where(
-        and(eq(journalLines.orgId, scope.orgId), eq(journalLines.entryId, args.reversesEntryId)),
+        and(
+          eq(journalLines.orgId, scope.orgId),
+          eq(journalEntries.documentType, document.type),
+          eq(journalEntries.documentId, document.id),
+          eq(journalEntries.kind, "post"),
+        ),
       );
 
-    if (storedLines.length === 0) {
-      throw new Error(`Journal entry ${args.reversesEntryId} has no lines in this organization`);
+    const [postLine] = storedLines;
+
+    if (!postLine) {
+      throw new Error(`Document ${document.id} is missing its post journal entry`);
     }
 
+    reversesEntryId = postLine.entryId;
     lines = reverseLines(storedLines);
   }
 
   assertBalanced(lines);
 
   const entryId = Bun.randomUUIDv7();
+
   await tx.insert(journalEntries).values({
     id: entryId,
     orgId: scope.orgId,
@@ -211,8 +297,8 @@ export async function recordEntry(
     documentId: document.id,
     kind: args.kind,
     reversesEntryId,
-    entryDate,
-    narration,
+    entryDate: args.entryDate,
+    narration: args.narration,
     createdBy: scope.userId,
   });
   await tx.insert(journalLines).values(
@@ -223,7 +309,4 @@ export async function recordEntry(
       ...line,
     })),
   );
-  await applyBalances(tx, scope.orgId, entryDate, lines);
-
-  return { entryId };
 }

@@ -26,11 +26,6 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.58 0.22 27);
-  /* Two states billing needs to name in colour: money not yet invoiced, and
-     money that has waited long enough to chase. Both always ship with a word
-     beside them (docs/design.md §5). */
-  --pending: oklch(0.55 0.14 250);
-  --overdue: oklch(0.6 0.16 42);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   /* Focus indicators must maintain 3:1 contrast; guarded by the theme contrast test. */
@@ -83,8 +78,6 @@
   --accent: oklch(0.371 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --pending: oklch(0.72 0.13 250);
-  --overdue: oklch(0.76 0.16 42);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -147,8 +140,6 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
-  --color-pending: var(--pending);
-  --color-overdue: var(--overdue);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);

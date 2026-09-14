@@ -1,14 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  check,
-  index,
-  pgTable,
-  text,
-  timestamp,
-  unique,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 import { organization } from "./auth";
 
@@ -47,16 +38,13 @@ export const parties = pgTable(
     // Millisecond precision: the value round-trips through JSON as the edit token.
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
   },
+  // Roles, state codes and one-Party-per-GSTIN are application rules (routers/party.ts):
+  // GST practice can change them, so no CHECK or unique index repeats them.
   (table) => [
-    check(
-      "parties_roles_check",
-      sql`${table.roles} <@ array['customer', 'vendor', 'tenant', 'donor', 'employee', 'government']::text[]`,
-    ),
-    check("parties_state_code_check", sql`char_length(${table.stateCode}) = 2`),
     unique("parties_org_id_id_unique").on(table.orgId, table.id),
     index("parties_org_normalized_name_idx").on(table.orgId, table.normalizedName),
     index("parties_org_name_idx").on(table.orgId, table.name),
-    uniqueIndex("parties_org_gstin_idx")
+    index("parties_org_gstin_idx")
       .on(table.orgId, table.gstin)
       .where(sql`${table.gstin} is not null`),
   ],

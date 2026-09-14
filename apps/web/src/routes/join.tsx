@@ -155,7 +155,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
             {organizations.map((organization) => (
               <Link
                 key={organization.id}
-                to="/$orgSlug/dashboard"
+                to="/$orgSlug/receipts"
                 params={{ orgSlug: organization.slug }}
                 className={buttonVariants({
                   variant: "ghost",

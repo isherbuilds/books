@@ -1,4 +1,4 @@
-import type { DbTransaction } from "@accly/db/counter";
+import type { DbTransaction } from "@accly/db";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { and, eq } from "drizzle-orm";
 

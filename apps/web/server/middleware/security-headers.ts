@@ -24,7 +24,7 @@ const scriptSrc = [
   ...(isDevelopment ? ["'unsafe-eval'", "https://unpkg.com"] : []),
 ].join(" ");
 
-// The billing PDF is a web route framed by the same origin; nothing frames the API.
+// Only the same origin may frame web pages; nothing frames the API.
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",

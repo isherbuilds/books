@@ -12,18 +12,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@accly/ui/components/sheet";
+import { useQuery } from "@tanstack/react-query";
 import { ClientOnly, Link } from "@tanstack/react-router";
 
 import { Monogram } from "@/components/monogram";
+import { ErrorNote } from "@/components/page";
 import { PartyFactSections, RecentReceipts } from "@/components/party-facts";
 import { useCan } from "@/lib/membership";
+import { orpc } from "@/lib/orpc";
 import { ROLE_LABELS } from "@/lib/parties";
 import { stepRow } from "@/lib/row-focus";
 
 /**
- * A read-only look at a party from the list, which stays mounted behind it. The row
- * from the cached master carries every field, so opening it costs no request; the
- * party page owns editing, receipts and the ledger.
+ * A read-only look at a party from the list, which stays mounted behind it. The
+ * header comes from the cached master row; the facts come from `party.get`, the same
+ * cache entry the party page opens with. The party page owns editing, receipts and
+ * the ledger.
  */
 export function PartyQuickLook({
   orgSlug,
@@ -32,12 +36,13 @@ export function PartyQuickLook({
   onStep,
 }: {
   orgSlug: string;
-  party: PartyRecord;
+  party: Pick<PartyRecord, "id" | "name" | "roles" | "active">;
   onClose: () => void;
   onStep: (partyId: string) => void;
 }) {
   const canUpdate = useCan(orgSlug, { party: ["update"] });
   const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
+  const record = useQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId: party.id } }));
 
   return (
     <ClientOnly fallback={null}>
@@ -59,7 +64,10 @@ export function PartyQuickLook({
           </SheetHeader>
 
           <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
-            <PartyFactSections party={party} />
+            {record.isError ? (
+              <ErrorNote title="Could not load this party" error={record.error} />
+            ) : null}
+            {record.data ? <PartyFactSections party={record.data} /> : null}
             {canReadReceipts ? (
               <>
                 <Separator />

@@ -1,7 +1,7 @@
 // TanStack suppresses intervals in background tabs by default. No shared
-// placeholder: it would bridge results across keys and show one appointment or
+// placeholder: it would bridge results across keys and show one receipt list or
 // organization under another during navigation.
-export const OPERATIONAL_REFETCH = {
+const OPERATIONAL_REFETCH = {
   refetchInterval: 10_000,
   refetchOnWindowFocus: true,
   staleTime: 5_000,

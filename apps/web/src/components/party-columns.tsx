@@ -1,8 +1,7 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/tables/customers/columns.tsx (name cell,
-// money columns, tags, actions) and customers-column-visibility.tsx (optional columns).
+// money column, tags, actions).
 import { formatMoney } from "@accly/api/core/money";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { AppRouter } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
@@ -15,7 +14,6 @@ import { DATA_TABLE_FEATURES, Dash, TextOrDash } from "@/components/data-table/d
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { Monogram } from "@/components/monogram";
 import { useCan } from "@/lib/membership";
-import { formatDay } from "@/lib/org-datetime";
 import { ROLE_LABELS } from "@/lib/parties";
 
 type PartyListRow = Awaited<ReturnType<RouterClient<AppRouter>["party"]["list"]>>[number];
@@ -26,24 +24,10 @@ type PartyTotals = Awaited<ReturnType<RouterClient<AppRouter>["receipt"]["partyT
 export type PartyRow = PartyListRow & { totals: PartyTotals | null | undefined };
 
 /** Sortable columns other than Name, which is the resting order. */
-export const PARTY_SORTS = ["state", "gstin", "city", "received", "lastReceipt"] as const;
-
-export const PARTY_OPTIONAL_COLUMNS = ["receipts", "email", "pan", "city", "pinCode"] as const;
-
-export type PartyOptionalColumn = (typeof PARTY_OPTIONAL_COLUMNS)[number];
-
-export const PARTY_OPTIONAL_COLUMN_LABELS: Record<PartyOptionalColumn, string> = {
-  receipts: "Receipts",
-  email: "Email",
-  pan: "PAN",
-  city: "City",
-  pinCode: "PIN",
-};
+export const PARTY_SORTS = ["gstin", "received"] as const;
 
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, PartyRow>();
 
-// Optional columns carry no width: in a fixed layout they share the space left by
-// the fixed columns with Name, so turning one on never pushes the table wider.
 export const PARTY_COLUMNS = [
   col.accessor("name", {
     header: "Name",
@@ -76,18 +60,6 @@ export const PARTY_COLUMNS = [
       </span>
     ),
   }),
-  col.accessor((party) => INDIAN_STATES[party.stateCode] ?? party.stateCode, {
-    id: "state",
-    header: "State",
-    sortFn: "collated",
-    meta: { className: "w-36" },
-    cell: ({ row: { original: party }, getValue }) => (
-      <span className="flex min-w-0 gap-1.5" title={getValue()}>
-        <span className="font-mono text-muted-foreground tabular-nums">{party.stateCode}</span>
-        <span className="truncate">{getValue()}</span>
-      </span>
-    ),
-  }),
   // Undefined sorts last both ways; the first defined value is text, so the first
   // click sorts ascending.
   col.accessor((party) => party.gstin ?? undefined, {
@@ -98,12 +70,6 @@ export const PARTY_COLUMNS = [
     meta: { className: "w-40" },
     cell: ({ row: { original: party } }) => <TextOrDash value={party.gstin} mono />,
   }),
-  col.accessor("phone", {
-    header: "Phone",
-    enableSorting: false,
-    meta: { className: "hidden w-32 xl:table-cell" },
-    cell: ({ getValue }) => <TextOrDash value={getValue()} mono />,
-  }),
   // No receipt sorts as zero, so the column needs no undefined handling.
   col.accessor((party) => party.totals?.receivedPaise ?? 0n, {
     id: "received",
@@ -112,52 +78,6 @@ export const PARTY_COLUMNS = [
     sortDescFirst: true,
     meta: { align: "right", className: "w-32" },
     cell: ({ row: { original: party } }) => <Received totals={party.totals} />,
-  }),
-  col.accessor((party) => party.totals?.lastReceiptDate ?? undefined, {
-    id: "lastReceipt",
-    header: "Last receipt",
-    sortFn: "basic",
-    sortUndefined: "last",
-    sortDescFirst: true,
-    meta: { className: "hidden w-28 xl:table-cell" },
-    cell: ({ row: { original: party } }) =>
-      party.totals === undefined ? null : party.totals === null ? (
-        <Dash />
-      ) : (
-        <span className="tabular-nums">{formatDay(party.totals.lastReceiptDate)}</span>
-      ),
-  }),
-  col.accessor((party) => party.totals?.receiptCount, {
-    id: "receipts",
-    header: "Receipts",
-    enableSorting: false,
-    meta: { align: "right" },
-    cell: ({ row: { original: party } }) =>
-      party.totals === undefined ? null : (
-        <span className="tabular-nums">{party.totals?.receiptCount ?? 0}</span>
-      ),
-  }),
-  col.accessor("email", {
-    header: "Email",
-    enableSorting: false,
-    cell: ({ getValue }) => <TextOrDash value={getValue()} />,
-  }),
-  col.accessor("pan", {
-    header: "PAN",
-    enableSorting: false,
-    cell: ({ getValue }) => <TextOrDash value={getValue()} mono />,
-  }),
-  col.accessor((party) => party.city ?? undefined, {
-    id: "city",
-    header: "City",
-    sortFn: "collated",
-    sortUndefined: "last",
-    cell: ({ row: { original: party } }) => <TextOrDash value={party.city} />,
-  }),
-  col.accessor("pinCode", {
-    header: "PIN",
-    enableSorting: false,
-    cell: ({ getValue }) => <TextOrDash value={getValue()} mono />,
   }),
   col.display({
     id: "actions",
@@ -197,8 +117,7 @@ export function PartyCard({ party }: { party: PartyRow }) {
         ) : null}
       </div>
       <p className="mt-1 truncate text-muted-foreground">
-        {party.roles.map((role) => ROLE_LABELS[role]).join(", ")} ·{" "}
-        {INDIAN_STATES[party.stateCode] ?? party.stateCode}
+        {party.roles.map((role) => ROLE_LABELS[role]).join(", ")}
         {party.gstin ? ` · ${party.gstin}` : ""}
       </p>
     </>

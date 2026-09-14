@@ -1,7 +1,13 @@
-import { postDocument, reverseDocument } from "@accly/api/core/documents";
+import {
+  organizationSnapshot,
+  partySnapshot,
+  postDocument,
+  receiptTax,
+  reverseDocument,
+  type PostDocumentInput,
+} from "@accly/api/core/documents";
 import { financialYearOf } from "@accly/api/core/numbering";
 import { createOrganization, createOrganizationInput } from "@accly/api/core/organizations";
-import type { ReceiptPosting } from "@accly/api/core/posting";
 import { normalizedPartyName } from "@accly/api/routers/party";
 import { businessDate } from "@accly/api/lib/business-date";
 import type { Scope } from "@accly/api/lib/procedures/factory";
@@ -12,7 +18,6 @@ import { db } from "@accly/db";
 import { runMigrations } from "@accly/db/migrate";
 import { accounts } from "@accly/db/schema/accounts";
 import { member, organization, user } from "@accly/db/schema/auth";
-import type { PrintSnapshot } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties, type PartyRole } from "@accly/db/schema/parties";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
@@ -24,9 +29,10 @@ import pg from "pg";
 // production database. Every account is created with `createUserWithPassword`,
 // exactly as an operator would, because sign-up is disabled.
 //
-// Each organization then gets parties and receipts. Masters are inserted directly;
-// every receipt and cancellation goes through postDocument/reverseDocument, the
-// same core the receipt router calls, so ledgers, balances and numbers agree.
+// Each organization then gets two bank accounts, parties and receipts. Masters are
+// inserted directly; every receipt and cancellation goes through
+// postDocument/reverseDocument, the same core the receipt router calls, so ledgers
+// and numbers agree.
 // A fixed PRNG seed makes reruns produce the same data for the same date.
 
 const PASSWORD = "password123";
@@ -38,8 +44,6 @@ const DAY_MS = 86_400_000;
 const POST_BATCH = 250;
 
 type Person = {
-  email: string;
-  name: string;
   id: string;
   headers: Headers;
 };
@@ -78,13 +82,27 @@ export type OrgProfile = {
   monthly: Flow[];
 };
 
+// --- Money: receipts land in two banks and the cash box -----------------------------
+//
+// A receipt lands where its method points. The demo renames the template's bank leaf to
+// HDFC, adds ICICI, and names each method after the account it pays into.
+
+const METHOD = {
+  cash: "Cash",
+  hdfcUpi: "HDFC UPI",
+  hdfcNeft: "HDFC NEFT",
+  card: "HDFC card machine",
+  iciciNeft: "ICICI NEFT",
+  iciciCheque: "ICICI cheque",
+} as const;
+
 const bankInterest: Flow = {
   weight: 1,
   account: "Interest Income",
   roles: null,
   rupees: [800, 6_000, 1],
   withPaise: true,
-  method: "Bank transfer",
+  method: METHOD.hdfcNeft,
   narrations: ["Savings account interest", "Interest on fixed deposit"],
 };
 
@@ -205,7 +223,7 @@ export const ORGS: OrgProfile[] = [
         account: "Grants",
         roles: ["government"],
         rupees: [100_000, 500_000, 1_000],
-        method: "Bank transfer",
+        method: METHOD.iciciNeft,
         narrations: ["Grant-in-aid instalment"],
       },
     ],
@@ -407,7 +425,7 @@ function buildParties(
 
 // --- Receipts through the core posting path -----------------------------------
 
-export type BooksOrg = {
+type BooksOrg = {
   scope: Scope;
   settings: Settings;
   // Only the income accounts a direct receipt may credit under this org's GST rules.
@@ -416,10 +434,7 @@ export type BooksOrg = {
   parties: Party[];
 };
 
-export type ReceiptPlan = (
-  | { account: null; party: Party }
-  | { account: Account; party: Party | null }
-) & {
+type ReceiptPlan = ({ account: null; party: Party } | { account: Account; party: Party | null }) & {
   date: string;
   amountPaise: bigint;
   method: PaymentMethod;
@@ -431,7 +446,7 @@ export type ReceiptPlan = (
 const directAllowed = (settings: Settings, account: Account) =>
   account.type === "income" &&
   account.active &&
-  !(settings.gstin && account.supplyClass === "taxable");
+  !receiptTax(settings.gstin, account.supplyClass).refused;
 
 export async function loadBooksOrg(slug: string): Promise<BooksOrg> {
   const [org] = await db
@@ -481,22 +496,27 @@ const CANCEL_REASONS = [
 const BANK_CODES = ["HDFC", "ICIC", "SBIN", "UTIB", "KKBK"];
 
 function methodFor(rupees: number, random: () => number): string {
-  if (rupees >= 50_000) return pick(random, ["Bank transfer", "Bank transfer", "Cheque"]);
+  if (rupees >= 50_000) {
+    return pick(random, [METHOD.hdfcNeft, METHOD.iciciNeft, METHOD.iciciCheque]);
+  }
 
-  if (rupees >= 10_000) return pick(random, ["UPI", "Bank transfer", "Cheque", "Card"]);
+  if (rupees >= 10_000) {
+    return pick(random, [METHOD.hdfcUpi, METHOD.hdfcNeft, METHOD.iciciNeft, METHOD.card]);
+  }
 
-  return pick(random, ["Cash", "Cash", "UPI", "UPI", "Card"]);
+  return pick(random, [METHOD.cash, METHOD.cash, METHOD.hdfcUpi, METHOD.hdfcUpi, METHOD.card]);
 }
 
 function referenceFor(method: string, random: () => number): string | null {
   switch (method) {
-    case "UPI":
+    case METHOD.hdfcUpi:
       return `UPI/${digits(random, 12)}`;
-    case "Card":
+    case METHOD.card:
       return `Card xx${digits(random, 4)}, auth ${digits(random, 6)}`;
-    case "Bank transfer":
+    case METHOD.hdfcNeft:
+    case METHOD.iciciNeft:
       return `${pick(random, BANK_CODES)}N${digits(random, 12)}`;
-    case "Cheque":
+    case METHOD.iciciCheque:
       return `Chq ${digits(random, 6)}`;
     default:
       return random() < 0.3 ? `Book ${between(random, 1, 40)}/${digits(random, 3)}` : null;
@@ -565,32 +585,15 @@ export function planReceipts(
   ]);
 }
 
-function addressLine(...parts: Array<string | null>): string {
-  const [line1, line2, city, pinCode] = parts;
-
-  return [line1, line2, [city, pinCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-}
-
 export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[]): Promise<void> {
   const { settings } = org;
 
-  const documentSettings = {
+  const numbering = {
+    prefix: settings.receiptPrefix,
     fiscalYearStartMonth: settings.financialYearStart,
-    receiptPrefix: settings.receiptPrefix,
-    timeZone: settings.timeZone,
   };
 
-  const organizationSnapshot = {
-    legalName: settings.legalName,
-    address: addressLine(
-      settings.addressLine1,
-      settings.addressLine2,
-      settings.city,
-      settings.pinCode,
-    ),
-    gstin: settings.gstin,
-    pan: settings.pan,
-  };
+  const organizationPrintSnapshot = organizationSnapshot(settings);
 
   for (let start = 0; start < plans.length; start += POST_BATCH) {
     await db.transaction(async (tx) => {
@@ -598,57 +601,44 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
         const { party, account } = plan;
         const lineDescription = plan.narration ?? account?.name ?? "Advance received";
 
-        const posting: ReceiptPosting = account
+        const posting: PostDocumentInput["posting"] = account
           ? {
+              type: "receipt",
               settlementKind: "direct",
               exposureSide: null,
               partyId: party?.id ?? null,
-              incomeAccountId: account.id,
+              accountId: account.id,
               amountPaise: plan.amountPaise,
             }
           : {
+              type: "receipt",
               settlementKind: "advance",
               advanceSupply: "exempt",
               exposureSide: "receivable",
               partyId: plan.party.id,
-              incomeAccountId: null,
+              accountId: null,
               amountPaise: plan.amountPaise,
             };
 
-        const printSnapshot: PrintSnapshot = {
-          organization: organizationSnapshot,
-          party: party
-            ? {
-                name: party.name,
-                address: addressLine(
-                  party.addressLine1,
-                  party.addressLine2,
-                  party.city,
-                  party.pinCode,
-                ),
-                gstin: party.gstin,
-              }
-            : null,
-          paymentMethod: plan.method.name,
+        const printSnapshot: PostDocumentInput["printSnapshot"] = {
+          organization: organizationPrintSnapshot,
+          party: partySnapshot(party),
           lines: [{ description: lineDescription, hsnSac: null, unit: null }],
         };
 
-        const { documentId } = await postDocument(tx, org.scope, documentSettings, {
+        const { id } = await postDocument(tx, org.scope, numbering, {
           documentDate: plan.date,
           paymentMethodId: plan.method.id,
-          paymentMethodAccountId: plan.method.accountId,
           reference: plan.reference,
           narration: plan.narration,
-          ...posting,
-          affectsTax:
-            Boolean(settings.gstin) &&
-            ["exempt", "nil", "nonGst"].includes(account?.supplyClass ?? ""),
+          posting,
+          affectsTax: account ? receiptTax(settings.gstin, account.supplyClass).affectsTax : false,
           printSnapshot,
           lineDescription,
         });
 
         if (plan.cancelReason) {
-          await reverseDocument(tx, org.scope, documentSettings, documentId, plan.cancelReason);
+          await reverseDocument(tx, org.scope, settings.timeZone, "receipt", id, plan.cancelReason);
         }
       }
     });
@@ -677,21 +667,55 @@ function seedDays(
   return days;
 }
 
-async function seedBooks(orgId: string, profile: OrgProfile, index: number) {
-  const random = mulberry32(FIXED_SEED + index);
-
-  const [bank] = await db
+// Renames the template's bank leaf and seeded methods, and adds ICICI with its methods.
+async function seedMoney(orgId: string): Promise<void> {
+  const [bankGroup] = await db
     .select({ id: accounts.id })
     .from(accounts)
     .where(and(eq(accounts.orgId, orgId), eq(accounts.systemKey, "bank")));
 
-  if (!bank) throw new Error(`${profile.organization.slug}: missing the bank account`);
+  if (!bankGroup) throw new Error(`Organization ${orgId} is missing the bank group`);
 
-  // Organization bootstrap seeds Cash, UPI, Card and Bank transfer; cheques clear to the bank.
   await db
-    .insert(paymentMethods)
-    .values({ id: Bun.randomUUIDv7(), orgId, name: "Cheque", accountId: bank.id });
+    .update(accounts)
+    .set({ name: "HDFC Bank - Current" })
+    .where(and(eq(accounts.orgId, orgId), eq(accounts.code, "1101")));
 
+  const [icici] = await db
+    .insert(accounts)
+    .values({
+      id: Bun.randomUUIDv7(),
+      orgId,
+      parentId: bankGroup.id,
+      code: "1102",
+      name: "ICICI Bank - Savings",
+      type: "asset",
+    })
+    .returning();
+
+  if (!icici) throw new Error("ICICI account insert returned no row");
+
+  for (const [from, to] of [
+    ["UPI", METHOD.hdfcUpi],
+    ["Bank transfer", METHOD.hdfcNeft],
+    ["Card", METHOD.card],
+  ] as const) {
+    await db
+      .update(paymentMethods)
+      .set({ name: to })
+      .where(and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.name, from)));
+  }
+
+  await db.insert(paymentMethods).values([
+    { id: Bun.randomUUIDv7(), orgId, name: METHOD.iciciNeft, accountId: icici.id },
+    { id: Bun.randomUUIDv7(), orgId, name: METHOD.iciciCheque, accountId: icici.id },
+  ]);
+}
+
+async function seedBooks(orgId: string, profile: OrgProfile, index: number) {
+  const random = mulberry32(FIXED_SEED + index);
+
+  await seedMoney(orgId);
   await db.insert(parties).values(buildParties(orgId, profile, random));
 
   const org = await loadBooksOrg(profile.organization.slug);
@@ -761,13 +785,13 @@ async function createUser(email: string, name: string): Promise<Person> {
     throw new Error(`Sign-in for ${email} returned no session cookie`);
   }
 
-  return { email, name, id, headers: new Headers({ cookie }) };
+  return { id, headers: new Headers({ cookie }) };
 }
 
 async function addMember(
   organizationId: string,
   person: Person,
-  role: RoleKey = "reception",
+  role: RoleKey = "operator",
 ): Promise<void> {
   await auth.api.addMember({
     body: { userId: person.id, organizationId, role },
@@ -810,14 +834,14 @@ async function main(): Promise<void> {
   }
 
   const meridian = orgIds[0]!;
-  const admin = await createUser("admin@example.com", "Grace Hopper");
-  const staff = await createUser("staff@example.com", "Alan Turing");
-  await addMember(meridian, admin, "admin");
-  await addMember(meridian, staff);
+  const accountant = await createUser("accountant@example.com", "Grace Hopper");
+  const operator = await createUser("operator@example.com", "Alan Turing");
+  await addMember(meridian, accountant, "accountant");
+  await addMember(meridian, operator);
 
   // Left unaccepted, so the Members page shows an invited row on arrival.
   await auth.api.createInvitation({
-    body: { email: "invited@example.com", role: "reception", organizationId: meridian },
+    body: { email: "invited@example.com", role: "operator", organizationId: meridian },
     headers: owner.headers,
   });
 
@@ -832,9 +856,9 @@ async function main(): Promise<void> {
       "",
       `  Password for every account below: ${PASSWORD}`,
       "",
-      "  owner@example.com   owner      Meridian Traders + Ridgeview Academy",
-      "  admin@example.com   admin      Meridian Traders",
-      "  staff@example.com   reception  Meridian Traders",
+      "  owner@example.com       owner       Meridian Traders + Ridgeview Academy",
+      "  accountant@example.com  accountant  Meridian Traders",
+      "  operator@example.com    operator    Meridian Traders",
       "  invited@example.com has a pending invitation to Meridian Traders.",
       "",
       ...ORGS.map(({ organization: { name } }, index) => {
@@ -846,8 +870,11 @@ async function main(): Promise<void> {
         );
       }),
       "",
-      "  admin@example.com can read the audit log;",
-      "  staff@example.com cannot — that denial is itself audited.",
+      "  Receipts land in HDFC, ICICI or the cash box by payment method;",
+      "  Settings > Banks shows what each account holds.",
+      "",
+      "  accountant@example.com can read the audit log;",
+      "  operator@example.com cannot — that denial is itself audited.",
       "",
       "  More receipts for the volume check: bun run db:seed:volume",
       "  New accounts are created by an operator:",

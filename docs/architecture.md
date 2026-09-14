@@ -1,305 +1,221 @@
 # Architecture
 
-Accly Books is a Bun/Turborepo monorepo: TanStack Start (`apps/web`), Hono/oRPC
-(`apps/server` and `packages/api`), Drizzle/PostgreSQL (`packages/db`), Better
-Auth (`packages/auth`), private S3-compatible storage (`packages/storage`), and
-shared Base UI/shadcn components (`packages/ui`).
-
-## Runtime shape
-
-```text
-browser ──HTTP──▶ apps/server/Hono ──▶ oRPC handler ──┐
-                    └─ /api/auth                      │
-                                                     ├─▶ appRouter
-browser ──HTTP──▶ apps/web billing-PDF route ─────────┤
-apps/web SSR ──in-process router client───────────────┤
-tests ─────────in-process router client───────────────┘
-```
-
-Every router entry point builds the same request context. SSR, billing-document
-routes, and integration tests therefore exercise the same router and
-authorization guard as HTTP. The API server also exposes development-only
-reference pages; they never mount in production. RPC and development reference
-bodies are limited to 1 MiB before expensive context work.
-
-Source-of-truth code:
-
-| Concern                   | Location                                                              |
-| ------------------------- | --------------------------------------------------------------------- |
-| Roles and permissions     | `packages/auth/src/access.ts`                                         |
-| Request context           | `packages/api/src/lib/context.ts`                                     |
-| Guarded procedure factory | `packages/api/src/lib/procedures/factory.ts`                          |
-| Routers and audit         | `packages/api/src/routers/`, `packages/api/src/audit.ts`              |
-| Schema and migrations     | `packages/db/src/schema/`, `packages/db/src/migrations/`              |
-| Web RPC/query policy      | `apps/web/src/lib/orpc.ts`, `query-client.ts`, `operational-query.ts` |
-| Storage                   | `packages/storage/src/index.ts`                                       |
+Bun and Turborepo: TanStack Start (`apps/web`), Hono and oRPC (`apps/server`,
+`packages/api`), Drizzle and PostgreSQL (`packages/db`), Better Auth
+(`packages/auth`), private S3 storage (`packages/storage`) and Base UI
+components (`packages/ui`). HTTP, web SSR, the receipt PDF route and tests call
+one `appRouter` with the same request context and guard. RPC bodies stop at 1
+MiB. Development reference pages never mount in production.
 
 ## Tenancy and authorization
 
-The organization slug is explicit untrusted procedure input. It is never
-session state and never falls back:
-
 ```text
 /:orgSlug/... → input.orgSlug → orgProcedure(permission, input)
-              → session + indexed membership + union-role grant
-              → context.scope { orgId, userId }
-              → WHERE table.org_id = scope.orgId
+  → session + indexed membership + union-role grant
+  → context.scope { orgId, userId } → WHERE org_id = scope.orgId
 ```
 
-- Organization slugs are immutable, URL-safe, at least four characters, and
-  outside the reserved public/system root namespace.
-- `session.activeOrganizationId` is never tenant scope.
-- A missing claim fails validation, a missing session is `UNAUTHORIZED`, and a
-  missing membership or grant is `FORBIDDEN`. Foreign/nonexistent slugs are
-  intentionally indistinguishable.
-- Accly Books recognizes `owner`, `admin`, `reception`, `cashier`, and `accountant`. Legacy
-  stored `member` roles are rejected by `parseRoles`/`authorize` and fail closed
-  until they are reset.
-- Better Auth's own organization endpoints remain mounted at `/api/auth/*` and
-  may consult active-organization state when their input omits an id. They
-  enforce Better Auth permissions but bypass the application's membership audit;
-  supported product flows use guarded `member.*` procedures. Integration tests
-  pin both properties until the direct surface is closed or audited.
-- The request context memoizes membership only within that request. Every
-  procedure still checks its own permission and denial audit. Nothing survives
-  the request, so revocation applies on the next request.
-- Handlers use only `context.scope.orgId` for SQL. `userId` is attribution.
-- Every primary-key lookup and write includes the tenant predicate. Reads and
-  direct writes turn foreign ids into `NOT_FOUND`; conditional state writes may
-  deliberately return the same `CONFLICT` for missing and already-moved rows.
-- Every referenced id is re-verified under the same tenant. Prices and taxes
-  come from server-read item rows, never browser claims.
-- RLS is not currently used. Application predicates plus integration guardrails
-  are the accepted enforcement model; RLS may later be additive defense in
-  depth, never a replacement for membership/permission checks.
+The slug is untrusted input. It is never session state and never falls back.
 
-Permissions are defined only in dependency-free `packages/auth/src/access.ts`.
-Better Auth stores comma-joined roles; `parseRoles` and `authorize` treat them as
-a union and throw on unknown roles. Client checks only hide controls; every
-operation is checked server-side.
+- Slugs are immutable, URL-safe, at least four characters, and outside the
+  reserved root names.
+- A missing claim fails validation, no session is `UNAUTHORIZED`, and no
+  membership or grant is `FORBIDDEN`. A foreign slug looks like an unknown one.
+- Membership is memoized for one request, so revocation applies on the next.
+  Each procedure checks and audits its own denial.
+- SQL uses only `context.scope.orgId`. `userId` is attribution.
+- Every lookup, write and referenced id carries the tenant predicate. A foreign
+  id is `NOT_FOUND`. A conditional state write may return one `CONFLICT` for a
+  missing and a moved row. Prices and taxes come from server rows.
+- There is no RLS. Predicates and the tenancy tests enforce isolation. RLS may
+  later add depth; it never replaces the guard.
 
-No email is sent. The invitation id is an opaque UUIDv7 that the admin hands to
-one person; presenting it with the invited email is the proof of eligibility
-The `invitation-claim` plugin enforces this in Better Auth's
-`user.create.before` hook: native `/sign-up/email` must carry a live invitation
-id whose email matches, and every other creation path is refused. Operator
-scripts insert rows directly and bypass the hook. New accounts stay
-`emailVerified: false` until a provider exists; organization endpoints do not
-require verification.
+Roles live only in `packages/auth/src/access.ts`. Better Auth stores them
+comma-joined. `parseRoles` and `authorize` read a union and throw on an unknown
+role, Better Auth's `member` and `admin` included. The roles are `owner`,
+`accountant`, `ca` and `operator`
+([call 10](./specs/accounting-core.md#architecture-calls)). Only `owner`
+manages members, invitations and settings, and uploads or deletes files. Client
+checks only hide controls.
 
-Because the id creates the account, `member.list` returns invitation rows and
-their links only to members holding `invitation: ["create"]`. Expired rows are
-hidden; inviting the same email again after expiry creates a fresh id.
+Better Auth's organization endpoints under `/api/auth/*` enforce their own
+permissions, may read active-organization state, and skip our membership audit.
+Product flows use the guarded `member.*` procedures; tests pin this until that
+surface closes.
 
-The join page's invitation lookup is public and returns the invited email,
-organization name and slug, and whether an account exists. From it the visitor
-either signs in or creates the account (name and password), then accepts the
-selected invitation through Better Auth, which checks the session email against
-the invitation. The organization picker loads only when no invitation is
-selected; its invitation links open the same selected-invitation screen.
+No email is sent. An owner hands an invitation id (UUIDv7) to one person. The
+`invitation-claim` plugin lets `/sign-up/email` create an account only with a
+live invitation for that email, and refuses every other path. Operator scripts
+insert users directly. Accounts stay `emailVerified: false`. `member.list` shows
+links only to holders of `invitation: ["create"]` and hides expired rows. The
+public join lookup returns the invited email, the organization, and whether an
+account exists. Better Auth checks the session email when it accepts.
 
-To add an organization-scoped domain:
-
-1. Add `orgId NOT NULL` and a tenant-leading index; generate the migration.
-2. Add explicit grants for every role in `packages/auth/src/access.ts`.
-3. Declare every endpoint with `orgProcedure(permission, orgInput...)`.
-4. Predicate every read/write/reference with verified `context.scope.orgId`.
-5. Put web routes under `apps/web/src/routes/$orgSlug/` and include `orgSlug` in
-   every query, mutation, direct call, and invalidation key.
-6. Add procedures to `GUARDED_CALLS` and prove cross-tenant row invisibility in
-   `tests/integration/tenancy.test.ts`.
+A new org-scoped domain follows the
+[`org-scoped-feature`](../.agents/skills/org-scoped-feature/SKILL.md) skill.
 
 ## Web data flow
 
-Org pages server-render. The `/$orgSlug` loader calls `member.me` through the
-request-local in-process client and supplies the shell's identity, roles,
-organizations, timezone, and currency. Base UI popups remain behind
-`ClientOnly` because of their current SSR store behavior.
+- Org pages server-render. The `/$orgSlug` loader reads `member.me` (identity,
+  roles, organizations, time zone) through the request-local client. Base UI
+  popups stay behind `ClientOnly`.
+- TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
+  `operational-query.ts`). Loaders prime it, components subscribe with the same
+  `queryOptions`, and loaders never pass data down as props. Membership comes
+  from `useMembership` through `membershipOptions`, stale after five minutes;
+  member and settings edits invalidate it.
+- The browser client batches calls made in the same tick into one `/rpc`
+  request (`BatchLinkPlugin`, `BatchHandlerPlugin`). The calls share one
+  context, so the session and membership resolve once per batch.
+- A gated route checks in its loader every grant it needs to submit
+  (`requireOrgPermission`), and redirects. `useCan` hides actions on readable
+  pages.
+- `/` and `/login` call `redirectSignedInHome` in `beforeLoad`. A member goes to
+  the first organization by name; anyone else goes to `/join`. A validated
+  `redirect` on `/login` wins. The organization home is `/$orgSlug/receipts`.
+- A tabbed record keeps shared chrome in its layout route. Declare context
+  shared by sibling routes outside the route tree: TanStack Start splits route
+  files into chunks with separate context objects.
+- Every query key includes `orgSlug`. Growing lists use full keysets and select
+  `limit + 1` base rows through a tenant-leading index before joins. Never use
+  `OFFSET`.
+- Live lists poll every 10 s (stale after 5 s), refetch only page one, and pause
+  in background tabs. There is no WebSocket or SSE.
 
-TanStack Query is the sole cache. Loaders prime it and components subscribe with
-the identical `queryOptions`; loaders do not carry query data as a second cache,
-and a loader's return value is not a channel for handing data down as props —
-`useMembership` in `apps/web/src/lib/membership.ts` is how a component asks for
-the one slice of `member.me` it draws. Independent reads run in parallel.
-Required failures reach route error/not-found boundaries; secondary prefetches
-may fail into component-level states.
-
-A route gated by a permission resolves it in the loader through
-`requireOrgPermission` and redirects somewhere the role can use. The gate names
-every grant the page needs to reach a submitted state, not just the one its name
-suggests: a page that renders and then 403s on save is the same denial arriving
-later. Actions that a role cannot perform on an otherwise readable page are
-hidden with `useCan` instead.
-
-The landing page and `/login` are for signed-out visitors. Their `beforeLoad`
-calls `redirectSignedInHome` in `apps/web/src/lib/home.ts`, a server function
-that reads the session and sends a member to their first organization by name
-(the switcher's order) or, with no membership, to `/join`. A validated `redirect`
-search value on `/login` wins over that default. Sign-in itself navigates to `/`
-so this is the one place that decides where a signed-in user belongs.
-
-Shared chrome for a tabbed record lives in its layout route, so switching tabs
-re-renders the body alone. A React context shared between sibling routes must be
-declared **outside** the route tree: TanStack Start splits a route file into
-separate chunks, so a context created in `route.tsx` and imported from a sibling
-route resolves to two different objects — the provider publishes into one and the
-tab reads the other. `apps/web/src/lib/opd-record.ts` is why.
-
-Every query identity includes `orgSlug`. Growing lists use keysets containing
-all stable ordering columns and select `limit + 1` base rows through a
-tenant-leading index before joining display data. Never use `OFFSET` for
-operational lists.
-
-The OPD operational surfaces poll every 10 seconds with a 5-second stale time
-and refetch on focus; background tabs pause. Mutations invalidate exact domain
-keys. A `CONFLICT` refreshes the relevant appointment, queue, charges, invoices,
-and worklists so the losing terminal sees the winning state. There is no
-WebSocket/SSE layer.
+Query, form and invalidation rules are in
+[Development](./development.md#react-and-forms).
 
 ## Data and migrations
 
-One `organization_settings` row per Organization owns legal identity, address,
-financial-year fields, and operational settings. Its `orgId` is both the primary
-key and a foreign key to Better Auth's `organization`. The profile API reads
-from this row; settings updates write it in one scoped statement.
+- Every Organization-owned row has `orgId NOT NULL`. Ids are UUIDv7 text unless
+  the record needs another key. Do not infer field contracts from convention.
+- PostgreSQL enforces structure: tenant-safe composite foreign keys, unique and
+  partial unique indexes, and CHECKs for data-integrity invariants only
+  (non-negative money, one-sided journal lines, closed state and type enums
+  that code owns, date ranges, the advance-supply presence rule).
+- Volatile and regulatory rules live in the application, in zod
+  (`packages/api/src/lib/schemas.ts` and router inputs): supply classes, legal
+  types, state codes, Party roles, the TDS rate range, advance-supply values and
+  the document number format. A change to them needs no migration. Party GSTIN
+  uniqueness per Organization is an application check (`PARTY_GSTIN_TAKEN`),
+  not an index.
+- Indexes lead with `org_id` and match the real filter, order and keyset.
+- Write with scoped `UPDATE ... RETURNING`. Edits compare-and-swap on the loaded
+  `updatedAt` (`timestamptz(3)`). Zero rows is a stale-record `CONFLICT`, with
+  no retry.
+- Member and short master names are stored lowercase. Legal names, addresses,
+  notes, references and identifiers keep their case.
+- One `organization_settings` row per Organization holds identity, address,
+  financial year, time zone, prefixes and settings. Readers query it directly;
+  there is no settings cache.
+- Migrations run before startup under an advisory lock and must suit a draining
+  old instance ([rules](./development.md#code-rules)).
+- Tests use real PostgreSQL and wipe only a database whose name ends in `_test`.
 
-- Every Organization-owned domain or infrastructure row has `orgId NOT NULL`.
-  Keys and timestamps follow the record's job: UUIDv7 text ids and paired
-  `createdAt`/`updatedAt` are common, but counters use composite keys, immutable
-  documents may have only `createdAt`, and a file id is its validated object
-  key. Do not infer a field contract from convention. Cross-row invariants are
-  database constraints when PostgreSQL can express them.
-- Sponsor data lives in the organization-scoped `payers` master and `customer_payers` links; it is measurement data, not billing state.
-- Tenant-leading indexes follow the actual filter/order/keyset shape. Descending
-  nullable cursor columns specify matching null ordering explicitly.
-- Use scoped `UPDATE/DELETE ... RETURNING` instead of select-then-write.
-- Migration authoring and history follow the
-  [migration policy](./development.md#code-rules).
-- Development and production apply migrations before app startup. Production
-  startup retains the advisory lock; deployment migrations must remain
-  compatible with an old instance that may still be draining.
-- Integration tests use real PostgreSQL and wipe only a database ending in
-  `_test`.
+## Audit and files
 
-## Domain boundary
+`audit()` is fire-and-forget. It records role denials and sensitive successes
+(membership and settings changes, file deletion, posts, cancellations), never
+reads or ordinary writes. A foreign claim cannot write another tenant's log.
+URLs, tokens and secrets never enter metadata; an unverified file key is stored
+as a digest. Journal entries differ: they commit with their document, because ledger
+drift must fail the transaction and an audit outage must not.
 
-User-entered member names and short master-data names are trimmed and stored in
-lowercase by their Zod input schemas. Formal legal names, addresses, notes,
-document references, and identifiers keep their entered casing.
+Objects are private. The browser moves bytes with 15-minute presigned URLs; keys
+are `<orgId>/<uuid>/<sanitized-name>`. An upload stays `pending`, and invisible,
+until a scoped update marks it `ready`. Deletion removes the row, then the
+object best-effort, so a failure leaves an orphan, never a dangling row.
 
-Customer codes use an organization-scoped transactional counter plus configured
-prefix. The customer code is a local display identifier, not primary identity or a
-national ID.
+## Ledger
 
-A Customer stores one date of birth plus `dobEstimated`; age is always derived
-against the Organization-local date, and an estimate is displayed with a `~`
-prefix. Registration requires an explicit sex choice. Phone matching and input
-classification compare digits only, while the stored and displayed phone text
-keeps the operator's formatting.
+Evidence, not decisions: `docs/research/ledger-architecture.md` (13 products and
+ledger engines, with code paths and URLs) and
+`docs/research/accounting-contract-decisions-2026-09-10.md` (ERPNext, Frappe
+Books and Odoo posting code at pinned commits), in Git at `a716b6c`. Where they
+differ from this page (materialized balances, a posting-rule table, database
+triggers), this page wins.
 
-Customer and Party edits are an Organization-scoped compare-and-swap against the
-loaded, millisecond-exact `updatedAt` (`timestamptz(3)`). A zero-row update is a stale-record `CONFLICT`
-with no second read; the client offers a refresh, which also reveals a Customer
-that no longer exists. The server does not retry a stale write.
+### Documents first, append-only
 
-The item is a flat chargeable-item registry. Charges snapshot name/code,
-category, unit price, tax rate, and tax code so later item edits never
-rewrite financial history. New/follow-up attendance pricing is configured per
-practitioner; a configured zero-price item represents an intentional free line.
+Documents are the only write model. Posting writes the document, the journal
+entry and lines, and the party ledger lines in one transaction. Posted rows
+change only through post and reverse; a correction is a reversing entry.
+`recordEntry` refuses an unbalanced entry (`assertBalanced`), and no code
+updates or deletes a journal line. Add a database guard only when a second
+writer appears. ERPNext, Odoo, Xero and Square Books share this shape. Two other
+shapes lost. A ledger-first voucher system (TallyPrime) makes the user choose
+accounts on every entry and permits edits in place. An event-sourced ledger
+with projections suits offline sync, but its event schemas are versioned
+forever, a projection change is a replay, and a late projection shows a wrong
+balance. Documents first won on entry speed, migrations, AI read models and
+cost. Event-sourced replay is given up; a hash chain can come later without a
+model change. Offline sync needs its own replay contract, idempotency keys and
+per-site number series ([deferred](./specs/accounting-core.md#deferred)). A
+feature that wants to edit a posted row adds a document type or a reversal.
 
-One OPD Appointment is the parent for its Customer link, queue lifecycle,
-Charges, Invoices, and prescription attachments. Check-in enriches a booked row;
-it does not create a Visit/Encounter wrapper. The outpatient parent is legacy; it stays until documents can be raised directly against a Customer.
+### Posting mechanics in code, accounts and rates in data
 
-Booking and walk-in creation share one appointment table and one intake UI. They
-remain separate server procedures because `createWalkIn` is an atomic financial
-transaction that requires `billing:write`, while `book` requires `opd:create`
-and may atomically snapshot optional selected services as pending Charges. Those
-booked Charges stay outside billing worklists and invoice issuance until check-in.
-A merged contract would over-privilege booking staff or weaken the money path.
+Each document type has one pure posting function in `core/posting.ts` that
+branches on `settlementKind` and `exposureSide`; a Journal's legs are its own
+lines. Accounts come from data: the
+method's account, the line Account, and `Account.systemKey`, seeded per legal
+type and unique per Organization. Rates come from dated rows. No account id,
+name or rate is in code. A posting-rule table keyed by document type, line
+kind, tax class and legal type was rejected. An advance Receipt has no line to
+key on, its debit comes from the Payment Method, and a Payment that refunds a
+Credit Note hits receivables although money goes out; a key that covers these
+becomes a rules language. ERPNext, Frappe Books and Odoo build these legs in
+code. A new accounting event is reviewed code plus a `systemKey` seed, with a
+unit test per branch.
 
-Each care setting owns its operational billing route and desk workflow, over one
-shared finance domain: immutable documents, collection, corrections, accounting,
-and authorization. Shared UI is extracted only after a
-second shipped desk proves the same interaction and state model.
+### Post and cancel
 
-## Audit
+- `postDocument` (Billing) reads the Payment Method `FOR SHARE` inside the
+  transaction (active state, account and name), so an archive waits for posts
+  in flight. It writes the document as a draft with its line, party ledger line
+  and any TDS deduction, and calls `recordEntry`. Then `postNumbered` numbers
+  and posts it last. So the number-series lock spans only numbering and commit,
+  and a rollback takes the number with it: no gaps.
+- `recordEntry` (General Accounting) is Billing's only call into General
+  Accounting. A post resolves system accounts and runs the posting function. A
+  reverse swaps the stored post lines and never reruns the function, rates or
+  mappings.
+- `reverseDocument` is one transaction. A conditional update moves a posted
+  document to `cancelled` (anything else is `CONFLICT`). Then the party ledger
+  lines and the entry are reversed, dated today in the Organization time zone.
+- One `post` entry and at most one `reverse` entry exist per document:
+  `journal_entries` has a unique index on
+  `(orgId, documentType, documentId, kind)` and a partial unique index on
+  `reversesEntryId`.
+- A number is prefix, short financial year, `/` and sequence: `RCT26-27/1`. A
+  prefix has 1–4 letters, digits, `-` or `/`, stored in upper case because
+  GSTR-1 and the IRP compare numbers without case. The series key is (org,
+  type, financial year, prefix). `postNumbered` refuses a number longer than 16
+  characters (GST Rules 46 and 50) with `BAD_REQUEST` `NUMBER_SERIES_FULL`; the
+  owner then changes the prefix, which starts a new consecutive series.
+- There is no balances table: balances are sums of journal lines, as in ERPNext
+  and Odoo. A period-close snapshot is
+  [deferred](./specs/accounting-core.md#deferred).
 
-`audit()` is fire-and-forget. It records verified role denials centrally and
-sensitive/destructive successes such as membership changes, file deletion, and
-financial corrections. Do not audit lists, reads, or every ordinary mutation.
+### Money accounts
 
-A foreign membership claim cannot insert into the claimed tenant's audit log.
-Presigned URLs, tokens, and secrets never enter audit metadata. A verified file
-deletion records the stored in-scope object key; an unverified or foreign
-caller-supplied key is recorded only as a digest. Tests use `eventually` for
-positive assertions and `drainAuditWrites()` before negative assertions.
+The chart has a Cash group (1000, `systemKey` `cash`) and a Bank Accounts group
+(1100, `bank`). Money sits in their leaves: 1001 Cash in Hand, 1101 Bank
+Account, and cash or bank leaves that `account.create` adds.
+`account.moneyBalances` returns each leaf with its group and balance; it is the
+only read Settings > Banks needs for accounts. A Payment Method names one active money
+leaf, so the method decides where money lands, as in ERPNext; there is no
+per-receipt deposit account. `paymentMethod.setActive` archives a method, and
+old documents keep it. New Organizations get Cash → Cash in Hand, and UPI, Bank
+transfer and Card → Bank Account. Direct receipts and payments cannot name a
+money account, a group or a system account (`postableAccount`).
 
-Accounting differs: journals commit atomically with their source financial
-document. Audit availability must not fail an operational action; ledger drift
-must fail the financial transaction.
+Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
+Payment to it, from the bank statement. Record actual fees; never model per-bank
+fee rules or settlement days.
 
-## Files
-
-Objects are always private. The browser uploads/downloads directly with
-15-minute presigned URLs; bytes never cross the app server. Keys are
-`<orgId>/<uuid>/<sanitized-name>` and are validated before database work.
-
-Upload lifecycle: insert `pending` metadata and presign, browser PUT, then scoped
-`pending → ready`. Pending objects are neither listed nor readable. Deletion
-commits metadata removal first, then best-effort object removal; a storage
-failure may leave an unreachable orphan but never a live row pointing at a
-missing object. No anonymous bucket policy or unsigned read path is allowed.
-
-## Billing ledger
-
-Invoices, Payments, Credit Notes, and Refunds post balanced journals in the
-same transaction. Stable `systemKey` accounts include Cash, Bank, Customer
-Receivables, GST Output, and category revenue accounts. A unique
-`(orgId, documentType, documentId, kind)` prevents duplicate posting; storage and all
-math use `bigint` paise; decimal strings appear only at the API boundary.
-Payment methods are listed in [Product](./product.md).
-
-The accounting core ([spec](./specs/accounting-core.md)) shares the
-`journal_entries` and `journal_lines` tables with this legacy ledger until slice
-7 retires it. Its Receipt path is documents-first: `receipt.post` writes the
-`documents` row, its line, the party ledger line, one `post` journal entry with
-its lines, the month `balances` rows and the `number_series` increment in one
-transaction; `receipt.cancel` appends a `reverse` entry built from the stored
-lines (never from the posting function) and flips the document to `cancelled`.
-Procedures return `bigint` paise; the receipt PDF renders only the print
-snapshot captured at post. The ledger is guarded in the application:
-`recordEntry` refuses an unbalanced entry (`assertBalanced`) before it inserts,
-and no code path updates or deletes journal lines, so a correction is always a
-reversing entry. Add a database guard only when a second writer appears.
-
-Split collection is one tenant-scoped transaction containing up to four
-Payments. Every line gets its own Receipt and journal source; UPI and card lines
-fail before insertion when their reconciliation reference is absent. Item
-charges selected together are likewise verified under the same organization
-and inserted in one transaction rather than one request per item.
-
-A care record owns a monotonically increasing `chargeRevision` for its Charge
-set. Voids and Invoice issuance advance it in the same transaction; settlement
-locks the record and must match both the revision the desk reviewed and the
-reviewed grand total after trusted repricing. It is an
-optimistic-concurrency token and nothing else.
-
-Trial balance and billing-ledger balance sheet read journals. GST reporting
-reads immutable invoice/credit-note lines because document numbers, customers,
-rates, and HSN/SAC are document facts. The current GST surface is an intra-state
-outward register, not a filing-ready GSTR-1 export.
-
-Billing paper is rendered on the server from one guarded `billing.getInvoice`
-call. Preview, print, and download share that PDF endpoint; the document routes
-do not repeat the domain query. Templates read only the immutable source facts
-for the selected Invoice, Payment, Credit Note, or refund, so later balance
-activity cannot rewrite an issued document. The renderer and its WASM stay
-behind a server-only dynamic import, and its Unicode fonts are application
-assets rather than network dependencies.
-
-Business Date is the calendar date in the Organization timezone with a local
-midnight boundary. Invoice, Payment, Credit Note, and Refund rows snapshot it at
-issuance; paper renders that stored date rather than reinterpreting `createdAt`.
-Stored token/document/journal dates do not move when the timezone setting later
-changes.
+Settings > Banks lists money accounts, balances and methods to anyone with
+`account` `read`, `paymentMethod` `read` and `report` `readFinancial`, the CA
+included. Adding an account needs `account` `create`; adding or archiving a
+method needs `paymentMethod` `create` and `update`. Both forms open in a right
+Sheet ([Design](./design.md#10-task-overlays)).

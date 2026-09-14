@@ -18,7 +18,8 @@ import {
   timeZone,
   validateGstinIdentity,
 } from "../lib/schemas";
-import { seedChartOfAccounts, seedPaymentMethods } from "./chart-templates";
+import { seedChartOfAccounts } from "./chart-templates";
+import { seedTdsSections } from "./tds-schedule";
 
 export const createOrganizationInput = z
   .object({
@@ -89,8 +90,8 @@ export async function createOrganization(
         city: input.city,
         pinCode: input.pinCode,
       });
-      const accountIds = await seedChartOfAccounts(tx, id, input.legalType);
-      await seedPaymentMethods(tx, id, accountIds);
+      await seedChartOfAccounts(tx, id, input.legalType);
+      await seedTdsSections(tx, id);
     });
   } catch (error) {
     if (uniqueViolationConstraint(error) === "organization_slug_uidx") {

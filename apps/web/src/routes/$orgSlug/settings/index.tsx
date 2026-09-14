@@ -1,20 +1,18 @@
 import { authorize } from "@accly/auth/access";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { membershipOptions } from "@/lib/membership";
 import { SETTINGS_TABS } from "@/lib/navigation";
-import { orpc } from "@/lib/orpc";
 
-// An address, not a page: resolves to the first tab this member can open.
+// An address, not a page: resolves to the first tab this member can open. The tab
+// loaders gate on the same cached membership, so the redirect cannot loop.
 export const Route = createFileRoute("/$orgSlug/settings/")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
-    const membership = await queryClient.query({
-      ...orpc.member.me.queryOptions({ input: { orgSlug } }),
-      staleTime: 0,
-    });
+    const membership = await queryClient.query(membershipOptions(orgSlug));
 
     const first = SETTINGS_TABS.find(({ permission }) => authorize(membership.roles, permission));
     throw redirect({
-      to: first?.to ?? "/$orgSlug/dashboard",
+      to: first?.to ?? "/$orgSlug/receipts",
       params: { orgSlug },
     });
   },

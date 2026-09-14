@@ -10,7 +10,7 @@ const PASSWORD = process.env.PERF_PASSWORD;
 
 const ROUND_COUNT = Number(process.env.PERF_ROUNDS ?? 3);
 
-const ROUTE = process.env.PERF_ROUTE ?? "/meridian-traders/dashboard";
+const ROUTE = process.env.PERF_ROUTE ?? "/meridian-traders/receipts";
 
 if (!EMAIL || !PASSWORD) {
   throw new Error("Set PERF_EMAIL and PERF_PASSWORD to a benchmark fixture account");

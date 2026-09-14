@@ -15,69 +15,41 @@ function matrix(permission: AppPermission, granted: readonly RoleKey[]): MatrixR
   return {
     permission,
     owner: granted.includes("owner"),
-    admin: granted.includes("admin"),
     accountant: granted.includes("accountant"),
     ca: granted.includes("ca"),
     operator: granted.includes("operator"),
-    reception: granted.includes("reception"),
-    cashier: granted.includes("cashier"),
   };
 }
 
-const ALL_ROLES = [
-  "owner",
-  "admin",
-  "accountant",
-  "ca",
-  "operator",
-  "reception",
-  "cashier",
-] as const;
+const ALL_ROLES = ["owner", "accountant", "ca", "operator"] as const;
 
-const ADMINISTRATORS = ["owner", "admin"] as const;
+const ACCOUNTING_WRITERS = ["owner", "accountant"] as const;
 
-const ACCOUNTING_WRITERS = ["owner", "admin", "accountant"] as const;
-
-const LEGACY_READERS = ["owner", "admin", "accountant", "reception", "cashier"] as const;
+const READERS_OF_BOOKS = ["owner", "accountant", "ca"] as const;
 
 const MATRIX: MatrixRow[] = [
   matrix({ settings: ["read"] }, ALL_ROLES),
-  matrix({ settings: ["update"] }, ADMINISTRATORS),
-  matrix({ audit: ["read"] }, ["owner", "admin", "accountant", "ca"]),
-  matrix({ report: ["readDailyCollections"] }, ["owner", "admin", "accountant", "cashier"]),
-  matrix({ report: ["readOpdRegister"] }, ACCOUNTING_WRITERS),
-  matrix({ report: ["readFinancial"] }, ["owner", "admin", "accountant", "ca"]),
-  matrix({ item: ["read"] }, ALL_ROLES),
-  matrix({ item: ["create"] }, ACCOUNTING_WRITERS),
-  matrix({ item: ["update"] }, ACCOUNTING_WRITERS),
-  matrix({ payer: ["read"] }, LEGACY_READERS),
-  matrix({ payer: ["create"] }, ADMINISTRATORS),
-  matrix({ staff: ["read"] }, LEGACY_READERS),
-  matrix({ staff: ["create"] }, ADMINISTRATORS),
-  matrix({ staff: ["update"] }, ADMINISTRATORS),
-  matrix({ file: ["upload"] }, ["owner", "admin", "reception"]),
+  matrix({ settings: ["update"] }, ["owner"]),
+  matrix({ audit: ["read"] }, READERS_OF_BOOKS),
+  matrix({ export: ["read"] }, READERS_OF_BOOKS),
+  matrix({ report: ["read"] }, READERS_OF_BOOKS),
+  matrix({ report: ["readFinancial"] }, READERS_OF_BOOKS),
+  matrix({ file: ["upload"] }, ["owner"]),
   matrix({ file: ["read"] }, ALL_ROLES),
-  matrix({ file: ["delete"] }, ADMINISTRATORS),
+  matrix({ file: ["delete"] }, ["owner"]),
   matrix({ member: ["read"] }, ALL_ROLES),
-  matrix({ member: ["create"] }, ADMINISTRATORS),
-  matrix({ member: ["update"] }, ADMINISTRATORS),
-  matrix({ member: ["delete"] }, ADMINISTRATORS),
-  matrix({ invitation: ["create"] }, ADMINISTRATORS),
-  matrix({ invitation: ["cancel"] }, ADMINISTRATORS),
-  matrix({ organization: ["update"] }, ADMINISTRATORS),
+  matrix({ member: ["create"] }, ["owner"]),
+  matrix({ member: ["update"] }, ["owner"]),
+  matrix({ member: ["delete"] }, ["owner"]),
+  matrix({ invitation: ["create"] }, ["owner"]),
+  matrix({ invitation: ["cancel"] }, ["owner"]),
+  matrix({ organization: ["update"] }, ["owner"]),
   matrix({ organization: ["delete"] }, ["owner"]),
-  matrix({ customer: ["create"] }, ["owner", "admin", "reception"]),
-  matrix({ customer: ["read"] }, LEGACY_READERS),
-  matrix({ customer: ["update"] }, ["owner", "admin", "reception"]),
-  matrix({ opd: ["create"] }, ["owner", "admin", "reception"]),
-  matrix({ opd: ["read"] }, LEGACY_READERS),
-  matrix({ opd: ["update"] }, ["owner", "admin", "reception"]),
-  matrix({ billing: ["read"] }, LEGACY_READERS),
-  matrix({ billing: ["write"] }, ["owner", "admin", "reception", "cashier"]),
-  matrix({ billing: ["creditNote"] }, ACCOUNTING_WRITERS),
-  matrix({ receipt: ["post"] }, ["owner", "admin", "accountant", "operator"]),
+  matrix({ receipt: ["post"] }, ["owner", "accountant", "operator"]),
   matrix({ receipt: ["cancel"] }, ACCOUNTING_WRITERS),
   matrix({ party: ["create"] }, ACCOUNTING_WRITERS),
+  matrix({ account: ["create"] }, ACCOUNTING_WRITERS),
+  matrix({ paymentMethod: ["update"] }, ACCOUNTING_WRITERS),
 ];
 
 test("each role grants exactly the permissions the matrix declares", () => {
@@ -86,12 +58,9 @@ test("each role grants exactly the permissions the matrix declares", () => {
   const granted = MATRIX.map((row) => ({
     permission: row.permission,
     owner: authorize(["owner"], row.permission),
-    admin: authorize(["admin"], row.permission),
     accountant: authorize(["accountant"], row.permission),
     ca: authorize(["ca"], row.permission),
     operator: authorize(["operator"], row.permission),
-    reception: authorize(["reception"], row.permission),
-    cashier: authorize(["cashier"], row.permission),
   }));
 
   expect(granted).toEqual(MATRIX);
@@ -121,23 +90,22 @@ test("the operator can post receipts without cancellation or master creation", (
 });
 
 test("parseRoles reads every stored role and rejects ones this app does not define", () => {
-  expect(parseRoles("reception,cashier")).toEqual(["reception", "cashier"]);
+  expect(parseRoles("operator,ca")).toEqual(["operator", "ca"]);
   expect(parseRoles(" owner , accountant ")).toEqual(["owner", "accountant"]);
-  expect(parseRoles("ca,operator")).toEqual(["ca", "operator"]);
 
-  expect(() => parseRoles("member")).toThrow(/Unknown organization role/);
-  expect(() => parseRoles("toString")).toThrow(/Unknown organization role/);
-  expect(() => parseRoles("superadmin")).toThrow(/Unknown organization role/);
-  expect(() => parseRoles("reception,superadmin")).toThrow(/Unknown organization role/);
+  // Better Auth's own `member` and `admin` roles, and the removed legacy roles, fail closed.
+  for (const stored of ["member", "admin", "reception", "toString", "operator,superadmin"]) {
+    expect(() => parseRoles(stored)).toThrow(/Unknown organization role/);
+  }
 });
 
 test("authorize grants the union across roles, matching Better Auth's own semantics", () => {
   // The bug this guards: reading only the first role strips a multi-role member's
   // permissions.
-  expect(authorize(parseRoles("reception"), { audit: ["read"] })).toBe(false);
-  expect(authorize(parseRoles("reception,accountant"), { audit: ["read"] })).toBe(true);
-  expect(authorize(parseRoles("reception,admin"), { file: ["delete"] })).toBe(true);
+  expect(authorize(parseRoles("operator"), { audit: ["read"] })).toBe(false);
+  expect(authorize(parseRoles("operator,accountant"), { audit: ["read"] })).toBe(true);
+  expect(authorize(parseRoles("operator,owner"), { file: ["delete"] })).toBe(true);
 
-  expect(authorize(["reception"], { organization: ["delete"] })).toBe(false);
+  expect(authorize(["operator"], { organization: ["delete"] })).toBe(false);
   expect(authorize([], { settings: ["read"] })).toBe(false);
 });

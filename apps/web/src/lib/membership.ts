@@ -7,6 +7,14 @@ import { orpc } from "@/lib/orpc";
 
 export type Membership = Awaited<ReturnType<RouterClient<AppRouter>["member"]["me"]>>;
 
+// The `/$orgSlug` loader runs on every navigation. Roles change rarely and the server
+// re-checks each call, so five minutes of reuse spares most navigations a blocking
+// round trip; member and settings edits invalidate it at once.
+export const membershipOptions = (orgSlug: string) => ({
+  ...orpc.member.me.queryOptions({ input: { orgSlug } }),
+  staleTime: 5 * 60_000,
+});
+
 /**
  * The only way to read membership. The `/$orgSlug` loader awaits `member.me`, so it
  * is always cached here and never pending or failed — a `useQuery` beside this one
@@ -18,10 +26,7 @@ export type Membership = Awaited<ReturnType<RouterClient<AppRouter>["member"]["m
 export function useMembership(orgSlug: string): Membership;
 export function useMembership<T>(orgSlug: string, select: (membership: Membership) => T): T;
 export function useMembership<T>(orgSlug: string, select?: (membership: Membership) => T) {
-  return useSuspenseQuery({
-    ...orpc.member.me.queryOptions({ input: { orgSlug } }),
-    select,
-  }).data;
+  return useSuspenseQuery({ ...membershipOptions(orgSlug), select }).data;
 }
 
 export function useCan(orgSlug: string, permission: AppPermission): boolean {

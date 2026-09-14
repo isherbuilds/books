@@ -2,15 +2,19 @@ import { beforeAll, expect, test } from "bun:test";
 
 import { auth } from "@accly/auth";
 import { SYSTEM_ACCOUNT_KEYS } from "@accly/api/core/chart-templates";
+import { uniqueViolationConstraint } from "@accly/api/lib/db-errors";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import { journalEntries } from "@accly/db/schema/journal-entries";
+import { journalLines } from "@accly/db/schema/journal-lines";
+import { tdsSections } from "@accly/db/schema/tds-sections";
 import { eq } from "drizzle-orm";
-import { ORPCError } from "@orpc/server";
 
 import {
   createAccountingOrganization,
   createFounderSession,
+  createOrganization,
   createTestUser,
   joinOrganization,
   removeFromOrganization,
@@ -27,20 +31,80 @@ beforeAll(async () => {
   founder = await createFounderSession();
 });
 
-type PartyCreateInput = Parameters<AppRouterClient["party"]["create"]>[0];
+test("unique violations remain distinguishable when Postgres omits the constraint name", () => {
+  expect(uniqueViolationConstraint({ cause: { code: "23505" } })).toBeNull();
+  expect(
+    uniqueViolationConstraint({
+      cause: { code: "23505", constraint: "payment_methods_org_name_idx" },
+    }),
+  ).toBe("payment_methods_org_name_idx");
+  expect(uniqueViolationConstraint({ cause: { code: "23503" } })).toBeUndefined();
+});
 
-async function expectCoreError(promise: Promise<unknown>, code: string) {
-  try {
-    await promise;
-  } catch (error) {
-    if (!(error instanceof ORPCError)) throw error;
-    expect(error.code).toBe(code);
+test("journal lines reject accounts and entries from another organization", async () => {
+  const [ownerA, ownerB] = await Promise.all([
+    createTestUser("core-journal-tenant-a"),
+    createTestUser("core-journal-tenant-b"),
+  ]);
 
-    return error;
+  const [organizationA, organizationB] = await Promise.all([
+    createOrganization(ownerA, "core-journal-tenant-a"),
+    createOrganization(ownerB, "core-journal-tenant-b"),
+  ]);
+
+  const accountAId = Bun.randomUUIDv7();
+  const accountBId = Bun.randomUUIDv7();
+  const entryAId = Bun.randomUUIDv7();
+  const entryBId = Bun.randomUUIDv7();
+
+  await db.insert(accounts).values([
+    { id: accountAId, orgId: organizationA.id, code: "TENANT-A", name: "Tenant A", type: "asset" },
+    { id: accountBId, orgId: organizationB.id, code: "TENANT-B", name: "Tenant B", type: "asset" },
+  ]);
+  await db.insert(journalEntries).values([
+    {
+      id: entryAId,
+      orgId: organizationA.id,
+      entryDate: "2030-03-15",
+      documentType: "tenant-integrity",
+      documentId: "tenant-a",
+      kind: "post",
+      narration: "Tenant A entry",
+      createdBy: ownerA.user.id,
+    },
+    {
+      id: entryBId,
+      orgId: organizationB.id,
+      entryDate: "2030-03-15",
+      documentType: "tenant-integrity",
+      documentId: "tenant-b",
+      kind: "post",
+      narration: "Tenant B entry",
+      createdBy: ownerB.user.id,
+    },
+  ]);
+
+  // The composite (org_id, id) foreign keys refuse a line that crosses tenants.
+  for (const crossing of [
+    { entryId: entryBId, accountId: accountAId },
+    { entryId: entryAId, accountId: accountBId },
+  ]) {
+    await expect(
+      db
+        .insert(journalLines)
+        .values({
+          id: Bun.randomUUIDv7(),
+          orgId: organizationB.id,
+          debit: 100n,
+          credit: 0n,
+          ...crossing,
+        })
+        .execute(),
+    ).rejects.toThrow();
   }
+});
 
-  throw new Error("Expected core call to reject");
-}
+type PartyCreateInput = Parameters<AppRouterClient["party"]["create"]>[0];
 
 function partyCreateInput(orgSlug: string, name: string): PartyCreateInput {
   return {
@@ -72,6 +136,10 @@ test("founder organization creation seeds the complete chart and profile", async
   for (const systemKey of SYSTEM_ACCOUNT_KEYS) {
     expect(seededAccounts.filter((account) => account.systemKey === systemKey)).toHaveLength(1);
   }
+
+  expect(
+    await db.select().from(tdsSections).where(eq(tdsSections.orgId, organization.id)),
+  ).toHaveLength(13);
 
   const profile = await api.organization.getProfile({ orgSlug: organization.slug });
   expect(profile.legalType).toBe("company");
@@ -146,7 +214,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   );
 
   const collisionInput = partyCreateInput(organization.slug, "ACME CO");
-  const collision = await expectCoreError(api.party.create(collisionInput), "CONFLICT");
+  const collision = await expectORPCCode(api.party.create(collisionInput), "CONFLICT");
   expect(collision.data).toMatchObject({
     reason: "PARTY_NAME_COLLISION",
     candidateIds: [original.id],
@@ -159,7 +227,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
 
   expect(namesake.id).not.toBe(original.id);
 
-  const gstinCollision = await expectCoreError(
+  const gstinCollision = await expectORPCCode(
     api.party.create({
       ...partyCreateInput(organization.slug, "Different Legal Name"),
       gstin: "27ABCDE1234F1Z5",
@@ -213,8 +281,8 @@ test("a party edit from a stale copy is refused", async () => {
 
   expect(await api.party.update(edit)).toMatchObject({ name: "Stale Copy Renamed" });
 
-  const stale = await expectCoreError(api.party.update({ ...edit, name: "Lost edit" }), "CONFLICT");
-  expect(stale.data).toMatchObject({ reason: "stale_record" });
+  const stale = await expectORPCCode(api.party.update({ ...edit, name: "Lost edit" }), "CONFLICT");
+  expect(stale.data).toMatchObject({ reason: "STALE_RECORD" });
 });
 
 test("membership removal is enforced on the next party request", async () => {

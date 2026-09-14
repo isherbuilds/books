@@ -1,5 +1,5 @@
 import { db } from "@accly/db";
-import type { DbTransaction } from "@accly/db/counter";
+import type { DbTransaction } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { PARTY_ROLES, parties } from "@accly/db/schema/parties";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
@@ -8,7 +8,6 @@ import { and, asc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { conflict } from "../lib/conflict";
-import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
@@ -101,12 +100,31 @@ async function claimPartyName(
   }
 }
 
-function rethrowPartyWriteError(error: unknown): never {
-  if (uniqueViolationConstraint(error) === "parties_org_gstin_idx") {
-    throw conflict("PARTY_GSTIN_TAKEN", "A party with this GSTIN already exists.");
-  }
+// One Party per GSTIN is an application rule, not a unique index, so it can follow GST
+// practice. The lock serializes writers of one GSTIN; names are always claimed first.
+async function claimGstin(
+  tx: DbTransaction,
+  orgId: string,
+  gstin: string | null,
+  exceptId?: string,
+): Promise<void> {
+  if (!gstin) return;
 
-  throw error;
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${orgId} || ':gstin:' || ${gstin}))`);
+
+  const [taken] = await tx
+    .select({ id: parties.id })
+    .from(parties)
+    .where(
+      and(
+        eq(parties.orgId, orgId),
+        eq(parties.gstin, gstin),
+        exceptId ? ne(parties.id, exceptId) : undefined,
+      ),
+    )
+    .limit(1);
+
+  if (taken) throw conflict("PARTY_GSTIN_TAKEN", "A party with this GSTIN already exists.");
 }
 
 export const partyRouter = {
@@ -123,27 +141,18 @@ export const partyRouter = {
 
     const party = await db.transaction(async (tx) => {
       await claimPartyName(tx, scope.orgId, values.normalizedName, allowNamesake);
+      await claimGstin(tx, scope.orgId, values.gstin);
 
-      try {
-        const [created] = await tx
-          .insert(parties)
-          .values({
-            ...values,
-            id: Bun.randomUUIDv7(),
-            orgId: scope.orgId,
-          })
-          .returning();
+      const [created] = await tx
+        .insert(parties)
+        .values({ ...values, id: Bun.randomUUIDv7(), orgId: scope.orgId })
+        .returning();
 
-        if (!created) {
-          throw new ORPCError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to create party.",
-          });
-        }
-
-        return created;
-      } catch (error) {
-        rethrowPartyWriteError(error);
+      if (!created) {
+        throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create party." });
       }
+
+      return created;
     });
 
     return party;
@@ -152,7 +161,7 @@ export const partyRouter = {
   update: orgProcedure(
     { party: ["update"] },
     orgInput
-      .extend({ partyId: z.string().uuid() })
+      .extend({ partyId: z.uuid() })
       .extend(partyInputFields)
       .extend({
         active: z.boolean(),
@@ -177,40 +186,37 @@ export const partyRouter = {
 
     const party = await db.transaction(async (tx) => {
       await claimPartyName(tx, scope.orgId, values.normalizedName, allowNamesake, partyId);
+      await claimGstin(tx, scope.orgId, values.gstin, partyId);
 
-      try {
-        // One compare-and-swap: a missing row and a newer one both mean the editor's
-        // copy is stale, so neither needs a second read to tell them apart.
-        const [updated] = await tx
-          .update(parties)
-          .set({
-            ...values,
-            active,
-            updatedAt: sql`greatest(statement_timestamp(), ${parties.updatedAt} + interval '1 millisecond')::timestamptz(3)`,
-          })
-          .where(
-            and(
-              eq(parties.orgId, scope.orgId),
-              eq(parties.id, partyId),
-              eq(parties.updatedAt, new Date(updatedAt)),
-            ),
-          )
-          .returning();
+      // One compare-and-swap: a missing row and a newer one both mean the editor's
+      // copy is stale, so neither needs a second read to tell them apart.
+      const [updated] = await tx
+        .update(parties)
+        .set({
+          ...values,
+          active,
+          updatedAt: sql`greatest(statement_timestamp(), ${parties.updatedAt} + interval '1 millisecond')::timestamptz(3)`,
+        })
+        .where(
+          and(
+            eq(parties.orgId, scope.orgId),
+            eq(parties.id, partyId),
+            eq(parties.updatedAt, new Date(updatedAt)),
+          ),
+        )
+        .returning();
 
-        if (!updated) {
-          throw conflict("stale_record", "This party changed after you opened it.");
-        }
-
-        return updated;
-      } catch (error) {
-        rethrowPartyWriteError(error);
+      if (!updated) {
+        throw conflict("STALE_RECORD", "This party changed after you opened it.");
       }
+
+      return updated;
     });
 
     return party;
   }),
 
-  get: orgProcedure({ party: ["read"] }, orgInput.extend({ partyId: z.string().uuid() })).handler(
+  get: orgProcedure({ party: ["read"] }, orgInput.extend({ partyId: z.uuid() })).handler(
     async ({ context, input }) => {
       const [party] = await db
         .select()
@@ -231,7 +237,7 @@ export const partyRouter = {
   // the organization; negative is an advance held for it.
   statement: orgProcedure(
     { party: ["read"], report: ["read"] },
-    orgInput.extend({ partyId: z.string().uuid(), ...period }).superRefine(orderedPeriod),
+    orgInput.extend({ partyId: z.uuid(), ...period }).superRefine(orderedPeriod),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
@@ -298,9 +304,17 @@ export const partyRouter = {
   }),
 
   // The complete master; every caller filters `active` in memory from this one entry.
+  // Only what the list, Link Field and palette show: contact and address fields come
+  // from `get` when one party opens.
   list: orgProcedure({ party: ["read"] }, orgInput).handler(async ({ context }) => {
     const rows = await db
-      .select()
+      .select({
+        id: parties.id,
+        name: parties.name,
+        roles: parties.roles,
+        gstin: parties.gstin,
+        active: parties.active,
+      })
       .from(parties)
       .where(eq(parties.orgId, context.scope.orgId))
       .orderBy(asc(parties.name), asc(parties.id))

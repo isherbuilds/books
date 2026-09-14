@@ -6,7 +6,8 @@ This file is the map plus the rules you must not break. Read the linked owner fo
 the behavior being changed; use the [documentation index](./docs/README.md) when
 ownership is unclear. Update that owner when the change makes its guidance stale.
 
-- [Product](./docs/product.md) — scope, canonical language, finance flows, roadmap gates
+- [Product](./docs/product.md) — position, scope, language, evidence gates
+- [Accounting core](./docs/specs/accounting-core.md) — the accounting contract and slice plan
 - [Architecture](./docs/architecture.md) — tenancy, auth, requests, data, audit, files, accounting
 - [Development](./docs/development.md) — setup, commands, check policy; [Operations](./docs/operations.md)
 - [Design](./docs/design.md) — **the UI source of truth**
@@ -33,7 +34,7 @@ If my instructions are ambiguous, ask me to clarify before proceeding.
    - Public sign-up is closed. An account is created only by native sign-up carrying a live invitation id for that email, or by an operator via `scripts/create-user.ts`. The invitation id is the recipient's proof until an email provider exists, so it reaches only members with the invite grant. Only the `FOUNDING_EMAIL` account creates organizations (`scripts/create-founder.ts`).
    - Roles are stored comma-joined and authorize as a **union**. Use `parseRoles`/`authorize` from `@accly/auth/access`; never read `role.split(",")[0]`.
 3. **Audit sensitive actions, not everything.** `audit()` is fire-and-forget and can never slow a response or turn one into a 500. Role denials are audited centrally in `orgProcedure`; routers call `audit()` only for sensitive or destructive mutations. Do not move audit writes into domain transactions.
-4. **Never hand-edit generated migrations.** New schema → `bun run db:generate`; hand-authored SQL gets its own migration file. Migrations are append-only once data is retained.
+4. **Never hand-edit or hand-write migrations.** The Drizzle schema is the only source: change it, then `bun run db:generate`. A rule Drizzle cannot express is not built. Before any environment keeps data, delete the baseline, regenerate it and reset the database; once data is retained, migrations are append-only.
 5. **Permissions live in `packages/auth/src/access.ts` only.** Dependency-free, shared by client and server. Each role states its grants explicitly.
 6. **No secrets or server-only modules in client assets.**
 7. **Stored objects are always private.** `@accly/storage` issues only short-lived presigned URLs; the bucket is never anonymously readable.

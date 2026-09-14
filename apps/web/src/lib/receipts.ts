@@ -2,7 +2,7 @@ import type { AppRouterClient } from "@accly/api/routers/index";
 
 import { orpc } from "@/lib/orpc";
 
-export type ReceiptListFilters = Omit<
+type ReceiptListFilters = Omit<
   Parameters<AppRouterClient["receipt"]["list"]>[0],
   "orgSlug" | "cursor" | "limit"
 >;
@@ -11,7 +11,14 @@ export type ReceiptListFilters = Omit<
 // Receipts tab share it, so posting a receipt refreshes both through one key.
 export const receiptListOptions = (orgSlug: string, filters: ReceiptListFilters) =>
   orpc.receipt.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor, limit: 50 }),
+    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
     initialPageParam: undefined,
     getNextPageParam: (last) => (last.hasMore ? last.rows.at(-1)?.id : undefined),
   });
+
+// A cached master like party.list: every method, active or not, since old receipts
+// name retired ones. The receipts page, its form and Banks settings share one entry.
+export const paymentMethodListOptions = (orgSlug: string) => ({
+  ...orpc.paymentMethod.list.queryOptions({ input: { orgSlug } }),
+  staleTime: 5 * 60_000,
+});

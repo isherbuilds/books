@@ -17,7 +17,7 @@ export function invitationClaim() {
           databaseHooks: {
             user: {
               create: {
-                // The invitation id is an opaque UUID handed to one person by an admin;
+                // The invitation id is an opaque UUID handed to one person by an owner;
                 // presenting it with the invited email is the proof of eligibility until
                 // an email provider exists. Operator scripts insert directly and
                 // never reach this hook, so every other creation path is refused.

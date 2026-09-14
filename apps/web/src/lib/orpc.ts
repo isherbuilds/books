@@ -1,6 +1,7 @@
 import { env } from "@accly/env/web";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
+import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createRouterClient, type RouterClient } from "@orpc/server";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { createIsomorphicFn } from "@tanstack/react-start";
@@ -31,9 +32,12 @@ const getORPCClient = createIsomorphicFn()
     }),
   )
   .client((): RouterClient<AppRouter> => {
+    // Calls made in the same tick, such as a page's queries, travel as one request:
+    // one CORS preflight, one session check and one membership lookup.
     const link = new RPCLink({
       url: `${env.VITE_SERVER_URL}/rpc`,
       fetch: (url, options) => fetch(url, { ...options, credentials: "include" }),
+      plugins: [new BatchLinkPlugin({ groups: [{ condition: () => true, context: {} }] })],
     });
 
     return createORPCClient(link);

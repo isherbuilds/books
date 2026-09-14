@@ -15,5 +15,5 @@ export function pdfContentDisposition(fileName: string, download: boolean): stri
     return codePoint <= 31 || codePoint === 127 ? "_" : character;
   }).join("");
 
-  return `${disposition}; filename="billing-document.pdf"; filename*=UTF-8''${encode5987(safeFileName)}`;
+  return `${disposition}; filename="document.pdf"; filename*=UTF-8''${encode5987(safeFileName)}`;
 }

@@ -12,3 +12,5 @@ export const db = drizzle({
   },
   schema,
 });
+
+export type DbTransaction = Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];

@@ -6,15 +6,18 @@ import { ORPCError } from "@orpc/server";
  * and shows the server message.
  */
 export type ConflictReason =
-  | "duplicate"
-  | "uid_taken"
-  | "stale_record"
+  | "DUPLICATE"
+  | "STALE_RECORD"
   | "PARTY_NAME_COLLISION"
   | "PARTY_GSTIN_TAKEN";
 
 /** A clash the operator can act on. Expected, so the server does not log it. */
 export function conflict(reason: ConflictReason, message: string) {
   return new ORPCError("CONFLICT", { message, data: { reason } });
+}
+
+export function badRequest(reason: string, message: string) {
+  return new ORPCError("BAD_REQUEST", { message, data: { reason } });
 }
 
 /**
