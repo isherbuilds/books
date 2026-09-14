@@ -70,7 +70,8 @@ app.use(
   cors({
     origin: env.CORS_ORIGIN,
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    // oRPC's BatchLinkPlugin marks batched requests with x-orpc-batch.
+    allowHeaders: ["Content-Type", "Authorization", "x-orpc-batch"],
     credentials: true,
     // Cache preflight responses so cross-origin RPCs don't pay an OPTIONS round trip.
     maxAge: 86400,
