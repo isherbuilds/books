@@ -3,7 +3,7 @@ import { accounts } from "@accly/db/schema/accounts";
 import type { AdvanceSupply, DocumentType } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Scope } from "../lib/procedures/factory";
 import type { AllocationTarget } from "./allocations";
@@ -336,6 +336,18 @@ export function reverseLines(lines: readonly JournalLineInput[]): JournalLineInp
   }));
 }
 
+// The validation every stored-line reversal passes, single or batched.
+function reversalOf(entryId: string, storedLines: readonly JournalLineInput[]): JournalLineInput[] {
+  if (storedLines.length === 0) {
+    throw new Error(`Journal entry ${entryId} has no lines to reverse`);
+  }
+
+  const lines = reverseLines(storedLines);
+  assertBalanced(lines);
+
+  return lines;
+}
+
 export type EntryDocumentType = DocumentType | "allocation";
 
 export type RecordEntryArgs =
@@ -394,6 +406,8 @@ export async function recordEntry(
         posting satisfies never;
         throw new Error("Unsupported posting");
     }
+
+    assertBalanced(lines);
   } else {
     document = args.document;
 
@@ -426,10 +440,8 @@ export async function recordEntry(
     }
 
     reversesEntryId = postLine.entryId;
-    lines = reverseLines(storedLines);
+    lines = reversalOf(postLine.entryId, storedLines);
   }
-
-  assertBalanced(lines);
 
   const entryId = Bun.randomUUIDv7();
 
@@ -452,4 +464,77 @@ export async function recordEntry(
       ...line,
     })),
   );
+}
+
+// Reverses stored entries by id in a fixed number of statements: one read of their
+// lines, one header insert, one line insert. Same posting boundary and same
+// validation as a single `recordEntry` reverse; no posting function re-runs.
+export async function reverseEntries(
+  tx: DbTransaction,
+  scope: Scope,
+  entryIds: readonly string[],
+  meta: { entryDate: string; narration: string },
+): Promise<void> {
+  if (entryIds.length === 0) {
+    return;
+  }
+
+  const storedLines = await tx
+    .select({
+      entryId: journalLines.entryId,
+      documentType: journalEntries.documentType,
+      documentId: journalEntries.documentId,
+      accountId: journalLines.accountId,
+      partyId: journalLines.partyId,
+      debit: journalLines.debit,
+      credit: journalLines.credit,
+    })
+    .from(journalLines)
+    .innerJoin(
+      journalEntries,
+      and(eq(journalEntries.orgId, scope.orgId), eq(journalEntries.id, journalLines.entryId)),
+    )
+    .where(and(eq(journalLines.orgId, scope.orgId), inArray(journalLines.entryId, [...entryIds])))
+    .orderBy(journalLines.entryId, journalLines.id);
+
+  const byEntry = new Map<string, typeof storedLines>();
+
+  for (const line of storedLines) {
+    const group = byEntry.get(line.entryId);
+
+    if (group) {
+      group.push(line);
+    } else {
+      byEntry.set(line.entryId, [line]);
+    }
+  }
+
+  const entryRows: (typeof journalEntries.$inferInsert)[] = [];
+  const lineRows: (typeof journalLines.$inferInsert)[] = [];
+
+  for (const reversedEntryId of entryIds) {
+    const stored = byEntry.get(reversedEntryId) ?? [];
+    const lines = reversalOf(reversedEntryId, stored);
+
+    const entryId = Bun.randomUUIDv7();
+
+    entryRows.push({
+      id: entryId,
+      orgId: scope.orgId,
+      documentType: stored[0]!.documentType,
+      documentId: stored[0]!.documentId,
+      kind: "reverse",
+      reversesEntryId: reversedEntryId,
+      entryDate: meta.entryDate,
+      narration: meta.narration,
+      createdBy: scope.userId,
+    });
+
+    for (const line of lines) {
+      lineRows.push({ id: Bun.randomUUIDv7(), orgId: scope.orgId, entryId, ...line });
+    }
+  }
+
+  await tx.insert(journalEntries).values(entryRows);
+  await tx.insert(journalLines).values(lineRows);
 }

@@ -27,7 +27,7 @@ CREATE TABLE "allocations" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "allocations_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "allocations_amount_paise_check" CHECK ("allocations"."amount_paise" > 0),
-	CONSTRAINT "allocations_kind_check" CHECK ("allocations"."kind" in ('apply', 'reverse'))
+	CONSTRAINT "allocations_kind_check" CHECK (("allocations"."kind" = 'apply' and "allocations"."reverses_allocation_id" is null) or ("allocations"."kind" = 'reverse' and "allocations"."reverses_allocation_id" is not null))
 );
 --> statement-breakpoint
 CREATE TABLE "audit_log" (
@@ -139,7 +139,10 @@ CREATE TABLE "document_lines" (
 	"amount_paise" bigint NOT NULL,
 	CONSTRAINT "document_lines_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "document_lines_kind_check" CHECK ("document_lines"."kind" in ('item', 'account')),
-	CONSTRAINT "document_lines_quantity_check" CHECK ("document_lines"."quantity" is null or "document_lines"."quantity" >= 1)
+	CONSTRAINT "document_lines_quantity_check" CHECK ("document_lines"."quantity" is null or "document_lines"."quantity" >= 1),
+	CONSTRAINT "document_lines_cgst_paise_check" CHECK ("document_lines"."cgst_paise" >= 0),
+	CONSTRAINT "document_lines_sgst_paise_check" CHECK ("document_lines"."sgst_paise" >= 0),
+	CONSTRAINT "document_lines_igst_paise_check" CHECK ("document_lines"."igst_paise" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "documents" (
@@ -434,5 +437,6 @@ CREATE INDEX "journal_lines_org_entry_idx" ON "journal_lines" USING btree ("org_
 CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id","name");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_rates_org_code_from_idx" ON "tax_rates" USING btree ("org_id","code","effective_from");--> statement-breakpoint
 CREATE UNIQUE INDEX "items_org_normalized_name_idx" ON "items" USING btree ("org_id","normalized_name");--> statement-breakpoint
+CREATE INDEX "items_org_name_idx" ON "items" USING btree ("org_id","name");--> statement-breakpoint
 CREATE INDEX "party_ledger_lines_org_party_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","side");--> statement-breakpoint
 CREATE INDEX "party_ledger_lines_org_document_idx" ON "party_ledger_lines" USING btree ("org_id","document_id");

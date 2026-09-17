@@ -33,7 +33,7 @@ import { ErrorNote } from "@/components/page";
 import { PartyLinkField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
-import { invalidateDocumentState } from "@/lib/domain-invalidation";
+import { invalidateCashState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { formatDay } from "@/lib/org-datetime";
 import { applyOrpcFieldError, errorReason, isRefusal } from "@/lib/orpc-error";
@@ -56,8 +56,8 @@ const receiptSchema = z
     paymentMethodId: z.string().min(1, "Choose a payment method"),
     settlementKind: z.enum(["advance", "against", "direct"]),
     advanceSupply: z.enum(["goods", "exempt", "taxableService"]).nullable(),
-    // Typed amounts by Invoice id. The open-invoice query owns the rows, so submit
-    // checks and sends only the ids it lists; it never walks this record.
+    // Typed amounts by Invoice id. These are the operator's intent, so submit sends
+    // exactly the non-empty entries and refuses when one is no longer open.
     allocations: z.record(z.string(), z.string()),
     incomeAccountId: z.string().nullable(),
     reference: z.string().trim().max(120, "Reference must be 120 characters or fewer"),
@@ -160,13 +160,13 @@ export function ReceiptForm({
   const post = useMutation(
     orpc.receipt.post.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateCashState(queryClient, orgSlug);
       },
       onError: async (error) => {
         // Retrying could post it twice; the list shows whether it went through.
         if (!isRefusal(error)) {
           onClose();
-          await invalidateDocumentState(queryClient, orgSlug);
+          await invalidateCashState(queryClient, orgSlug);
           toast.error("The result is uncertain. Check the receipt list before entering it again.");
 
           return;
@@ -217,11 +217,20 @@ export function ReceiptForm({
       let allocatedPaise = 0n;
       let invalid = false;
 
-      for (const invoice of openRows) {
-        // A row mounted after the last edit has no key yet.
-        const amount = values.allocations[invoice.id] ?? "";
-
+      for (const [invoiceId, amount] of Object.entries(values.allocations)) {
         if (amount === "") continue;
+
+        const invoice = openRows.find((row) => row.id === invoiceId);
+
+        if (!invoice) {
+          form.setError(
+            `allocations.${invoiceId}`,
+            { message: "This invoice is no longer open. Clear the amount to continue." },
+            { shouldFocus: !invalid },
+          );
+          invalid = true;
+          continue;
+        }
 
         const amountPaise = enteredPaise(amount);
 
@@ -234,15 +243,19 @@ export function ReceiptForm({
               : undefined;
 
         if (message) {
-          form.setError(`allocations.${invoice.id}`, { message }, { shouldFocus: !invalid });
+          form.setError(`allocations.${invoiceId}`, { message }, { shouldFocus: !invalid });
           invalid = true;
         } else {
-          allocations.push({ invoiceId: invoice.id, amount });
+          allocations.push({ invoiceId, amount });
           allocatedPaise += amountPaise;
         }
       }
 
-      if (invalid) return;
+      if (invalid) {
+        toast.error("Check the allocated amounts before posting.");
+
+        return;
+      }
 
       const receiptPaise = parseMoney(values.amount);
 
@@ -554,8 +567,10 @@ export function ReceiptForm({
               control={form.control}
               name={["amount", "allocations"]}
               render={([amount, allocations]) => {
-                const allocatedPaise = openRows.reduce(
-                  (total, invoice) => total + enteredPaise(allocations[invoice.id] ?? ""),
+                // Totals over what was typed, not over the open rows, so an amount for
+                // an invoice that has since closed still counts against the remainder.
+                const allocatedPaise = Object.values(allocations).reduce(
+                  (total, entered) => total + enteredPaise(entered),
                   0n,
                 );
 

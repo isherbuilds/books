@@ -23,8 +23,12 @@ Check UI items in the running app on desktop and mobile, in both themes.
 
 - **[Accounting core](./specs/accounting-core.md)**: Active. Slices 4b-ii and
   5–7, plus CA acceptance and the native PostgreSQL posting baseline for slices
-  1–3. Slices 4a and 4b-i are implemented and verified in the running app on
-  desktop and mobile, in both themes.
+  1–3. Slices 4a and 4b-i are implemented and runtime verified in the app; CA
+  acceptance is open.
+- **Released credits versus advances**: Active. Decide whether a credit
+  released by reversing an allocation is classified explicitly or recorded as a
+  released credit distinct from an advance, before any tax workflow reads
+  `advanceSupply` ([decision](./specs/accounting-core.md#slices)).
 - **Settlement reads at volume**: Verification. Invoice open and overdue filters
   and `receipt.unapplied` join one grouped active-allocation total. Measure them
   on 100,000 Invoices with allocations before adding any stored balance.

@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   pgTable,
   text,
   timestamp,
@@ -40,6 +41,7 @@ export const items = pgTable(
     }),
     unique("items_org_id_id_unique").on(table.orgId, table.id),
     uniqueIndex("items_org_normalized_name_idx").on(table.orgId, table.normalizedName),
+    index("items_org_name_idx").on(table.orgId, table.name),
     check("items_unit_price_paise_check", sql`${table.unitPricePaise} >= 0`),
   ],
 );

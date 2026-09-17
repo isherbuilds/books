@@ -116,9 +116,11 @@ financial rollback are not adopted.
      `components/apply-advance-sheet.tsx`, adoption in `receipt-form.tsx`, and
      `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
-     two proven shared seams. Every receipt, invoice, allocation and cancel
-     write calls one `invalidateDocumentState`; invalidation refetches only
-     mounted queries, so no write narrows it. A draft opens for editing at
+     two proven shared seams. Each write invalidates the set for what it moved:
+     `invalidateInvoiceDrafts` (draft save or discard),
+     `invalidateSettlementState` (invoice post or cancel, allocation apply or
+     reverse) and `invalidateCashState` (receipt post or cancel); an uncertain
+     result uses the same set as the success path. A draft opens for editing at
      `/invoices/$invoiceId?edit=true`; `?create=true` on the list starts a new
      invoice.
    - Legacy reference (a716b6c). Read it; do not copy it.

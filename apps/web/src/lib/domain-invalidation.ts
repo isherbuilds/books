@@ -6,10 +6,18 @@ type QueryInvalidator = {
   invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<void>;
 };
 
-// Every read a receipt, invoice, allocation or cancel write can move: both document
-// families, the party statement, and the cash or bank leaf a receipt's method names.
-// Invalidation refetches only mounted queries, so no write narrows this list.
-export async function invalidateDocumentState(
+// Three sets, one per kind of write. Each mutation calls the set for what it moved,
+// on success and on an uncertain result alike; a broader set would refetch every
+// mounted register and balance for a draft that touched none of them.
+
+// A draft save or discard changes only invoice reads.
+export function invalidateInvoiceDrafts(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({ queryKey: orpc.invoice.key({ input: { orgSlug } }) });
+}
+
+// Posting or cancelling an invoice and applying or reversing an allocation move
+// outstanding, unapplied and the party statement, never a cash or bank balance.
+export async function invalidateSettlementState(
   queryClient: QueryInvalidator,
   orgSlug: string,
 ): Promise<void> {
@@ -19,6 +27,16 @@ export async function invalidateDocumentState(
     queryClient.invalidateQueries({
       queryKey: orpc.party.statement.key({ input: { orgSlug } }),
     }),
+  ]);
+}
+
+// Posting or cancelling a receipt also moves the cash or bank leaf its method names.
+export async function invalidateCashState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    invalidateSettlementState(queryClient, orgSlug),
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
     }),

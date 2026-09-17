@@ -501,3 +501,72 @@ test("an operator may post but not cancel while a CA cannot post", async () => {
     "FORBIDDEN",
   );
 });
+
+test("an unregistered organization invoices a date with no effective rate", async () => {
+  const unregistered = await createAccountingFixture(founder, "invoice-unregistered");
+
+  const income = required(
+    unregistered.accounts.find(
+      ({ type, supplyClass }) => type === "income" && supplyClass === "taxable",
+    ),
+    "taxable income account",
+  );
+
+  const [customer, item] = await Promise.all([
+    unregistered.api.party.create({
+      orgSlug: unregistered.organization.slug,
+      name: "Unregistered Customer",
+      roles: ["customer"],
+      stateCode: "27",
+      addressLine1: "3 Customer Road",
+      city: "Pune",
+      pinCode: "411001",
+    }),
+    unregistered.api.item.create({
+      orgSlug: unregistered.organization.slug,
+      name: "Late rate consulting",
+      unit: "hour",
+      unitPrice: "1000.00",
+      incomeAccountId: income.id,
+      // GST40 only starts on 2025-09-22, so the invoice date below resolves no rate.
+      taxCode: "GST40",
+    }),
+  ]);
+
+  const posted = await unregistered.api.invoice.post({
+    orgSlug: unregistered.organization.slug,
+    partyId: customer.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2025-04-01",
+    lines: [{ kind: "item", itemId: item.id, quantity: 1 }],
+  });
+
+  const detail = await unregistered.api.invoice.get({
+    orgSlug: unregistered.organization.slug,
+    invoiceId: posted.id,
+  });
+
+  expect(detail).toMatchObject({ totalPaise: 100_000n, printClass: "billOfSupply" });
+  expect(detail.lines).toEqual([
+    expect.objectContaining({ unit: "hour", cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n }),
+  ]);
+});
+
+test("a line amount beyond the storable range is refused, not left to the database", async () => {
+  await expectReason(
+    api.invoice.post({
+      orgSlug: organization.slug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [
+        {
+          kind: "item",
+          itemId: taxableItem.id,
+          quantity: 1_000_000,
+          unitPrice: "9999999999999.99",
+        },
+      ],
+    }),
+    "INVOICE_AMOUNT_TOO_LARGE",
+  );
+});

@@ -14,6 +14,7 @@ import { NativeSelect } from "@accly/ui/components/native-select";
 import { SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -30,7 +31,12 @@ import { applyOrpcFieldError, errorMessage, errorReason, hasErrorCode } from "@/
 const HSN_SAC_PATTERN = /^\d{4,8}$/;
 
 const itemSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name").max(120, "Keep the name under 120 characters"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter a name")
+    .max(120, "Keep the name under 120 characters")
+    .refine((value) => /[\p{L}\p{N}]/u.test(value), "Name must include a letter or number"),
   hsnSac: z
     .string()
     .trim()
@@ -74,6 +80,9 @@ function ItemForm({
 }) {
   const queryClient = useQueryClient();
   const form = useZodForm(itemSchema, { defaultValues: defaults(item, seedName) });
+  // Captured with the initial field values: a background refetch must not swap the token
+  // under edits the user has not saved, or the server would accept stale fields.
+  const [editToken] = useState(() => item?.updatedAt.toISOString() ?? null);
 
   const accounts = useQuery(incomeAccountOptions(orgSlug));
   const rates = useQuery(orpc.item.taxRates.queryOptions({ input: { orgSlug } }));
@@ -131,7 +140,19 @@ function ItemForm({
     }),
   );
 
-  const saving = create.isPending || update.isPending;
+  // The mobile list renders cards without the table's row menu, so archiving lives here.
+  const setActive = useMutation(
+    orpc.item.setActive.mutationOptions({
+      onSuccess: async () => {
+        await invalidateItems(queryClient, orgSlug);
+        toast.success(item?.active ? "Item archived" : "Item restored");
+        onClose();
+      },
+      onError: (error) => toast.error(errorMessage(error, "Could not update the item")),
+    }),
+  );
+
+  const saving = create.isPending || update.isPending || setActive.isPending;
 
   const onSubmit = form.handleSubmit((values) => {
     // Sent as held: choosing a non-taxable account clears it, and the server owns the
@@ -146,12 +167,9 @@ function ItemForm({
     };
 
     if (item) {
-      update.mutate({
-        orgSlug,
-        itemId: item.id,
-        updatedAt: item.updatedAt.toISOString(),
-        ...fields,
-      });
+      if (editToken === null) throw new Error("Editing an item without a captured edit token");
+
+      update.mutate({ orgSlug, itemId: item.id, updatedAt: editToken, ...fields });
     } else {
       create.mutate({ orgSlug, ...fields });
     }
@@ -293,6 +311,17 @@ function ItemForm({
           </div>
 
           <SheetFooter>
+            {item ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="mr-auto"
+                onClick={() => setActive.mutate({ orgSlug, itemId: item.id, active: !item.active })}
+              >
+                {item.active ? "Archive" : "Restore"}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>

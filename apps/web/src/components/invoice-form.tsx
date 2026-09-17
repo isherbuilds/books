@@ -15,7 +15,13 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { Textarea } from "@accly/ui/components/textarea";
-import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 import {
@@ -37,14 +43,35 @@ import { LinkField } from "@/components/link-field";
 import { PartyLinkField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
-import { invalidateDocumentState } from "@/lib/domain-invalidation";
+import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import type { InvoiceDetail } from "@/lib/invoices";
 import { itemListOptions, type ItemListRow } from "@/lib/items";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, hasErrorCode, isRefusal } from "@/lib/orpc-error";
 
-const activeItems = (rows: ItemListRow[]) => rows.filter((item) => item.active);
+/** The active item master, with the id lookup every line needs, built once. */
+type ItemMaster = {
+  rows: ItemListRow[];
+  byId: Record<string, ItemListRow | undefined>;
+};
+
+type ItemMasterQuery = UseQueryResult<ItemMaster>;
+
+// The editor reads the item master once and hands the result to every line;
+// react-query keeps this selection while the cached list is unchanged.
+function itemMaster(rows: ItemListRow[]): ItemMaster {
+  const active = rows.filter((item) => item.active);
+  const byId: Record<string, ItemListRow | undefined> = {};
+
+  for (const item of active) byId[item.id] = item;
+
+  return { rows: active, byId };
+}
+
+type IncomeAccount = Awaited<ReturnType<AppRouterClient["account"]["list"]>>[number];
+
+type IncomeAccountQuery = UseQueryResult<IncomeAccount[]>;
 
 const lineSchema = z
   .object({
@@ -191,13 +218,15 @@ function ItemLineFields({
   orgSlug,
   form,
   index,
+  items,
+  canCreateItem,
 }: {
   orgSlug: string;
   form: InvoiceFormReturn;
   index: number;
+  items: ItemMasterQuery;
+  canCreateItem: boolean;
 }) {
-  const items = useQuery({ ...itemListOptions(orgSlug), select: activeItems });
-  const canCreateItem = useCan(orgSlug, { item: ["create"] });
   const [createSeed, setCreateSeed] = useState<string | null>(null);
 
   return (
@@ -210,13 +239,13 @@ function ItemLineFields({
             <FormLabel>Item</FormLabel>
             <FormControl>
               <LinkField
-                items={items.data}
+                items={items.data?.rows}
                 query={items}
                 noun="items"
                 getKey={(item) => item.id}
                 getLabel={(item) => item.name}
                 getCode={(item) => item.hsnSac ?? undefined}
-                value={items.data?.find((item) => item.id === field.value) ?? null}
+                value={(field.value ? items.data?.byId[field.value] : null) ?? null}
                 onSelect={(item) => (item ? setLineItem(form, index, item) : field.onChange(null))}
                 onCreate={canCreateItem ? setCreateSeed : undefined}
                 placeholder="Choose an item"
@@ -292,16 +321,14 @@ function ItemLineFields({
 }
 
 function AccountLineFields({
-  orgSlug,
   form,
   index,
+  accounts,
 }: {
-  orgSlug: string;
   form: InvoiceFormReturn;
   index: number;
+  accounts: IncomeAccountQuery;
 }) {
-  const accounts = useQuery(incomeAccountOptions(orgSlug));
-
   return (
     <>
       <FormField
@@ -386,13 +413,20 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
   const form = useZodForm(invoiceSchema, { defaultValues: defaults(today, draft) });
   const linesField = useFieldArray({ control: form.control, name: "lines" });
   const documentDate = useWatch({ control: form.control, name: "documentDate" });
+  // One subscription per editor: every line reads these results through props.
+  const items = useQuery({ ...itemListOptions(orgSlug), select: itemMaster });
+  const accounts = useQuery(incomeAccountOptions(orgSlug));
+  const canCreateItem = useCan(orgSlug, { item: ["create"] });
 
-  // The Party's state is the usual place of supply; the operator may change it.
+  // The Party's state is the usual place of supply, and only while the field is
+  // still empty: a state the operator picked meanwhile outranks this default.
   const defaultPlaceOfSupply = (partyId: string) =>
     queryClient.fetchQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId } })).then(
       (party) => {
-        // A later pick wins over a slower read.
+        // A later pick wins over a slower read, and a state chosen meanwhile stays.
         if (form.getValues("partyId") !== partyId) return;
+
+        if (form.getValues("placeOfSupplyStateCode") !== "") return;
 
         form.setValue("placeOfSupplyStateCode", party.stateCode, {
           shouldDirty: true,
@@ -448,11 +482,16 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
   };
 
   // A CONFLICT means the loaded draft moved on, so the editor closes and the record
-  // shows the current state; every other refusal goes to its field.
-  const onMutationError = async (error: unknown, fallback: string) => {
+  // shows the current state; every other refusal goes to its field. `invalidate` is
+  // the set of the write that failed, never a broader one.
+  const onMutationError = async (
+    error: unknown,
+    fallback: string,
+    invalidate: () => Promise<void>,
+  ) => {
     if (hasErrorCode(error, "CONFLICT")) {
       onClose();
-      await invalidateDocumentState(queryClient, orgSlug);
+      await invalidate();
       toast.error(errorMessage(error, fallback));
 
       return;
@@ -461,22 +500,38 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
     applyOrpcFieldError(form, error, SERVER_FIELDS, fallback);
   };
 
+  // A draft save moves invoice reads alone; posting moves settlement as well.
+  const invalidateDrafts = () => invalidateInvoiceDrafts(queryClient, orgSlug);
+  const invalidateSettlement = () => invalidateSettlementState(queryClient, orgSlug);
+
   const save = useMutation(
     orpc.invoice.saveDraft.mutationOptions({
       onSuccess: async (saved) => {
         setDraftToken(saved);
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateDrafts();
         toast.success("Draft saved");
         onSaved?.(saved.id);
       },
-      onError: (error) => onMutationError(error, "Could not save the invoice draft"),
+      onError: async (error) => {
+        // A first save that lost its response may have inserted the draft; retrying
+        // would insert a second one. An existing draft's retry is refused by its version.
+        if (!draftToken && !isRefusal(error)) {
+          onClose();
+          await invalidateDrafts();
+          toast.error("The result is uncertain. Check the invoice list before entering it again.");
+
+          return;
+        }
+
+        await onMutationError(error, "Could not save the invoice draft", invalidateDrafts);
+      },
     }),
   );
 
   const post = useMutation(
     orpc.invoice.post.mutationOptions({
       onSuccess: async ({ id }) => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateSettlement();
         toast.success("Invoice posted");
 
         // A posted draft goes on to its record; a new invoice stays for Post and next.
@@ -486,13 +541,13 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         // Retrying a new invoice could post it twice; a draft's retry is refused by its version.
         if (!draft && !isRefusal(error)) {
           onClose();
-          await invalidateDocumentState(queryClient, orgSlug);
+          await invalidateSettlement();
           toast.error("The result is uncertain. Check the invoice list before entering it again.");
 
           return;
         }
 
-        await onMutationError(error, "Could not post the invoice");
+        await onMutationError(error, "Could not post the invoice", invalidateSettlement);
       },
     }),
   );
@@ -704,9 +759,15 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
                 </Button>
               </div>
               {line.kind === "item" ? (
-                <ItemLineFields orgSlug={orgSlug} form={form} index={index} />
+                <ItemLineFields
+                  orgSlug={orgSlug}
+                  form={form}
+                  index={index}
+                  items={items}
+                  canCreateItem={canCreateItem}
+                />
               ) : (
-                <AccountLineFields orgSlug={orgSlug} form={form} index={index} />
+                <AccountLineFields form={form} index={index} accounts={accounts} />
               )}
             </fieldset>
           ))}

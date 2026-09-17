@@ -30,7 +30,7 @@ import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { InvoiceSheet } from "@/components/invoice-form";
 import { InvoiceStatus, InvoiceTotals } from "@/components/invoice-summary";
-import { invalidateDocumentState } from "@/lib/domain-invalidation";
+import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { invoiceDetailOptions, type InvoiceDetail } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
@@ -88,47 +88,62 @@ function InvoiceSheetRoute() {
   const closeEdit = () =>
     void navigate({ search: ({ edit: _edit, ...previous }) => previous, replace: true });
 
-  // Every CONFLICT here means the Sheet is stale: dismiss the overlay, refetch, and
-  // show the server's words.
-  const refused = (fallback: string, dismiss: () => void) => async (error: unknown) => {
-    if (hasErrorCode(error, "CONFLICT")) {
-      dismiss();
-      await invalidateDocumentState(queryClient, orgSlug);
-    }
+  // Every CONFLICT here means the Sheet is stale: dismiss the overlay, refetch what
+  // the failed write would have moved, and show the server's words.
+  const refused =
+    (fallback: string, dismiss: () => void, invalidate: () => Promise<void>) =>
+    async (error: unknown) => {
+      if (hasErrorCode(error, "CONFLICT")) {
+        dismiss();
+        await invalidate();
+      }
 
-    toast.error(errorMessage(error, fallback));
-  };
+      toast.error(errorMessage(error, fallback));
+    };
+
+  // Cancelling an invoice and reversing an allocation move settlement; discarding a
+  // draft moves invoice reads alone.
+  const invalidateSettlement = () => invalidateSettlementState(queryClient, orgSlug);
+  const invalidateDrafts = () => invalidateInvoiceDrafts(queryClient, orgSlug);
 
   const cancel = useMutation(
     orpc.invoice.cancel.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateSettlement();
         setCancelOpen(false);
         toast.success("Invoice cancelled");
       },
-      onError: refused("Could not cancel the invoice", () => setCancelOpen(false)),
+      onError: refused(
+        "Could not cancel the invoice",
+        () => setCancelOpen(false),
+        invalidateSettlement,
+      ),
     }),
   );
 
   const reverse = useMutation(
     orpc.allocation.reverse.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateSettlement();
         setReversing(null);
         toast.success("Allocation reversed");
       },
-      onError: refused("Could not reverse the allocation", () => setReversing(null)),
+      onError: refused(
+        "Could not reverse the allocation",
+        () => setReversing(null),
+        invalidateSettlement,
+      ),
     }),
   );
 
   const discard = useMutation(
     orpc.invoice.discardDraft.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateDrafts();
         toast.success("Draft discarded");
         close();
       },
-      onError: refused("Could not discard the draft", close),
+      onError: refused("Could not discard the draft", close, invalidateDrafts),
     }),
   );
 
@@ -315,7 +330,13 @@ function InvoiceSheetRoute() {
                             {line.description}
                           </TableCell>
                           <TableCell className="font-mono">{line.hsnSac ?? "—"}</TableCell>
-                          <TableCell className="text-right">{line.quantity ?? "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {line.quantity === null
+                              ? "—"
+                              : line.unit
+                                ? `${line.quantity} ${line.unit}`
+                                : line.quantity}
+                          </TableCell>
                           <TableCell className="text-right">
                             {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
                           </TableCell>
@@ -353,7 +374,9 @@ function InvoiceSheetRoute() {
                       </div>
                       <p className="text-muted-foreground">
                         {line.hsnSac ? <span className="font-mono">{line.hsnSac}</span> : null}
-                        {line.quantity === null ? null : ` · ${line.quantity} × `}
+                        {line.quantity === null
+                          ? null
+                          : ` · ${line.quantity}${line.unit ? ` ${line.unit}` : ""} × `}
                         {line.unitPricePaise === null ? null : formatMoney(line.unitPricePaise)}
                       </p>
                       <div className="flex justify-between gap-3 text-muted-foreground">

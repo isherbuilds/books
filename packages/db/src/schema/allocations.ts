@@ -54,6 +54,9 @@ export const allocations = pgTable(
       .on(table.orgId, table.reversesAllocationId)
       .where(sql`${table.reversesAllocationId} is not null`),
     check("allocations_amount_paise_check", sql`${table.amountPaise} > 0`),
-    check("allocations_kind_check", sql`${table.kind} in ('apply', 'reverse')`),
+    check(
+      "allocations_kind_check",
+      sql`(${table.kind} = 'apply' and ${table.reversesAllocationId} is null) or (${table.kind} = 'reverse' and ${table.reversesAllocationId} is not null)`,
+    ),
   ],
 );

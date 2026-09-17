@@ -63,5 +63,8 @@ export const documentLines = pgTable(
       "document_lines_quantity_check",
       sql`${table.quantity} is null or ${table.quantity} >= 1`,
     ),
+    check("document_lines_cgst_paise_check", sql`${table.cgstPaise} >= 0`),
+    check("document_lines_sgst_paise_check", sql`${table.sgstPaise} >= 0`),
+    check("document_lines_igst_paise_check", sql`${table.igstPaise} >= 0`),
   ],
 );

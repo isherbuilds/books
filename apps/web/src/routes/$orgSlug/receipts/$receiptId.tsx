@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
-import { invalidateDocumentState } from "@/lib/domain-invalidation";
+import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
@@ -100,7 +100,7 @@ function ReceiptSheetRoute() {
   const cancel = useMutation(
     orpc.receipt.cancel.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateCashState(queryClient, orgSlug);
         setCancelOpen(false);
         toast.success("Receipt cancelled");
       },
@@ -108,7 +108,7 @@ function ReceiptSheetRoute() {
         // Someone else cancelled it: refetch, so this Sheet shows the cancelled receipt.
         if (hasErrorCode(error, "CONFLICT")) {
           setCancelOpen(false);
-          void invalidateDocumentState(queryClient, orgSlug);
+          void invalidateCashState(queryClient, orgSlug);
         }
 
         toast.error(errorMessage(error, "Could not cancel the receipt"));

@@ -6,7 +6,7 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { activeAllocationSums, allocationReversed } from "../core/allocations";
+import { allocationReversed, remainingPaiseOf } from "../core/allocations";
 import {
   accountLine,
   organizationSnapshot,
@@ -305,7 +305,7 @@ export const receiptRouter = {
   unapplied: orgProcedure({ receipt: ["read"] }, orgInput.extend({ partyId: z.uuid() })).handler(
     async ({ context, input }) => {
       const { orgId } = context.scope;
-      const { sums, remainingPaise: unappliedPaise } = activeAllocationSums(orgId, "source");
+      const unappliedPaise = remainingPaiseOf(orgId, "source");
 
       const rows = await db
         .select({
@@ -315,7 +315,6 @@ export const receiptRouter = {
           unappliedPaise,
         })
         .from(documents)
-        .leftJoin(sums, eq(sums.documentId, documents.id))
         .where(
           and(
             eq(documents.orgId, orgId),

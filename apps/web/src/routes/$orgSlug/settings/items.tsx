@@ -1,25 +1,19 @@
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
-import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { cn } from "@accly/ui/lib/utils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useRef } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { DataTable, DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
-import { RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { ItemSheet } from "@/components/item-sheet";
 import { PageBody, PageHeader } from "@/components/page";
-import { invalidateItems } from "@/lib/domain-invalidation";
 import { itemListOptions, type ItemListRow } from "@/lib/items";
 import { useCan } from "@/lib/membership";
-import { errorMessage } from "@/lib/orpc-error";
-import { orpc } from "@/lib/orpc";
 import { focusRowLink } from "@/lib/row-focus";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -85,54 +79,7 @@ const ITEM_COLUMNS = [
       </Badge>
     ),
   }),
-  col.display({
-    id: "actions",
-    enableHiding: false,
-    enableSorting: false,
-    header: () => <span className="sr-only">Actions</span>,
-    meta: { className: "w-10 px-1 text-center" },
-    cell: ({ row, table }) => {
-      const orgSlug = table.options.meta?.orgSlug;
-
-      return orgSlug ? <ItemRowActions orgSlug={orgSlug} item={row.original} /> : null;
-    },
-  }),
 ];
-
-function ItemRowActions({ orgSlug, item }: { orgSlug: string; item: ItemListRow }) {
-  const canUpdate = useCan(orgSlug, { item: ["update"] });
-  const queryClient = useQueryClient();
-
-  const setActive = useMutation(
-    orpc.item.setActive.mutationOptions({
-      onSuccess: async () => {
-        await invalidateItems(queryClient, orgSlug);
-        toast.success(item.active ? "Item archived" : "Item restored");
-      },
-      onError: (error) => toast.error(errorMessage(error, "Could not update the item")),
-    }),
-  );
-
-  if (!canUpdate) return null;
-
-  return (
-    <RowActionsMenu label={`Actions for ${item.name}`}>
-      <DropdownMenuItem
-        render={
-          <Link to="/$orgSlug/settings/items" params={{ orgSlug }} search={{ edit: item.id }} />
-        }
-      >
-        Edit
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        disabled={setActive.isPending}
-        onClick={() => setActive.mutate({ orgSlug, itemId: item.id, active: !item.active })}
-      >
-        {item.active ? "Archive" : "Restore"}
-      </DropdownMenuItem>
-    </RowActionsMenu>
-  );
-}
 
 function ItemCard({ item }: { item: ItemListRow }) {
   return (

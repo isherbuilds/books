@@ -7,7 +7,22 @@ import { useId, type FormEvent, type ReactNode, type SyntheticEvent } from "reac
 const ownEvent = (event: SyntheticEvent<HTMLFormElement>) =>
   event.target instanceof Node && event.currentTarget.contains(event.target);
 
-/** Mod+Enter submits; plain Enter in a field does not implicitly submit. Tab moves on. */
+const FOCUSABLE = 'input, select, textarea, button, [tabindex]:not([tabindex="-1"])';
+
+// Spec §5: Enter moves to the next field. A Link Field with its popup open owns the
+// key (it commits the highlighted match), so only a closed control moves focus.
+function focusNext(form: HTMLFormElement, current: HTMLElement) {
+  const controls = [...form.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (element) =>
+      !element.matches(":disabled") && element.offsetParent !== null && element.tabIndex !== -1,
+  );
+
+  const next = controls[controls.indexOf(current) + 1];
+
+  next?.focus();
+}
+
+/** Mod+Enter submits; plain Enter moves to the next field and never submits. */
 export function DocumentForm({
   pending,
   onSubmit,
@@ -33,8 +48,12 @@ export function DocumentForm({
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
           event.currentTarget.requestSubmit();
-        } else if (event.target instanceof HTMLInputElement) {
+        } else if (
+          event.target instanceof HTMLInputElement &&
+          event.target.getAttribute("aria-expanded") !== "true"
+        ) {
           event.preventDefault();
+          focusNext(event.currentTarget, event.target);
         }
       }}
       className="flex min-h-0 flex-1 flex-col"

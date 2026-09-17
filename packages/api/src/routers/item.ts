@@ -3,9 +3,10 @@ import { accounts } from "@accly/db/schema/accounts";
 import { items } from "@accly/db/schema/items";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { taxRateEffectiveOn } from "../core/tax-schedule";
 import { postableAccount } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, conflict, nextEditToken } from "../lib/conflict";
@@ -43,13 +44,23 @@ const itemFields = {
 type ItemFields = z.output<z.ZodObject<typeof itemFields>>;
 
 async function itemValues(orgId: string, fields: ItemFields) {
+  // The rate must be effective today, exactly as `item.taxRates` offers it: a code whose
+  // range has ended cannot be resolved by a new invoice either.
+  const today = businessDate(new Date(), await orgTimeZone(orgId));
+
   const [incomeAccount, taxRate] = await Promise.all([
     postableAccount(orgId, fields.incomeAccountId, ["income"]),
     fields.taxCode
       ? db
           .select({ id: taxRates.id })
           .from(taxRates)
-          .where(and(eq(taxRates.orgId, orgId), eq(taxRates.code, fields.taxCode)))
+          .where(
+            and(
+              eq(taxRates.orgId, orgId),
+              eq(taxRates.code, fields.taxCode),
+              taxRateEffectiveOn(today),
+            ),
+          )
           .limit(1)
           .then(([row]) => row)
       : undefined,
@@ -71,7 +82,7 @@ async function itemValues(orgId: string, fields: ItemFields) {
   }
 
   if (fields.taxCode && !taxRate) {
-    throw badRequest("TAX_CODE_INVALID", "Choose a GST rate in this organization.");
+    throw badRequest("TAX_CODE_INVALID", "Choose a GST rate effective in this organization.");
   }
 
   return {
@@ -197,13 +208,7 @@ export const itemRouter = {
     return db
       .select({ id: taxRates.id, code: taxRates.code, name: taxRates.name })
       .from(taxRates)
-      .where(
-        and(
-          eq(taxRates.orgId, orgId),
-          lte(taxRates.effectiveFrom, today),
-          or(isNull(taxRates.effectiveTo), gte(taxRates.effectiveTo, today)),
-        ),
-      )
+      .where(and(eq(taxRates.orgId, orgId), taxRateEffectiveOn(today)))
       .orderBy(asc(taxRates.rateBasisPoints), asc(taxRates.code));
   }),
 };

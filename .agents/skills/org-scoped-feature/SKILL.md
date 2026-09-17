@@ -12,7 +12,8 @@ description: >-
 Every domain row belongs to exactly one organization. This skill is the
 end-to-end path for a new one. Background:
 [tenancy and authorization](../../../docs/architecture.md#tenancy-and-authorization)
-and the hard rules in `AGENTS.md`.
+and the hard rules in `AGENTS.md`, which apply to every step. This skill adds
+only the order, the templates, and the checks those rules do not state.
 
 Work in this order — each step depends on the one before it.
 
@@ -37,8 +38,7 @@ export const thing = pgTable(
 );
 ```
 
-- `orgId` is `NOT NULL` and cascades from the org. Not nullable, not optional.
-- `userId` is **attribution only**. It never authorizes anything.
+- `orgId` cascades from the org.
 - The index leads with `orgId`, then the sort and keyset columns in query order.
 - Export it from `packages/db/src/schema/index.ts`.
 
@@ -48,14 +48,12 @@ export const thing = pgTable(
 bun run db:generate
 ```
 
-Never hand-edit or hand-write a migration: the schema is the only source. A rule
-Drizzle cannot express is not built.
+Hard rule 4 applies.
 
 ## 3. Permission — `packages/auth/src/access.ts`
 
-Add the statement to `ac`, then add the grant **explicitly** to each of `owner`,
-`accountant`, `ca` and `operator` that should have it. Do not inherit from a
-lesser role.
+Add the statement to `ac`, then grant it to each of `owner`, `accountant`, `ca`
+and `operator` that should have it.
 
 ```ts
 export const ac = createAccessControl({ ..., thing: ["create", "read", "update", "delete"] } as const);
@@ -74,34 +72,25 @@ export const thingRouter = {
 };
 ```
 
-Non-negotiable in every handler:
+Beyond hard rules 1 and 2:
 
-- `eq(table.orgId, context.scope.orgId)` in **every** `where`, including queries
-  that already filter by primary key. This is what makes a foreign id a
-  `NOT_FOUND` instead of a leak.
-- Use `context.scope`; never derive scope from the session, URL, or input.
+- The tenant predicate also goes on queries that already filter by primary key.
+  This is what makes a foreign id a `NOT_FOUND` instead of a leak.
 - Mutations are a single scoped `UPDATE`/`DELETE ... RETURNING`, not
   select-then-write. Missing direct writes return `NOT_FOUND`; conditional state
   writes may collapse missing and stale rows into one `CONFLICT`.
 - Keyset pagination, never `OFFSET`.
-- `audit()` for destructive or sensitive successes only. Verified role denials
-  are audited centrally in `orgProcedure`'s internal guard; an unverified foreign
-  org claim must never write into that tenant's audit trail. Audit only
-  additional domain denials after scope is proven.
+- An unverified foreign org claim must never write into that tenant's audit
+  trail. Audit additional domain denials only after scope is proven.
 
 Register it in `packages/api/src/routers/index.ts`.
 
 ## 5. Route — `apps/web/src/routes/$orgSlug/<thing>.tsx`
 
-It must live under the server-rendered org layout, import the singleton `orpc`
-from `@/lib/orpc`, read `orgSlug` from route params, and include it in every
-procedure input and tenant-specific invalidation key. Put Base UI popups behind
-TanStack Router's `ClientOnly`.
-
-Follow `packages/ui` (shadcn `base-lyra` on Base UI: `text-xs`, compact controls,
-and the [shared radius scale](../../../docs/design.md#4-radius)). Use only the
-state colours and named exceptions documented in Design; tenants do not receive
-their own visual themes.
+Hard rule 2 and the UI section of `AGENTS.md` cover the route. Import `orpc` from
+`@/lib/orpc` and read `orgSlug` from route params. Use only the state colours and
+named exceptions documented in [Design](../../../docs/design.md); tenants do not
+receive their own visual themes.
 
 ## 6. Test — `tests/integration/tenancy.test.ts`
 
@@ -124,11 +113,7 @@ bun run check-types && bun run check && bun run test
 
 ## Self-check before calling it done
 
-- [ ] Every query in the new router has the tenant predicate.
-- [ ] No handler re-derives an org from the URL, session, or input.
+- [ ] Hard rules 1, 2, 4 and 5 hold for every file touched.
 - [ ] Edit-token columns are `timestamptz(3)`, and writes set them with `nextEditToken` (`lib/conflict.ts`).
-- [ ] The permission is granted explicitly per role, in `access.ts` only.
-- [ ] The page is under `routes/$orgSlug/`, imports `orpc`, and passes `orgSlug` in every call and tenant-specific key.
 - [ ] The tenancy test answers all four questions for this domain.
-- [ ] The migration is generated, not hand-edited.
 - [ ] Behaviour that changed has its doc updated in the same change.

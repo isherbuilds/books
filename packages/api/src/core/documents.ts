@@ -18,7 +18,7 @@ import type { Scope } from "../lib/procedures/factory";
 import { activeAllocationsOf, applyAllocations } from "./allocations";
 import { financialYearOf, postNumbered } from "./numbering";
 import { reversePartyLedgerLines, writePartyLedgerLine } from "./party-ledger";
-import { recordEntry, type DocumentPosting } from "./posting";
+import { recordEntry, reverseEntries, type DocumentPosting } from "./posting";
 
 export type DocumentNumbering = {
   prefix: string;
@@ -439,7 +439,7 @@ export async function reverseDocument(
   const reversedEntry = alias(journalEntries, "reversed_entry");
 
   const unreversedAllocationEntries = await tx
-    .select({ allocationId: allocations.id })
+    .select({ entryId: journalEntries.id })
     .from(journalEntries)
     .innerJoin(
       allocations,
@@ -465,14 +465,12 @@ export async function reverseDocument(
       ),
     );
 
-  for (const entry of unreversedAllocationEntries) {
-    await recordEntry(tx, scope, {
-      kind: "reverse",
-      document: { id: entry.allocationId, type: "allocation" },
-      entryDate,
-      narration: reason,
-    });
-  }
+  await reverseEntries(
+    tx,
+    scope,
+    unreversedAllocationEntries.map((entry) => entry.entryId),
+    { entryDate, narration: reason },
+  );
 
   await reversePartyLedgerLines(tx, scope.orgId, documentId, entryDate);
   await recordEntry(tx, scope, {

@@ -32,10 +32,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useZodForm } from "@/hooks/use-zod-form";
-import { invalidateDocumentState } from "@/lib/domain-invalidation";
+import { invalidateSettlementState } from "@/lib/domain-invalidation";
 import { formatDay } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, errorReason } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorMessage, errorReason, isRefusal } from "@/lib/orpc-error";
 
 const applyAdvanceSchema = z.object({
   amount: z
@@ -65,16 +65,27 @@ export function ApplyAdvanceSheet({
   const apply = useMutation(
     orpc.allocation.apply.mutationOptions({
       onSuccess: async () => {
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateSettlementState(queryClient, orgSlug);
         toast.success("Advance applied");
         onClose();
       },
       onError: async (error) => {
+        // Retrying could apply it twice; the receipt and the invoice show whether it went through.
+        if (!isRefusal(error)) {
+          onClose();
+          await invalidateSettlementState(queryClient, orgSlug);
+          toast.error(
+            "The result is uncertain. Check the receipt and invoice before applying it again.",
+          );
+
+          return;
+        }
+
         const reason = errorReason(error);
 
         // The receipt or the invoice moved on since the sheet opened.
         if (reason === "ALLOCATION_SOURCE_INVALID" || reason === "ALLOCATION_TARGET_INVALID") {
-          await invalidateDocumentState(queryClient, orgSlug);
+          await invalidateSettlementState(queryClient, orgSlug);
           toast.error(errorMessage(error, "Could not apply the advance"));
           onClose();
 
@@ -82,7 +93,7 @@ export function ApplyAdvanceSheet({
         }
 
         // The server states the amount that still fits; the rows behind the sheet show it too.
-        await invalidateDocumentState(queryClient, orgSlug);
+        await invalidateSettlementState(queryClient, orgSlug);
         applyOrpcFieldError(
           form,
           error,
@@ -166,6 +177,7 @@ export function ApplyAdvanceSheet({
                                 onClick={() => {
                                   setReceiptId(receipt.id);
                                   form.clearErrors();
+                                  form.setValue("amount", "");
                                 }}
                               >
                                 Select

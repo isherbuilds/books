@@ -296,7 +296,7 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
     }),
   ]);
 
-  const [alphaAllocations, betaAllocations] = await Promise.all([
+  const [alphaAllocations] = await Promise.all([
     api.allocation.apply({
       orgSlug: alpha.slug,
       receiptId: alphaReceipt.id,
@@ -353,7 +353,14 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
     }),
     "ALLOCATION_SOURCE_INVALID",
   );
-  expect(betaAllocations).toHaveLength(1);
+
+  const [alphaUnappliedAfter, betaUnappliedAfter] = await Promise.all([
+    api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
+    api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+  ]);
+
+  expect(alphaUnappliedAfter.rows).toEqual(alphaUnapplied.rows);
+  expect(betaUnappliedAfter.rows).toEqual(betaUnapplied.rows);
 });
 
 test("operators are denied audit:read, the denial is recorded, and the owner sees only their org", async () => {

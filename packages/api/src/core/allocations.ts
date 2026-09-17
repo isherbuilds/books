@@ -75,6 +75,26 @@ export function activeAllocationSums(
   return { sums, remainingPaise };
 }
 
+/**
+ * The document's total less its active allocations, looked up per row of the enclosing
+ * query through `allocations (org_id, source/target_document_id)`. A register or picker
+ * aggregates only the allocations of the documents it considers, never the
+ * Organization's whole allocation history; "active" is still `activeApply`.
+ */
+export function remainingPaiseOf(orgId: string, side: "source" | "target") {
+  const documentId =
+    side === "source" ? allocations.sourceDocumentId : allocations.targetDocumentId;
+
+  const allocated = db
+    .select({
+      allocatedPaise: sql`coalesce(sum(${allocations.amountPaise}), 0)::bigint`,
+    })
+    .from(allocations)
+    .where(and(activeApply(orgId), eq(documentId, documents.id)));
+
+  return sql<bigint>`${documents.totalPaise} - (${allocated})`.mapWith(BigInt);
+}
+
 /** Active applies from or to any of the documents. */
 export async function activeAllocationsOf(
   tx: DbTransaction,

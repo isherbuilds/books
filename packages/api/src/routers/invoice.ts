@@ -7,11 +7,16 @@ import { items } from "@accly/db/schema/items";
 import { parties } from "@accly/db/schema/parties";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { activeAllocationSums, allocationReversed, invoiceSettlement } from "../core/allocations";
+import {
+  activeAllocationSums,
+  allocationReversed,
+  invoiceSettlement,
+  remainingPaiseOf,
+} from "../core/allocations";
 import {
   organizationSnapshot,
   partySnapshot,
@@ -25,6 +30,7 @@ import {
 import { formatDecimal } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
 import { computeTax, roundOff } from "../core/tax";
+import { taxRateEffectiveOn } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
@@ -44,6 +50,18 @@ import {
 type InvoiceFields = z.output<z.ZodObject<typeof invoiceFields>>;
 
 type ResolvedInvoice = Omit<PostDocumentInput, "draft">;
+
+// Paise are stored as signed 64-bit integers, so a quantity times a price that no
+// column can hold is refused here instead of failing the insert.
+const MAX_PAISE = 9_223_372_036_854_775_807n;
+
+function boundedPaise(amountPaise: bigint): bigint {
+  if (amountPaise > MAX_PAISE) {
+    throw badRequest("INVOICE_AMOUNT_TOO_LARGE", "An invoice amount is too large to record.");
+  }
+
+  return amountPaise;
+}
 
 async function resolveInvoice(
   scope: Scope,
@@ -115,9 +133,19 @@ async function resolveInvoice(
   const itemById = new Map(storedItems.map(({ item, account }) => [item.id, { item, account }]));
   const accountById = new Map(storedAccounts.map((account) => [account.id, account]));
 
-  const taxCodes = [
-    ...new Set(storedItems.flatMap(({ item }) => (item.taxCode ? [item.taxCode] : []))),
-  ];
+  const registered = settings.gstin !== null;
+
+  // Only a registered org's taxable supplies need a rate, so an unregistered org never
+  // reads tax_rates and never sees TAX_RATE_MISSING.
+  const taxCodes = registered
+    ? [
+        ...new Set(
+          storedItems.flatMap(({ item, account }) =>
+            item.taxCode && account.supplyClass === "taxable" ? [item.taxCode] : [],
+          ),
+        ),
+      ]
+    : [];
 
   const effectiveRates =
     taxCodes.length === 0
@@ -133,8 +161,7 @@ async function resolveInvoice(
             and(
               eq(taxRates.orgId, scope.orgId),
               inArray(taxRates.code, taxCodes),
-              lte(taxRates.effectiveFrom, documentDate),
-              or(isNull(taxRates.effectiveTo), gte(taxRates.effectiveTo, documentDate)),
+              taxRateEffectiveOn(documentDate),
             ),
           );
 
@@ -143,8 +170,6 @@ async function resolveInvoice(
   if (taxCodes.some((code) => !rateByCode.has(code))) {
     throw badRequest("TAX_RATE_MISSING", "An item has no GST rate effective on the invoice date.");
   }
-
-  const registered = settings.gstin !== null;
 
   const unresolvedLines = input.lines.map((line) => {
     if (line.kind === "account") {
@@ -179,7 +204,7 @@ async function resolveInvoice(
 
     const stored = itemById.get(line.itemId)!;
     const unitPricePaise = line.unitPrice ?? stored.item.unitPricePaise;
-    const amountPaise = BigInt(line.quantity) * unitPricePaise;
+    const amountPaise = boundedPaise(BigInt(line.quantity) * unitPricePaise);
     const rate = stored.item.taxCode ? rateByCode.get(stored.item.taxCode)! : undefined;
     const rateApplies = registered && stored.account.supplyClass === "taxable";
 
@@ -217,7 +242,7 @@ async function resolveInvoice(
   const taxablePaise = lines.reduce((sum, line) => sum + line.amountPaise, 0n);
   const grossPaise = taxablePaise + tax.cgstPaise + tax.sgstPaise + tax.igstPaise;
   const roundOffPaise = roundOff(grossPaise);
-  const totalPaise = grossPaise + roundOffPaise;
+  const totalPaise = boundedPaise(grossPaise + roundOffPaise);
 
   if (totalPaise <= 0n) {
     throw badRequest("INVOICE_ZERO_TOTAL", "An invoice total must be greater than zero.");
@@ -310,80 +335,98 @@ export const invoiceRouter = {
         input.invoiceId,
       ]);
 
-      const [[invoice], lines, allocationRows, timeZone] = await Promise.all([
-        db
-          .select({
-            id: documents.id,
-            version: documents.version,
-            number: documents.number,
-            state: documents.state,
-            partyId: documents.partyId,
-            partyName: printedPartyName,
-            documentDate: documents.documentDate,
-            dueDate: documents.dueDate,
-            placeOfSupplyStateCode: documents.placeOfSupplyStateCode,
-            reference: documents.reference,
-            narration: documents.narration,
-            cancelledAt: documents.cancelledAt,
-            totalPaise: documents.totalPaise,
-            roundOffPaise: documents.roundOffPaise,
-            outstandingPaise,
-          })
-          .from(documents)
-          .leftJoin(sums, eq(sums.documentId, documents.id))
-          .where(
-            and(
-              eq(documents.orgId, orgId),
-              eq(documents.id, input.invoiceId),
-              eq(documents.type, "invoice"),
-            ),
-          )
-          .limit(1),
-        db
-          .select({
-            id: documentLines.id,
-            kind: documentLines.kind,
-            accountId: documentLines.accountId,
-            itemId: documentLines.itemId,
-            description: documentLines.description,
-            hsnSac: documentLines.hsnSac,
-            quantity: documentLines.quantity,
-            unitPricePaise: documentLines.unitPricePaise,
-            taxRateId: documentLines.taxRateId,
-            cgstPaise: documentLines.cgstPaise,
-            sgstPaise: documentLines.sgstPaise,
-            igstPaise: documentLines.igstPaise,
-            amountPaise: documentLines.amountPaise,
-          })
-          .from(documentLines)
-          .where(and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, input.invoiceId)))
-          .orderBy(asc(documentLines.position)),
-        db
-          .select({
-            id: allocations.id,
-            sourceDocumentId: allocations.sourceDocumentId,
-            sourceNumber: documents.number,
-            amountPaise: allocations.amountPaise,
-            entryDate: allocations.entryDate,
-            reversed: allocationReversed(orgId),
-          })
-          .from(allocations)
-          .innerJoin(
-            documents,
-            and(eq(documents.orgId, orgId), eq(documents.id, allocations.sourceDocumentId)),
-          )
-          .where(
-            and(
-              eq(allocations.orgId, orgId),
-              eq(allocations.targetDocumentId, input.invoiceId),
-              eq(allocations.kind, "apply"),
-            ),
-          )
-          .orderBy(asc(allocations.entryDate), asc(allocations.id)),
+      // The version token and the data it protects return from one consistent read:
+      // an editor must never receive version 2's token beside version 1's lines.
+      const [snapshot, timeZone] = await Promise.all([
+        db.transaction(
+          async (tx) => {
+            const [invoice] = await tx
+              .select({
+                id: documents.id,
+                version: documents.version,
+                number: documents.number,
+                state: documents.state,
+                partyId: documents.partyId,
+                partyName: printedPartyName,
+                documentDate: documents.documentDate,
+                dueDate: documents.dueDate,
+                placeOfSupplyStateCode: documents.placeOfSupplyStateCode,
+                reference: documents.reference,
+                narration: documents.narration,
+                cancelledAt: documents.cancelledAt,
+                totalPaise: documents.totalPaise,
+                roundOffPaise: documents.roundOffPaise,
+                outstandingPaise,
+              })
+              .from(documents)
+              .leftJoin(sums, eq(sums.documentId, documents.id))
+              .where(
+                and(
+                  eq(documents.orgId, orgId),
+                  eq(documents.id, input.invoiceId),
+                  eq(documents.type, "invoice"),
+                ),
+              )
+              .limit(1);
+
+            if (!invoice) return null;
+
+            const lines = await tx
+              .select({
+                id: documentLines.id,
+                kind: documentLines.kind,
+                accountId: documentLines.accountId,
+                itemId: documentLines.itemId,
+                description: documentLines.description,
+                hsnSac: documentLines.hsnSac,
+                unit: documentLines.unit,
+                quantity: documentLines.quantity,
+                unitPricePaise: documentLines.unitPricePaise,
+                taxRateId: documentLines.taxRateId,
+                cgstPaise: documentLines.cgstPaise,
+                sgstPaise: documentLines.sgstPaise,
+                igstPaise: documentLines.igstPaise,
+                amountPaise: documentLines.amountPaise,
+              })
+              .from(documentLines)
+              .where(
+                and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, input.invoiceId)),
+              )
+              .orderBy(asc(documentLines.position));
+
+            const allocationRows = await tx
+              .select({
+                id: allocations.id,
+                sourceDocumentId: allocations.sourceDocumentId,
+                sourceNumber: documents.number,
+                amountPaise: allocations.amountPaise,
+                entryDate: allocations.entryDate,
+                reversed: allocationReversed(orgId),
+              })
+              .from(allocations)
+              .innerJoin(
+                documents,
+                and(eq(documents.orgId, orgId), eq(documents.id, allocations.sourceDocumentId)),
+              )
+              .where(
+                and(
+                  eq(allocations.orgId, orgId),
+                  eq(allocations.targetDocumentId, input.invoiceId),
+                  eq(allocations.kind, "apply"),
+                ),
+              )
+              .orderBy(asc(allocations.entryDate), asc(allocations.id));
+
+            return { invoice, lines, allocationRows };
+          },
+          { isolationLevel: "repeatable read", accessMode: "read only" },
+        ),
         orgTimeZone(orgId),
       ]);
 
-      if (!invoice) throw new ORPCError("NOT_FOUND", { message: "Invoice not found." });
+      if (!snapshot) throw new ORPCError("NOT_FOUND", { message: "Invoice not found." });
+
+      const { invoice, lines, allocationRows } = snapshot;
 
       return {
         ...invoice,
@@ -413,7 +456,7 @@ export const invoiceRouter = {
     const { orgId } = context.scope;
     // `overdue` compares due dates with today, so the time zone is read first.
     const today = businessDate(new Date(), await orgTimeZone(orgId));
-    const { sums, remainingPaise: outstandingPaise } = activeAllocationSums(orgId, "target");
+    const outstandingPaise = remainingPaiseOf(orgId, "target");
 
     const page = await db
       .select({
@@ -428,7 +471,6 @@ export const invoiceRouter = {
         outstandingPaise,
       })
       .from(documents)
-      .leftJoin(sums, eq(sums.documentId, documents.id))
       .where(
         and(
           documentListWhere(orgId, "invoice", input),
@@ -453,7 +495,7 @@ export const invoiceRouter = {
   openInvoices: orgProcedure({ invoice: ["read"] }, orgInput.extend({ partyId: z.uuid() })).handler(
     async ({ context, input }) => {
       const { orgId } = context.scope;
-      const { sums, remainingPaise: outstandingPaise } = activeAllocationSums(orgId, "target");
+      const outstandingPaise = remainingPaiseOf(orgId, "target");
 
       const rows = await db
         .select({
@@ -464,7 +506,6 @@ export const invoiceRouter = {
           outstandingPaise,
         })
         .from(documents)
-        .leftJoin(sums, eq(sums.documentId, documents.id))
         .where(
           and(
             eq(documents.orgId, orgId),

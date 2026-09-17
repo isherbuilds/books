@@ -75,13 +75,18 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    editable `placeOfSupplyStateCode` decide intra- or inter-state supply; the
    form defaults place of supply from the Party. A line gets its dated rate
    only when the Organization has a `gstin` and the line Account is `taxable`,
-   so no `gstin` means no tax lines. For each component, `computeTax` rounds
-   the running total half-up and gives each line the increase, so the lines
-   sum to the document total rounded once. CGST and SGST each take half the
-   rate before rounding, so an odd rate is exact. `roundOff` rounds gross to
-   the rupee and posts the signed difference to the `roundOff` Account. A
-   zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`), and a registered
-   Organization cannot put a `taxable` account line on an Invoice
+   so no `gstin` means no tax lines. Each GST component is a separately levied
+   tax and is rounded separately: `computeTax` rounds a component's running
+   total half-up and gives each line the increase, so the lines sum to that
+   component's document total. CGST and SGST each take half the rate, so an
+   odd rate is exact. The document tax total is therefore the sum of the
+   rounded components, never the rounded sum, so a tiny line can carry zero
+   tax where the unsplit rate would round to one paise: an intra-state
+   10-paise line at 5% rounds each 2.5% half to zero, while one 5%
+   calculation would round to a paise. That is intended. `roundOff` rounds
+   gross to the rupee and posts the signed difference to the `roundOff`
+   Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`), and a
+   registered Organization cannot put a `taxable` account line on an Invoice
    (`TAXABLE_ACCOUNT_LINE`): taxable supplies are Items, which carry the dated
    rate.
 6. **Print class**: all exempt or nil lines print Bill of Supply, any taxable
@@ -187,9 +192,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
    rows then `MASTER_LIST_LIMIT`, money accounts and methods.
 2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
-   no draft), `get`, `list`, `partyTotals`, `unapplied`, `cancel`, the day book
-   XLSX, and the snapshot PDF at
-   `/api/$orgSlug/receipts/$receiptId/pdf`. Open: CA acceptance, and posting p95
+   no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
+   the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
+   allocations and `receipt.unapplied` belong to slice 4b-i. Open: CA
+   acceptance, and posting p95
    under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
    receipts per organization).
 3. **Payment with TDS.** Implemented: `payment.*`, `tdsSections({ date })` and
@@ -207,7 +213,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
    Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
-   otherwise it prints Bill of Supply. Open: the CA verifies the GST seed.
+   otherwise it prints Bill of Supply. Implemented and runtime verified in the
+   app; CA acceptance of the GST seed is open.
 
    `postDocument` takes a lines array and `draft: { id, version } | null`.
    Receipt and Payment pass one `accountLine`. `invoice.saveDraft` and
@@ -223,17 +230,29 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 
    **4b-i. Allocations and Invoice settlement.** Implemented: append-only
    allocations; Receipt `against`; advance-to-Invoice apply and reversal
-   entries; allocation-aware cancellation; Invoice outstanding, status,
-   overdue, open and overdue filters; `invoice.openInvoices`; and
+   entries; allocation-aware cancellation; Invoice outstanding, settlement
+   status, and open or overdue filters; `invoice.openInvoices`; and
    `receipt.unapplied`. `invoice.openInvoices` and `receipt.unapplied` return
    the 200 oldest rows and `hasMore`. The web supports Receipt allocation at
    post, allocation detail and reversal, applying an advance, Invoice
-   settlement status, and open or overdue filtering.
+   settlement status, and open or overdue filtering. Implemented and runtime
+   verified in the app; CA acceptance is open.
 
    **4b-ii. Bills, notes and remaining settlement.** Open: Bill, Credit Note
    and Debit Note; Payment `against`; fee and write-off lines; customer TDS;
    counter sale; cancel-and-copy (`amendedFrom`); GST registers; Invoice PDF;
    header discount; and supplier, note and Payment allocation.
+
+   **Released credits versus advances.** Reversing an allocation on a fully
+   allocated `against` Receipt posts `invoiceToAdvance`, yet the Receipt stored
+   no `advanceSupply` and `reverseAllocation` records none, so the released
+   credit is unclassified while the journal balances. A credit released from a
+   previously invoiced settlement is not an advance accepted before supply, and
+   a Receipt's nullable `advanceSupply` is never authoritative for a later
+   state. Settle the model — classify released credits explicitly, or record
+   them as released credits distinct from advances — before any tax workflow
+   reads `advanceSupply`. Never rewrite the posted Receipt to manufacture that
+   history.
    - Legacy reference (a716b6c):
      - Header discount: split pro rata, half-up, with the residue on the
        largest line, so lines sum to the header

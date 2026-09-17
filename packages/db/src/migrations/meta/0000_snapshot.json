@@ -1,5 +1,5 @@
 {
-  "id": "be32be57-be47-4a44-9c68-3f9f10938817",
+  "id": "4a135388-ea3e-460a-b824-85ba8295a008",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -397,7 +397,7 @@
         },
         "allocations_kind_check": {
           "name": "allocations_kind_check",
-          "value": "\"allocations\".\"kind\" in ('apply', 'reverse')"
+          "value": "(\"allocations\".\"kind\" = 'apply' and \"allocations\".\"reverses_allocation_id\" is null) or (\"allocations\".\"kind\" = 'reverse' and \"allocations\".\"reverses_allocation_id\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -1406,6 +1406,18 @@
         "document_lines_quantity_check": {
           "name": "document_lines_quantity_check",
           "value": "\"document_lines\".\"quantity\" is null or \"document_lines\".\"quantity\" >= 1"
+        },
+        "document_lines_cgst_paise_check": {
+          "name": "document_lines_cgst_paise_check",
+          "value": "\"document_lines\".\"cgst_paise\" >= 0"
+        },
+        "document_lines_sgst_paise_check": {
+          "name": "document_lines_sgst_paise_check",
+          "value": "\"document_lines\".\"sgst_paise\" >= 0"
+        },
+        "document_lines_igst_paise_check": {
+          "name": "document_lines_igst_paise_check",
+          "value": "\"document_lines\".\"igst_paise\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -3131,6 +3143,27 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "items_org_name_idx": {
+          "name": "items_org_name_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -46,7 +46,10 @@ export const shortName = z
 /** A master record's name, unique per Organization after `normalizedName`. */
 export const masterName = shortName
   .max(120)
-  .refine((name) => normalizedName(name).length > 0, "Name must include a letter or number");
+  .refine(
+    (name) => /[\p{L}\p{N}]/u.test(normalizedName(name)),
+    "Name must include a letter or number",
+  );
 
 // GST Rules 46 and 50 cap a number at 16 characters of letters, digits, '-' and '/':
 // up to 4 here, then "26-27/" and a sequence of up to 6 digits. Stored in upper case:
