@@ -1,6 +1,6 @@
-import type { ConflictReason } from "@accly/api/lib/conflict";
 import { notFound } from "@tanstack/react-router";
 import type { FieldPath, FieldValues, UseFormReturn } from "react-hook-form";
+import { toast } from "sonner";
 
 /**
  * Walks an error and its `cause` chain. Transport wraps server errors, so the
@@ -41,12 +41,22 @@ export function errorReason(error: unknown): string | undefined {
   return undefined;
 }
 
-function isServerFault(error: unknown): boolean {
+function status(error: unknown): number | undefined {
   for (const link of causes(error)) {
-    if ("status" in link && typeof link.status === "number" && link.status >= 500) return true;
+    if ("status" in link && typeof link.status === "number") return link.status;
   }
 
-  return false;
+  return undefined;
+}
+
+/**
+ * The server answered and wrote nothing. A 5xx or a dropped connection (fetch rejects
+ * with a TypeError) may still have committed the write.
+ */
+export function isRefusal(error: unknown): boolean {
+  const code = status(error);
+
+  return code !== undefined && code < 500;
 }
 
 /**
@@ -60,26 +70,32 @@ function isServerFault(error: unknown): boolean {
 export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
   // fetch rejects a dropped connection with a TypeError ("Failed to fetch", "Load
   // failed"): a browser sentence, not one an operator can act on.
-  if (isServerFault(error) || error instanceof TypeError) return fallback;
+  if (error instanceof TypeError || (status(error) ?? 0) >= 500) return fallback;
 
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-/** Marks the field the conflict belongs to and hands back its wording, so the caller
- * does not repeat the message to toast it. Undefined when the map does not match. */
+/**
+ * Puts a refused submit on the field its server `reason` names, in the server's
+ * words, and toasts every other refusal. `fields` maps a reason to its field.
+ */
 export function applyOrpcFieldError<TFieldValues extends FieldValues, TContext, TTransformedValues>(
   form: UseFormReturn<TFieldValues, TContext, TTransformedValues>,
   error: unknown,
-  map: Partial<Record<ConflictReason, { field: FieldPath<TFieldValues>; message: string }>>,
-): string | undefined {
+  fields: Partial<Record<string, FieldPath<TFieldValues>>>,
+  fallback: string,
+): void {
   const reason = errorReason(error);
-  const fieldError = Object.entries(map).find(([key]) => key === reason)?.[1];
+  // `hasOwn`: a reason must never resolve through the prototype ("constructor").
+  const field = reason !== undefined && Object.hasOwn(fields, reason) ? fields[reason] : undefined;
 
-  if (!fieldError) return undefined;
+  if (field) {
+    form.setError(field, { message: errorMessage(error, fallback) }, { shouldFocus: true });
 
-  form.setError(fieldError.field, { message: fieldError.message });
+    return;
+  }
 
-  return fieldError.message;
+  toast.error(errorMessage(error, fallback));
 }
 
 const GENERIC_ROUTE_ERROR = "An unexpected error interrupted the request.";

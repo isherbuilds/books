@@ -41,7 +41,8 @@ bun run db:seed
 ```
 
 Organization creation runs one bootstrap (`core/organizations.ts`): settings,
-chart, payment methods and TDS sections. `db:seed` fills an empty database with
+chart, payment methods, TDS sections and Tax Rates. `db:seed` fills an empty
+database with
 users, a pending invitation, Meridian Traders (company) and Ridgeview Academy
 (trust). `owner@example.com` owns both Organizations. `accountant@example.com`
 is an accountant and reads the audit log. `operator@example.com` is an
@@ -90,11 +91,10 @@ before an upgrade.
   delete unused exports.
 - Fail loudly on config, auth, money and data-integrity errors. No silent
   defaults or broad catches.
-- Money is `bigint` paise end to end. Rounding is half-up; slice 4 adds the
-  shared division helper with `computeTax`
-  ([accounting core](./specs/accounting-core.md#slices)). Display with
-  `formatMoney` and write plain text with `formatDecimal`. Input is rupee text
-  that the `money` fragment parses once (13-digit cap on input only).
+- Money is `bigint` paise end to end. Rounding is half-up through the one
+  `divideHalfUp` in `core/money.ts`, which tax, round-off and TDS share.
+  Display with `formatMoney` and write plain text with `formatDecimal`. Input is
+  rupee text that the `money` fragment parses once (13-digit cap on input only).
 - `sum()` returns `numeric` and `db.execute` returns `int8` as text: cast to
   `bigint` in SQL and read with `BigInt(...)`.
 - `JSON.stringify` throws on `bigint`, so audit metadata and query inputs hold

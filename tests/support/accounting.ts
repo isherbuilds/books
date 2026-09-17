@@ -29,6 +29,7 @@ export async function createAccountingFixture(
     timeZone: "UTC",
     ...overrides,
   });
+
   const accountant = await createTestUser(`${prefix}-accountant-${uniqueSuffix()}`);
   await joinOrganization(accountant, organization.id, "accountant");
 

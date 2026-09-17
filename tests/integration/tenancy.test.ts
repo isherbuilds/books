@@ -12,7 +12,13 @@ import {
   removeFromOrganization,
   setMemberRoles,
 } from "../support/auth";
-import { clientFor, eventually, expectAuthStatus, expectORPCCode } from "../support/client";
+import {
+  clientFor,
+  eventually,
+  expectAuthStatus,
+  expectORPCCode,
+  expectReason,
+} from "../support/client";
 import { resetTestDatabase } from "../support/database";
 import { uniqueSuffix } from "../support/unique";
 
@@ -191,6 +197,170 @@ test("one client can update settings and post receipts and payments in different
 
   expect(paymentsOne.rows.map(({ id }) => id)).toEqual([paymentOne.id]);
   expect(paymentsTwo.rows.map(({ id }) => id)).toEqual([paymentTwo.id]);
+});
+
+test("one client keeps Items, Invoices, Receipts, and Allocations isolated across two orgs", async () => {
+  const user = await createTestUser("domain-isolation");
+  const alpha = await createOrganization(user, "domain-alpha");
+  const beta = await createOrganization(user, "domain-beta");
+  const api = clientFor(user);
+
+  const [alphaAccounts, betaAccounts, alphaMethods, betaMethods] = await Promise.all([
+    api.account.list({ orgSlug: alpha.slug }),
+    api.account.list({ orgSlug: beta.slug }),
+    api.paymentMethod.list({ orgSlug: alpha.slug }),
+    api.paymentMethod.list({ orgSlug: beta.slug }),
+  ]);
+
+  const alphaIncome = required(
+    alphaAccounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "alpha exempt income account",
+  );
+
+  const betaIncome = required(
+    betaAccounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "beta exempt income account",
+  );
+
+  const alphaMethod = required(
+    alphaMethods.find(({ name }) => name === "Cash"),
+    "alpha cash method",
+  );
+
+  const betaMethod = required(
+    betaMethods.find(({ name }) => name === "Cash"),
+    "beta cash method",
+  );
+
+  const [alphaParty, betaParty] = await Promise.all([
+    api.party.create({
+      orgSlug: alpha.slug,
+      name: "Shared Customer",
+      roles: ["customer"],
+      stateCode: "27",
+    }),
+    api.party.create({
+      orgSlug: beta.slug,
+      name: "Shared Customer",
+      roles: ["customer"],
+      stateCode: "27",
+    }),
+  ]);
+
+  const [alphaItem, betaItem] = await Promise.all([
+    api.item.create({
+      orgSlug: alpha.slug,
+      name: "Shared Service",
+      unitPrice: "5.00",
+      incomeAccountId: alphaIncome.id,
+    }),
+    api.item.create({
+      orgSlug: beta.slug,
+      name: "Shared Service",
+      unitPrice: "5.00",
+      incomeAccountId: betaIncome.id,
+    }),
+  ]);
+
+  const [alphaInvoice, betaInvoice] = await Promise.all([
+    api.invoice.post({
+      orgSlug: alpha.slug,
+      partyId: alphaParty.id,
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: alphaItem.id, quantity: 1 }],
+    }),
+    api.invoice.post({
+      orgSlug: beta.slug,
+      partyId: betaParty.id,
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: betaItem.id, quantity: 1 }],
+    }),
+  ]);
+
+  const [alphaReceipt, betaReceipt] = await Promise.all([
+    api.receipt.post({
+      orgSlug: alpha.slug,
+      settlementKind: "advance",
+      partyId: alphaParty.id,
+      advanceSupply: "goods",
+      amount: "5.00",
+      paymentMethodId: alphaMethod.id,
+    }),
+    api.receipt.post({
+      orgSlug: beta.slug,
+      settlementKind: "advance",
+      partyId: betaParty.id,
+      advanceSupply: "goods",
+      amount: "5.00",
+      paymentMethodId: betaMethod.id,
+    }),
+  ]);
+
+  const [alphaAllocations] = await Promise.all([
+    api.allocation.apply({
+      orgSlug: alpha.slug,
+      receiptId: alphaReceipt.id,
+      invoiceId: alphaInvoice.id,
+      amount: "1.00",
+    }),
+    api.allocation.apply({
+      orgSlug: beta.slug,
+      receiptId: betaReceipt.id,
+      invoiceId: betaInvoice.id,
+      amount: "1.00",
+    }),
+  ]);
+
+  const [alphaItems, betaItems, alphaInvoices, betaInvoices, alphaUnapplied, betaUnapplied] =
+    await Promise.all([
+      api.item.list({ orgSlug: alpha.slug }),
+      api.item.list({ orgSlug: beta.slug }),
+      api.invoice.list({ orgSlug: alpha.slug }),
+      api.invoice.list({ orgSlug: beta.slug }),
+      api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
+      api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+    ]);
+
+  expect(alphaItems.map(({ id }) => id)).toEqual([alphaItem.id]);
+  expect(betaItems.map(({ id }) => id)).toEqual([betaItem.id]);
+  expect(alphaInvoices.rows.map(({ id }) => id)).toEqual([alphaInvoice.id]);
+  expect(betaInvoices.rows.map(({ id }) => id)).toEqual([betaInvoice.id]);
+  expect(alphaUnapplied.rows.map(({ id }) => id)).toEqual([alphaReceipt.id]);
+  expect(betaUnapplied.rows.map(({ id }) => id)).toEqual([betaReceipt.id]);
+
+  await expectORPCCode(
+    api.item.setActive({ orgSlug: beta.slug, itemId: alphaItem.id, active: false }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.invoice.get({ orgSlug: beta.slug, invoiceId: alphaInvoice.id }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.allocation.reverse({
+      orgSlug: beta.slug,
+      allocationId: required(alphaAllocations[0], "alpha allocation").id,
+      reason: "cross-org attempt",
+    }),
+    "CONFLICT",
+  );
+  await expectReason(
+    api.allocation.apply({
+      orgSlug: beta.slug,
+      receiptId: alphaReceipt.id,
+      invoiceId: betaInvoice.id,
+      amount: "1.00",
+    }),
+    "ALLOCATION_SOURCE_INVALID",
+  );
+
+  const [alphaUnappliedAfter, betaUnappliedAfter] = await Promise.all([
+    api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
+    api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+  ]);
+
+  expect(alphaUnappliedAfter.rows).toEqual(alphaUnapplied.rows);
+  expect(betaUnappliedAfter.rows).toEqual(betaUnapplied.rows);
 });
 
 test("operators are denied audit:read, the denial is recorded, and the owner sees only their org", async () => {
@@ -380,6 +550,48 @@ const GUARDED_CALLS = {
   "account.create": (api, claim) =>
     api.account.create({ ...claim, kind: "bank", name: "Intrusion" }),
   "account.moneyBalances": (api, claim) => api.account.moneyBalances({ ...claim }),
+  "item.list": (api, claim) => api.item.list({ ...claim }),
+  "item.create": (api, claim) =>
+    api.item.create({
+      ...claim,
+      name: "Intrusion",
+      unitPrice: "1.00",
+      incomeAccountId: crypto.randomUUID(),
+    }),
+  "item.update": (api, claim) =>
+    api.item.update({
+      ...claim,
+      itemId: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      name: "Intrusion",
+      unitPrice: "1.00",
+      incomeAccountId: crypto.randomUUID(),
+    }),
+  "item.setActive": (api, claim) =>
+    api.item.setActive({ ...claim, itemId: crypto.randomUUID(), active: false }),
+  "item.taxRates": (api, claim) => api.item.taxRates({ ...claim }),
+  "invoice.saveDraft": (api, claim) =>
+    api.invoice.saveDraft({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: crypto.randomUUID(), quantity: 1 }],
+    }),
+  "invoice.post": (api, claim) =>
+    api.invoice.post({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: crypto.randomUUID(), quantity: 1 }],
+    }),
+  "invoice.get": (api, claim) => api.invoice.get({ ...claim, invoiceId: crypto.randomUUID() }),
+  "invoice.list": (api, claim) => api.invoice.list({ ...claim }),
+  "invoice.openInvoices": (api, claim) =>
+    api.invoice.openInvoices({ ...claim, partyId: crypto.randomUUID() }),
+  "invoice.cancel": (api, claim) =>
+    api.invoice.cancel({ ...claim, invoiceId: crypto.randomUUID(), reason: "intrusion" }),
+  "invoice.discardDraft": (api, claim) =>
+    api.invoice.discardDraft({ ...claim, draft: { id: crypto.randomUUID(), version: 1 } }),
   "receipt.post": (api, claim) =>
     api.receipt.post({
       ...claim,
@@ -391,6 +603,21 @@ const GUARDED_CALLS = {
   "receipt.get": (api, claim) => api.receipt.get({ ...claim, receiptId: crypto.randomUUID() }),
   "receipt.list": (api, claim) => api.receipt.list({ ...claim }),
   "receipt.partyTotals": (api, claim) => api.receipt.partyTotals({ ...claim }),
+  "receipt.unapplied": (api, claim) =>
+    api.receipt.unapplied({ ...claim, partyId: crypto.randomUUID() }),
+  "allocation.apply": (api, claim) =>
+    api.allocation.apply({
+      ...claim,
+      receiptId: crypto.randomUUID(),
+      invoiceId: crypto.randomUUID(),
+      amount: "1.00",
+    }),
+  "allocation.reverse": (api, claim) =>
+    api.allocation.reverse({
+      ...claim,
+      allocationId: crypto.randomUUID(),
+      reason: "intrusion",
+    }),
   "receipt.cancel": (api, claim) =>
     api.receipt.cancel({ ...claim, receiptId: crypto.randomUUID(), reason: "intrusion" }),
   "export.dayBookXlsx": (api, claim) => api.export.dayBookXlsx({ ...claim, date: "2026-09-12" }),

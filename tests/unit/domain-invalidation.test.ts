@@ -6,7 +6,8 @@ const previousSkip = process.env.SKIP_ENV_VALIDATION;
 
 process.env.SKIP_ENV_VALIDATION = "true";
 
-const { invalidateReceiptState } = await import("../../apps/web/src/lib/domain-invalidation");
+const { invalidateCashState, invalidateInvoiceDrafts, invalidateSettlementState } =
+  await import("../../apps/web/src/lib/domain-invalidation");
 
 if (previousSkip === undefined) {
   delete process.env.SKIP_ENV_VALIDATION;
@@ -15,26 +16,35 @@ if (previousSkip === undefined) {
 }
 
 function recordingInvalidator() {
-  const keys: QueryKey[] = [];
+  const keys: string[] = [];
 
   return {
     keys,
     client: {
       invalidateQueries: async ({ queryKey }: { queryKey: QueryKey }) => {
-        keys.push(queryKey);
+        keys.push(JSON.stringify(queryKey));
       },
     },
   };
 }
 
-test("receipt invalidation scopes every key to the org and refreshes money balances", async () => {
-  const { client, keys } = recordingInvalidator();
-  await invalidateReceiptState(client, "org-a");
+test("each invalidation set scopes to the org and widens only for what the write moved", async () => {
+  const drafts = recordingInvalidator();
+  await invalidateInvoiceDrafts(drafts.client, "org-a");
+  expect(drafts.keys).toHaveLength(1);
+  expect(drafts.keys[0]).toContain('"invoice"');
 
-  const emitted = keys.map((key) => JSON.stringify(key));
-  expect(emitted.length).toBeGreaterThan(0);
+  const settlement = recordingInvalidator();
+  await invalidateSettlementState(settlement.client, "org-a");
+  expect(settlement.keys.some((key) => key.includes('"receipt"'))).toBe(true);
+  expect(settlement.keys.some((key) => key.includes('"account","moneyBalances"'))).toBe(false);
 
-  for (const key of emitted) expect(key).toContain('"orgSlug":"org-a"');
-  expect(emitted.some((key) => key.includes('"receiptId"'))).toBe(false);
-  expect(emitted.some((key) => key.includes('"account","moneyBalances"'))).toBe(true);
+  const cash = recordingInvalidator();
+  await invalidateCashState(cash.client, "org-a");
+  expect(cash.keys.some((key) => key.includes('"account","moneyBalances"'))).toBe(true);
+
+  for (const key of [...drafts.keys, ...settlement.keys, ...cash.keys]) {
+    expect(key).toContain('"orgSlug":"org-a"');
+    expect(key).not.toContain('"receiptId"');
+  }
 });

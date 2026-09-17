@@ -206,11 +206,7 @@ function PartyForm({
       return;
     }
 
-    const mapped = applyOrpcFieldError(form, error, {
-      PARTY_GSTIN_TAKEN: { field: "gstin", message: "A party with this GSTIN already exists" },
-    });
-
-    if (!mapped) toast.error(errorMessage(error, "Could not save the party"));
+    applyOrpcFieldError(form, error, { PARTY_GSTIN_TAKEN: "gstin" }, "Could not save the party");
   };
 
   const create = useMutation(

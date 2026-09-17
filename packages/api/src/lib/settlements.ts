@@ -1,5 +1,5 @@
 import { db } from "@accly/db";
-import { documents } from "@accly/db/schema/documents";
+import { documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
@@ -11,16 +11,52 @@ import { reverseDocument } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import type { DocumentPosting } from "../core/posting";
 import type { Scope } from "./procedures/factory";
-import { likePattern, type settlementListFields } from "./schemas";
+import { likePattern, type documentListFields, type settlementListFields } from "./schemas";
 
-// Receipts and Payments share one read, list and cancel path; only the type differs.
-type SettlementType = DocumentPosting["type"];
+// Receipts and Payments share one read and list path. Invoices also share the cancel.
+type PostedType = DocumentPosting["type"];
+
+type DocumentListInput = z.output<z.ZodObject<typeof documentListFields>>;
 
 type SettlementListInput = z.output<z.ZodObject<typeof settlementListFields>>;
 
+/** A picker lists the oldest open documents; later ones settle from their own record. */
+export const PICKER_LIMIT = 200;
+
+/** Splits rows fetched with `.limit(limit + 1)` into one page and an overflow flag. */
+export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boolean } {
+  return rows.length > limit
+    ? { rows: rows.slice(0, limit), hasMore: true }
+    : { rows, hasMore: false };
+}
+
+/** The party name printed on a document; registers show and search it. */
+export const printedPartyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
+
+/** The keyset, party, period and search predicates every document register shares. */
+export function documentListWhere(orgId: string, type: DocumentType, input: DocumentListInput) {
+  const pattern = input.q ? likePattern(input.q) : undefined;
+
+  return and(
+    eq(documents.orgId, orgId),
+    eq(documents.type, type),
+    input.cursor ? lt(documents.id, input.cursor) : undefined,
+    input.partyId ? eq(documents.partyId, input.partyId) : undefined,
+    input.from ? gte(documents.documentDate, input.from) : undefined,
+    input.to ? lte(documents.documentDate, input.to) : undefined,
+    pattern
+      ? or(
+          ilike(documents.number, pattern),
+          ilike(documents.reference, pattern),
+          ilike(printedPartyName, pattern),
+        )
+      : undefined,
+  );
+}
+
 export async function settlementDetail(
   orgId: string,
-  type: SettlementType,
+  type: PostedType,
   documentId: string,
 ): Promise<typeof documents.$inferSelect> {
   const [detail] = await db
@@ -38,23 +74,29 @@ export async function settlementDetail(
   return detail;
 }
 
-/** The Organization's time zone, which dates a cancellation and a default document date. */
-export async function orgTimeZone(orgId: string): Promise<string> {
-  const [row] = await db
-    .select({ timeZone: organizationSettings.timeZone })
+export async function orgSettings(
+  orgId: string,
+): Promise<typeof organizationSettings.$inferSelect> {
+  const [settings] = await db
+    .select()
     .from(organizationSettings)
     .where(eq(organizationSettings.orgId, orgId))
     .limit(1);
 
-  if (!row) throw new Error(`Organization ${orgId} is missing its settings`);
+  if (!settings) throw new Error(`Organization ${orgId} is missing its settings`);
 
-  return row.timeZone;
+  return settings;
+}
+
+/** The Organization's time zone, which dates a cancellation and a default document date. */
+export async function orgTimeZone(orgId: string): Promise<string> {
+  return (await orgSettings(orgId)).timeZone;
 }
 
 // The audit runs after the commit, so it never slows or fails the cancel.
-export async function cancelSettlement(
+export async function cancelDocument(
   scope: Scope,
-  type: SettlementType,
+  type: PostedType,
   documentId: string,
   reason: string,
 ): Promise<typeof documents.$inferSelect> {
@@ -75,14 +117,7 @@ export async function cancelSettlement(
   return cancelled;
 }
 
-export async function listSettlements(
-  orgId: string,
-  type: SettlementType,
-  input: SettlementListInput,
-) {
-  const pattern = input.q ? likePattern(input.q) : undefined;
-  const partyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
-
+export async function listSettlements(orgId: string, type: PostedType, input: SettlementListInput) {
   const rows = await db
     .select({
       id: documents.id,
@@ -91,7 +126,7 @@ export async function listSettlements(
       state: documents.state,
       totalPaise: documents.totalPaise,
       reference: documents.reference,
-      partyName,
+      partyName: printedPartyName,
       paymentMethodName: paymentMethods.name,
     })
     .from(documents)
@@ -101,30 +136,16 @@ export async function listSettlements(
     )
     .where(
       and(
-        eq(documents.orgId, orgId),
-        eq(documents.type, type),
-        input.cursor ? lt(documents.id, input.cursor) : undefined,
-        input.partyId ? eq(documents.partyId, input.partyId) : undefined,
+        documentListWhere(orgId, type, input),
         input.paymentMethodIds
           ? inArray(documents.paymentMethodId, input.paymentMethodIds)
           : undefined,
         input.state ? eq(documents.state, input.state) : undefined,
         input.settlementKind ? eq(documents.settlementKind, input.settlementKind) : undefined,
-        input.from ? gte(documents.documentDate, input.from) : undefined,
-        input.to ? lte(documents.documentDate, input.to) : undefined,
-        pattern
-          ? or(
-              ilike(documents.number, pattern),
-              ilike(documents.reference, pattern),
-              ilike(partyName, pattern),
-            )
-          : undefined,
       ),
     )
     .orderBy(desc(documents.id))
     .limit(input.limit + 1);
 
-  const hasMore = rows.length > input.limit;
-
-  return { rows: hasMore ? rows.slice(0, input.limit) : rows, hasMore };
+  return pageOf(rows, input.limit);
 }

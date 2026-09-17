@@ -2,16 +2,18 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   check,
+  date,
   foreignKey,
   index,
   pgTable,
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { documents } from "./documents";
-import { organization } from "./auth";
+import { organization, user } from "./auth";
 
 export const allocations = pgTable(
   "allocations",
@@ -23,10 +25,12 @@ export const allocations = pgTable(
     sourceDocumentId: text("source_document_id").notNull(),
     targetDocumentId: text("target_document_id").notNull(),
     amountPaise: bigint("amount_paise", { mode: "bigint" }).notNull(),
-    state: text("state", { enum: ["active", "reversed"] })
+    kind: text("kind", { enum: ["apply", "reverse"] }).notNull(),
+    reversesAllocationId: text("reverses_allocation_id"),
+    entryDate: date("entry_date", { mode: "string" }).notNull(),
+    createdBy: text("created_by")
       .notNull()
-      .default("active"),
-    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+      .references(() => user.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -38,10 +42,21 @@ export const allocations = pgTable(
       columns: [table.orgId, table.targetDocumentId],
       foreignColumns: [documents.orgId, documents.id],
     }),
+    foreignKey({
+      columns: [table.orgId, table.reversesAllocationId],
+      foreignColumns: [table.orgId, table.id],
+      name: "allocations_reverses_fk",
+    }),
     unique("allocations_org_id_id_unique").on(table.orgId, table.id),
     index("allocations_org_source_document_idx").on(table.orgId, table.sourceDocumentId),
     index("allocations_org_target_document_idx").on(table.orgId, table.targetDocumentId),
+    uniqueIndex("allocations_org_reverses_idx")
+      .on(table.orgId, table.reversesAllocationId)
+      .where(sql`${table.reversesAllocationId} is not null`),
     check("allocations_amount_paise_check", sql`${table.amountPaise} > 0`),
-    check("allocations_state_check", sql`${table.state} in ('active', 'reversed')`),
+    check(
+      "allocations_kind_check",
+      sql`(${table.kind} = 'apply' and ${table.reversesAllocationId} is null) or (${table.kind} = 'reverse' and ${table.reversesAllocationId} is not null)`,
+    ),
   ],
 );

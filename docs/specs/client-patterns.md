@@ -33,7 +33,7 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    before re-entry.
 4. **Posting state** (`draft`, `posting`, `posted`, `rejected`) renders in
    place. Posting disables the action and fields. Posted shows the number,
-   Print and "Post and next". Rejected keeps the values and shows the reason.
+   "Post and next", and Print when a print artifact exists. Rejected keeps the values and shows the reason.
    No number shows before the server returns it. Nothing is optimistic: no
    inserted row, balance or outstanding. Invalidate only after success.
 5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
@@ -66,8 +66,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
 11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
     `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
-    Receipt also the method, and focuses the first Link Field. Enter on the
-    last Invoice cell adds a line; an empty last line is dropped.
+    Receipt also the method, and focuses the first Link Field. Tab moves
+    between fields natively; plain Enter never submits, Mod+Enter posts.
 
 ## Midday adaptation
 
@@ -89,46 +89,44 @@ financial rollback are not adopted.
    Party quick look and page (Overview, Receipts, Ledger), Party edit. Open:
    keyboard row focus, the receipts list on `db:seed:volume` data, and an
    empty-query Link Field at 5,000 Parties under 200 ms.
-4. **Invoice form.** Open.
+4. **Invoice form.** Implemented and runtime verified. Open: H4 set 2.
    - Acceptance: the Receipt and Invoice forms both use the extracted
      `DocumentForm`, `PostBar` and `LineGrid`. Item is a Link Field with inline
      create. Place of supply defaults from the Party, stays editable and is
      passed to `computeTax`. Due date defaults to the document date, is
-     editable before post and never precedes it. Enter on the last cell of the
-     last line appends a line and focuses its Item; an empty last line is
-     dropped at post. Totals and tax come only from `computeTax`, never a
-     second client formula. Save draft calls `invoice.saveDraft`, then
-     `invoice.updateDraft` with the loaded `version`; a stale version shows the
-     refresh conflict; a draft reopened from the list restores every field and
-     line. A post from a draft sends `mode: "draft"` with `documentId` and
-     `version`; a fresh form sends `mode: "new"`. A Receipt with `against`
+     editable before post and never precedes it. Lines are added with the Add
+     buttons; Tab moves through fields natively. Totals and tax come only from `computeTax`, never a
+     second client formula. Save draft and post send the loaded
+     `draft: { id, version }` once a draft exists and omit it on a fresh form;
+     a stale version shows the refresh conflict; a draft reopened from the list
+     restores every field and line. A Receipt with `against`
      lists the Party's open Invoices with outstanding, allocates by amount with
      Enter, refuses more than outstanding on the field, and shows the
      remainder as advance before post. The Invoice record Sheet applies an open
      advance through `allocation.apply` and reverses it there. The list and
      record Sheet show due date, gross, allocated, outstanding, settlement
      status and overdue (core call 18); filters include settlement status and
-     overdue. The record Sheet also shows lines, tax split, allocations and
-     Print. Cancelling a settled Invoice shows the core conflict with its
-     allocations, offers their permitted reversal, and keeps a shared Receipt
-     and its other allocation. H4 set 2 is recorded here.
+     overdue. The record Sheet also shows lines, tax split and allocations.
+     The record Sheet offers Cancel only once every allocation is reversed
+     (core call 17); reversing one allocation keeps a shared Receipt and its
+     other allocation. H4 set 2 is still open.
    - Depends on: slices 1–2 and accounting-core slice 4.
-   - Owns: `routes/$orgSlug/invoices/`, `components/document-form/`,
-     `components/allocation-list.tsx`, `components/item-form.tsx`, adoption in
-     `receipt-form.tsx`, `lib/domain-invalidation.ts`.
-   - Interfaces: `DocumentForm({ form, state, onPost, onPostAndNext, carry })`;
-     `LineGrid({ name, columns, onAppend })` on `useFieldArray`;
-     `AllocationList({ open, value, onChange })`;
-     `invalidateInvoiceState(queryClient, orgSlug, invoiceId, "post" | "cancel")`;
-     `invalidateAllocationState(queryClient, orgSlug, partyId)`.
+   - Owns: `routes/$orgSlug/invoices/`, `components/invoice-form.tsx`,
+     `components/invoice-summary.tsx`, `components/document-form.tsx`,
+     `components/apply-advance-sheet.tsx`, adoption in `receipt-form.tsx`, and
+     `lib/domain-invalidation.ts`.
+   - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
+     two proven shared seams. Each write invalidates the set for what it moved:
+     `invalidateInvoiceDrafts` (draft save or discard),
+     `invalidateSettlementState` (invoice post or cancel, allocation apply or
+     reverse) and `invalidateCashState` (receipt post or cancel); an uncertain
+     result uses the same set as the success path. A draft opens for editing at
+     `/invoices/$invoiceId?edit=true`; `?create=true` on the list starts a new
+     invoice.
    - Legacy reference (a716b6c). Read it; do not copy it.
      - Allocation remainder: a live "Fill ₹x" or "Over by ₹x" control
        (`a716b6c:apps/web/src/components/payment-lines.tsx:77-108`). Port it
        onto bigint `formatMoney`.
-     - Print preview: an iframe of the server PDF, so the preview is the same
-       bytes the Party gets
-       (`a716b6c:apps/web/src/components/billing-document-view.tsx:70-106`). It
-       needs same-origin `frame-src`.
      - List totals: `count(*) over()` and `sum(sum(x)) over()` beside a
        `limit + 1` page, in one query
        (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The

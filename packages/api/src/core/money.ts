@@ -21,6 +21,11 @@ export function parseMoney(value: string): bigint {
   return negative ? -amount : amount;
 }
 
+/** Half-up integer division for non-negative money and a positive denominator. */
+export function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator / 2n) / denominator;
+}
+
 /** Plain decimal text such as "-12.50", for form values, audit metadata and messages. */
 export function formatDecimal(paise: bigint): string {
   const negative = paise < 0n;

@@ -41,7 +41,6 @@ export const organizationSettings = pgTable(
     addressLine2: text("address_line_2"),
     city: text("city").notNull(),
     pinCode: text("pin_code").notNull(),
-    // Invoice and Credit Note prefixes wait for slice 4, which numbers those documents.
     invoicePrefix: text("invoice_prefix").notNull(),
     receiptPrefix: text("receipt_prefix").notNull(),
     paymentPrefix: text("payment_prefix").notNull(),

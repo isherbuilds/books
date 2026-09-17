@@ -398,9 +398,7 @@ test("receipt detail preserves the posted party and organization print snapshot"
     expect(reprint.printSnapshot?.party?.name).toBe("Receipt Customer");
     expect(reprint.printSnapshot?.organization.legalName).toBe(originalLegalName);
     expect(reprint.printSnapshot?.paymentMethod).toBe("Bank transfer");
-    expect(reprint.printSnapshot?.lines).toEqual([
-      { description: expect.any(String), hsnSac: null, unit: null },
-    ]);
+    expect(reprint.printSnapshot?.lines).toEqual([{ description: expect.any(String) }]);
   } finally {
     await api.party.update({
       orgSlug: organization.slug,

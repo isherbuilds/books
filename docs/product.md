@@ -24,7 +24,9 @@ per entity.
 - **Live**: tenancy, auth, members, files, audit, security headers, upload
   cleanup; Parties with ledger, Receipts, Payments with TDS (API only), money
   accounts and payment methods, day book and TDS register XLSX (API only).
-- **Next**: accounting-core slices 4–7.
+- **Next**: accounting-core slices 4b-ii and 5–7. Slices 4a (Items, GST and
+  Invoices) and 4b-i (allocations) are implemented and runtime verified in the
+  app; CA acceptance is open.
 - **Evidence-gated**: the table below. This work gets no placeholder route,
   table, permission or navigation entry. It starts only with an observed or paid
   need, a named owner and an accepted vertical-slice spec.

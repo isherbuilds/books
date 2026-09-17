@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type RefObject } from "react";
+import { useRef, useState, type Ref } from "react";
 
 import { LinkField } from "@/components/link-field";
 import { PartySheet } from "@/components/party-form";
@@ -17,7 +17,6 @@ export function PartyLinkField({
   orgSlug,
   value,
   onSelect,
-  onCommit,
   clearable,
   inputRef,
   id,
@@ -27,9 +26,9 @@ export function PartyLinkField({
   orgSlug: string;
   value: PartyOption | null;
   onSelect: (party: PartyOption | null) => void;
-  onCommit?: () => void;
   clearable?: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
+  /** Usually RHF's `field.ref`, so focus-on-error reaches the picker. */
+  inputRef: Ref<HTMLInputElement>;
   id?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
@@ -39,11 +38,21 @@ export function PartyLinkField({
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const [createSeed, setCreateSeed] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const input = useRef<HTMLInputElement | null>(null);
+
+  // The field keeps its own handle to refocus after a quick-create and still hands
+  // the input to the caller's ref.
+  const attachInput = (element: HTMLInputElement | null) => {
+    input.current = element;
+
+    if (typeof inputRef === "function") inputRef(element);
+    else if (inputRef) inputRef.current = element;
+  };
 
   // A frame later, once the closing Sheet has released focus.
   const closeCreate = () => {
     setCreateOpen(false);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    requestAnimationFrame(() => input.current?.focus());
   };
 
   return (
@@ -57,7 +66,6 @@ export function PartyLinkField({
         getCode={(party) => party.gstin ?? undefined}
         value={value}
         onSelect={onSelect}
-        onCommit={onCommit}
         onCreate={
           canCreate
             ? (seed) => {
@@ -68,7 +76,7 @@ export function PartyLinkField({
         }
         clearable={clearable}
         placeholder={canCreate ? "Select or create a party" : "Select a party"}
-        inputRef={inputRef}
+        inputRef={attachInput}
         id={id}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}

@@ -1,15 +1,18 @@
 import { db } from "@accly/db";
+import { allocations } from "@accly/db/schema/allocations";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { allocationReversed, remainingPaiseOf } from "../core/allocations";
 import {
+  accountLine,
   organizationSnapshot,
   partySnapshot,
   postDocument,
+  postedNumber,
   receiptTax,
   type PostDocumentInput,
 } from "../core/documents";
@@ -18,9 +21,23 @@ import { postableAccount } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { orderedPeriod, reason, settlementListFields, settlementPostFields } from "../lib/schemas";
-import { cancelSettlement, listSettlements, settlementDetail } from "../lib/settlements";
+import {
+  orderedPeriod,
+  positiveMoney,
+  reason,
+  settlementListFields,
+  settlementPostFields,
+} from "../lib/schemas";
+import {
+  PICKER_LIMIT,
+  cancelDocument,
+  listSettlements,
+  orgSettings,
+  pageOf,
+  settlementDetail,
+} from "../lib/settlements";
 
+// The receipt PDF prints only the document row.
 export type ReceiptDetail = typeof documents.$inferSelect;
 
 const postInput = z.discriminatedUnion("settlementKind", [
@@ -30,6 +47,18 @@ const postInput = z.discriminatedUnion("settlementKind", [
       settlementKind: z.literal("advance"),
       partyId: z.uuid(),
       advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS),
+    })
+    .strict(),
+  orgInput
+    .extend(settlementPostFields)
+    .extend({
+      settlementKind: z.literal("against"),
+      partyId: z.uuid(),
+      allocations: z
+        .array(z.object({ invoiceId: z.uuid(), amount: positiveMoney }).strict())
+        .min(1)
+        .max(50),
+      advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
     })
     .strict(),
   orgInput
@@ -47,9 +76,25 @@ export const receiptRouter = {
     const { scope } = context;
     const { settlementKind } = input;
 
+    const allocatedPaise =
+      settlementKind === "against"
+        ? input.allocations.reduce((sum, allocation) => sum + allocation.amount, 0n)
+        : 0n;
+
+    // Only an unallocated remainder is held as an advance, so only it records a supply.
+    const remainderSupply =
+      settlementKind === "against" && allocatedPaise < input.amount ? input.advanceSupply : null;
+
+    if (remainderSupply === undefined) {
+      throw badRequest(
+        "ADVANCE_SUPPLY_REQUIRED",
+        "Choose what the remaining advance is received for.",
+      );
+    }
+
     // Independent lookups; validation order below still reports the first missing input.
     // postDocument checks the Payment Method under a lock inside the transaction.
-    const [party, incomeAccount, storedSettings] = await Promise.all([
+    const [party, incomeAccount, settings] = await Promise.all([
       input.partyId
         ? db
             .select()
@@ -61,23 +106,14 @@ export const receiptRouter = {
       settlementKind === "direct"
         ? postableAccount(scope.orgId, input.incomeAccountId, ["income"])
         : undefined,
-      db
-        .select()
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, scope.orgId))
-        .limit(1)
-        .then(([row]) => row),
+      orgSettings(scope.orgId),
     ]);
-
-    if (!storedSettings) {
-      throw new Error(`Organization ${scope.orgId} is missing its settings`);
-    }
 
     if (input.partyId && !party) {
       throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
     }
 
-    const documentDate = input.documentDate ?? businessDate(new Date(), storedSettings.timeZone);
+    const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
     let lineDescription: string;
     let affectsTax: boolean;
     let posting: PostDocumentInput["posting"];
@@ -86,6 +122,7 @@ export const receiptRouter = {
       lineDescription = input.narration ?? "Advance received";
       affectsTax = false;
       posting = {
+        paymentMethodId: input.paymentMethodId,
         type: "receipt",
         settlementKind,
         advanceSupply: input.advanceSupply,
@@ -96,6 +133,23 @@ export const receiptRouter = {
         accountId: null,
         amountPaise: input.amount,
       };
+    } else if (settlementKind === "against") {
+      lineDescription = "Receipt against invoices";
+      affectsTax = false;
+      posting = {
+        paymentMethodId: input.paymentMethodId,
+        type: "receipt",
+        settlementKind,
+        exposureSide: "receivable",
+        partyId: input.partyId,
+        accountId: null,
+        amountPaise: input.amount,
+        allocations: input.allocations.map((allocation) => ({
+          documentId: allocation.invoiceId,
+          amountPaise: allocation.amount,
+        })),
+        advanceSupply: remainderSupply,
+      };
     } else {
       if (!incomeAccount) {
         throw badRequest(
@@ -104,7 +158,7 @@ export const receiptRouter = {
         );
       }
 
-      const tax = receiptTax(storedSettings.gstin, incomeAccount.supplyClass);
+      const tax = receiptTax(settings.gstin, incomeAccount.supplyClass);
 
       if (tax.refused) {
         throw badRequest(
@@ -116,6 +170,7 @@ export const receiptRouter = {
       lineDescription = input.narration ?? incomeAccount.name;
       affectsTax = tax.affectsTax;
       posting = {
+        paymentMethodId: input.paymentMethodId,
         type: "receipt",
         settlementKind,
         exposureSide: null,
@@ -126,9 +181,9 @@ export const receiptRouter = {
     }
 
     const printSnapshot = {
-      organization: organizationSnapshot(storedSettings),
+      organization: organizationSnapshot(settings),
       party: partySnapshot(party),
-      lines: [{ description: lineDescription, hsnSac: null, unit: null }],
+      lines: [{ description: lineDescription }],
     };
 
     const posted = await db.transaction((tx) =>
@@ -136,18 +191,20 @@ export const receiptRouter = {
         tx,
         scope,
         {
-          prefix: storedSettings.receiptPrefix,
-          fiscalYearStartMonth: storedSettings.financialYearStart,
+          prefix: settings.receiptPrefix,
+          fiscalYearStartMonth: settings.financialYearStart,
         },
         {
           documentDate,
-          paymentMethodId: input.paymentMethodId,
+          dueDate: null,
+          placeOfSupplyStateCode: null,
           reference: input.reference ?? null,
           narration: input.narration ?? null,
           affectsTax,
           printSnapshot,
-          lineDescription,
+          lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
           posting,
+          draft: null,
         },
       ),
     );
@@ -161,7 +218,8 @@ export const receiptRouter = {
         number: posted.number,
         amount: formatDecimal(input.amount),
         settlementKind,
-        advanceSupply: settlementKind === "advance" ? input.advanceSupply : null,
+        advanceSupply: settlementKind === "advance" ? input.advanceSupply : remainderSupply,
+        allocatedAmount: settlementKind === "against" ? formatDecimal(allocatedPaise) : null,
       },
     });
 
@@ -170,7 +228,43 @@ export const receiptRouter = {
   }),
 
   get: orgProcedure({ receipt: ["read"] }, orgInput.extend({ receiptId: z.uuid() })).handler(
-    ({ context, input }) => settlementDetail(context.scope.orgId, "receipt", input.receiptId),
+    async ({ context, input }) => {
+      const { orgId } = context.scope;
+
+      const [detail, rows] = await Promise.all([
+        settlementDetail(orgId, "receipt", input.receiptId),
+        db
+          .select({
+            id: allocations.id,
+            targetDocumentId: allocations.targetDocumentId,
+            targetNumber: documents.number,
+            amountPaise: allocations.amountPaise,
+            entryDate: allocations.entryDate,
+            reversed: allocationReversed(orgId),
+          })
+          .from(allocations)
+          .innerJoin(
+            documents,
+            and(eq(documents.orgId, orgId), eq(documents.id, allocations.targetDocumentId)),
+          )
+          .where(
+            and(
+              eq(allocations.orgId, orgId),
+              eq(allocations.sourceDocumentId, input.receiptId),
+              eq(allocations.kind, "apply"),
+            ),
+          )
+          .orderBy(asc(allocations.entryDate), asc(allocations.id)),
+      ]);
+
+      return {
+        ...detail,
+        allocations: rows.map((row) => ({
+          ...row,
+          targetNumber: postedNumber(row.targetNumber, row.targetDocumentId),
+        })),
+      };
+    },
   ),
 
   list: orgProcedure(
@@ -208,10 +302,43 @@ export const receiptRouter = {
     });
   }),
 
+  unapplied: orgProcedure({ receipt: ["read"] }, orgInput.extend({ partyId: z.uuid() })).handler(
+    async ({ context, input }) => {
+      const { orgId } = context.scope;
+      const unappliedPaise = remainingPaiseOf(orgId, "source");
+
+      const rows = await db
+        .select({
+          id: documents.id,
+          number: documents.number,
+          documentDate: documents.documentDate,
+          unappliedPaise,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.orgId, orgId),
+            eq(documents.type, "receipt"),
+            eq(documents.state, "posted"),
+            eq(documents.partyId, input.partyId),
+            inArray(documents.settlementKind, ["advance", "against"]),
+            sql`${unappliedPaise} > 0`,
+          ),
+        )
+        .orderBy(asc(documents.documentDate), asc(documents.id))
+        .limit(PICKER_LIMIT + 1);
+
+      return pageOf(
+        rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
+        PICKER_LIMIT,
+      );
+    },
+  ),
+
   cancel: orgProcedure(
     { receipt: ["cancel"] },
     orgInput.extend({ receiptId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelSettlement(context.scope, "receipt", input.receiptId, input.reason),
+    cancelDocument(context.scope, "receipt", input.receiptId, input.reason),
   ),
 };

@@ -3,14 +3,6 @@
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@accly/ui/components/dialog";
 import { Separator } from "@accly/ui/components/separator";
 import {
   Sheet,
@@ -20,15 +12,24 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@accly/ui/components/sheet";
-import { Textarea } from "@accly/ui/components/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@accly/ui/components/table";
 import { cn } from "@accly/ui/lib/utils";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
+import { ReasonDialog } from "@/components/confirm-dialog";
+import { DetailRow } from "@/components/detail-row";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
-import { invalidateReceiptState } from "@/lib/domain-invalidation";
+import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
@@ -46,76 +47,6 @@ export const Route = createFileRoute("/$orgSlug/receipts/$receiptId")({
   component: ReceiptSheetRoute,
 });
 
-function CancelReceiptDialog({
-  open,
-  pending,
-  reason,
-  onReasonChange,
-  onCancel,
-  onConfirm,
-}: {
-  open: boolean;
-  pending: boolean;
-  reason: string;
-  onReasonChange: (reason: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Cancel receipt</DialogTitle>
-          <DialogDescription>
-            This posts a reversal. The receipt remains in the register for audit history.
-          </DialogDescription>
-        </DialogHeader>
-        <label className="grid gap-1.5 text-xs">
-          <span>Reason</span>
-          <Textarea
-            required
-            autoFocus
-            value={reason}
-            maxLength={500}
-            rows={4}
-            disabled={pending}
-            onChange={(event) => onReasonChange(event.target.value)}
-            placeholder="Why is this receipt being cancelled?"
-          />
-        </label>
-        <DialogFooter>
-          <Button variant="ghost" disabled={pending} onClick={onCancel}>
-            Keep receipt
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={pending || reason.trim().length === 0}
-            onClick={onConfirm}
-          >
-            {pending ? "Cancelling…" : "Cancel receipt"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Row({ label, children, mono }: { label: string; children?: ReactNode; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          "min-w-0 text-right break-words",
-          children ? mono && "font-mono" : "text-muted-foreground",
-        )}
-      >
-        {children || "—"}
-      </dd>
-    </div>
-  );
-}
-
 // The record opens over the list, which stays mounted in the layout route, so
 // closing the Sheet returns to the same scroll position and filters.
 function ReceiptSheetRoute() {
@@ -132,7 +63,6 @@ function ReceiptSheetRoute() {
   const canCancel = useCan(orgSlug, { receipt: ["cancel"] }) && !cancelled;
   const canReadParties = useCan(orgSlug, { party: ["read"] });
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [reason, setReason] = useState("");
   const pdfHref = `/api/${orgSlug}/receipts/${receipt.id}/pdf`;
   const partyName = receipt.printSnapshot?.party?.name;
 
@@ -165,44 +95,26 @@ function ReceiptSheetRoute() {
 
   usePaletteActions(paletteActions);
 
-  // Write the returned row first, so the Sheet strikes the amount and drops Cancel at
-  // once; a second click would only get CONFLICT.
+  // Cancelling reverses the receipt's active allocations in the same transaction, so
+  // the dialog closes only once the record and its invoices have refetched.
   const cancel = useMutation(
     orpc.receipt.cancel.mutationOptions({
-      onSuccess: (detail) => {
-        queryClient.setQueryData(
-          orpc.receipt.get.queryKey({ input: { orgSlug, receiptId } }),
-          detail,
-        );
-        void invalidateReceiptState(queryClient, orgSlug);
+      onSuccess: async () => {
+        await invalidateCashState(queryClient, orgSlug);
         setCancelOpen(false);
-        setReason("");
         toast.success("Receipt cancelled");
       },
       onError: (error) => {
         // Someone else cancelled it: refetch, so this Sheet shows the cancelled receipt.
         if (hasErrorCode(error, "CONFLICT")) {
           setCancelOpen(false);
-          setReason("");
-          void Promise.all([
-            invalidateReceiptState(queryClient, orgSlug),
-            queryClient.invalidateQueries({
-              queryKey: orpc.receipt.get.key({ input: { orgSlug, receiptId } }),
-            }),
-          ]);
+          void invalidateCashState(queryClient, orgSlug);
         }
 
         toast.error(errorMessage(error, "Could not cancel the receipt"));
       },
     }),
   );
-
-  const closeCancel = () => {
-    if (cancel.isPending) return;
-
-    setCancelOpen(false);
-    setReason("");
-  };
 
   return (
     <ClientOnly fallback={null}>
@@ -252,8 +164,8 @@ function ReceiptSheetRoute() {
             <Separator />
 
             <dl className="grid gap-3">
-              <Row label="Date">{formatDay(receipt.documentDate)}</Row>
-              <Row label="Party">
+              <DetailRow label="Date">{formatDay(receipt.documentDate)}</DetailRow>
+              <DetailRow label="Party">
                 {receipt.partyId && canReadParties ? (
                   <Link
                     to="/$orgSlug/parties/$partyId"
@@ -265,15 +177,63 @@ function ReceiptSheetRoute() {
                 ) : (
                   partyName
                 )}
-              </Row>
-              <Row label="Payment method">{receipt.printSnapshot?.paymentMethod}</Row>
-              <Row label="Settlement">
+              </DetailRow>
+              <DetailRow label="Payment method">{receipt.printSnapshot?.paymentMethod}</DetailRow>
+              <DetailRow label="Settlement">
                 <span className="capitalize">{receipt.settlementKind}</span>
-              </Row>
-              <Row label="Reference" mono>
+              </DetailRow>
+              <DetailRow label="Reference" mono>
                 {receipt.reference}
-              </Row>
+              </DetailRow>
             </dl>
+
+            {receipt.allocations.length > 0 ? (
+              <>
+                <Separator />
+                <section className="grid gap-2">
+                  <h3 className="text-muted-foreground">Allocations</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">State</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {receipt.allocations.map((allocation) => (
+                        <TableRow key={allocation.id}>
+                          <TableCell>
+                            <Link
+                              to="/$orgSlug/invoices/$invoiceId"
+                              params={{
+                                orgSlug,
+                                invoiceId: allocation.targetDocumentId,
+                              }}
+                              className="font-mono underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:hover:underline"
+                            >
+                              {allocation.targetNumber}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{formatDay(allocation.entryDate)}</TableCell>
+                          <TableCell className="text-right">
+                            {formatMoney(allocation.amountPaise)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {allocation.reversed ? (
+                              <Badge variant="muted">Reversed</Badge>
+                            ) : (
+                              <Badge variant="outline">Active</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </section>
+              </>
+            ) : null}
 
             {receipt.narration ? (
               <>
@@ -303,13 +263,17 @@ function ReceiptSheetRoute() {
           </SheetFooter>
 
           {/* Inside the Sheet, so Base UI treats it as nested: Esc closes it alone. */}
-          <CancelReceiptDialog
+          <ReasonDialog
             open={cancelOpen}
             pending={cancel.isPending}
-            reason={reason}
-            onReasonChange={setReason}
-            onCancel={closeCancel}
-            onConfirm={() => cancel.mutate({ orgSlug, receiptId, reason: reason.trim() })}
+            title="Cancel receipt"
+            description="This posts a reversal. The receipt remains in the register for audit history."
+            placeholder="Why is this receipt being cancelled?"
+            keepLabel="Keep receipt"
+            confirmLabel="Cancel receipt"
+            pendingLabel="Cancelling…"
+            onClose={() => setCancelOpen(false)}
+            onConfirm={(reason) => cancel.mutate({ orgSlug, receiptId, reason })}
           />
         </SheetContent>
       </Sheet>

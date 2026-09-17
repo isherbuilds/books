@@ -7,31 +7,23 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { conflict } from "../lib/conflict";
+import { conflict, nextEditToken } from "../lib/conflict";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
+import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   indianPinCode,
   indianStateCode,
+  masterName,
   optionalGstin,
   optionalPan,
   orderedPeriod,
   period,
-  shortName,
   validateGstinIdentity,
 } from "../lib/schemas";
 
-export function normalizedPartyName(name: string): string {
-  return name
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}]/gu, "");
-}
-
 const partyInputFields = {
-  name: shortName
-    .max(120)
-    .refine((name) => normalizedPartyName(name).length > 0, "Name must include a letter or number"),
+  name: masterName,
   roles: z
     .array(z.enum(PARTY_ROLES))
     .min(1)
@@ -56,7 +48,7 @@ const STATEMENT_LIMIT = 5000;
 function partyValues(fields: PartyFields) {
   return {
     ...fields,
-    normalizedName: normalizedPartyName(fields.name),
+    normalizedName: normalizedName(fields.name),
     gstin: fields.gstin?.toUpperCase() ?? null,
     pan: fields.pan ?? null,
     addressLine1: fields.addressLine1 ?? null,
@@ -195,7 +187,7 @@ export const partyRouter = {
         .set({
           ...values,
           active,
-          updatedAt: sql`greatest(statement_timestamp(), ${parties.updatedAt} + interval '1 millisecond')::timestamptz(3)`,
+          updatedAt: nextEditToken(parties.updatedAt),
         })
         .where(
           and(

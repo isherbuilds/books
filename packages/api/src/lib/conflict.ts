@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import { sql, type AnyColumn } from "drizzle-orm";
 
 /**
  * Why a CONFLICT happened when a client can take a specific recovery path.
@@ -9,11 +10,20 @@ export type ConflictReason =
   | "DUPLICATE"
   | "STALE_RECORD"
   | "PARTY_NAME_COLLISION"
-  | "PARTY_GSTIN_TAKEN";
+  | "PARTY_GSTIN_TAKEN"
+  | "ITEM_NAME_TAKEN";
 
 /** A clash the operator can act on. Expected, so the server does not log it. */
 export function conflict(reason: ConflictReason, message: string) {
   return new ORPCError("CONFLICT", { message, data: { reason } });
+}
+
+/**
+ * The next value of a `timestamptz(3)` edit token. It moves forward even when two saves
+ * land in one millisecond, so an editor's stale token can never match again.
+ */
+export function nextEditToken(updatedAt: AnyColumn) {
+  return sql`greatest(statement_timestamp(), ${updatedAt} + interval '1 millisecond')::timestamptz(3)`;
 }
 
 export function badRequest(reason: string, message: string) {

@@ -32,30 +32,40 @@ export function isLeaf(orgId: string) {
 }
 
 /**
- * An active, non-system leaf of one of `types` that is not a money account: money
- * moves between money accounts only by the slice 5 Journal.
+ * Active, non-system leaves of one of `types` that are not money accounts: money
+ * moves between money accounts only by the slice 5 Journal. Unresolved ids are
+ * omitted from the result.
  */
-export async function postableAccount(
+export async function postableAccounts(
   orgId: string,
-  id: string,
+  ids: readonly string[],
   types: readonly AccountType[],
-): Promise<typeof accounts.$inferSelect | undefined> {
-  const [row] = await db
+): Promise<Array<typeof accounts.$inferSelect>> {
+  if (ids.length === 0) return [];
+
+  return db
     .select(getTableColumns(accounts))
     .from(accounts)
     .leftJoin(moneyGroup, underMoneyGroup(orgId))
     .where(
       and(
         eq(accounts.orgId, orgId),
-        eq(accounts.id, id),
+        inArray(accounts.id, [...ids]),
         eq(accounts.active, true),
         inArray(accounts.type, [...types]),
         isNull(accounts.systemKey),
         isNull(moneyGroup.id),
         isLeaf(orgId),
       ),
-    )
-    .limit(1);
+    );
+}
+
+export async function postableAccount(
+  orgId: string,
+  id: string,
+  types: readonly AccountType[],
+): Promise<typeof accounts.$inferSelect | undefined> {
+  const [row] = await postableAccounts(orgId, [id], types);
 
   return row;
 }

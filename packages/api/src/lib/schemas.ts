@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { NON_NEGATIVE_MONEY_PATTERN, parseMoney } from "../core/money";
 import { INDIAN_STATES } from "./indian-states";
+import { normalizedName } from "./normalized-name";
 
 // Input fragments shared by more than one router.
 
@@ -13,6 +14,10 @@ export const positiveMoney = money.refine((value) => value > 0n);
 
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
+
+export const indianStateCode = z
+  .string()
+  .refine((code) => Object.hasOwn(INDIAN_STATES, code), "Use a valid Indian state code");
 
 /** An optional date range; pair with `.superRefine(orderedPeriod)`. */
 export const period = { from: dateOnly.optional(), to: dateOnly.optional() };
@@ -37,6 +42,14 @@ export const shortName = z
   .overwrite((value) => value.replace(/\s+/g, " "))
   .min(1)
   .max(200);
+
+/** A master record's name, unique per Organization after `normalizedName`. */
+export const masterName = shortName
+  .max(120)
+  .refine(
+    (name) => /[\p{L}\p{N}]/u.test(normalizedName(name)),
+    "Name must include a letter or number",
+  );
 
 // GST Rules 46 and 50 cap a number at 16 characters of letters, digits, '-' and '/':
 // up to 4 here, then "26-27/" and a sequence of up to 6 digits. Stored in upper case:
@@ -74,15 +87,49 @@ export const settlementPostFields = {
     .optional(),
 };
 
-export const settlementListFields = {
+export const invoiceFields = {
+  partyId: z.uuid(),
+  documentDate: dateOnly.optional(),
+  dueDate: dateOnly.optional(),
+  placeOfSupplyStateCode: indianStateCode,
+  reference: settlementPostFields.reference,
+  narration: settlementPostFields.narration,
+  lines: z
+    .array(
+      z.discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("item"),
+          itemId: z.uuid(),
+          quantity: z.number().int().min(1).max(1_000_000),
+          unitPrice: money.optional(),
+          description: z.string().trim().max(200).optional(),
+        }),
+        z.object({
+          kind: z.literal("account"),
+          accountId: z.uuid(),
+          description: z.string().trim().min(1).max(200),
+          amount: positiveMoney,
+        }),
+      ]),
+    )
+    .min(1)
+    .max(100),
+};
+
+/** The keyset, party, period and search fields every document register takes. */
+export const documentListFields = {
   q: searchQuery,
   partyId: z.uuid().optional(),
-  paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional(),
-  state: z.enum(["posted", "cancelled"]).optional(),
-  settlementKind: z.enum(SETTLEMENT_KINDS).optional(),
   ...period,
   cursor: z.uuid().optional(),
   limit: pageLimit,
+};
+
+export const settlementListFields = {
+  ...documentListFields,
+  paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional(),
+  state: z.enum(["posted", "cancelled"]).optional(),
+  settlementKind: z.enum(SETTLEMENT_KINDS).optional(),
 };
 
 // Escapes LIKE wildcards so a typed `%` matches a literal percent sign.
@@ -129,10 +176,6 @@ export const optionalGstin = z
   .refine((value) => value === "" || GSTIN_PATTERN.test(value), "Use a valid GSTIN")
   .transform((value) => value || undefined)
   .optional();
-
-export const indianStateCode = z
-  .string()
-  .refine((code) => Object.hasOwn(INDIAN_STATES, code), "Use a valid Indian state code");
 
 export const indianPinCode = z
   .string()

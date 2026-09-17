@@ -20,12 +20,14 @@ CREATE TABLE "allocations" (
 	"source_document_id" text NOT NULL,
 	"target_document_id" text NOT NULL,
 	"amount_paise" bigint NOT NULL,
-	"state" text DEFAULT 'active' NOT NULL,
-	"reversed_at" timestamp with time zone,
+	"kind" text NOT NULL,
+	"reverses_allocation_id" text,
+	"entry_date" date NOT NULL,
+	"created_by" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "allocations_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "allocations_amount_paise_check" CHECK ("allocations"."amount_paise" > 0),
-	CONSTRAINT "allocations_state_check" CHECK ("allocations"."state" in ('active', 'reversed'))
+	CONSTRAINT "allocations_kind_check" CHECK (("allocations"."kind" = 'apply' and "allocations"."reverses_allocation_id" is null) or ("allocations"."kind" = 'reverse' and "allocations"."reverses_allocation_id" is not null))
 );
 --> statement-breakpoint
 CREATE TABLE "audit_log" (
@@ -124,10 +126,23 @@ CREATE TABLE "document_lines" (
 	"position" integer NOT NULL,
 	"kind" text NOT NULL,
 	"account_id" text,
+	"item_id" text,
 	"description" text NOT NULL,
+	"hsn_sac" text,
+	"unit" text,
+	"quantity" integer,
+	"unit_price_paise" bigint,
+	"tax_rate_id" text,
+	"cgst_paise" bigint NOT NULL,
+	"sgst_paise" bigint NOT NULL,
+	"igst_paise" bigint NOT NULL,
 	"amount_paise" bigint NOT NULL,
 	CONSTRAINT "document_lines_org_id_id_unique" UNIQUE("org_id","id"),
-	CONSTRAINT "document_lines_kind_check" CHECK ("document_lines"."kind" in ('item', 'account'))
+	CONSTRAINT "document_lines_kind_check" CHECK ("document_lines"."kind" in ('item', 'account')),
+	CONSTRAINT "document_lines_quantity_check" CHECK ("document_lines"."quantity" is null or "document_lines"."quantity" >= 1),
+	CONSTRAINT "document_lines_cgst_paise_check" CHECK ("document_lines"."cgst_paise" >= 0),
+	CONSTRAINT "document_lines_sgst_paise_check" CHECK ("document_lines"."sgst_paise" >= 0),
+	CONSTRAINT "document_lines_igst_paise_check" CHECK ("document_lines"."igst_paise" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "documents" (
@@ -139,6 +154,8 @@ CREATE TABLE "documents" (
 	"series" text,
 	"financial_year" text,
 	"document_date" date NOT NULL,
+	"due_date" date,
+	"place_of_supply_state_code" text,
 	"party_id" text,
 	"exposure_side" text,
 	"settlement_kind" text,
@@ -149,6 +166,7 @@ CREATE TABLE "documents" (
 	"source" text DEFAULT 'user' NOT NULL,
 	"version" integer DEFAULT 1 NOT NULL,
 	"total_paise" bigint NOT NULL,
+	"round_off_paise" bigint NOT NULL,
 	"affects_tax" boolean DEFAULT false NOT NULL,
 	"print_snapshot" jsonb,
 	"posted_at" timestamp with time zone,
@@ -161,7 +179,7 @@ CREATE TABLE "documents" (
 	CONSTRAINT "documents_state_check" CHECK ("documents"."state" in ('draft', 'posted', 'cancelled')),
 	CONSTRAINT "documents_exposure_side_check" CHECK ("documents"."exposure_side" is null or "documents"."exposure_side" in ('receivable', 'payable')),
 	CONSTRAINT "documents_settlement_kind_check" CHECK ("documents"."settlement_kind" is null or "documents"."settlement_kind" in ('against', 'advance', 'direct')),
-	CONSTRAINT "documents_advance_supply_check" CHECK (coalesce("documents"."type" = 'receipt' and "documents"."settlement_kind" = 'advance', false) = ("documents"."advance_supply" is not null)),
+	CONSTRAINT "documents_advance_supply_check" CHECK (case when "documents"."type" = 'receipt' and "documents"."settlement_kind" = 'advance' then "documents"."advance_supply" is not null when "documents"."type" = 'receipt' and "documents"."settlement_kind" = 'against' then true else "documents"."advance_supply" is null end),
 	CONSTRAINT "documents_source_check" CHECK ("documents"."source" in ('user', 'opening')),
 	CONSTRAINT "documents_total_paise_check" CHECK ("documents"."total_paise" >= 0)
 );
@@ -275,6 +293,37 @@ CREATE TABLE "tds_sections" (
 	CONSTRAINT "tds_sections_effective_range_check" CHECK ("tds_sections"."effective_to" is null or "tds_sections"."effective_to" >= "tds_sections"."effective_from")
 );
 --> statement-breakpoint
+CREATE TABLE "tax_rates" (
+	"id" text PRIMARY KEY NOT NULL,
+	"org_id" text NOT NULL,
+	"code" text NOT NULL,
+	"name" text NOT NULL,
+	"rate_basis_points" integer NOT NULL,
+	"effective_from" date NOT NULL,
+	"effective_to" date,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "tax_rates_org_id_id_unique" UNIQUE("org_id","id"),
+	CONSTRAINT "tax_rates_rate_basis_points_check" CHECK ("tax_rates"."rate_basis_points" between 0 and 10000),
+	CONSTRAINT "tax_rates_effective_range_check" CHECK ("tax_rates"."effective_to" is null or "tax_rates"."effective_to" >= "tax_rates"."effective_from")
+);
+--> statement-breakpoint
+CREATE TABLE "items" (
+	"id" text PRIMARY KEY NOT NULL,
+	"org_id" text NOT NULL,
+	"name" text NOT NULL,
+	"normalized_name" text NOT NULL,
+	"hsn_sac" text,
+	"unit" text,
+	"unit_price_paise" bigint NOT NULL,
+	"income_account_id" text NOT NULL,
+	"tax_code" text,
+	"active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "items_org_id_id_unique" UNIQUE("org_id","id"),
+	CONSTRAINT "items_unit_price_paise_check" CHECK ("items"."unit_price_paise" >= 0)
+);
+--> statement-breakpoint
 CREATE TABLE "tds_deductions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"org_id" text NOT NULL,
@@ -312,8 +361,10 @@ CREATE TABLE "number_series" (
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_parent_fk" FOREIGN KEY ("org_id","parent_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "allocations" ADD CONSTRAINT "allocations_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_org_id_source_document_id_documents_org_id_id_fk" FOREIGN KEY ("org_id","source_document_id") REFERENCES "public"."documents"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_org_id_target_document_id_documents_org_id_id_fk" FOREIGN KEY ("org_id","target_document_id") REFERENCES "public"."documents"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "allocations" ADD CONSTRAINT "allocations_reverses_fk" FOREIGN KEY ("org_id","reverses_allocation_id") REFERENCES "public"."allocations"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invitation" ADD CONSTRAINT "invitation_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invitation" ADD CONSTRAINT "invitation_inviter_id_user_id_fk" FOREIGN KEY ("inviter_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -323,6 +374,8 @@ ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_document_id_documents_org_id_id_fk" FOREIGN KEY ("org_id","document_id") REFERENCES "public"."documents"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_account_id_accounts_org_id_id_fk" FOREIGN KEY ("org_id","account_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_item_id_items_org_id_id_fk" FOREIGN KEY ("org_id","item_id") REFERENCES "public"."items"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_tax_rate_id_tax_rates_org_id_id_fk" FOREIGN KEY ("org_id","tax_rate_id") REFERENCES "public"."tax_rates"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_org_id_party_id_parties_org_id_id_fk" FOREIGN KEY ("org_id","party_id") REFERENCES "public"."parties"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -341,6 +394,9 @@ ALTER TABLE "journal_lines" ADD CONSTRAINT "journal_lines_org_id_party_id_partie
 ALTER TABLE "payment_methods" ADD CONSTRAINT "payment_methods_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_methods" ADD CONSTRAINT "payment_methods_org_id_account_id_accounts_org_id_id_fk" FOREIGN KEY ("org_id","account_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tds_sections" ADD CONSTRAINT "tds_sections_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tax_rates" ADD CONSTRAINT "tax_rates_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_org_id_income_account_id_accounts_org_id_id_fk" FOREIGN KEY ("org_id","income_account_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tds_deductions" ADD CONSTRAINT "tds_deductions_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tds_deductions" ADD CONSTRAINT "tds_deductions_org_id_document_id_documents_org_id_id_fk" FOREIGN KEY ("org_id","document_id") REFERENCES "public"."documents"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tds_deductions" ADD CONSTRAINT "tds_deductions_org_id_tds_section_id_tds_sections_org_id_id_fk" FOREIGN KEY ("org_id","tds_section_id") REFERENCES "public"."tds_sections"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -352,6 +408,7 @@ CREATE UNIQUE INDEX "accounts_org_code_idx" ON "accounts" USING btree ("org_id",
 CREATE UNIQUE INDEX "accounts_org_system_key_idx" ON "accounts" USING btree ("org_id","system_key") WHERE "accounts"."system_key" is not null;--> statement-breakpoint
 CREATE INDEX "allocations_org_source_document_idx" ON "allocations" USING btree ("org_id","source_document_id");--> statement-breakpoint
 CREATE INDEX "allocations_org_target_document_idx" ON "allocations" USING btree ("org_id","target_document_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "allocations_org_reverses_idx" ON "allocations" USING btree ("org_id","reverses_allocation_id") WHERE "allocations"."reverses_allocation_id" is not null;--> statement-breakpoint
 CREATE INDEX "audit_log_org_id_idx" ON "audit_log" USING btree ("org_id","id");--> statement-breakpoint
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "account_issuer_accountId_uidx" ON "account" USING btree ("issuer","account_id");--> statement-breakpoint
@@ -378,5 +435,8 @@ CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("o
 CREATE INDEX "journal_lines_org_account_idx" ON "journal_lines" USING btree ("org_id","account_id");--> statement-breakpoint
 CREATE INDEX "journal_lines_org_entry_idx" ON "journal_lines" USING btree ("org_id","entry_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "tax_rates_org_code_from_idx" ON "tax_rates" USING btree ("org_id","code","effective_from");--> statement-breakpoint
+CREATE UNIQUE INDEX "items_org_normalized_name_idx" ON "items" USING btree ("org_id","normalized_name");--> statement-breakpoint
+CREATE INDEX "items_org_name_idx" ON "items" USING btree ("org_id","name");--> statement-breakpoint
 CREATE INDEX "party_ledger_lines_org_party_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","side");--> statement-breakpoint
 CREATE INDEX "party_ledger_lines_org_document_idx" ON "party_ledger_lines" USING btree ("org_id","document_id");
