@@ -6,7 +6,7 @@ const previousSkip = process.env.SKIP_ENV_VALIDATION;
 
 process.env.SKIP_ENV_VALIDATION = "true";
 
-const { invalidateReceiptState } = await import("../../apps/web/src/lib/domain-invalidation");
+const { invalidateDocumentState } = await import("../../apps/web/src/lib/domain-invalidation");
 
 if (previousSkip === undefined) {
   delete process.env.SKIP_ENV_VALIDATION;
@@ -27,9 +27,9 @@ function recordingInvalidator() {
   };
 }
 
-test("receipt invalidation scopes every key to the org and refreshes money balances", async () => {
+test("document invalidation scopes every key to the org and refreshes money balances", async () => {
   const { client, keys } = recordingInvalidator();
-  await invalidateReceiptState(client, "org-a");
+  await invalidateDocumentState(client, "org-a");
 
   const emitted = keys.map((key) => JSON.stringify(key));
   expect(emitted.length).toBeGreaterThan(0);

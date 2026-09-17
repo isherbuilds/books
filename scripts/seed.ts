@@ -1,5 +1,6 @@
 import {
   organizationSnapshot,
+  accountLine,
   partySnapshot,
   postDocument,
   receiptTax,
@@ -8,7 +9,7 @@ import {
 } from "@accly/api/core/documents";
 import { financialYearOf } from "@accly/api/core/numbering";
 import { createOrganization, createOrganizationInput } from "@accly/api/core/organizations";
-import { normalizedPartyName } from "@accly/api/routers/party";
+import { normalizedName } from "@accly/api/lib/normalized-name";
 import { businessDate } from "@accly/api/lib/business-date";
 import type { Scope } from "@accly/api/lib/procedures/factory";
 import { auth } from "@accly/auth";
@@ -363,7 +364,7 @@ function buildParties(
     id: Bun.randomUUIDv7(),
     orgId,
     name,
-    normalizedName: normalizedPartyName(name),
+    normalizedName: normalizedName(name),
     roles,
     stateCode: profile.organization.stateCode,
     active: random() >= 0.06,
@@ -603,6 +604,7 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
 
         const posting: PostDocumentInput["posting"] = account
           ? {
+              paymentMethodId: plan.method.id,
               type: "receipt",
               settlementKind: "direct",
               exposureSide: null,
@@ -611,6 +613,7 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
               amountPaise: plan.amountPaise,
             }
           : {
+              paymentMethodId: plan.method.id,
               type: "receipt",
               settlementKind: "advance",
               advanceSupply: "exempt",
@@ -623,18 +626,20 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
         const printSnapshot: PostDocumentInput["printSnapshot"] = {
           organization: organizationPrintSnapshot,
           party: partySnapshot(party),
-          lines: [{ description: lineDescription, hsnSac: null, unit: null }],
+          lines: [{ description: lineDescription }],
         };
 
         const { id } = await postDocument(tx, org.scope, numbering, {
           documentDate: plan.date,
-          paymentMethodId: plan.method.id,
+          dueDate: null,
+          placeOfSupplyStateCode: null,
           reference: plan.reference,
           narration: plan.narration,
           posting,
           affectsTax: account ? receiptTax(settings.gstin, account.supplyClass).affectsTax : false,
           printSnapshot,
-          lineDescription,
+          lines: [accountLine(account?.id ?? null, lineDescription, plan.amountPaise)],
+          draft: null,
         });
 
         if (plan.cancelReason) {

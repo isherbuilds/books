@@ -3,7 +3,7 @@
 // rebuilt on cmdk + Base UI Dialog, oRPC, TanStack Router and Accly's route action registry.
 
 import { formatMoney } from "@accly/api/core/money";
-import { authorize } from "@accly/auth/access";
+import { authorize, type AppPermission } from "@accly/auth/access";
 import {
   Command,
   CommandEmpty,
@@ -59,6 +59,33 @@ const GROUP_LABELS: Record<PaletteGroup, string> = {
   party: "Parties",
   receipt: "Receipts",
 };
+
+// Each list page opens its create form from `?create=true`.
+const CREATE_ACTIONS: readonly {
+  id: string;
+  label: string;
+  to: "/$orgSlug/receipts" | "/$orgSlug/invoices" | "/$orgSlug/parties";
+  permission: AppPermission;
+}[] = [
+  {
+    id: "receipt:new",
+    label: "New receipt",
+    to: "/$orgSlug/receipts",
+    permission: { receipt: ["post"] },
+  },
+  {
+    id: "invoice:new",
+    label: "New invoice",
+    to: "/$orgSlug/invoices",
+    permission: { invoice: ["post"] },
+  },
+  {
+    id: "party:new",
+    label: "New party",
+    to: "/$orgSlug/parties",
+    permission: { party: ["create"] },
+  },
+];
 
 const GROUP_ICONS: Record<PaletteGroup, LucideIcon> = {
   action: CornerUpRightIcon,
@@ -149,38 +176,19 @@ function PaletteBody({
 
   // Creating works from any page; a route that registers the same action id wins,
   // because it opens the form in place.
-  const createItems = [
-    ...(authorize(roles, { receipt: ["post"] })
+  const createItems = CREATE_ACTIONS.flatMap((create): PaletteItem[] =>
+    authorize(roles, create.permission) && !actions.some((action) => action.id === create.id)
       ? [
           {
-            id: "receipt:new",
-            label: "New receipt",
-            group: "action" as const,
+            id: create.id,
+            label: create.label,
+            group: "action",
             run: () =>
-              void navigate({
-                to: "/$orgSlug/receipts",
-                params: { orgSlug },
-                search: { create: true },
-              }),
+              void navigate({ to: create.to, params: { orgSlug }, search: { create: true } }),
           },
         ]
-      : []),
-    ...(authorize(roles, { party: ["create"] })
-      ? [
-          {
-            id: "party:new",
-            label: "New party",
-            group: "action" as const,
-            run: () =>
-              void navigate({
-                to: "/$orgSlug/parties",
-                params: { orgSlug },
-                search: { create: true },
-              }),
-          },
-        ]
-      : []),
-  ].filter((item) => !actions.some((action) => action.id === item.id));
+      : [],
+  );
 
   const organizationItems = organizations
     .filter((organization) => organization.slug !== orgSlug)

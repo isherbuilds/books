@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@accly/ui/components/dialog";
+import { Textarea } from "@accly/ui/components/textarea";
 import { ClientOnly } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 
@@ -45,6 +46,90 @@ export function ConfirmDialog({
         </DialogContent>
       </Dialog>
     </ClientOnly>
+  );
+}
+
+type ReasonQuestion = Question & {
+  placeholder: string;
+  /** The button that leaves the record as it is: "Keep invoice". */
+  keepLabel: string;
+  pendingLabel: string;
+};
+
+/** A destructive confirmation that needs a written reason, such as a cancel or a reversal. */
+export function ReasonDialog({
+  open,
+  pending,
+  title,
+  description,
+  onClose,
+  ...body
+}: ReasonQuestion & {
+  open: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  return (
+    <ClientOnly fallback={null}>
+      <Dialog open={open} onOpenChange={(next) => !next && !pending && onClose()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <ReasonBody pending={pending} onClose={onClose} {...body} />
+        </DialogContent>
+      </Dialog>
+    </ClientOnly>
+  );
+}
+
+// The reason lives inside the popup, which unmounts on close, so a reopened dialog
+// starts empty without a reset at every close path.
+function ReasonBody({
+  placeholder,
+  keepLabel,
+  confirmLabel,
+  pendingLabel,
+  pending,
+  onClose,
+  onConfirm,
+}: Omit<ReasonQuestion, "title" | "description"> & {
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <>
+      <label className="grid gap-1.5 text-xs">
+        <span>Reason</span>
+        <Textarea
+          required
+          autoFocus
+          value={reason}
+          maxLength={500}
+          rows={4}
+          disabled={pending}
+          onChange={(event) => setReason(event.currentTarget.value)}
+          placeholder={placeholder}
+        />
+      </label>
+      <DialogFooter>
+        <Button variant="ghost" disabled={pending} onClick={onClose}>
+          {keepLabel}
+        </Button>
+        <Button
+          variant="destructive"
+          disabled={pending || reason.trim().length === 0}
+          onClick={() => onConfirm(reason.trim())}
+        >
+          {pending ? pendingLabel : confirmLabel}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }
 

@@ -18,6 +18,10 @@ export * from "./payment-methods";
 
 export * from "./tds-sections";
 
+export * from "./tax-rates";
+
+export * from "./items";
+
 export * from "./documents";
 
 export * from "./document-lines";

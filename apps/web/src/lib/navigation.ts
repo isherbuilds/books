@@ -3,6 +3,7 @@ import {
   Building2Icon,
   ContactRoundIcon,
   FileIcon,
+  FileTextIcon,
   LandmarkIcon,
   ReceiptIndianRupeeIcon,
   UsersIcon,
@@ -36,7 +37,9 @@ export const BANKS_MANAGE_PERMISSION: AppPermission = {
 
 type NavGroup = (typeof NAV_GROUPS)[number];
 
-type PrimaryNavItem = NavEntry<"/$orgSlug/receipts" | "/$orgSlug/parties" | "/$orgSlug/files"> & {
+type PrimaryNavItem = NavEntry<
+  "/$orgSlug/receipts" | "/$orgSlug/invoices" | "/$orgSlug/parties" | "/$orgSlug/files"
+> & {
   icon: LucideIcon;
   group: NavGroup;
 };
@@ -50,6 +53,13 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
     icon: ReceiptIndianRupeeIcon,
     group: "Sales",
     permission: { receipt: ["read"] },
+  },
+  {
+    to: "/$orgSlug/invoices",
+    label: "Invoices",
+    icon: FileTextIcon,
+    group: "Sales",
+    permission: { invoice: ["read"] },
   },
   {
     to: "/$orgSlug/parties",
@@ -72,6 +82,7 @@ type SettingsTab = NavEntry<
   | "/$orgSlug/settings/banks"
   | "/$orgSlug/settings/members"
   | "/$orgSlug/settings/audit"
+  | "/$orgSlug/settings/items"
 >;
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
@@ -85,6 +96,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   { to: "/$orgSlug/settings/banks", label: "Banks", permission: BANKS_PERMISSION },
   { to: "/$orgSlug/settings/members", label: "Members", permission: { member: ["read"] } },
   { to: "/$orgSlug/settings/audit", label: "Audit", permission: { audit: ["read"] } },
+  { to: "/$orgSlug/settings/items", label: "Items", permission: { item: ["read"] } },
 ];
 
 type SetupStep = NavEntry<

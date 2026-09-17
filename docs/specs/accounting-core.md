@@ -1,7 +1,7 @@
 # Spec: Accounting core
 
-Status: slices 1–3 implemented; slices 4–7 open. Authority: the founder's
-decisions. Git keeps the research behind them.
+Status: slices 1–3, 4a and 4b-i implemented; slices 4b-ii and 5–7 open.
+Authority: the founder's decisions. Git keeps the research behind them.
 
 ## Outcome
 
@@ -24,14 +24,28 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
   Interest is `exempt`; `notASupply` covers donations, grants, dividends,
   capital receipts and insurance claims.
+- **Item**: an Organization-unique `name` through `normalizedName`, optional
+  `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
+  `active` flag. `taxCode` is required exactly when the income Account is
+  `taxable`.
+- **Tax Rate**: `code`, `name`, an integer `rateBasisPoints` from 0 to 10,000,
+  `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited, and
+  `(Organization, code, effectiveFrom)` is unique. `seedTaxRates` gives each
+  Organization GST5, GST12 and GST18 from 2017-07-01, GST28 until 2026-01-31,
+  and GST40 from 2025-09-22. There is no GST0: the income Account's supply
+  class decides nil and exempt supplies.
 - **Money account** and **Payment Method**: see
   [Architecture](../architecture.md#money-accounts).
 - **Document** header: `number`, `series`, `financialYear`, `documentDate`,
-  `partyId`, `exposureSide`, `settlementKind`, `advanceSupply`,
-  `paymentMethodId`, `reference`, `source`, `version` (draft token),
-  `totalPaise`, `affectsTax`, and a print snapshot that reprints read alone.
-  Slice 4 adds `dueDate`, `placeOfSupplyStateCode` and `amendedFrom`. A Journal
-  leaves the party, method and settlement fields null.
+  `dueDate`, `placeOfSupplyStateCode`, `partyId`, `exposureSide`,
+  `settlementKind`, `advanceSupply`, `paymentMethodId`, `reference`, `source`,
+  `version` (draft token), `totalPaise`, `roundOffPaise`, `affectsTax`, and a
+  print snapshot that reprints read alone. A Journal leaves the party, method
+  and settlement fields null.
+- **Document Line**: `kind`, Account, description, `amountPaise`, and optional
+  `itemId`, `hsnSac`, `unit`, integer `quantity`, integer `unitPricePaise` and
+  `taxRateId`. `cgstPaise`, `sgstPaise` and `igstPaise` store the computed GST
+  split. `amountPaise` remains the taxable value.
 - **Exposure Side** (`receivable`, `payable` or null) is the control that a
   document settles, not the cash direction. A customer refund is a
   `receivable` Payment.
@@ -49,23 +63,34 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    ([Architecture](../architecture.md#documents-first-append-only)). A post
    entry reverses once. There is one `DATABASE_URL`, and Organization deletion
    is unreachable.
-2. **Money** follows [Development](../development.md#code-rules). Fractional
-   prices or FX need a precision contract before slice 4.
+2. **Money** follows [Development](../development.md#code-rules). Item unit
+   prices are integer paise and quantities are integers of at least one.
+   Fractional prices or FX require a new precision contract.
 3. **One `orgProcedure` per mutation**, in one transaction. Reads are separate.
 4. **Posting in code, accounts and rates in data**
    ([Architecture](../architecture.md#posting-mechanics-in-code-accounts-and-rates-in-data)).
    A line stores the tax rate row it used. Bank charges and write-offs are
    account lines.
-5. **Supply type** is intra-state when the Organization `stateCode` equals the
-   document's stored place of supply. `computeTax` takes it explicitly. No
-   `gstin` means no tax lines.
+5. **Supply type and tax.** The Organization `stateCode` and the Invoice's
+   editable `placeOfSupplyStateCode` decide intra- or inter-state supply; the
+   form defaults place of supply from the Party. A line gets its dated rate
+   only when the Organization has a `gstin` and the line Account is `taxable`,
+   so no `gstin` means no tax lines. For each component, `computeTax` rounds
+   the running total half-up and gives each line the increase, so the lines
+   sum to the document total rounded once. CGST and SGST each take half the
+   rate before rounding, so an odd rate is exact. `roundOff` rounds gross to
+   the rupee and posts the signed difference to the `roundOff` Account. A
+   zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`), and a registered
+   Organization cannot put a `taxable` account line on an Invoice
+   (`TAXABLE_ACCOUNT_LINE`): taxable supplies are Items, which carry the dated
+   rate.
 6. **Print class**: all exempt or nil lines print Bill of Supply, any taxable
    line prints Tax Invoice, and a Receipt prints Receipt. Printed fields are
    data that the CA approves.
-7. **Locks.** From slice 5, posting or cancelling on or before the general lock needs an
-   exception. The tax lock follows `affectsTax`, stored at post, which marks any
-   document in a GST register, exempt direct Receipts included. Cancellation
-   checks both dates. Back-dating before a lock rewrites nothing.
+7. **Locks.** From slice 5, posting or cancelling on or before the general lock
+   needs an exception. The tax lock follows `affectsTax`, stored at post, which
+   marks any document in a GST register, exempt direct Receipts included.
+   Cancellation checks both dates. Back-dating before a lock rewrites nothing.
 8. **External posting is post-MVP.** References, digests, deduplication,
    ingestion and API keys arrive together.
 9. **Reports.** Accounting reports read journal lines. P&L and balance sheet
@@ -74,9 +99,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 10. **Roles.** `owner`: everything. `accountant`: masters, every document,
     allocations, reports, exports. `ca`: reads everything, exports, sets locks
     and exceptions, never posts. `operator`: creates and posts Receipt, Payment
-    and Invoice, reads masters, prints; never cancels, allocates, creates
-    masters or exports. Grants are per document type and action (`read`,
-    `create`, `post`, `cancel`), plus `allocation` `apply` and `reverse`.
+    and Invoice, reads masters, prints; never cancels, creates masters or
+    exports, and never applies or reverses allocations after post. Allocations
+    made at Receipt post come with `receipt:post`. Grants are per document type
+    and action (`read`, `create`, `post`, `cancel`), plus `allocation` `apply`
+    and `reverse`.
 11. **Audit** follows [Architecture](../architecture.md#audit-and-files).
 12. **Migrations** follow [Development](../development.md#code-rules).
 13. **Time.** `documentDate` and `entryDate` are dates in the Organization time
@@ -94,15 +121,15 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     allocations (statements, outstanding, registers, GST registers). Accounting
     reports read journal lines (day book, ledger, trial balance, P&L, balance
     sheet). One report never mixes both.
-16. **Receipt settlement.** The user picks the kind; nothing is inferred. From
-    slice 4, a Receipt with allocations is `against` and one without is
-    `advance`; `direct` stays explicit.
+16. **Receipt settlement.** The user picks the kind; nothing is inferred.
+    `against` carries allocations, `advance` does not, and `direct` stays
+    explicit.
 
-    | Kind      | Money for                    | Debit          | Credit                    | Also                         |
-    | --------- | ---------------------------- | -------------- | ------------------------- | ---------------------------- |
-    | `against` | Open Invoices or Debit Notes | Method account | `receivables`, party      | Allocations; rest is advance |
-    | `advance` | A claim not yet raised       | Method account | `customerAdvances`, party | A party ledger line          |
-    | `direct`  | Income with no claim         | Method account | The income Account        | Nothing                      |
+    | Kind      | Money for              | Debit          | Credit                    | Also                         |
+    | --------- | ---------------------- | -------------- | ------------------------- | ---------------------------- |
+    | `against` | Open Invoices          | Method account | `receivables`, party      | Allocations; rest is advance |
+    | `advance` | A claim not yet raised | Method account | `customerAdvances`, party | A party ledger line          |
+    | `direct`  | Income with no claim   | Method account | The income Account        | Nothing                      |
 
     A Receipt never computes tax. With a `gstin`, a `direct` Receipt to a
     `taxable` account is refused (`TAXABLE_DIRECT_RECEIPT`). `exempt`, `nil`
@@ -110,23 +137,45 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     out. An `advance` stores `advanceSupply`: `goods` (no GST, Notification
     66/2017), `exempt`, or `taxableService`, which is refused
     (`ADVANCE_TAX_UNSUPPORTED`) until GST advance documents exist. The database
-    checks only that `advanceSupply` is present exactly on `advance` Receipts
-    (`documents_advance_supply_check`); the app validates the values. From
-    slice 4, a mixed `against` Receipt stores it for its remainder, and slice 4
-    widens that check. The allocations made at post fix the kind; a later
-    `allocation.apply` never changes it. Applying an advance posts Dr
-    `customerAdvances` / Cr `receivables`, or Dr `payables` / Cr
-    `supplierAdvances`. A note-to-invoice allocation posts nothing. Payment
-    mirrors all this; its `direct` kind posts to an expense or asset.
+    requires `advanceSupply` on an `advance` and forbids it on a `direct`
+    Receipt. The receipt router stores it on an `against` Receipt only when an
+    advance remainder exists, and refuses a remainder without it
+    (`ADVANCE_SUPPLY_REQUIRED`). Allocations made at post fix the kind; a later
+    `allocation.apply` never changes it. An `against` Receipt credits
+    `receivables` for the allocated amount and `customerAdvances` for the
+    remainder; its party ledger line is the negative full amount. Applying an
+    advance to an Invoice posts Dr `customerAdvances` / Cr `receivables`.
+    Supplier allocation, note allocation and Payment settlement remain in
+    slice 4b-ii.
 
-17. **Settlement changes.** From slice 4, a document with active allocations refuses
-    cancellation (`CONFLICT` naming them); reverse them first. Receipt and
-    Payment cancellation reverses allocations and entry together. Post,
-    allocate and cancel lock the affected documents in ascending id order,
-    recheck, and retry if the set changed. Allocation changes are dated today,
-    check the general lock on all three dates, and skip the tax lock.
-18. **Due dates.** From slice 4, a posted Invoice or Bill derives `settlementStatus` (`paid`,
-    `partPaid`, `unpaid`) and an `overdue` flag from outstanding and `dueDate`.
+17. **Settlement changes.** Allocations are append-only `apply` and `reverse`
+    rows; one reverse may name each apply. Only `advance` and `against`
+    Receipts are allocation sources: a `direct` Receipt credits income and
+    holds no advance (`ALLOCATION_SOURCE_INVALID`). Active means an apply
+    without a reverse. Invoice outstanding is total minus active allocations
+    targeting it; Receipt unapplied is total minus active allocations from it.
+    `allocation.apply` and `allocation.reverse` lock the source and targets
+    `FOR NO KEY UPDATE` in ascending document id order, then recheck. An
+    allocation insert takes `KEY SHARE` on both documents it names, and a
+    `FOR UPDATE` lock would make that wait out of id order. A cancellation
+    first moves the document to `cancelled`; that row lock orders it against
+    any apply or reverse on the same document, so the allocations it reads next
+    are current. Applying an advance writes a journal entry with document type
+    `allocation` and the allocation id; reversing it reverses that entry.
+    Reversing an allocation made at Receipt post instead posts Dr
+    `receivables` / Cr `customerAdvances`. An Invoice with active allocations
+    refuses cancellation (`CONFLICT`, naming the Receipts); the record Sheet
+    offers Cancel only once every allocation is reversed. Receipt cancellation appends reverse rows for its active
+    allocations, with no journal entry of their own, and reverses every
+    un-reversed allocation journal entry from it. Allocation date lock checks
+    arrive with slice 5. Slice 4b-ii copies this model: it keeps ERPNext's
+    separate advance account, and rejects Zoho-style gross posting, which sends
+    every Receipt through the advance account and doubles journal rows, and the
+    Odoo and Tally shape without an advance account, which loses the liability
+    that Schedule III and GST advance tracking need.
+18. **Due dates.** Posted Invoices expose outstanding,
+    `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Invoice
+    lists filter open or overdue settlement. Bills remain in slice 4b-ii.
 
 ## Slices
 
@@ -137,92 +186,71 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    templates, Parties with a namesake check and one GSTIN per Organization (an
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
    rows then `MASTER_LIST_LIMIT`, money accounts and methods.
-2. **Receipt.** Implemented: `receipt.post` (full payload, no draft), `get`,
-   `list`, `partyTotals`, `cancel`, the day book XLSX, and the snapshot PDF at
-   `/api/$orgSlug/receipts/$receiptId/pdf`. `against` waits for slice 4. Open:
-   CA acceptance, and posting p95 under 30 ms on native PostgreSQL at 100,000
-   lines (`db:seed:volume`, 100,000 receipts per organization).
+2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
+   no draft), `get`, `list`, `partyTotals`, `unapplied`, `cancel`, the day book
+   XLSX, and the snapshot PDF at
+   `/api/$orgSlug/receipts/$receiptId/pdf`. Open: CA acceptance, and posting p95
+   under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
+   receipts per organization).
 3. **Payment with TDS.** Implemented: `payment.*`, `tdsSections({ date })` and
    the TDS register XLSX. TDS is the amount times the rate, half-up to the
    rupee, at the earlier of credit or payment. A Party without a PAN is refused.
    The register reads the PAN from the snapshot, and a Form 140 correction fixes
    a filed quarter. No web form yet. Open: the CA verifies the 13-row seed.
-4. **Invoice, Bill, Items, GST, notes, allocations.** Open. A post takes
-   `mode: "new"`, or `mode: "draft"` with a `version` (stale is `CONFLICT`). A
-   pure `computeTax` reads the dated rate and the stored place of supply and
-   rounds per document. Bills carry `itcEligible` and line TDS at credit.
-   Receipts gain `against`, fee and write-off lines, and customer TDS to
-   `tdsReceivable`. A counter sale is an Invoice marked paid. A correction is
-   cancel-and-copy (`amendedFrom`). GST registers match the GSTR-1 columns.
-   `postDocument` takes the header fields and a lines array; Receipt and
-   Payment pass one line. The Journal reuses this. Invoices and Credit Notes
-   number from the `invoicePrefix` and `creditNotePrefix` settings.
+4. **Invoice and settlement**, in three parts.
+
+   **4a. Items, GST calculation and Invoice.** Implemented: dated Tax Rates;
+   `item.{list,create,update,setActive,taxRates}`; pure `computeTax`; and
+   `invoice.{saveDraft,post,get,list,cancel,discardDraft}`. An Invoice posts
+   Dr receivables for the Party total, one Cr per income Account, and output
+   CGST, SGST or IGST credits. Positive round-off is a credit; negative
+   round-off is a debit. Its Party ledger line is the positive receivable.
+   `affectsTax` is true when the Organization is registered and any line
+   Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
+   otherwise it prints Bill of Supply. Open: the CA verifies the GST seed.
+
+   `postDocument` takes a lines array and `draft: { id, version } | null`.
+   Receipt and Payment pass one `accountLine`. `invoice.saveDraft` and
+   `invoice.post` take an optional `draft: { id, version }`: without it they
+   write a new Invoice, and with it they replace or post that draft.
+   `invoice.discardDraft` requires the token and deletes the matching draft. A
+   stale token is `CONFLICT`. A draft has no number or journal. Posting uses
+   `invoicePrefix`. Invoice post and cancel are audited.
+
+   Item permissions let owner and accountant create, read and update. Operator
+   and CA read. The web has Invoice list, create, draft, detail and cancel
+   routes under `/$orgSlug/invoices`, plus Settings > Items.
+
+   **4b-i. Allocations and Invoice settlement.** Implemented: append-only
+   allocations; Receipt `against`; advance-to-Invoice apply and reversal
+   entries; allocation-aware cancellation; Invoice outstanding, status,
+   overdue, open and overdue filters; `invoice.openInvoices`; and
+   `receipt.unapplied`. `invoice.openInvoices` and `receipt.unapplied` return
+   the 200 oldest rows and `hasMore`. The web supports Receipt allocation at
+   post, allocation detail and reversal, applying an advance, Invoice
+   settlement status, and open or overdue filtering.
+
+   **4b-ii. Bills, notes and remaining settlement.** Open: Bill, Credit Note
+   and Debit Note; Payment `against`; fee and write-off lines; customer TDS;
+   counter sale; cancel-and-copy (`amendedFrom`); GST registers; Invoice PDF;
+   header discount; and supplier, note and Payment allocation.
    - Legacy reference (a716b6c):
-     - Half-up division: `divideHalfUp`
-       (`a716b6c:packages/api/src/core/money.ts:45-58`) returns with
-       `computeTax`. Legacy rounded per line; this slice rounds per document.
      - Header discount: split pro rata, half-up, with the residue on the
-       largest line, so lines sum to the header; the same method makes line
-       tax sum to the document tax
+       largest line, so lines sum to the header
        (`a716b6c:packages/api/src/lib/invoice-math.ts:35-106`).
-     - Rates are integer basis points, like `tds_sections.rateBasisPoints`,
-       never the legacy money text
-       (`a716b6c:packages/api/src/lib/invoice-math.ts:71-78`).
-     - Store the GST split once: `computeTax` stores CGST, SGST and IGST on the
-       lines, and print and registers read them. The legacy PDF split again and
-       disagreed with the register on negative tax
-       (`a716b6c:packages/api/src/lib/invoice-math.ts:114-119`,
-       `a716b6c:apps/web/src/components/pdf/billing-documents.tsx:311-343`).
      - Credit Note bounds: work back from gross, bound each line per component
-       (taxable, tax, gross) against earlier credits, and bound the total by the
-       Invoice. A refund needs two bounds: the note total and the negative
-       outstanding (`a716b6c:packages/api/src/routers/billing.ts:632-953`).
-     - Zero lines: drop a zero line before `recordEntry`
-       (`journal_lines_one_side_check` refuses 0/0) and refuse an empty entry
-       (`a716b6c:packages/api/src/lib/ledger.ts:176-204`).
-     - Revenue lines: one credit per revenue account; legacy skipped the entry
-       for a zero-total Invoice. Decide between no entry and a refusal
-       (`a716b6c:packages/api/src/routers/billing.ts:297-324`).
-     - Version token plus expected total: put `version` in the conditional
-       `UPDATE`, and compare the recomputed total too, because a dated rate
-       change moves the total without a version bump
-       (`a716b6c:packages/api/src/routers/billing.ts:411-467`).
-     - Allocation locks: sort the source and target ids, lock them in one
-       `where id in (…) order by id for update`, then recheck (call 17). Legacy
-       locked one Invoice
-       (`a716b6c:packages/api/src/routers/billing.ts:98-115`, `:342-409`).
-       `.for("update", { of: table })` locks the document and leaves the joined
-       Party free (`a716b6c:packages/api/src/routers/billing.ts:140-162`).
-     - Counter sale numbering: number the Invoice and the Receipt last, in a
-       fixed type order, so two series locks never deadlock
+       against earlier credits, and bound the total by the Invoice. A refund
+       needs bounds for the note total and negative outstanding
+       (`a716b6c:packages/api/src/routers/billing.ts:632-953`).
+     - Counter sale numbering: number Invoice and Receipt last, in fixed type
+       order, so two series locks never deadlock
        (`a716b6c:packages/db/src/counter.ts:8-26`).
-     - Masters: one org- and active-scoped `inArray` query per master type,
-       then `NOT_FOUND` for any unresolved id; copy item facts (name, price,
-       rate row, tax code) onto the line at write
-       (`a716b6c:packages/api/src/lib/opd-charges.ts:17-168`).
-     - Outstanding for a list: select the `limit + 1` page first, then
-       aggregate for those ids in one grouped query with the org predicate in
-       each branch (`a716b6c:packages/api/src/lib/invoice-balance.ts:16-75`).
-       The formula becomes `totalPaise` minus active allocations to the
-       document.
-     - Lists by `documentDate`: a row-value keyset
-       `(document_date, id) < ($1, $2)` on an index
-       `(org_id, type, document_date, id)`; `documents_org_type_date_idx` has
-       no `id` (`a716b6c:packages/api/src/routers/customer.ts:232-340`).
-     - GST register: groups lines by document, rate and HSN, negates notes and
-       reads the stored date. It was intra-state only; extend it with IGST,
-       place of supply and the B2B and B2CS split
+     - GST registers group stored lines by document, rate and HSN, negate
+       notes, and include IGST, place of supply and B2B/B2CS
        (`a716b6c:packages/api/src/lib/report-math.ts:190-383`).
-     - Item price history in audit metadata
-       (`a716b6c:packages/api/src/routers/item.ts:115-211`): decide whether a
-       price edit is a sensitive action.
-     - Avoid: a correlated per-row subquery filtered in `WHERE`
-       (`a716b6c:packages/api/src/routers/billing-worklist.ts:26-39`); a read
-       that writes (`a716b6c:packages/api/src/lib/opd-close.ts:31-82`);
-       `regexp_replace` in `WHERE`, which no index serves
-       (`a716b6c:packages/api/src/lib/phone.ts:1-3`); `Promise.all` inside a
-       transaction, where node-postgres queues the reads on one client
-       (`a716b6c:packages/api/src/routers/billing.ts:653-696`).
+     - Avoid correlated per-row subqueries, reads that write,
+       `regexp_replace` in `WHERE`, and `Promise.all` inside a transaction.
+
 5. **Journal, Opening Balance, locks.** Open. The contract is
    [Journal (slice 5)](#journal-slice-5). General and tax locks (`LOCKED`) and
    expiring user exceptions, all audited.
@@ -284,7 +312,7 @@ Today's code needs only additive changes.
 - **Posting.** `JournalPosting { type: "journal", amountPaise, lines }` joins
   `DocumentPosting`. A pure `postJournal` checks the lines, `recordEntry`'s
   dispatch becomes a switch, and `assertBalanced` also refuses an empty entry.
-- **Write path and number.** The slice 4 `postDocument`. A `journalPrefix`
+- **Write path and number.** The slice 4a `postDocument`. A `journalPrefix`
   setting (default `JV`, the `documentPrefix` rule, a database default for
   existing rows) gives `JV26-27/1`.
 - **Cancel.** `reverseDocument` as it is: once, with a reason, dated the cancel
@@ -304,15 +332,15 @@ Today's code needs only additive changes.
   (the CA cannot call it, and it replaces every field). `postDocument` and
   `reverseDocument` read the lock inside their transaction.
 
-| Not in the first Journal                              | Gate                                                                                                  |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Party lines on control accounts, bill-wise references | Slice 4 allocations and a CA example (set-off, bad-debt write-off); then side follows the account key |
-| GST accounts and line tax                             | The monthly GST-on-fee reclass gate                                                                   |
-| Drafts and approval                                   | Slice 4 drafts proven; more posters than reviewers                                                    |
-| Recurring, templates, auto-reversal                   | One Journal posted three months running, or a CA accrual workflow                                     |
-| A Contra series or a Transfer document                | The CA asks, or bank reconciliation opens                                                             |
-| Multi-currency, inter-company                         | Their own spec; two live Organizations for one owner                                                  |
-| Print, attachments, cost centres                      | The CA asks, or a pilot report needs one                                                              |
+| Not in the first Journal                              | Gate                                                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Party lines on control accounts, bill-wise references | Slice 4b allocations and a CA example (set-off, bad-debt write-off); then side follows the account key |
+| GST accounts and line tax                             | The monthly GST-on-fee reclass gate                                                                    |
+| Drafts and approval                                   | Slice 4a drafts proven; more posters than reviewers                                                    |
+| Recurring, templates, auto-reversal                   | One Journal posted three months running, or a CA accrual workflow                                      |
+| A Contra series or a Transfer document                | The CA asks, or bank reconciliation opens                                                              |
+| Multi-currency, inter-company                         | Their own spec; two live Organizations for one owner                                                   |
+| Print, attachments, cost centres                      | The CA asks, or a pilot report needs one                                                               |
 
 ## Deferred
 
@@ -330,7 +358,7 @@ Today's code needs only additive changes.
   Gate: a trial balance or ledger misses its latency budget at pilot volume.
 - **Partitioning `journal_lines`.** Gate: ten million rows.
 - **TDS thresholds, amount overrides and the no-PAN rate** (§397(2)). Gate: the
-  slice 4 Bill spec, or the first pilot case.
+  slice 4b-ii Bill spec, or the first pilot case.
 - **TDS schedule updates for existing Organizations.** Gate: the first statute
   change after pilot data exists.
 - **Clearing TDS Payable** by Journal, on purpose: a Payment cannot name a
@@ -343,7 +371,7 @@ Today's code needs only additive changes.
 - **Receipt gaps**: refunds of unused advances, refundable deposits,
   third-party payers, `direct` to a non-income account. Gate: the CA answers
   the worked examples below.
-- **GSTR-1 Table 13.** Gate: the slice 4 registers.
+- **GSTR-1 Table 13.** Gate: the slice 4b-ii registers.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
 - **Year-end close.** Gate: the first pilot year end.
 - **Billing without General Accounting.** Gate: a hospital customer keeps
@@ -364,15 +392,13 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
 ## Open questions
 
 1. **CA acceptance**, recorded here with name and date: the call 16 table; the
-   13 TDS rows; half-up rupee TDS versus exact paise; the chart templates (the
-   trust "Fees" account is `taxable`, the professional "Rent Received" is
-   `exempt`); and these worked examples, tax excluded: a ₹10,000 advance with
-   ₹4,000 applied to a ₹6,000 Invoice; a Credit Note refunded by Payment; a
-   supplier Debit Note against a Bill; a Receipt shared by two Invoices, one
-   allocation reversed, then cancelled; a cutover with open Invoices and an
-   advance for one Party; a TPA settlement net of TDS with a disallowance; a
-   dealer receipt net of TDS and a bank charge; a school caution deposit; an IPD
-   deposit.
-2. **Allocation reversal model** (blocks slice 4). Call 17 appends a reversal
-   row, but `allocations` has a mutable `state` and `reversedAt`. Slice 4
-   aligns them.
+   13 TDS rows; the GST seed dates (GST28 ends 2026-01-31 and GST40 starts
+   2025-09-22, both from secondary sources); half-up rupee TDS versus exact
+   paise; the chart templates (the trust "Fees" account is `taxable`, the
+   professional "Rent Received" is `exempt`); and these worked examples, tax
+   excluded: a ₹10,000 advance with ₹4,000 applied to a ₹6,000 Invoice; a
+   Credit Note refunded by Payment; a supplier Debit Note against a Bill; a
+   Receipt shared by two Invoices, one allocation reversed, then cancelled; a
+   cutover with open Invoices and an advance for one Party; a TPA settlement
+   net of TDS with a disallowance; a dealer receipt net of TDS and a bank
+   charge; a school caution deposit; an IPD deposit.

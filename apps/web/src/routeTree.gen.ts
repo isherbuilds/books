@@ -23,17 +23,20 @@ import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as OrgSlugIndexRouteImport } from './routes/$orgSlug/index'
 import { Route as OrgSlugFilesRouteImport } from './routes/$orgSlug/files'
+import { Route as OrgSlugInvoicesRouteRouteImport } from './routes/$orgSlug/invoices/route'
 import { Route as OrgSlugOnboardingRouteImport } from './routes/$orgSlug/onboarding'
 import { Route as OrgSlugPartiesRouteRouteImport } from './routes/$orgSlug/parties/route'
 import { Route as OrgSlugReceiptsRouteRouteImport } from './routes/$orgSlug/receipts/route'
 import { Route as OrgSlugSettingsRouteRouteImport } from './routes/$orgSlug/settings/route'
 import { Route as ChangelogIndexRouteImport } from './routes/changelog.index'
 import { Route as ChangelogSlugRouteImport } from './routes/changelog.$slug'
+import { Route as OrgSlugInvoicesInvoiceIdRouteImport } from './routes/$orgSlug/invoices/$invoiceId'
 import { Route as OrgSlugPartiesPartyIdRouteImport } from './routes/$orgSlug/parties_.$partyId'
 import { Route as OrgSlugReceiptsReceiptIdRouteImport } from './routes/$orgSlug/receipts/$receiptId'
 import { Route as OrgSlugSettingsIndexRouteImport } from './routes/$orgSlug/settings/index'
 import { Route as OrgSlugSettingsAuditRouteImport } from './routes/$orgSlug/settings/audit'
 import { Route as OrgSlugSettingsBanksRouteImport } from './routes/$orgSlug/settings/banks'
+import { Route as OrgSlugSettingsItemsRouteImport } from './routes/$orgSlug/settings/items'
 import { Route as OrgSlugSettingsMembersRouteImport } from './routes/$orgSlug/settings/members'
 import { Route as OrgSlugSettingsOrganizationRouteImport } from './routes/$orgSlug/settings/organization'
 import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlug/parties_.$partyId.index'
@@ -111,6 +114,11 @@ const OrgSlugFilesRoute = OrgSlugFilesRouteImport.update({
   path: '/files',
   getParentRoute: () => OrgSlugRouteRoute,
 } as any)
+const OrgSlugInvoicesRouteRoute = OrgSlugInvoicesRouteRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => OrgSlugRouteRoute,
+} as any)
 const OrgSlugOnboardingRoute = OrgSlugOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -141,6 +149,12 @@ const ChangelogSlugRoute = ChangelogSlugRouteImport.update({
   path: '/changelog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrgSlugInvoicesInvoiceIdRoute =
+  OrgSlugInvoicesInvoiceIdRouteImport.update({
+    id: '/$invoiceId',
+    path: '/$invoiceId',
+    getParentRoute: () => OrgSlugInvoicesRouteRoute,
+  } as any)
 const OrgSlugPartiesPartyIdRoute = OrgSlugPartiesPartyIdRouteImport.update({
   id: '/parties_/$partyId',
   path: '/parties/$partyId',
@@ -165,6 +179,11 @@ const OrgSlugSettingsAuditRoute = OrgSlugSettingsAuditRouteImport.update({
 const OrgSlugSettingsBanksRoute = OrgSlugSettingsBanksRouteImport.update({
   id: '/banks',
   path: '/banks',
+  getParentRoute: () => OrgSlugSettingsRouteRoute,
+} as any)
+const OrgSlugSettingsItemsRoute = OrgSlugSettingsItemsRouteImport.update({
+  id: '/items',
+  path: '/items',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
 const OrgSlugSettingsMembersRoute = OrgSlugSettingsMembersRouteImport.update({
@@ -216,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$orgSlug/invoices': typeof OrgSlugInvoicesRouteRouteWithChildren
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
   '/$orgSlug/settings': typeof OrgSlugSettingsRouteRouteWithChildren
@@ -224,10 +244,12 @@ export interface FileRoutesByFullPath {
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/changelog/': typeof ChangelogIndexRoute
+  '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
+  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
@@ -248,6 +270,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$orgSlug/invoices': typeof OrgSlugInvoicesRouteRouteWithChildren
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
   '/$orgSlug/files': typeof OrgSlugFilesRoute
@@ -255,9 +278,11 @@ export interface FileRoutesByTo {
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug': typeof OrgSlugIndexRoute
   '/changelog': typeof ChangelogIndexRoute
+  '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
+  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings': typeof OrgSlugSettingsIndexRoute
@@ -280,6 +305,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$orgSlug/invoices': typeof OrgSlugInvoicesRouteRouteWithChildren
   '/$orgSlug/parties': typeof OrgSlugPartiesRouteRoute
   '/$orgSlug/receipts': typeof OrgSlugReceiptsRouteRouteWithChildren
   '/$orgSlug/settings': typeof OrgSlugSettingsRouteRouteWithChildren
@@ -288,10 +314,12 @@ export interface FileRoutesById {
   '/changelog/$slug': typeof ChangelogSlugRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/changelog/': typeof ChangelogIndexRoute
+  '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
   '/$orgSlug/parties_/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
+  '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
@@ -315,6 +343,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$orgSlug/invoices'
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
     | '/$orgSlug/settings'
@@ -323,10 +352,12 @@ export interface FileRouteTypes {
     | '/changelog/$slug'
     | '/$orgSlug/'
     | '/changelog/'
+    | '/$orgSlug/invoices/$invoiceId'
     | '/$orgSlug/parties/$partyId'
     | '/$orgSlug/receipts/$receiptId'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
+    | '/$orgSlug/settings/items'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings/'
@@ -347,6 +378,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$orgSlug/invoices'
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
     | '/$orgSlug/files'
@@ -354,9 +386,11 @@ export interface FileRouteTypes {
     | '/changelog/$slug'
     | '/$orgSlug'
     | '/changelog'
+    | '/$orgSlug/invoices/$invoiceId'
     | '/$orgSlug/receipts/$receiptId'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
+    | '/$orgSlug/settings/items'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings'
@@ -378,6 +412,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$orgSlug/invoices'
     | '/$orgSlug/parties'
     | '/$orgSlug/receipts'
     | '/$orgSlug/settings'
@@ -386,10 +421,12 @@ export interface FileRouteTypes {
     | '/changelog/$slug'
     | '/$orgSlug/'
     | '/changelog/'
+    | '/$orgSlug/invoices/$invoiceId'
     | '/$orgSlug/parties_/$partyId'
     | '/$orgSlug/receipts/$receiptId'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
+    | '/$orgSlug/settings/items'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings/'
@@ -517,6 +554,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugFilesRouteImport
       parentRoute: typeof OrgSlugRouteRoute
     }
+    '/$orgSlug/invoices': {
+      id: '/$orgSlug/invoices'
+      path: '/invoices'
+      fullPath: '/$orgSlug/invoices'
+      preLoaderRoute: typeof OrgSlugInvoicesRouteRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
     '/$orgSlug/onboarding': {
       id: '/$orgSlug/onboarding'
       path: '/onboarding'
@@ -559,6 +603,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChangelogSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$orgSlug/invoices/$invoiceId': {
+      id: '/$orgSlug/invoices/$invoiceId'
+      path: '/$invoiceId'
+      fullPath: '/$orgSlug/invoices/$invoiceId'
+      preLoaderRoute: typeof OrgSlugInvoicesInvoiceIdRouteImport
+      parentRoute: typeof OrgSlugInvoicesRouteRoute
+    }
     '/$orgSlug/parties_/$partyId': {
       id: '/$orgSlug/parties_/$partyId'
       path: '/parties/$partyId'
@@ -592,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/banks'
       fullPath: '/$orgSlug/settings/banks'
       preLoaderRoute: typeof OrgSlugSettingsBanksRouteImport
+      parentRoute: typeof OrgSlugSettingsRouteRoute
+    }
+    '/$orgSlug/settings/items': {
+      id: '/$orgSlug/settings/items'
+      path: '/items'
+      fullPath: '/$orgSlug/settings/items'
+      preLoaderRoute: typeof OrgSlugSettingsItemsRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
     '/$orgSlug/settings/members': {
@@ -639,6 +697,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface OrgSlugInvoicesRouteRouteChildren {
+  OrgSlugInvoicesInvoiceIdRoute: typeof OrgSlugInvoicesInvoiceIdRoute
+}
+
+const OrgSlugInvoicesRouteRouteChildren: OrgSlugInvoicesRouteRouteChildren = {
+  OrgSlugInvoicesInvoiceIdRoute: OrgSlugInvoicesInvoiceIdRoute,
+}
+
+const OrgSlugInvoicesRouteRouteWithChildren =
+  OrgSlugInvoicesRouteRoute._addFileChildren(OrgSlugInvoicesRouteRouteChildren)
+
 interface OrgSlugReceiptsRouteRouteChildren {
   OrgSlugReceiptsReceiptIdRoute: typeof OrgSlugReceiptsReceiptIdRoute
 }
@@ -653,6 +722,7 @@ const OrgSlugReceiptsRouteRouteWithChildren =
 interface OrgSlugSettingsRouteRouteChildren {
   OrgSlugSettingsAuditRoute: typeof OrgSlugSettingsAuditRoute
   OrgSlugSettingsBanksRoute: typeof OrgSlugSettingsBanksRoute
+  OrgSlugSettingsItemsRoute: typeof OrgSlugSettingsItemsRoute
   OrgSlugSettingsMembersRoute: typeof OrgSlugSettingsMembersRoute
   OrgSlugSettingsOrganizationRoute: typeof OrgSlugSettingsOrganizationRoute
   OrgSlugSettingsIndexRoute: typeof OrgSlugSettingsIndexRoute
@@ -661,6 +731,7 @@ interface OrgSlugSettingsRouteRouteChildren {
 const OrgSlugSettingsRouteRouteChildren: OrgSlugSettingsRouteRouteChildren = {
   OrgSlugSettingsAuditRoute: OrgSlugSettingsAuditRoute,
   OrgSlugSettingsBanksRoute: OrgSlugSettingsBanksRoute,
+  OrgSlugSettingsItemsRoute: OrgSlugSettingsItemsRoute,
   OrgSlugSettingsMembersRoute: OrgSlugSettingsMembersRoute,
   OrgSlugSettingsOrganizationRoute: OrgSlugSettingsOrganizationRoute,
   OrgSlugSettingsIndexRoute: OrgSlugSettingsIndexRoute,
@@ -687,6 +758,7 @@ const OrgSlugPartiesPartyIdRouteWithChildren =
   )
 
 interface OrgSlugRouteRouteChildren {
+  OrgSlugInvoicesRouteRoute: typeof OrgSlugInvoicesRouteRouteWithChildren
   OrgSlugPartiesRouteRoute: typeof OrgSlugPartiesRouteRoute
   OrgSlugReceiptsRouteRoute: typeof OrgSlugReceiptsRouteRouteWithChildren
   OrgSlugSettingsRouteRoute: typeof OrgSlugSettingsRouteRouteWithChildren
@@ -697,6 +769,7 @@ interface OrgSlugRouteRouteChildren {
 }
 
 const OrgSlugRouteRouteChildren: OrgSlugRouteRouteChildren = {
+  OrgSlugInvoicesRouteRoute: OrgSlugInvoicesRouteRouteWithChildren,
   OrgSlugPartiesRouteRoute: OrgSlugPartiesRouteRoute,
   OrgSlugReceiptsRouteRoute: OrgSlugReceiptsRouteRouteWithChildren,
   OrgSlugSettingsRouteRoute: OrgSlugSettingsRouteRouteWithChildren,

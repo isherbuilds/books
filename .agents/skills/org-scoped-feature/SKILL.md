@@ -126,6 +126,7 @@ bun run check-types && bun run check && bun run test
 
 - [ ] Every query in the new router has the tenant predicate.
 - [ ] No handler re-derives an org from the URL, session, or input.
+- [ ] Edit-token columns are `timestamptz(3)`, and writes set them with `nextEditToken` (`lib/conflict.ts`).
 - [ ] The permission is granted explicitly per role, in `access.ts` only.
 - [ ] The page is under `routes/$orgSlug/`, imports `orpc`, and passes `orgSlug` in every call and tenant-specific key.
 - [ ] The tenancy test answers all four questions for this domain.

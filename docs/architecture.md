@@ -157,32 +157,39 @@ feature that wants to edit a posted row adds a document type or a reversal.
 
 Each document type has one pure posting function in `core/posting.ts` that
 branches on `settlementKind` and `exposureSide`; a Journal's legs are its own
-lines. Accounts come from data: the
-method's account, the line Account, and `Account.systemKey`, seeded per legal
-type and unique per Organization. Rates come from dated rows. No account id,
-name or rate is in code. A posting-rule table keyed by document type, line
-kind, tax class and legal type was rejected. An advance Receipt has no line to
-key on, its debit comes from the Payment Method, and a Payment that refunds a
-Credit Note hits receivables although money goes out; a key that covers these
-becomes a rules language. ERPNext, Frappe Books and Odoo build these legs in
-code. A new accounting event is reviewed code plus a `systemKey` seed, with a
-unit test per branch.
+lines. Accounts come from data: the method's account, the line Account, and
+`Account.systemKey`, seeded per legal type and unique per Organization. Tax
+Rates are immutable dated rows, and pure `computeTax` follows
+[call 5](./specs/accounting-core.md#architecture-calls). No account id, name or
+rate is in code. A
+posting-rule table keyed by document type, line kind, tax class and legal type
+was rejected. An advance Receipt has no line to key on, its debit comes from
+the Payment Method, and a Payment that refunds a Credit Note hits receivables
+although money goes out; a key that covers these becomes a rules language.
+ERPNext, Frappe Books and Odoo build these legs in code. A new accounting event
+is reviewed code plus a `systemKey` seed, with a unit test per branch.
 
 ### Post and cancel
 
-- `postDocument` (Billing) reads the Payment Method `FOR SHARE` inside the
-  transaction (active state, account and name), so an archive waits for posts
-  in flight. It writes the document as a draft with its line, party ledger line
-  and any TDS deduction, and calls `recordEntry`. Then `postNumbered` numbers
-  and posts it last. So the number-series lock spans only numbering and commit,
-  and a rollback takes the number with it: no gaps.
+- `postDocument` takes the header, a lines array and the draft token that
+  [slice 4a](./specs/accounting-core.md#slices) defines. `writeDraft` inserts
+  the draft, or replaces it and its lines while the token still matches; a
+  stale token is `CONFLICT`. Receipt and Payment pass one `accountLine`. An
+  `against` Receipt inserts its allocations before `recordEntry`; the entry
+  credits receivables for the allocated amount and customer advances for any
+  remainder. `postDocument` also writes the party ledger line and any TDS
+  deduction. `postNumbered` runs last on every path, so the number-series lock
+  spans only numbering and commit, and a rollback takes the number with it: no
+  gaps.
 - `recordEntry` (General Accounting) is Billing's only call into General
   Accounting. A post resolves system accounts and runs the posting function. A
   reverse swaps the stored post lines and never reruns the function, rates or
   mappings.
-- `reverseDocument` is one transaction. A conditional update moves a posted
-  document to `cancelled` (anything else is `CONFLICT`). Then the party ledger
-  lines and the entry are reversed, dated today in the Organization time zone.
+- `reverseDocument` is one transaction. A conditional update first moves the
+  posted document to `cancelled` (anything else is `CONFLICT`). Allocations then
+  follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
+  party ledger lines and entry are reversed, dated today in the Organization
+  time zone.
 - One `post` entry and at most one `reverse` entry exist per document:
   `journal_entries` has a unique index on
   `(orgId, documentType, documentId, kind)` and a partial unique index on
@@ -196,6 +203,17 @@ unit test per branch.
 - There is no balances table: balances are sums of journal lines, as in ERPNext
   and Odoo. A period-close snapshot is
   [deferred](./specs/accounting-core.md#deferred).
+
+### Allocations
+
+The allocation rows, their locks and their effect on cancellation are
+[call 17](./specs/accounting-core.md#architecture-calls).
+
+### Items and tax
+
+Items and Tax Rates are defined in the
+[canonical language](./specs/accounting-core.md#canonical-language); tax
+follows [call 5](./specs/accounting-core.md#architecture-calls).
 
 ### Money accounts
 

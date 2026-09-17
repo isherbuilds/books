@@ -57,11 +57,7 @@ export type PrintSnapshot = {
     pan: string | null;
   } | null;
   paymentMethod: string | null;
-  lines: Array<{
-    description: string;
-    hsnSac: string | null;
-    unit: string | null;
-  }>;
+  lines: Array<{ description: string }>;
 };
 
 export const documents = pgTable(
@@ -77,6 +73,8 @@ export const documents = pgTable(
     series: text("series"),
     financialYear: text("financial_year"),
     documentDate: date("document_date", { mode: "string" }).notNull(),
+    dueDate: date("due_date", { mode: "string" }),
+    placeOfSupplyStateCode: text("place_of_supply_state_code"),
     partyId: text("party_id"),
     exposureSide: text("exposure_side", { enum: EXPOSURE_SIDES }),
     settlementKind: text("settlement_kind", { enum: SETTLEMENT_KINDS }),
@@ -87,6 +85,7 @@ export const documents = pgTable(
     source: text("source", { enum: DOCUMENT_SOURCES }).notNull().default("user"),
     version: integer("version").notNull().default(1),
     totalPaise: bigint("total_paise", { mode: "bigint" }).notNull(),
+    roundOffPaise: bigint("round_off_paise", { mode: "bigint" }).notNull(),
     affectsTax: boolean("affects_tax").notNull().default(false),
     printSnapshot: jsonb("print_snapshot").$type<PrintSnapshot>(),
     postedAt: timestamp("posted_at", { withTimezone: true }),
@@ -136,7 +135,7 @@ export const documents = pgTable(
     ),
     check(
       "documents_advance_supply_check",
-      sql`coalesce(${table.type} = 'receipt' and ${table.settlementKind} = 'advance', false) = (${table.advanceSupply} is not null)`,
+      sql`case when ${table.type} = 'receipt' and ${table.settlementKind} = 'advance' then ${table.advanceSupply} is not null when ${table.type} = 'receipt' and ${table.settlementKind} = 'against' then true else ${table.advanceSupply} is null end`,
     ),
     check("documents_source_check", sql`${table.source} in ('user', 'opening')`),
     check("documents_total_paise_check", sql`${table.totalPaise} >= 0`),

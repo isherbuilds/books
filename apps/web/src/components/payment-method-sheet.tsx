@@ -20,7 +20,7 @@ import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { groupMoneyAccounts } from "@/lib/money-accounts";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage } from "@/lib/orpc-error";
+import { applyOrpcFieldError } from "@/lib/orpc-error";
 
 const methodSchema = z.object({
   name: shortName.max(120, "Keep the name under 120 characters"),
@@ -52,11 +52,7 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
         onClose();
       },
       onError: (error) => {
-        const mapped = applyOrpcFieldError(form, error, {
-          DUPLICATE: { field: "name", message: "Name already in use" },
-        });
-
-        toast.error(mapped ?? errorMessage(error, "Could not add the payment method"));
+        applyOrpcFieldError(form, error, { DUPLICATE: "name" }, "Could not add the payment method");
       },
     }),
   );

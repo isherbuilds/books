@@ -13,6 +13,8 @@ import {
 import { accounts } from "./accounts";
 import { organization } from "./auth";
 import { documents } from "./documents";
+import { items } from "./items";
+import { taxRates } from "./tax-rates";
 
 export const documentLines = pgTable(
   "document_lines",
@@ -25,7 +27,16 @@ export const documentLines = pgTable(
     position: integer("position").notNull(),
     kind: text("kind", { enum: ["item", "account"] }).notNull(),
     accountId: text("account_id"),
+    itemId: text("item_id"),
     description: text("description").notNull(),
+    hsnSac: text("hsn_sac"),
+    unit: text("unit"),
+    quantity: integer("quantity"),
+    unitPricePaise: bigint("unit_price_paise", { mode: "bigint" }),
+    taxRateId: text("tax_rate_id"),
+    cgstPaise: bigint("cgst_paise", { mode: "bigint" }).notNull(),
+    sgstPaise: bigint("sgst_paise", { mode: "bigint" }).notNull(),
+    igstPaise: bigint("igst_paise", { mode: "bigint" }).notNull(),
     amountPaise: bigint("amount_paise", { mode: "bigint" }).notNull(),
   },
   (table) => [
@@ -37,8 +48,20 @@ export const documentLines = pgTable(
       columns: [table.orgId, table.accountId],
       foreignColumns: [accounts.orgId, accounts.id],
     }),
+    foreignKey({
+      columns: [table.orgId, table.itemId],
+      foreignColumns: [items.orgId, items.id],
+    }),
+    foreignKey({
+      columns: [table.orgId, table.taxRateId],
+      foreignColumns: [taxRates.orgId, taxRates.id],
+    }),
     unique("document_lines_org_id_id_unique").on(table.orgId, table.id),
     index("document_lines_org_document_idx").on(table.orgId, table.documentId),
     check("document_lines_kind_check", sql`${table.kind} in ('item', 'account')`),
+    check(
+      "document_lines_quantity_check",
+      sql`${table.quantity} is null or ${table.quantity} >= 1`,
+    ),
   ],
 );

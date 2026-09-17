@@ -28,8 +28,6 @@ export type LinkFieldProps<T> = {
   value: T | null;
   onSelect: (item: T | null) => void;
   onCreate?: (seed: string) => void;
-  /** Called after an existing item is committed with Enter or click, so a form can advance focus. */
-  onCommit?: () => void;
   /** An optional field: shows a clear button, and emptied text plus Enter or Tab clears it. */
   clearable?: boolean;
   placeholder?: string;
@@ -65,7 +63,6 @@ export function LinkField<T>({
   value,
   onSelect,
   onCreate,
-  onCommit,
   clearable,
   placeholder,
   inputRef,
@@ -97,7 +94,7 @@ export function LinkField<T>({
     getCode,
   });
 
-  const choose = (item: T | CreateItem, advance: boolean) => {
+  const choose = (item: T | CreateItem) => {
     if (isCreateItem(item)) {
       onCreate?.(item.__create);
       setOpen(false);
@@ -108,10 +105,6 @@ export function LinkField<T>({
     setQuery(getLabel(item));
     onSelect(item);
     setOpen(false);
-
-    // Tab already moves focus natively; Enter and click hand off explicitly, after
-    // Base UI has returned focus from the closing popup.
-    if (advance && onCommit) requestAnimationFrame(onCommit);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -121,7 +114,7 @@ export function LinkField<T>({
 
     // Tab commits an existing match, never Create, so it cannot open a panel.
     if (event.key === "Tab" && item !== undefined && !isCreateItem(item)) {
-      choose(item, false);
+      choose(item);
 
       return;
     }
@@ -182,7 +175,7 @@ export function LinkField<T>({
             </>
           );
         }}
-        onSelect={(item) => choose(item, true)}
+        onSelect={choose}
         autoHighlight
         value={value}
         inputValue={query}

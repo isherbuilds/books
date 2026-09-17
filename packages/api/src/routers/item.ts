@@ -1,0 +1,209 @@
+import { db } from "@accly/db";
+import { accounts } from "@accly/db/schema/accounts";
+import { items } from "@accly/db/schema/items";
+import { taxRates } from "@accly/db/schema/tax-rates";
+import { ORPCError } from "@orpc/server";
+import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { z } from "zod";
+
+import { postableAccount } from "../lib/accounts";
+import { businessDate } from "../lib/business-date";
+import { badRequest, conflict, nextEditToken } from "../lib/conflict";
+import { uniqueViolationConstraint } from "../lib/db-errors";
+import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
+import { normalizedName } from "../lib/normalized-name";
+import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { masterName, money } from "../lib/schemas";
+import { orgTimeZone } from "../lib/settlements";
+
+const optionalHsnSac = z
+  .string()
+  .trim()
+  .regex(/^\d{4,8}$/, "Use a 4 to 8 digit HSN/SAC code")
+  .optional();
+
+const optionalUnit = z.string().trim().min(1).max(20).optional();
+
+const optionalTaxCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{1,12}$/)
+  .optional();
+
+const itemFields = {
+  name: masterName,
+  hsnSac: optionalHsnSac,
+  unit: optionalUnit,
+  unitPrice: money,
+  incomeAccountId: z.uuid(),
+  taxCode: optionalTaxCode,
+};
+
+type ItemFields = z.output<z.ZodObject<typeof itemFields>>;
+
+async function itemValues(orgId: string, fields: ItemFields) {
+  const [incomeAccount, taxRate] = await Promise.all([
+    postableAccount(orgId, fields.incomeAccountId, ["income"]),
+    fields.taxCode
+      ? db
+          .select({ id: taxRates.id })
+          .from(taxRates)
+          .where(and(eq(taxRates.orgId, orgId), eq(taxRates.code, fields.taxCode)))
+          .limit(1)
+          .then(([row]) => row)
+      : undefined,
+  ]);
+
+  if (!incomeAccount) {
+    throw badRequest(
+      "INCOME_ACCOUNT_INVALID",
+      "Choose an active income account that is not a group or system account.",
+    );
+  }
+
+  if (incomeAccount.supplyClass === "taxable" && !fields.taxCode) {
+    throw badRequest("TAX_CODE_REQUIRED", "Choose a GST rate for a taxable item.");
+  }
+
+  if (incomeAccount.supplyClass !== "taxable" && fields.taxCode) {
+    throw badRequest("TAX_CODE_NOT_ALLOWED", "Only taxable items may have a GST rate.");
+  }
+
+  if (fields.taxCode && !taxRate) {
+    throw badRequest("TAX_CODE_INVALID", "Choose a GST rate in this organization.");
+  }
+
+  return {
+    name: fields.name,
+    normalizedName: normalizedName(fields.name),
+    hsnSac: fields.hsnSac ?? null,
+    unit: fields.unit ?? null,
+    unitPricePaise: fields.unitPrice,
+    incomeAccountId: incomeAccount.id,
+    taxCode: fields.taxCode ?? null,
+  };
+}
+
+function itemNameTaken(error: unknown): never {
+  if (uniqueViolationConstraint(error) === "items_org_normalized_name_idx") {
+    throw conflict("ITEM_NAME_TAKEN", "An item with that name already exists.");
+  }
+
+  throw error;
+}
+
+export const itemRouter = {
+  // The complete master; every caller filters `active` in memory from this one entry.
+  list: orgProcedure({ item: ["read"] }, orgInput).handler(async ({ context }) => {
+    const { orgId } = context.scope;
+
+    const rows = await db
+      .select({
+        id: items.id,
+        name: items.name,
+        hsnSac: items.hsnSac,
+        unit: items.unit,
+        unitPricePaise: items.unitPricePaise,
+        incomeAccountId: items.incomeAccountId,
+        incomeAccountName: accounts.name,
+        taxCode: items.taxCode,
+        active: items.active,
+        updatedAt: items.updatedAt,
+      })
+      .from(items)
+      .innerJoin(accounts, and(eq(accounts.orgId, orgId), eq(accounts.id, items.incomeAccountId)))
+      .where(eq(items.orgId, orgId))
+      .orderBy(asc(items.name), asc(items.id))
+      .limit(MASTER_LIST_LIMIT + 1);
+
+    return capMasterList(rows);
+  }),
+
+  create: orgProcedure({ item: ["create"] }, orgInput.extend(itemFields)).handler(
+    async ({ context, input }) => {
+      const { orgSlug: _claim, ...fields } = input;
+      const values = await itemValues(context.scope.orgId, fields);
+
+      try {
+        const [created] = await db
+          .insert(items)
+          .values({ id: Bun.randomUUIDv7(), orgId: context.scope.orgId, ...values })
+          .returning();
+
+        if (!created) throw new Error("Item insert returned no row");
+
+        return created;
+      } catch (error) {
+        itemNameTaken(error);
+      }
+    },
+  ),
+
+  update: orgProcedure(
+    { item: ["update"] },
+    orgInput.extend({
+      itemId: z.uuid(),
+      updatedAt: z.iso.datetime({ precision: 3 }),
+      ...itemFields,
+    }),
+  ).handler(async ({ context, input }) => {
+    const { orgSlug: _claim, itemId, updatedAt, ...fields } = input;
+    const values = await itemValues(context.scope.orgId, fields);
+
+    try {
+      const [updated] = await db
+        .update(items)
+        .set({ ...values, updatedAt: nextEditToken(items.updatedAt) })
+        .where(
+          and(
+            eq(items.orgId, context.scope.orgId),
+            eq(items.id, itemId),
+            eq(items.updatedAt, new Date(updatedAt)),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        throw new ORPCError("CONFLICT", { message: "This item changed after you opened it." });
+      }
+
+      return updated;
+    } catch (error) {
+      itemNameTaken(error);
+    }
+  }),
+
+  setActive: orgProcedure(
+    { item: ["update"] },
+    orgInput.extend({ itemId: z.uuid(), active: z.boolean() }),
+  ).handler(async ({ context, input }) => {
+    const [updated] = await db
+      .update(items)
+      .set({ active: input.active, updatedAt: nextEditToken(items.updatedAt) })
+      .where(and(eq(items.orgId, context.scope.orgId), eq(items.id, input.itemId)))
+      .returning();
+
+    if (!updated) throw new ORPCError("NOT_FOUND", { message: "Item not found." });
+
+    return updated;
+  }),
+
+  // The rates an Item may take today; an Invoice resolves its own date's rate at post.
+  taxRates: orgProcedure({ item: ["read"] }, orgInput).handler(async ({ context }) => {
+    const { orgId } = context.scope;
+    const today = businessDate(new Date(), await orgTimeZone(orgId));
+
+    return db
+      .select({ id: taxRates.id, code: taxRates.code, name: taxRates.name })
+      .from(taxRates)
+      .where(
+        and(
+          eq(taxRates.orgId, orgId),
+          lte(taxRates.effectiveFrom, today),
+          or(isNull(taxRates.effectiveTo), gte(taxRates.effectiveTo, today)),
+        ),
+      )
+      .orderBy(asc(taxRates.rateBasisPoints), asc(taxRates.code));
+  }),
+};

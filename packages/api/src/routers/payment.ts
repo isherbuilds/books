@@ -1,5 +1,4 @@
 import { db } from "@accly/db";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
@@ -8,6 +7,7 @@ import { z } from "zod";
 
 import { audit } from "../audit";
 import {
+  accountLine,
   organizationSnapshot,
   partySnapshot,
   postDocument,
@@ -27,8 +27,9 @@ import {
   settlementPostFields,
 } from "../lib/schemas";
 import {
-  cancelSettlement,
+  cancelDocument,
   listSettlements,
+  orgSettings,
   orgTimeZone,
   settlementDetail,
 } from "../lib/settlements";
@@ -59,13 +60,8 @@ export const paymentRouter = {
     const { settlementKind } = input;
 
     // postDocument checks the Payment Method under a lock inside the transaction.
-    const [storedSettings, party, expenseAccount, section] = await Promise.all([
-      db
-        .select()
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, scope.orgId))
-        .limit(1)
-        .then(([row]) => row),
+    const [settings, party, expenseAccount, section] = await Promise.all([
+      orgSettings(scope.orgId),
       input.partyId
         ? db
             .select()
@@ -87,11 +83,7 @@ export const paymentRouter = {
         : undefined,
     ]);
 
-    if (!storedSettings) {
-      throw new Error(`Organization ${scope.orgId} is missing its settings`);
-    }
-
-    const documentDate = input.documentDate ?? businessDate(new Date(), storedSettings.timeZone);
+    const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
     if (input.partyId && !party) {
       throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
@@ -128,6 +120,7 @@ export const paymentRouter = {
     if (settlementKind === "advance") {
       lineDescription = input.narration ?? "Advance paid";
       posting = {
+        paymentMethodId: input.paymentMethodId,
         type: "payment",
         settlementKind,
         exposureSide: "payable",
@@ -147,6 +140,7 @@ export const paymentRouter = {
 
       lineDescription = input.narration ?? expenseAccount.name;
       posting = {
+        paymentMethodId: input.paymentMethodId,
         type: "payment",
         settlementKind,
         exposureSide: null,
@@ -158,9 +152,9 @@ export const paymentRouter = {
     }
 
     const printSnapshot = {
-      organization: organizationSnapshot(storedSettings),
+      organization: organizationSnapshot(settings),
       party: partySnapshot(party),
-      lines: [{ description: lineDescription, hsnSac: null, unit: null }],
+      lines: [{ description: lineDescription }],
     };
 
     const posted = await db.transaction((tx) =>
@@ -168,18 +162,20 @@ export const paymentRouter = {
         tx,
         scope,
         {
-          prefix: storedSettings.paymentPrefix,
-          fiscalYearStartMonth: storedSettings.financialYearStart,
+          prefix: settings.paymentPrefix,
+          fiscalYearStartMonth: settings.financialYearStart,
         },
         {
           documentDate,
-          paymentMethodId: input.paymentMethodId,
+          dueDate: null,
+          placeOfSupplyStateCode: null,
           reference: input.reference ?? null,
           narration: input.narration ?? null,
           affectsTax: false,
           printSnapshot,
-          lineDescription,
+          lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
           posting,
+          draft: null,
         },
       ),
     );
@@ -236,7 +232,7 @@ export const paymentRouter = {
     { payment: ["cancel"] },
     orgInput.extend({ paymentId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelSettlement(context.scope, "payment", input.paymentId, input.reason),
+    cancelDocument(context.scope, "payment", input.paymentId, input.reason),
   ),
 
   tdsSections: orgProcedure(

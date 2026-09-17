@@ -3,9 +3,12 @@ import { expect, test } from "bun:test";
 import {
   assertBalanced,
   computeTds,
+  postInvoice,
+  postAllocation,
   postPayment,
   postReceipt,
   reverseLines,
+  type InvoicePosting,
   type PaymentPosting,
   type ReceiptPosting,
 } from "@accly/api/core/posting";
@@ -95,6 +98,156 @@ test("direct receipt credits income and preserves its optional party", () => {
     debit: 0n,
     credit: 900n,
   });
+});
+
+test("receipt against invoices credits receivables and keeps no advance when fully allocated", () => {
+  const lines = postReceipt(
+    {
+      type: "receipt",
+      methodAccountId: "bank-account",
+      settlementKind: "against",
+      exposureSide: "receivable",
+      partyId: "customer-1",
+      accountId: null,
+      amountPaise: 12_500n,
+      allocations: [{ documentId: "invoice-1", amountPaise: 12_500n }],
+      advanceSupply: null,
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    {
+      accountId: "bank-account",
+      partyId: null,
+      debit: 12_500n,
+      credit: 0n,
+    },
+    {
+      accountId: "receivables-account",
+      partyId: "customer-1",
+      debit: 0n,
+      credit: 12_500n,
+    },
+  ]);
+  expect(() => assertBalanced(lines)).not.toThrow();
+});
+
+test("receipt against invoices credits an unallocated remainder to customer advances", () => {
+  const lines = postReceipt(
+    {
+      type: "receipt",
+      methodAccountId: "bank-account",
+      settlementKind: "against",
+      exposureSide: "receivable",
+      partyId: "customer-1",
+      accountId: null,
+      amountPaise: 12_500n,
+      allocations: [
+        { documentId: "invoice-1", amountPaise: 6_000n },
+        { documentId: "invoice-2", amountPaise: 4_000n },
+      ],
+      advanceSupply: "exempt",
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    {
+      accountId: "bank-account",
+      partyId: null,
+      debit: 12_500n,
+      credit: 0n,
+    },
+    {
+      accountId: "receivables-account",
+      partyId: "customer-1",
+      debit: 0n,
+      credit: 10_000n,
+    },
+    {
+      accountId: "customerAdvances-account",
+      partyId: "customer-1",
+      debit: 0n,
+      credit: 2_500n,
+    },
+  ]);
+  expect(() => assertBalanced(lines)).not.toThrow();
+});
+
+test("receipt against invoices cannot balance an allocation greater than its amount", () => {
+  const lines = postReceipt(
+    {
+      type: "receipt",
+      methodAccountId: "bank-account",
+      settlementKind: "against",
+      exposureSide: "receivable",
+      partyId: "customer-1",
+      accountId: null,
+      amountPaise: 12_500n,
+      allocations: [{ documentId: "invoice-1", amountPaise: 12_501n }],
+      advanceSupply: null,
+    },
+    accounts,
+  );
+
+  expect(() => assertBalanced(lines)).toThrow("Journal entry is not balanced");
+});
+
+test("advance allocation moves the party balance from advances to receivables", () => {
+  const lines = postAllocation(
+    {
+      type: "allocation",
+      direction: "advanceToInvoice",
+      partyId: "customer-1",
+      amountPaise: 2_500n,
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    {
+      accountId: "customerAdvances-account",
+      partyId: "customer-1",
+      debit: 2_500n,
+      credit: 0n,
+    },
+    {
+      accountId: "receivables-account",
+      partyId: "customer-1",
+      debit: 0n,
+      credit: 2_500n,
+    },
+  ]);
+  expect(() => assertBalanced(lines)).not.toThrow();
+});
+
+test("reversing a post-time allocation moves the party balance from receivables to advances", () => {
+  const lines = postAllocation(
+    {
+      type: "allocation",
+      direction: "invoiceToAdvance",
+      partyId: "customer-1",
+      amountPaise: 2_500n,
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    {
+      accountId: "customerAdvances-account",
+      partyId: "customer-1",
+      debit: 0n,
+      credit: 2_500n,
+    },
+    {
+      accountId: "receivables-account",
+      partyId: "customer-1",
+      debit: 2_500n,
+      credit: 0n,
+    },
+  ]);
+  expect(() => assertBalanced(lines)).not.toThrow();
 });
 
 test("receipt posting requires a positive amount", () => {
@@ -242,4 +395,67 @@ test("assertBalanced rejects an unbalanced entry", () => {
       { accountId: "income-account", partyId: null, debit: 0n, credit: 499n },
     ]),
   ).toThrow();
+});
+
+test("invoice posting groups income accounts and posts tax and positive round-off", () => {
+  const invoice: InvoicePosting = {
+    type: "invoice",
+    exposureSide: "receivable",
+    partyId: "customer-1",
+    amountPaise: 41_301n,
+    lines: [
+      { accountId: "sales-income", amountPaise: 10_000n },
+      { accountId: "sales-income", amountPaise: 5_000n },
+      { accountId: "services-income", amountPaise: 20_000n },
+    ],
+    cgstPaise: 3_150n,
+    sgstPaise: 3_150n,
+    igstPaise: 0n,
+    roundOffPaise: 1n,
+  };
+
+  const lines = postInvoice(invoice, accounts);
+
+  expect(lines).toEqual([
+    {
+      accountId: "receivables-account",
+      partyId: "customer-1",
+      debit: 41_301n,
+      credit: 0n,
+    },
+    {
+      accountId: "sales-income",
+      partyId: null,
+      debit: 0n,
+      credit: 15_000n,
+    },
+    {
+      accountId: "services-income",
+      partyId: null,
+      debit: 0n,
+      credit: 20_000n,
+    },
+    {
+      accountId: "cgstOutput-account",
+      partyId: null,
+      debit: 0n,
+      credit: 3_150n,
+    },
+    {
+      accountId: "sgstOutput-account",
+      partyId: null,
+      debit: 0n,
+      credit: 3_150n,
+    },
+    {
+      accountId: "roundOff-account",
+      partyId: null,
+      debit: 0n,
+      credit: 1n,
+    },
+  ]);
+  expect(() => assertBalanced(lines)).not.toThrow();
+  expect(() => assertBalanced(postInvoice({ ...invoice, amountPaise: 41_300n }, accounts))).toThrow(
+    "Journal entry is not balanced",
+  );
 });

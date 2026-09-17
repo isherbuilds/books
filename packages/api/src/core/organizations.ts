@@ -19,6 +19,7 @@ import {
   validateGstinIdentity,
 } from "../lib/schemas";
 import { seedChartOfAccounts } from "./chart-templates";
+import { seedTaxRates } from "./tax-schedule";
 import { seedTdsSections } from "./tds-schedule";
 
 export const createOrganizationInput = z
@@ -91,6 +92,7 @@ export async function createOrganization(
         pinCode: input.pinCode,
       });
       await seedChartOfAccounts(tx, id, input.legalType);
+      await seedTaxRates(tx, id);
       await seedTdsSections(tx, id);
     });
   } catch (error) {

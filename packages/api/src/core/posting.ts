@@ -3,12 +3,16 @@ import { accounts } from "@accly/db/schema/accounts";
 import type { AdvanceSupply, DocumentType } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { Scope } from "../lib/procedures/factory";
+import type { AllocationTarget } from "./allocations";
 import type { SystemAccountKey } from "./chart-templates";
+import { divideHalfUp } from "./money";
 
-type SystemAccounts = ReadonlyMap<SystemAccountKey, string>;
+// Keyed by the text `systemKey` column, so reading it needs no cast; `systemAccount`
+// still takes a typed key.
+type SystemAccounts = ReadonlyMap<string, string>;
 
 function systemAccount(byKey: SystemAccounts, key: SystemAccountKey): string {
   const id = byKey.get(key);
@@ -34,6 +38,15 @@ export type ReceiptPosting = { type: "receipt"; methodAccountId: string } & (
       partyId: string;
       accountId: null;
       amountPaise: bigint;
+    }
+  | {
+      settlementKind: "against";
+      exposureSide: "receivable";
+      partyId: string;
+      accountId: null;
+      amountPaise: bigint;
+      allocations: readonly AllocationTarget[];
+      advanceSupply: AdvanceSupply | null;
     }
   | {
       settlementKind: "direct";
@@ -70,37 +83,118 @@ export type PaymentPosting = {
     }
 );
 
-export type DocumentPosting = ReceiptPosting | PaymentPosting;
+export type InvoiceLinePosting = { accountId: string; amountPaise: bigint };
+
+export type InvoicePosting = {
+  type: "invoice";
+  exposureSide: "receivable";
+  partyId: string;
+  amountPaise: bigint;
+  lines: readonly InvoiceLinePosting[];
+  cgstPaise: bigint;
+  sgstPaise: bigint;
+  igstPaise: bigint;
+  roundOffPaise: bigint;
+};
+
+export type AllocationPosting = {
+  type: "allocation";
+  direction: "advanceToInvoice" | "invoiceToAdvance";
+  partyId: string;
+  amountPaise: bigint;
+};
+
+export type DocumentPosting = ReceiptPosting | PaymentPosting | InvoicePosting;
 
 export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): JournalLineInput[] {
   if (document.amountPaise <= 0n) {
     throw new Error("Receipt amount must be positive");
   }
 
-  return [
+  const lines: JournalLineInput[] = [
     {
       accountId: document.methodAccountId,
       partyId: null,
       debit: document.amountPaise,
       credit: 0n,
     },
-    {
-      accountId:
-        document.settlementKind === "direct"
-          ? document.accountId
-          : systemAccount(byKey, "customerAdvances"),
+  ];
+
+  if (document.settlementKind === "against") {
+    const allocatedPaise = document.allocations.reduce(
+      (sum, { amountPaise }) => sum + amountPaise,
+      0n,
+    );
+
+    if (allocatedPaise <= 0n) {
+      throw new Error("Receipt allocated amount must be positive");
+    }
+
+    const remainderPaise = document.amountPaise - allocatedPaise;
+
+    lines.push({
+      accountId: systemAccount(byKey, "receivables"),
       partyId: document.partyId,
       debit: 0n,
-      credit: document.amountPaise,
-    },
-  ];
+      credit: allocatedPaise,
+    });
+
+    if (remainderPaise > 0n) {
+      lines.push({
+        accountId: systemAccount(byKey, "customerAdvances"),
+        partyId: document.partyId,
+        debit: 0n,
+        credit: remainderPaise,
+      });
+    }
+
+    return lines;
+  }
+
+  lines.push({
+    accountId:
+      document.settlementKind === "direct"
+        ? document.accountId
+        : systemAccount(byKey, "customerAdvances"),
+    partyId: document.partyId,
+    debit: 0n,
+    credit: document.amountPaise,
+  });
+
+  return lines;
 }
 
-export function computeTds(amountPaise: bigint, rateBasisPoints: number): bigint {
-  const raw = amountPaise * BigInt(rateBasisPoints);
-  const rupee = (raw + 500_000n) / 1_000_000n;
+export function postAllocation(
+  posting: AllocationPosting,
+  byKey: SystemAccounts,
+): JournalLineInput[] {
+  if (posting.amountPaise <= 0n) {
+    throw new Error("Allocation amount must be positive");
+  }
 
-  return rupee * 100n;
+  const advanceToInvoice: JournalLineInput[] = [
+    {
+      accountId: systemAccount(byKey, "customerAdvances"),
+      partyId: posting.partyId,
+      debit: posting.amountPaise,
+      credit: 0n,
+    },
+    {
+      accountId: systemAccount(byKey, "receivables"),
+      partyId: posting.partyId,
+      debit: 0n,
+      credit: posting.amountPaise,
+    },
+  ];
+
+  return posting.direction === "advanceToInvoice"
+    ? advanceToInvoice
+    : reverseLines(advanceToInvoice);
+}
+
+/** Paise times basis points, rounded half-up to the rupee. */
+export function computeTds(amountPaise: bigint, rateBasisPoints: number): bigint {
+  return divideHalfUp(amountPaise * BigInt(rateBasisPoints), 1_000_000n) * 100n;
 }
 
 export function postPayment(document: PaymentPosting, byKey: SystemAccounts): JournalLineInput[] {
@@ -145,6 +239,72 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   return lines;
 }
 
+export function postInvoice(document: InvoicePosting, byKey: SystemAccounts): JournalLineInput[] {
+  if (document.amountPaise <= 0n) {
+    throw new Error("Invoice amount must be positive");
+  }
+
+  if (document.lines.length === 0) {
+    throw new Error("Invoice must have at least one line");
+  }
+
+  if (document.cgstPaise < 0n || document.sgstPaise < 0n || document.igstPaise < 0n) {
+    throw new Error("Invoice taxes cannot be negative");
+  }
+
+  const incomeByAccount = new Map<string, bigint>();
+
+  for (const line of document.lines) {
+    if (line.amountPaise <= 0n) {
+      throw new Error("Invoice line amount must be positive");
+    }
+
+    incomeByAccount.set(
+      line.accountId,
+      (incomeByAccount.get(line.accountId) ?? 0n) + line.amountPaise,
+    );
+  }
+
+  const lines: JournalLineInput[] = [
+    {
+      accountId: systemAccount(byKey, "receivables"),
+      partyId: document.partyId,
+      debit: document.amountPaise,
+      credit: 0n,
+    },
+  ];
+
+  for (const [accountId, amountPaise] of incomeByAccount) {
+    lines.push({ accountId, partyId: null, debit: 0n, credit: amountPaise });
+  }
+
+  for (const [key, amountPaise] of [
+    ["cgstOutput", document.cgstPaise],
+    ["sgstOutput", document.sgstPaise],
+    ["igstOutput", document.igstPaise],
+  ] as const) {
+    if (amountPaise > 0n) {
+      lines.push({
+        accountId: systemAccount(byKey, key),
+        partyId: null,
+        debit: 0n,
+        credit: amountPaise,
+      });
+    }
+  }
+
+  if (document.roundOffPaise !== 0n) {
+    lines.push({
+      accountId: systemAccount(byKey, "roundOff"),
+      partyId: null,
+      debit: document.roundOffPaise < 0n ? -document.roundOffPaise : 0n,
+      credit: document.roundOffPaise > 0n ? document.roundOffPaise : 0n,
+    });
+  }
+
+  return lines;
+}
+
 export function assertBalanced(lines: readonly JournalLineInput[]): void {
   let debitTotal = 0n;
   let creditTotal = 0n;
@@ -176,62 +336,21 @@ export function reverseLines(lines: readonly JournalLineInput[]): JournalLineInp
   }));
 }
 
+export type EntryDocumentType = DocumentType | "allocation";
+
 export type RecordEntryArgs =
   | {
       kind: "post";
-      document: { id: string; posting: DocumentPosting };
+      document: { id: string; posting: DocumentPosting | AllocationPosting };
       entryDate: string;
       narration: string;
     }
   | {
       kind: "reverse";
-      document: { id: string; type: DocumentType };
+      document: { id: string; type: EntryDocumentType };
       entryDate: string;
       narration: string;
     };
-
-function requiredSystemAccounts(posting: DocumentPosting): SystemAccountKey[] {
-  const keys: SystemAccountKey[] = [];
-
-  if (posting.settlementKind === "advance") {
-    keys.push(posting.type === "receipt" ? "customerAdvances" : "supplierAdvances");
-  }
-
-  if (posting.type === "payment" && posting.tds !== null && posting.tds.amountPaise > 0n) {
-    keys.push("tdsPayable");
-  }
-
-  return keys;
-}
-
-async function resolveSystemAccounts(
-  tx: DbTransaction,
-  orgId: string,
-  keys: readonly SystemAccountKey[],
-): Promise<SystemAccounts> {
-  if (keys.length === 0) return new Map();
-
-  const rows = await tx
-    .select({ id: accounts.id, systemKey: accounts.systemKey })
-    .from(accounts)
-    .where(and(eq(accounts.orgId, orgId), inArray(accounts.systemKey, keys)));
-
-  const ids = new Map<SystemAccountKey, string>();
-
-  for (const row of rows) {
-    const key = keys.find((candidate) => candidate === row.systemKey);
-
-    if (key) ids.set(key, row.id);
-  }
-
-  for (const key of keys) {
-    if (!ids.has(key)) {
-      throw new Error(`Organization ${orgId} is missing system account ${key}`);
-    }
-  }
-
-  return ids;
-}
 
 // The only call Billing makes into General Accounting. A post runs the document
 // type's posting function; a reverse swaps the stored lines of the post entry and
@@ -242,15 +361,39 @@ export async function recordEntry(
   args: RecordEntryArgs,
 ): Promise<void> {
   let lines: JournalLineInput[];
-  let document: { id: string; type: DocumentType };
+  let document: { id: string; type: EntryDocumentType };
   let reversesEntryId: string | null = null;
 
   if (args.kind === "post") {
     const { posting } = args.document;
     document = { id: args.document.id, type: posting.type };
 
-    const byKey = await resolveSystemAccounts(tx, scope.orgId, requiredSystemAccounts(posting));
-    lines = posting.type === "receipt" ? postReceipt(posting, byKey) : postPayment(posting, byKey);
+    // All of them, not only the keys this posting needs: at most 18 rows on one partial
+    // index, and each posting function stays the only list of its keys.
+    const systemRows = await tx
+      .select({ id: accounts.id, systemKey: accounts.systemKey })
+      .from(accounts)
+      .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
+
+    const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
+
+    switch (posting.type) {
+      case "receipt":
+        lines = postReceipt(posting, byKey);
+        break;
+      case "payment":
+        lines = postPayment(posting, byKey);
+        break;
+      case "invoice":
+        lines = postInvoice(posting, byKey);
+        break;
+      case "allocation":
+        lines = postAllocation(posting, byKey);
+        break;
+      default:
+        posting satisfies never;
+        throw new Error("Unsupported posting");
+    }
   } else {
     document = args.document;
 

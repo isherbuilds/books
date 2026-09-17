@@ -63,6 +63,9 @@ function RegisteredFormField<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({ name, rules, render }: RegisteredFormFieldProps<TFieldValues, TName>) {
+  // `setError` writes into the same `errors` object, so a compiler memo keyed on it
+  // never shows a server refusal; the exact-name subscription keeps renders narrow.
+  "use no memo";
   const { control, register } = useFormContext<TFieldValues>();
   // Not `getFieldState`: it reads four slices of `formState` eagerly.
   const { errors } = useFormState({ control, name, exact: true });
