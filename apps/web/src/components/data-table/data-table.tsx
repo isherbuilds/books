@@ -137,7 +137,10 @@ export function DataTable<T extends RowData>({
                     scope="col"
                     aria-sort={sortable ? (sorted ? ARIA_SORT[sorted] : "none") : undefined}
                     className={cn(
-                      "sticky top-0 z-10 h-10 border-r border-b border-border border-r-border/60 bg-card px-3 text-left align-middle font-normal whitespace-nowrap text-muted-foreground last:border-r-0",
+                      // -top-4 cancels PageBody's p-4: at top-0 the header would stick
+                      // at the scrollport's padding edge and rows would scroll through
+                      // the 1rem band above it.
+                      "sticky -top-4 z-10 h-10 border-r border-b border-border border-r-border/60 bg-muted px-3 text-left align-middle font-normal whitespace-nowrap text-muted-foreground last:border-r-0",
                       columnMeta?.align === "right" && "text-right",
                       columnMeta?.className,
                     )}
