@@ -1,7 +1,7 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/tables/customers/columns.tsx (name cell,
 // money column, tags, actions).
-import { formatMoney } from "@accly/api/core/money";
+import { ZERO_MONEY, formatMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
@@ -71,7 +71,7 @@ export const PARTY_COLUMNS = [
     cell: ({ row: { original: party } }) => <TextOrDash value={party.gstin} mono />,
   }),
   // No receipt sorts as zero, so the column needs no undefined handling.
-  col.accessor((party) => party.totals?.receivedPaise ?? 0n, {
+  col.accessor((party) => party.totals?.receivedPaise ?? ZERO_MONEY, {
     id: "received",
     header: "Received",
     sortFn: "basic",

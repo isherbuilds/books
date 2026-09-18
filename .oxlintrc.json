@@ -1,7 +1,16 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc"],
-  "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
+  "jsPlugins": [
+    {
+      "name": "anti-slop",
+      "specifier": "./tools/oxlint/anti-slop/index.ts"
+    },
+    {
+      "name": "accly",
+      "specifier": "./tools/oxlint/accly/index.ts"
+    }
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -21,7 +30,8 @@
     ".pi/**",
     ".roo/**",
     ".windsurf/**",
-    "tools/oxlint/anti-slop/**"
+    "tools/oxlint/anti-slop/**",
+    "tools/oxlint/accly/**"
   ],
   "rules": {
     "oxc/no-accumulating-spread": "error",
@@ -45,6 +55,12 @@
       "rules": {
         "anti-slop/no-chained-type-assertions": "off",
         "anti-slop/no-unknown-returns": "off"
+      }
+    },
+    {
+      "files": ["**/*.tsx"],
+      "rules": {
+        "accly/no-bigint-in-components": "error"
       }
     }
   ]

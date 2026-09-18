@@ -41,34 +41,31 @@ import {
 export type ReceiptDetail = typeof documents.$inferSelect;
 
 const postInput = z.discriminatedUnion("settlementKind", [
-  orgInput
-    .extend(settlementPostFields)
-    .extend({
-      settlementKind: z.literal("advance"),
-      partyId: z.uuid(),
-      advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS),
-    })
-    .strict(),
-  orgInput
-    .extend(settlementPostFields)
-    .extend({
-      settlementKind: z.literal("against"),
-      partyId: z.uuid(),
-      allocations: z
-        .array(z.object({ invoiceId: z.uuid(), amount: positiveMoney }).strict())
-        .min(1)
-        .max(50),
-      advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
-    })
-    .strict(),
-  orgInput
-    .extend(settlementPostFields)
-    .extend({
-      settlementKind: z.literal("direct"),
-      partyId: z.uuid().optional(),
-      incomeAccountId: z.uuid(),
-    })
-    .strict(),
+  z.strictObject({
+    ...orgInput.shape,
+    ...settlementPostFields,
+    settlementKind: z.literal("advance"),
+    partyId: z.uuid(),
+    advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS),
+  }),
+  z.strictObject({
+    ...orgInput.shape,
+    ...settlementPostFields,
+    settlementKind: z.literal("against"),
+    partyId: z.uuid(),
+    allocations: z
+      .array(z.strictObject({ invoiceId: z.uuid(), amount: positiveMoney }))
+      .min(1)
+      .max(50),
+    advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
+  }),
+  z.strictObject({
+    ...orgInput.shape,
+    ...settlementPostFields,
+    settlementKind: z.literal("direct"),
+    partyId: z.uuid().optional(),
+    incomeAccountId: z.uuid(),
+  }),
 ]);
 
 export const receiptRouter = {

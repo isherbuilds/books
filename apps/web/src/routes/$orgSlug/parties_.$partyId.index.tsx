@@ -1,11 +1,10 @@
-import { formatMoney } from "@accly/api/core/money";
+import { ZERO_MONEY, formatBalance, formatMoney } from "@accly/api/core/money";
 import { authorize } from "@accly/auth/access";
 import { Separator } from "@accly/ui/components/separator";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { balanceLabel } from "@/components/ledger-columns";
 import { PartyFactSections, RecentReceipts } from "@/components/party-facts";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
@@ -53,7 +52,7 @@ function PartyOverview() {
   // At most this party's row, and none without a posted receipt. Nothing stands in
   // while a figure loads.
   const own = totals.data?.[0];
-  const received = totals.data ? formatMoney(own?.receivedPaise ?? 0n) : null;
+  const received = totals.data ? formatMoney(own?.receivedPaise ?? ZERO_MONEY) : null;
 
   return (
     <div className="grid w-full max-w-4xl gap-6">
@@ -62,7 +61,7 @@ function PartyOverview() {
           {canReadReceipts ? <Summary label="Received">{received}</Summary> : null}
           {canReadLedger ? (
             <Summary label="Balance">
-              {statement.data ? balanceLabel(statement.data.closingPaise) : null}
+              {statement.data ? formatBalance(statement.data.closingPaise) : null}
             </Summary>
           ) : null}
         </dl>

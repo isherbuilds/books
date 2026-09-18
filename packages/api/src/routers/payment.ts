@@ -35,23 +35,21 @@ import {
 } from "../lib/settlements";
 
 const postInput = z.discriminatedUnion("settlementKind", [
-  orgInput
-    .extend(settlementPostFields)
-    .extend({
-      settlementKind: z.literal("advance"),
-      partyId: z.uuid(),
-      tdsSectionId: z.uuid().optional(),
-    })
-    .strict(),
-  orgInput
-    .extend(settlementPostFields)
-    .extend({
-      settlementKind: z.literal("direct"),
-      partyId: z.uuid().optional(),
-      expenseAccountId: z.uuid(),
-      tdsSectionId: z.uuid().optional(),
-    })
-    .strict(),
+  z.strictObject({
+    ...orgInput.shape,
+    ...settlementPostFields,
+    settlementKind: z.literal("advance"),
+    partyId: z.uuid(),
+    tdsSectionId: z.uuid().optional(),
+  }),
+  z.strictObject({
+    ...orgInput.shape,
+    ...settlementPostFields,
+    settlementKind: z.literal("direct"),
+    partyId: z.uuid().optional(),
+    expenseAccountId: z.uuid(),
+    tdsSectionId: z.uuid().optional(),
+  }),
 ]);
 
 export const paymentRouter = {

@@ -1,4 +1,4 @@
-import { formatMoney } from "@accly/api/core/money";
+import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
@@ -72,7 +72,7 @@ function InvoiceSheetRoute() {
     useCan(orgSlug, { allocation: ["apply"] }) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
-    invoice.outstandingPaise > 0n;
+    isPositiveMoney(invoice.outstandingPaise);
 
   const canReverse = useCan(orgSlug, { allocation: ["reverse"] });
   const { partyName } = invoice;

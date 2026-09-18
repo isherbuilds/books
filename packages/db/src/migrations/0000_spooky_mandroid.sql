@@ -45,7 +45,6 @@ CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
-	"issuer" text DEFAULT 'local:credential' NOT NULL,
 	"user_id" text NOT NULL,
 	"access_token" text,
 	"refresh_token" text,
@@ -411,7 +410,7 @@ CREATE INDEX "allocations_org_target_document_idx" ON "allocations" USING btree 
 CREATE UNIQUE INDEX "allocations_org_reverses_idx" ON "allocations" USING btree ("org_id","reverses_allocation_id") WHERE "allocations"."reverses_allocation_id" is not null;--> statement-breakpoint
 CREATE INDEX "audit_log_org_id_idx" ON "audit_log" USING btree ("org_id","id");--> statement-breakpoint
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "account_issuer_accountId_uidx" ON "account" USING btree ("issuer","account_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "account_provider_accountId_uidx" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
 CREATE INDEX "invitation_organizationId_idx" ON "invitation" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "invitation_email_idx" ON "invitation" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "member_userId_idx" ON "member" USING btree ("user_id");--> statement-breakpoint

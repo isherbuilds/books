@@ -19,7 +19,8 @@ Installed entry points:
 
 Nested vendored code: `vendor/eslint-stylistic/` keeps its own `LICENSE` and `UPSTREAM.md`.
 
-Dependencies: `@oxlint/plugins` pinned at `1.82.0` to match the installed `oxlint`.
+Dependencies: `@oxlint/plugins` and `oxlint` use `^1.82.0` ranges. Keep their resolved
+versions compatible when updating.
 
 Intentional deviations from the bundle: the nested Stylistic provenance note records the local
 verification commands. Rule source matches the bundled snapshot.

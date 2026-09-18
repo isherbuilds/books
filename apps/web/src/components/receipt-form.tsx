@@ -1,4 +1,11 @@
-import { NON_NEGATIVE_MONEY_PATTERN, formatMoney, parseMoney } from "@accly/api/core/money";
+import {
+  NON_NEGATIVE_MONEY_PATTERN,
+  ZERO_MONEY,
+  formatMoney,
+  isPositiveMoney,
+  isZeroMoney,
+  parseMoney,
+} from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -40,7 +47,7 @@ import { applyOrpcFieldError, errorReason, isRefusal } from "@/lib/orpc-error";
 import { paymentMethodListOptions } from "@/lib/receipts";
 
 function enteredPaise(value: string): bigint {
-  if (!NON_NEGATIVE_MONEY_PATTERN.test(value)) return 0n;
+  if (!NON_NEGATIVE_MONEY_PATTERN.test(value)) return ZERO_MONEY;
 
   return parseMoney(value);
 }
@@ -214,7 +221,7 @@ export function ReceiptForm({
       if (!values.partyId) return;
 
       const allocations: { invoiceId: string; amount: string }[] = [];
-      let allocatedPaise = 0n;
+      let allocatedPaise = ZERO_MONEY;
       let invalid = false;
 
       for (const [invoiceId, amount] of Object.entries(values.allocations)) {
@@ -236,7 +243,7 @@ export function ReceiptForm({
 
         const message = !NON_NEGATIVE_MONEY_PATTERN.test(amount)
           ? "Enter a valid amount"
-          : amountPaise === 0n
+          : isZeroMoney(amountPaise)
             ? "Amount must be greater than zero"
             : amountPaise > invoice.outstandingPaise
               ? `Enter no more than ${formatMoney(invoice.outstandingPaise)}`
@@ -571,7 +578,7 @@ export function ReceiptForm({
                 // an invoice that has since closed still counts against the remainder.
                 const allocatedPaise = Object.values(allocations).reduce(
                   (total, entered) => total + enteredPaise(entered),
-                  0n,
+                  ZERO_MONEY,
                 );
 
                 const remainingPaise = enteredPaise(amount) - allocatedPaise;
@@ -588,7 +595,7 @@ export function ReceiptForm({
                         <dd className="tabular-nums">{formatMoney(remainingPaise)}</dd>
                       </div>
                     </dl>
-                    {remainingPaise > 0n ? advanceSupplyField : null}
+                    {isPositiveMoney(remainingPaise) ? advanceSupplyField : null}
                   </>
                 );
               }}

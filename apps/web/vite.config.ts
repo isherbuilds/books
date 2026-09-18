@@ -2,8 +2,7 @@ import { resolve } from "node:path";
 import mdx from "@mdx-js/rollup";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import babel from "@rolldown/plugin-babel";
-import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
+import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
@@ -43,10 +42,12 @@ export default defineConfig({
       compressPublicAssets: { gzip: true, brotli: true },
       inlineDynamicImports: true,
     }),
-    // React Compiler through Babel, not `viteReact({ compiler: true })`: its oxc port
-    // (oxc-transform-react 0.149) rewrites every bigint literal inside a compiled
-    // component to `undefined`, so `paise === 0n` silently became `paise === undefined`.
-    viteReact(),
-    babel({ presets: [reactCompilerPreset()] }),
+    // React Compiler on, via oxc. Money never reaches it as a bigint literal: oxc's
+    // compiler pass rewrites bigint literals inside a compiled component to `undefined`
+    // with no error, so `paise === 0n` would silently become `paise === undefined`.
+    // Every amount goes through the helpers in `@accly/api/core/money` — a module with
+    // no components, which the pass leaves alone — and `oxlint` bans bigint literals in
+    // `.tsx` so one cannot creep back in.
+    viteReact({ compiler: true }),
   ],
 });

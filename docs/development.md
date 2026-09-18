@@ -81,9 +81,9 @@ change runs `bunx oxfmt --check <files>`. End-user content runs
 `bun run --cwd apps/fumadocs build`. An SSR or UI change needs a production
 build and the running app. A read-only review never runs `check` or `test`.
 
-Dependencies use SemVer ranges under `bun.lock`; only Bun and required peer
-pairs are pinned exactly. Check each Better Auth release for schema changes
-before an upgrade.
+Package dependencies use SemVer ranges; `bun.lock` records resolved versions.
+Keep required peer pairs compatible when updating them. Bun's runtime version
+stays pinned. Check each Better Auth release for schema changes before an upgrade.
 
 ## Code rules
 

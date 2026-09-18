@@ -1,3 +1,4 @@
+import { formatBalance } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   DropdownMenu,
@@ -13,7 +14,7 @@ import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
-import { LEDGER_COLUMNS, LedgerCard, balanceLabel } from "@/components/ledger-columns";
+import { LEDGER_COLUMNS, LedgerCard } from "@/components/ledger-columns";
 import { DateFilterItems, DateRangeDialog } from "@/components/list-filter";
 import { ListToolbar } from "@/components/page";
 import { dateRangeLabel } from "@/lib/date-presets";
@@ -108,14 +109,14 @@ function PartyLedger() {
               <span>
                 Opening{" "}
                 <span className="text-foreground tabular-nums">
-                  {balanceLabel(statement.data.openingPaise)}
+                  {formatBalance(statement.data.openingPaise)}
                 </span>
               </span>
             ) : null}
             <span>
               Closing{" "}
               <span className="font-medium text-foreground tabular-nums">
-                {balanceLabel(statement.data.closingPaise)}
+                {formatBalance(statement.data.closingPaise)}
               </span>
             </span>
           </p>

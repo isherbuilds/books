@@ -1,4 +1,4 @@
-import { formatMoney } from "@accly/api/core/money";
+import { ZERO_MONEY, formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 
 import { DetailRow } from "@/components/detail-row";
@@ -55,8 +55,8 @@ export function InvoiceTotals({
 }: {
   invoice: Pick<InvoiceDetail, "lines" | "roundOffPaise" | "totalPaise">;
 }) {
-  let taxablePaise = 0n;
-  let taxPaise = 0n;
+  let taxablePaise = ZERO_MONEY;
+  let taxPaise = ZERO_MONEY;
 
   for (const line of invoice.lines) {
     taxablePaise += line.amountPaise;
