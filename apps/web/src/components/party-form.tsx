@@ -25,7 +25,7 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { Separator } from "@accly/ui/components/separator";
-import { SheetFooter } from "@accly/ui/components/sheet";
+import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -280,7 +280,7 @@ function PartyForm({
         className="flex min-h-0 flex-1 flex-col"
       >
         <fieldset disabled={pending} className="contents">
-          <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+          <SheetBody>
             <Section title="General">
               <RegisteredFormField
                 name="name"
@@ -475,7 +475,7 @@ function PartyForm({
                 </Button>
               </div>
             ) : null}
-          </div>
+          </SheetBody>
 
           <SheetFooter>
             <Button type="button" variant="outline" onClick={onCancel}>

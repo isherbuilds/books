@@ -19,6 +19,7 @@ export type LegalType = (typeof LEGAL_TYPES)[number];
 // One row per Organization owns legal identity and operational settings.
 export const SETTINGS_DEFAULTS = {
   timeZone: "Asia/Kolkata",
+  financialYearStart: 4,
   invoicePrefix: "INV",
   receiptPrefix: "RCT",
   paymentPrefix: "PMT",
@@ -36,7 +37,9 @@ export const organizationSettings = pgTable(
     pan: text("pan").notNull(),
     gstin: text("gstin"),
     stateCode: text("state_code").notNull(),
-    financialYearStart: integer("financial_year_start").notNull().default(4),
+    financialYearStart: integer("financial_year_start")
+      .notNull()
+      .default(SETTINGS_DEFAULTS.financialYearStart),
     addressLine1: text("address_line_1").notNull(),
     addressLine2: text("address_line_2"),
     city: text("city").notNull(),

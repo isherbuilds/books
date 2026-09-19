@@ -28,6 +28,7 @@ export const Route = createFileRoute("/$orgSlug")({
     return {
       timeZone: membership.timeZone,
       today: orgToday(membership.timeZone),
+      financialYearStart: membership.financialYearStart,
     };
   },
   component: OrgLayout,

@@ -14,17 +14,17 @@ import { TableEmpty } from "@/components/data-table/table-empty";
 import { InvoiceSheet } from "@/components/invoice-form";
 import { INVOICE_STATE_LABELS, InvoiceStatus } from "@/components/invoice-summary";
 import {
-  DateFilterItems,
-  DateRangeDialog,
+  DateRangePopover,
   FilterChips,
   FilterMenu,
   FilterSubmenu,
+  PresetItems,
   focusSearch,
   type ActiveFilter,
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
-import { dateRangeLabel } from "@/lib/date-presets";
+import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { invoiceListOptions, type InvoiceListRow } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
@@ -189,9 +189,11 @@ function InvoicesRoute() {
   const { orgSlug } = Route.useParams();
   const { create, ...filters } = Route.useSearch();
   const { q, partyId, state, settlement, from, to } = filters;
-  const { today } = useOrgDateTime();
+  const { today, financialYearStart } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
+  const range: SearchRange = { from, to };
+  const rangeText = rangeLabel(range, today, financialYearStart);
   const newTrigger = useRef<HTMLButtonElement>(null);
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canPost = useCan(orgSlug, { invoice: ["post"] });
@@ -213,7 +215,7 @@ function InvoicesRoute() {
 
   const rows = invoices.data?.pages.flatMap((page) => page.rows) ?? [];
 
-  const setFilters = (patch: InvoiceFilters) =>
+  const setFilters = (patch: Partial<InvoiceFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
   const clear = () => {
@@ -244,7 +246,7 @@ function InvoicesRoute() {
     chips.push({
       id: "date",
       name: "Date",
-      label: dateRangeLabel(today, from, to),
+      label: rangeText,
       remove: () => setFilters({ from: undefined, to: undefined }),
     });
   }
@@ -332,12 +334,12 @@ function InvoicesRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label="Date">
-                  <DateFilterItems
+                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
+                  <PresetItems
+                    range={range}
                     today={today}
-                    from={from}
-                    to={to}
-                    onChange={(range) => void setFilters(range)}
+                    financialYearStart={financialYearStart}
+                    onSelect={(next) => void setFilters(next)}
                     onCustom={() => setCustomRangeOpen(true)}
                   />
                 </FilterSubmenu>
@@ -402,12 +404,14 @@ function InvoicesRoute() {
         <Outlet />
       </PageBody>
 
-      <DateRangeDialog
+      <DateRangePopover
         open={customRangeOpen}
         onOpenChange={setCustomRangeOpen}
+        anchor={field}
         from={from}
         to={to}
-        onApply={(range) => void setFilters(range)}
+        today={today}
+        onApply={(next) => void setFilters(next)}
       />
 
       {canPost && create ? (

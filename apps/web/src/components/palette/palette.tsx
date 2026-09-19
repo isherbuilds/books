@@ -52,6 +52,12 @@ import { partyListOptions } from "@/lib/parties";
 // module-level handle never binds during SSR.
 const paletteHandle = createDialogHandle();
 
+/** Below this, a remote search matches most of the table, so it is not worth a round trip. */
+const MIN_SEARCH_CHARS = 2;
+
+/** The palette is for recognising a row, not browsing: more rows only cost time. */
+const SEARCH_RESULT_LIMIT = 6;
+
 const GROUP_LABELS: Record<PaletteGroup, string> = {
   action: "Actions",
   go: "Navigation",
@@ -150,8 +156,10 @@ function PaletteBody({
   const partyQuery = useQuery({ ...partyListOptions(orgSlug), enabled: canReadParties });
 
   const receiptQuery = useQuery({
-    ...orpc.receipt.list.queryOptions({ input: { orgSlug, q: debouncedQuery, limit: 8 } }),
-    enabled: canReadReceipts && debouncedQuery.length > 0,
+    ...orpc.receipt.list.queryOptions({
+      input: { orgSlug, q: debouncedQuery, limit: SEARCH_RESULT_LIMIT },
+    }),
+    enabled: canReadReceipts && debouncedQuery.length >= MIN_SEARCH_CHARS,
     // Keeps the last rows while the next search fetches, so the group does not blink.
     // Safe because the body remounts per organization, the key carries orgSlug, and
     // rankCommands drops every retained row that no longer matches the input.
@@ -219,7 +227,7 @@ function PaletteBody({
   // keepPreviousData also returns the last rows for a disabled query: an emptied
   // input shows no receipts.
   const receiptItems =
-    typed && debouncedQuery
+    typed && debouncedQuery.length >= MIN_SEARCH_CHARS
       ? (receiptQuery.data?.rows ?? []).map((receipt): PaletteItem => ({
           id: `receipt:${receipt.id}`,
           label: receipt.number ?? "—",
@@ -244,7 +252,7 @@ function PaletteBody({
   const searching =
     sections.length === 0 &&
     canReadReceipts &&
-    typed.length > 0 &&
+    typed.length >= MIN_SEARCH_CHARS &&
     (typed !== debouncedQuery || receiptQuery.isFetching);
 
   return (

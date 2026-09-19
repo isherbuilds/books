@@ -33,7 +33,7 @@ function Fact({
   return (
     <div className={cn("grid gap-1", wide && "col-span-2")}>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("break-words", children ? mono && "font-mono" : "text-muted-foreground")}>
+      <dd className={cn("wrap-anywhere", children ? mono && "font-mono" : "text-muted-foreground")}>
         {children || empty}
       </dd>
     </div>

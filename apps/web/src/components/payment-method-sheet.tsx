@@ -10,7 +10,7 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
-import { SheetFooter } from "@accly/ui/components/sheet";
+import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -63,7 +63,7 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
     <Form {...form}>
       <form noValidate onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
         <fieldset disabled={create.isPending} className="contents">
-          <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+          <SheetBody>
             <RegisteredFormField
               name="name"
               render={({ field }) => (
@@ -101,7 +101,7 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
                 </FormItem>
               )}
             />
-          </div>
+          </SheetBody>
 
           <SheetFooter>
             <Button type="button" variant="outline" onClick={onClose}>

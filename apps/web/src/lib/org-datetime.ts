@@ -64,7 +64,14 @@ export function orgToday(timeZone: string, now = new Date()): string {
   }).format(now);
 }
 
-// Both resolved by the layout loader, so server and client agree across hydration.
-export function useOrgDateTime(): { timeZone: string; today: string } {
+/**
+ * All three resolved by the layout loader, so server and client agree across
+ * hydration and a list's default period cannot differ between them.
+ */
+export function useOrgDateTime(): {
+  timeZone: string;
+  today: string;
+  financialYearStart: number;
+} {
   return orgRoute.useLoaderData();
 }

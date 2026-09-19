@@ -11,7 +11,7 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { NativeSelect } from "@accly/ui/components/native-select";
-import { SheetFooter } from "@accly/ui/components/sheet";
+import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -179,7 +179,7 @@ function ItemForm({
     <Form {...form}>
       <form noValidate onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
         <fieldset disabled={saving} className="contents">
-          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
+          <SheetBody className="gap-3">
             <RegisteredFormField
               name="name"
               render={({ field }) => (
@@ -308,7 +308,7 @@ function ItemForm({
                 )}
               />
             ) : null}
-          </div>
+          </SheetBody>
 
           <SheetFooter>
             {item ? (

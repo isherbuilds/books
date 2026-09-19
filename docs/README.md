@@ -46,6 +46,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
   balances and methods without the add and archive actions.
 - **Receipt "Advance for" field**: Verification. A goods advance posts; a
   taxable service advance shows the field error.
+- **List period filter**: Verification. On Invoices, Receipts and the party
+  ledger: each preset, the financial-year label across an April start, a custom
+  range picked in the calendar popover, and clearing back to all time. Cover
+  desktop and mobile, both themes, and keyboard-only movement through the
+  calendar.
 - **Blank data regions**: Verification. A slow-4G cold open and a screen-reader
   pass.
 - **Production hardening**: Verification.

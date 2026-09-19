@@ -1,5 +1,5 @@
 import { Button } from "@accly/ui/components/button";
-import { SheetFooter } from "@accly/ui/components/sheet";
+import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { useId, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
 
 // React bubbles portal events through the tree, so a stacked quick-create Sheet's
@@ -59,9 +59,7 @@ export function DocumentForm({
       className="flex min-h-0 flex-1 flex-col"
     >
       <fieldset disabled={pending} className="contents">
-        <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
-          {children}
-        </div>
+        <SheetBody className="gap-3">{children}</SheetBody>
         {footer}
       </fieldset>
     </form>

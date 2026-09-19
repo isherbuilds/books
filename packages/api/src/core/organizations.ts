@@ -31,7 +31,12 @@ export const createOrganizationInput = z
     pan,
     gstin: optionalGstin,
     stateCode: indianStateCode,
-    financialYearStart: z.number().int().min(1).max(12).default(4),
+    financialYearStart: z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .default(SETTINGS_DEFAULTS.financialYearStart),
     timeZone: timeZone.default(SETTINGS_DEFAULTS.timeZone),
     addressLine1: z.string().trim().min(1).max(200),
     addressLine2: z

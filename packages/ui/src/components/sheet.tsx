@@ -82,6 +82,24 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+/**
+ * The scrolling middle of a sheet. The popup is `overflow-hidden` and the header and
+ * footer never shrink, so the body is the only part that scrolls — and it needs
+ * `min-h-0`, or a long form pushes the footer off the panel instead of scrolling.
+ */
+function SheetBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="sheet-body"
+      className={cn(
+        "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -115,4 +133,4 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   );
 }
 
-export { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle };
+export { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle };
