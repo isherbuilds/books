@@ -6,6 +6,7 @@ import { buttonVariants } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -63,7 +64,7 @@ export function PartyQuickLook({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+          <SheetBody>
             {record.isError ? (
               <ErrorNote title="Could not load this party" error={record.error} />
             ) : null}
@@ -74,7 +75,7 @@ export function PartyQuickLook({
                 <RecentReceipts orgSlug={orgSlug} partyId={party.id} />
               </>
             ) : null}
-          </div>
+          </SheetBody>
 
           <SheetFooter>
             {canUpdate ? (

@@ -36,12 +36,12 @@ export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
   orpc.receipt.partyTotals.queryOptions({ input: { orgSlug, partyId } });
 
 // The party page reads the whole statement for its balance and the Ledger tab reads a
-// period; with no period both share one cache entry.
+// date range; with no range both share one cache entry.
 export const partyStatementOptions = (
   orgSlug: string,
   partyId: string,
-  period: { from?: string; to?: string } = {},
-) => orpc.party.statement.queryOptions({ input: { orgSlug, partyId, ...period } });
+  range: { from?: string; to?: string } = {},
+) => orpc.party.statement.queryOptions({ input: { orgSlug, partyId, ...range } });
 
 export const PARTY_STATUSES = ["active", "inactive"] as const;
 

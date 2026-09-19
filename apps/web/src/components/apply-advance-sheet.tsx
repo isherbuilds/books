@@ -12,6 +12,7 @@ import {
 import { Input } from "@accly/ui/components/input";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -126,7 +127,7 @@ export function ApplyAdvanceSheet({
 
         <Form {...form}>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+            <SheetBody>
               {receipts.isPending ? (
                 <p className="text-muted-foreground">Loading unapplied receipts…</p>
               ) : receipts.isError ? (
@@ -220,7 +221,7 @@ export function ApplyAdvanceSheet({
                   )}
                 />
               ) : null}
-            </div>
+            </SheetBody>
 
             <SheetFooter>
               <Button type="button" variant="ghost" disabled={apply.isPending} onClick={close}>

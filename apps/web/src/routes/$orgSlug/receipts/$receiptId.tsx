@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -144,7 +145,7 @@ function ReceiptSheetRoute() {
             <SheetDescription>{partyName ?? "No party"}</SheetDescription>
           </SheetHeader>
 
-          <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+          <SheetBody>
             <div className="grid gap-1">
               <p
                 className={cn(
@@ -244,7 +245,7 @@ function ReceiptSheetRoute() {
                 </section>
               </>
             ) : null}
-          </div>
+          </SheetBody>
 
           <SheetFooter>
             <a

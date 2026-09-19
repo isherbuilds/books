@@ -16,7 +16,7 @@ export function DetailRow({
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          "min-w-0 text-right break-words",
+          "min-w-0 text-right wrap-anywhere",
           children ? mono && "font-mono" : "text-muted-foreground",
         )}
       >

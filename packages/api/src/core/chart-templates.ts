@@ -26,8 +26,6 @@ export const SYSTEM_ACCOUNT_KEYS = [
 
 export type SystemAccountKey = (typeof SYSTEM_ACCOUNT_KEYS)[number];
 
-export type SystemAccountIds = Record<SystemAccountKey, string>;
-
 type TemplateAccount = {
   code: string;
   name: string;

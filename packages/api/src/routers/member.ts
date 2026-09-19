@@ -2,7 +2,7 @@ import { auth, invitationUrl } from "@accly/auth";
 import { ORG_ROLES, authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { invitation, member, organization, user } from "@accly/db/schema/auth";
-import { SETTINGS_DEFAULTS, organizationSettings } from "@accly/db/schema/organization-settings";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
@@ -47,17 +47,30 @@ export const memberRouter = {
         .where(eq(member.userId, userId))
         .orderBy(asc(organization.name), asc(organization.id)),
       db
-        .select({ timeZone: organizationSettings.timeZone })
+        .select({
+          timeZone: organizationSettings.timeZone,
+          financialYearStart: organizationSettings.financialYearStart,
+        })
         .from(organizationSettings)
         .where(eq(organizationSettings.orgId, orgId))
         .limit(1),
     ]);
 
+    // Bootstrap creates the settings row in the same transaction as the organization,
+    // so a missing row is an integrity failure, never a default.
+    if (!settings) {
+      throw new ORPCError("INTERNAL_SERVER_ERROR", {
+        message: `Organization ${orgId} has no settings row`,
+      });
+    }
+
     return {
       roles,
       user: { name: sessionUser.name, email: sessionUser.email },
       organizations,
-      timeZone: settings?.timeZone ?? SETTINGS_DEFAULTS.timeZone,
+      timeZone: settings.timeZone,
+      // Every org page needs the financial year: the period presets are built from it.
+      financialYearStart: settings.financialYearStart,
     };
   }),
 

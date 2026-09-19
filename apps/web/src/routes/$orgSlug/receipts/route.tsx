@@ -10,11 +10,11 @@ import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import {
-  DateFilterItems,
-  DateRangeDialog,
+  DateRangePopover,
   FilterChips,
   FilterMenu,
   FilterSubmenu,
+  PresetItems,
   focusSearch,
   toggleValue,
   type ActiveFilter,
@@ -23,7 +23,7 @@ import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/comp
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
-import { dateRangeLabel } from "@/lib/date-presets";
+import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -77,9 +77,11 @@ function ReceiptsRoute() {
   const { orgSlug } = Route.useParams();
   const { create, ...filters } = Route.useSearch();
   const { q, partyId, from, to, paymentMethodIds, state, settlementKind } = filters;
-  const { today } = useOrgDateTime();
+  const { today, financialYearStart } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
+  const range: SearchRange = { from, to };
+  const rangeText = rangeLabel(range, today, financialYearStart);
   const newTrigger = useRef<HTMLButtonElement>(null);
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canPost = useCan(orgSlug, { receipt: ["post"] });
@@ -105,7 +107,7 @@ function ReceiptsRoute() {
 
   const rows = receipts.data?.pages.flatMap((page) => page.rows) ?? [];
 
-  const setFilters = (patch: ReceiptFilters) =>
+  const setFilters = (patch: Partial<ReceiptFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
   // Both Clear buttons unmount once the filters go, so focus moves to the box first.
@@ -140,7 +142,7 @@ function ReceiptsRoute() {
     chips.push({
       id: "date",
       name: "Date",
-      label: dateRangeLabel(today, from, to),
+      label: rangeText,
       remove: () => setFilters({ from: undefined, to: undefined }),
     });
   }
@@ -240,12 +242,12 @@ function ReceiptsRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label="Date">
-                  <DateFilterItems
+                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
+                  <PresetItems
+                    range={range}
                     today={today}
-                    from={from}
-                    to={to}
-                    onChange={(range) => void setFilters(range)}
+                    financialYearStart={financialYearStart}
+                    onSelect={(next) => void setFilters(next)}
                     onCustom={() => setCustomRangeOpen(true)}
                   />
                 </FilterSubmenu>
@@ -332,12 +334,14 @@ function ReceiptsRoute() {
         <Outlet />
       </PageBody>
 
-      <DateRangeDialog
+      <DateRangePopover
         open={customRangeOpen}
         onOpenChange={setCustomRangeOpen}
+        anchor={field}
         from={from}
         to={to}
-        onApply={(range) => void setFilters(range)}
+        today={today}
+        onApply={(next) => void setFilters(next)}
       />
 
       {canPost ? (
