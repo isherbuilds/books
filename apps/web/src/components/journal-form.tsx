@@ -137,6 +137,7 @@ function JournalLineFields({
   accounts,
   parties,
   onCreateParty,
+  autoFocus,
   removeDisabled,
   onRemove,
 }: {
@@ -145,6 +146,7 @@ function JournalLineFields({
   accounts: UseQueryResult<JournalAccount[]>;
   parties: UseQueryResult<PartyOption[]>;
   onCreateParty?: (seed: string) => void;
+  autoFocus: boolean;
   removeDisabled: boolean;
   onRemove: () => void;
 }) {
@@ -183,6 +185,7 @@ function JournalLineFields({
                 onSelect={(account) => field.onChange(account?.id ?? null)}
                 placeholder="Choose an account"
                 inputRef={field.ref}
+                autoFocus={autoFocus}
                 aria-invalid={fieldState.invalid}
               />
             </FormControl>
@@ -304,10 +307,9 @@ export function JournalForm({
   const canCreateParty = useCan(orgSlug, { party: ["create"] });
   const [createParty, setCreateParty] = useState<{ index: number; seed: string } | null>(null);
 
-  const closePartySheet = (index: number) => {
-    setCreateParty(null);
-    setTimeout(() => form.setFocus(`lines.${index}.partyId`), 50);
-  };
+  // A voucher entered after Post and next lands on its first line; the first open keeps
+  // the Sheet's default (the date). `reset` keeps the count, so the remount can tell.
+  const entered = form.formState.submitCount > 0;
 
   const post = useMutation(
     orpc.journal.post.mutationOptions({
@@ -353,10 +355,8 @@ export function JournalForm({
         onDone={onClose}
         onNext={() => {
           const { documentDate } = form.getValues();
-          form.reset(defaults(documentDate));
+          form.reset(defaults(documentDate), { keepSubmitCount: true });
           post.reset();
-          // Base UI returns focus to the Sheet when this button unmounts; land after it.
-          setTimeout(() => form.setFocus("lines.0.accountId"), 50);
         }}
       />
     );
@@ -437,6 +437,7 @@ export function JournalForm({
               accounts={accounts}
               parties={parties}
               onCreateParty={canCreateParty ? (seed) => setCreateParty({ index, seed }) : undefined}
+              autoFocus={entered && index === 0}
               removeDisabled={lineFields.fields.length <= 2}
               onRemove={() => lineFields.remove(index)}
             />
@@ -481,9 +482,8 @@ export function JournalForm({
         orgSlug={orgSlug}
         open={createParty !== null}
         seedName={createParty?.seed ?? ""}
-        onClose={() => {
-          if (createParty) closePartySheet(createParty.index);
-        }}
+        // Base UI returns focus to the Party field that opened the Sheet.
+        onClose={() => setCreateParty(null)}
         onSaved={(party) => {
           if (!createParty) return;
 
@@ -493,7 +493,7 @@ export function JournalForm({
             shouldValidate: true,
           });
           form.setValue(`lines.${index}.partyName`, party.name, { shouldDirty: true });
-          closePartySheet(index);
+          setCreateParty(null);
         }}
       />
     </Form>

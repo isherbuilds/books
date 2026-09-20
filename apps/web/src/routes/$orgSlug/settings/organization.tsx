@@ -144,12 +144,17 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
         toast.success("Settings saved");
         // Awaited: `member.me` carries the time zone every page formats with, and the org
         // layout loader holds it, so open pages would keep the old zone until staleTime lapses.
+        // `journal.accounts` follows the GSTIN: a registered organization cannot journal
+        // taxable income, so the picker must not keep offering it.
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: orpc.settings.get.key({ input: { orgSlug } }),
           }),
           queryClient.invalidateQueries({
             queryKey: orpc.member.me.key({ input: { orgSlug } }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.journal.accounts.key({ input: { orgSlug } }),
           }),
         ]);
         await router.invalidate();

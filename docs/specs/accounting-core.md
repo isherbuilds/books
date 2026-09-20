@@ -96,10 +96,16 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 6. **Print class**: all exempt or nil lines print Bill of Supply, any taxable
    line prints Tax Invoice, and a Receipt prints Receipt. Printed fields are
    data that the CA approves.
-7. **Locks.** From slice 5, posting or cancelling on or before the general lock
-   needs an exception. The tax lock follows `affectsTax`, stored at post, which
-   marks any document in a GST register, exempt direct Receipts included.
-   Cancellation checks both dates. Back-dating before a lock rewrites nothing.
+7. **Locks.** From slice 5, posting on or before the general lock needs an
+   exception. The tax lock follows `affectsTax`, stored at post, which marks
+   any document in a GST register, exempt direct Receipts included.
+   Back-dating before a lock rewrites nothing. A cancellation is checked on its
+   **reversal date, never the original document date**: `reverseDocument`
+   stamps the reversal with today's business date, so a locked period's journal
+   lines cannot move, and checking the original date would make every document
+   in a closed period permanently uncancellable while protecting nothing. This
+   is ERPNext's behaviour under `enable_immutable_ledger`
+   ([research](../research/opening-balance-and-locks-2026-09-20.md)).
 8. **External posting is post-MVP.** References, digests, deduplication,
    ingestion and API keys arrive together.
 9. **Reports.** Accounting reports read journal lines. P&L and balance sheet
@@ -159,15 +165,22 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 
 17. **Settlement changes.** Allocations are append-only `apply` and `reverse`
     rows; one reverse may name each apply. A document's allocation capacity
-    for a Party is the absolute amount of its posted party ledger line on that
-    Party and side. Sources hold a credit (a negative line): `advance` and
-    `against` Receipts, and from slice 9a a Journal with a `receivables`
-    credit. Targets hold a debit (a positive line): Invoices, and from slice
-    9b a Journal with a `receivables` debit. A `direct` Receipt credits income,
-    holds no exposure and is neither (`ALLOCATION_SOURCE_INVALID`). Active
-    means an apply without a reverse. Outstanding is capacity minus active
-    allocations targeting the document; unapplied is capacity minus active
-    allocations from it.
+    for a Party is its signed net `receivables` movement for that Party: a
+    debit is a target, a credit a source. Party statement balance and
+    allocatable capacity are different quantities. A Receipt or Invoice moves
+    one control account, so its party ledger line is its capacity. A Journal's
+    party ledger line is a per-side net and would count a `customerAdvances`
+    credit as `receivables` capacity; a Journal's capacity is therefore read
+    from its `receivables` lines, never from net control exposure. Slice 9a
+    admits only `receivables` to Journals, so the two agree until another
+    control account is admitted with its own settlement rule.
+    Sources hold a credit: `advance` and `against` Receipts, and from slice 9a
+    a Journal with a `receivables` credit. Targets hold a debit: Invoices, and
+    from slice 9b a Journal with a `receivables` debit. A `direct` Receipt
+    credits income, holds no exposure and is neither
+    (`ALLOCATION_SOURCE_INVALID`). Active means an apply without a reverse.
+    Outstanding is capacity minus active allocations targeting the document;
+    unapplied is capacity minus active allocations from it.
     `allocation.apply` and `allocation.reverse` lock the source and targets
     `FOR NO KEY UPDATE` in ascending document id order, then recheck. An
     allocation insert takes `KEY SHARE` on both documents it names, and a
@@ -375,23 +388,23 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    keep their document (Invoice header discount and Credit Note in 4b-ii,
    Receipt `against`), and the form says so.
 
-   **9a. Control lines and Journal credits.**
-   - `journalAccounts` takes `controls: boolean` and, when true, returns the
-     four control accounts (`receivables`, `payables`, `customerAdvances`,
-     `supplierAdvances`) with their `systemKey`; Opening Balance passes
-     `false`. A line on a control account without `partyId` is
+   **9a. Receivables lines and Journal credits.**
+   - `journalAccounts` takes `controls: boolean` and, when true, adds the
+     `receivables` control account with its `systemKey`; Opening Balance
+     passes `false`. `payables`, `customerAdvances` and `supplierAdvances`
+     stay refused (`ACCOUNT_INVALID`): advance sources are Receipts, payable
+     targets arrive with the 4b-ii Bill, and each is admitted only with its
+     own settlement rule, so a Journal's party ledger line never mixes
+     control accounts (call 17). A `receivables` line without `partyId` is
      `PARTY_REQUIRED` (`BAD_REQUEST`), checked in the posting transaction
      after the accounts resolve; elsewhere the party stays optional
      attribution.
-   - Side follows the key: `receivable` for `receivables` and
-     `customerAdvances`, `payable` for `payables` and `supplierAdvances`. A
-     debit is positive and a credit negative on either side: a debit always
-     moves the Party's claim toward the Organization (Dr `receivables` raises
-     what the Party owes; Dr `customerAdvances` or Dr `payables` lowers what
-     the Organization owes). `postDocument` nets the control lines per party
-     and side and writes one party ledger line each, skipping a zero net.
-     `documents.partyId` and `exposureSide` stay null: one Journal may touch
-     several parties.
+   - Side is `receivable`; a debit is positive and a credit negative (Dr
+     `receivables` raises what the Party owes). `postDocument` nets the
+     `receivables` lines per party and writes one party ledger line each,
+     skipping a zero net. That line equals the Journal's capacity for the
+     party by construction. `documents.partyId` and `exposureSide` stay null:
+     one Journal may touch several parties.
    - A `receivables` credit line may carry `allocations` of
      `{ invoiceId, amount }`, as a Receipt `against` does: each target a posted
      Invoice of that line's party, at most 50 per line, and the total across a
@@ -401,13 +414,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      Journal as source and no journal entry. The unallocated rest is an
      unapplied credit on `receivables`: not an advance, no `advanceSupply`, no
      `customerAdvances`.
-   - Lines on `customerAdvances`, `supplierAdvances` and `payables` write
-     party ledger lines and never allocate: advance sources are Receipts, and
-     payable targets arrive with the 4b-ii Bill.
    - `allocation.apply` takes `sourceDocumentId`, `targetDocumentId` and
-     `amount`; `applyAllocations` reads capacity from the party ledger line
-     (call 17) and admits a posted Journal with a `receivables` credit for the
-     target's party. Applying or reversing from a Journal writes no entry.
+     `amount`; `applyAllocations` reads a Journal's capacity as its net
+     `receivables` credit for the target's party (call 17), the same quantity
+     posting capped against, and admits a posted Journal with such a credit.
+     Applying or reversing from a Journal writes no entry.
      `party.openCredits({ partyId })` replaces `receipt.unapplied`: Receipts
      and Journals with unapplied credit for the party, 200 oldest and
      `hasMore`.
@@ -493,7 +504,8 @@ Balance and locks remain open; party lines are slice 9.
   input, output and cess accounts, and `taxable` income when the Organization
   has a `gstin` (the call 16 guard). The party control accounts
   (`receivables`, `payables`, `customerAdvances`, `supplierAdvances`) are
-  refused until slice 9a admits them with a required Party; Opening Balance
+  refused; slice 9a admits `receivables` with a required Party and keeps the
+  other three refused. Opening Balance
   keeps refusing them. Thus `affectsTax` is false, and before slice 9 the
   Journal writes no party ledger lines. The batch predicate `journalAccounts`
   runs inside the posting transaction after a `FOR SHARE` read of
@@ -503,7 +515,11 @@ Balance and locks remain open; party lines are slice 9.
 - **Storage.** The baseline migration carries: nullable `entry_side` (`debit`, `credit`)
   and `party_id` (composite key to `parties`) on `document_lines`, and
   `journal_prefix` on `organization_settings`. `amount_paise` stays positive.
-  The ledger derives from these lines.
+  The ledger derives from these lines. This slice regenerated the baseline
+  (`0000_unknown_the_stranger`, a new `when`), which is only correct under the
+  rule that no environment keeps data yet: a database that applied the earlier
+  baseline must be reset (`bun run db:seed -- --reset`), not migrated, or
+  `runMigrations()` replays the DDL and fails on existing tables.
 - **Posting.** `JournalPosting { type: "journal", amountPaise, lines }` is a
   `DocumentPosting` variant. A pure `postJournal` checks the lines, and
   `recordEntry` uses a switch.
@@ -532,7 +548,10 @@ Balance and locks remain open; party lines are slice 9.
   items, never twice.
 - **Locks.** A `lock.set` procedure and a lock table, not `settings.update`
   (the CA cannot call it, and it replaces every field). `postDocument` and
-  `reverseDocument` read the lock inside their transaction.
+  `reverseDocument` read the lock inside their transaction, each against its own
+  entry date. A lock and an unlock both require a reason, stored on the row. An
+  exception is a row naming a user and never a consequence of holding every
+  grant, so the owner has no implicit bypass.
 
 | Not in the first Journal               | Gate                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- |

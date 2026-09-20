@@ -29,7 +29,7 @@ import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { useFormState } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -147,12 +147,14 @@ function TextField({
  * Focus starts on Name, or on GSTIN when the name was seeded by a Link Field.
  */
 function PartyForm({
+  ref,
   orgSlug,
   party,
   seedName,
   onSaved,
   onCancel,
 }: {
+  ref: Ref<HTMLFormElement>;
   orgSlug: string;
   party?: PartyRecord;
   seedName?: string;
@@ -260,6 +262,7 @@ function PartyForm({
   return (
     <Form {...form}>
       <form
+        ref={ref}
         noValidate
         onSubmit={onSubmit}
         // Handled even while clean or saving, so the key never reaches the receipt
@@ -291,7 +294,6 @@ function PartyForm({
                       <Input
                         {...field}
                         required
-                        autoFocus={!seedName}
                         autoComplete="organization"
                         onChange={(event) => {
                           void field.onChange(event);
@@ -363,7 +365,6 @@ function PartyForm({
                       <FormControl>
                         <Input
                           {...field}
-                          autoFocus={Boolean(seedName)}
                           className="font-mono uppercase"
                           maxLength={15}
                           autoCapitalize="characters"
@@ -516,6 +517,16 @@ export function PartySheet({
       mutationKey: party ? orpc.party.update.mutationKey() : orpc.party.create.mutationKey(),
     }) > 0;
 
+  // Base UI records what was focused before the popup opens and returns there on
+  // close; a React `autoFocus` inside the form would run first and steal that record.
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const initialFocus = () => {
+    const field = formRef.current?.elements.namedItem(seedName ? "gstin" : "name");
+
+    return field instanceof HTMLInputElement ? field : null;
+  };
+
   return (
     <FormSheet
       open={open}
@@ -523,8 +534,10 @@ export function PartySheet({
       saving={saving}
       title={party ? "Edit party" : "New party"}
       description={party ? party.name : "Register a customer, vendor, or other counterparty."}
+      initialFocus={initialFocus}
     >
       <PartyForm
+        ref={formRef}
         orgSlug={orgSlug}
         party={party}
         seedName={seedName}

@@ -6,7 +6,7 @@ import {
   SheetTitle,
 } from "@accly/ui/components/sheet";
 import { ClientOnly } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 export function FormSheet({
   open,
@@ -14,6 +14,7 @@ export function FormSheet({
   saving,
   title,
   description,
+  initialFocus,
   children,
 }: {
   open: boolean;
@@ -21,12 +22,14 @@ export function FormSheet({
   saving: boolean;
   title: ReactNode;
   description: ReactNode;
+  /** Base UI owns focus: what it focuses on open is where it returns from on close. */
+  initialFocus?: ComponentProps<typeof SheetContent>["initialFocus"];
   children: ReactNode;
 }) {
   return (
     <ClientOnly fallback={null}>
       <Sheet open={open} onOpenChange={() => !saving && onClose()}>
-        <SheetContent>
+        <SheetContent initialFocus={initialFocus}>
           <SheetHeader>
             <SheetTitle>{title}</SheetTitle>
             <SheetDescription>{description}</SheetDescription>

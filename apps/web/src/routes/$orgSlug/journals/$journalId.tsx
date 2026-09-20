@@ -32,7 +32,7 @@ import { invalidateJournalState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, hasErrorCode, loadRouteQuery } from "@/lib/orpc-error";
+import { errorMessage, hasErrorCode, isRefusal, loadRouteQuery } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
 import { focusRowLink, stepRow } from "@/lib/row-focus";
 
@@ -88,13 +88,21 @@ function JournalSheetRoute() {
         setCancelOpen(false);
         toast.success("Journal cancelled");
       },
-      onError: (error) => {
-        if (hasErrorCode(error, "CONFLICT")) {
+      onError: async (error) => {
+        // A 5xx or dropped connection may have committed the reversal; a CONFLICT means
+        // someone else already cancelled it. Either way this Sheet's copy is stale.
+        const uncertain = !isRefusal(error);
+
+        if (uncertain || hasErrorCode(error, "CONFLICT")) {
           setCancelOpen(false);
-          void invalidateJournalState(queryClient, orgSlug);
+          await invalidateJournalState(queryClient, orgSlug);
         }
 
-        toast.error(errorMessage(error, "Could not cancel the journal"));
+        toast.error(
+          uncertain
+            ? "The result is uncertain. Check the journal before cancelling it again."
+            : errorMessage(error, "Could not cancel the journal"),
+        );
       },
     }),
   );

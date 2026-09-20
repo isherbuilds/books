@@ -442,12 +442,6 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
     if (party) void defaultPlaceOfSupply(party.id);
   };
 
-  const closeCreate = () => {
-    setCreateParty(null);
-    // Base UI returns focus to the Sheet when the button unmounts; land after it.
-    setTimeout(() => form.setFocus("partyId"), 50);
-  };
-
   const invoiceInput = (values: InvoiceFormValues) => {
     if (!values.partyId) return null;
 
@@ -586,11 +580,9 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         number={posted.number}
         onDone={() => onPosted(posted.id)}
         onNext={() => {
-          form.reset(defaults(form.getValues("documentDate")));
+          form.reset(defaults(form.getValues("documentDate")), { keepSubmitCount: true });
           post.reset();
           dueDateEdited.current = false;
-          // Base UI returns focus to the Sheet when this button unmounts; land after it.
-          setTimeout(() => form.setFocus("partyId"), 50);
         }}
       />
     );
@@ -634,6 +626,7 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
                   onSelect={selectParty}
                   onCreate={canCreateParty ? setCreateParty : undefined}
                   inputRef={field.ref}
+                  autoFocus={form.formState.submitCount > 0}
                   aria-invalid={fieldState.invalid}
                 />
               </FormControl>
@@ -817,10 +810,10 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         orgSlug={orgSlug}
         open={createParty !== null}
         seedName={createParty ?? ""}
-        onClose={closeCreate}
+        onClose={() => setCreateParty(null)}
         onSaved={(party) => {
           selectParty(party);
-          closeCreate();
+          setCreateParty(null);
         }}
       />
     </Form>

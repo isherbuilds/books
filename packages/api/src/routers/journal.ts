@@ -8,7 +8,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { postDocument, postedNumber, type PostDocumentLine } from "../core/documents";
+import { accountLine, postDocument, postedNumber, type PostDocumentLine } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import { journalAccounts } from "../lib/accounts";
 import { badRequest, impossible } from "../lib/conflict";
@@ -16,7 +16,7 @@ import { capMasterList } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   dateOnly,
-  documentListFields,
+  documentPageFields,
   orderedPeriod,
   positiveMoney,
   reason,
@@ -81,15 +81,12 @@ export const journalRouter = {
     const posted = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
 
-      const [resolvedAccounts, resolvedParties] = await Promise.all([
-        journalAccounts(tx, scope.orgId, { gstin: null, ids: accountIds }),
-        partyIds.length === 0
-          ? Promise.resolve([])
-          : tx
-              .select({ id: parties.id })
-              .from(parties)
-              .where(and(eq(parties.orgId, scope.orgId), inArray(parties.id, partyIds))),
-      ]);
+      // One connection runs a transaction's statements in order, so these are sequential
+      // by nature; parties are read only once every account has passed.
+      const resolvedAccounts = await journalAccounts(tx, scope.orgId, {
+        gstin: null,
+        ids: accountIds,
+      });
 
       if (resolvedAccounts.length !== accountIds.length) {
         throw badRequest(
@@ -105,6 +102,14 @@ export const journalRouter = {
         throw badRequest("TAXABLE_ACCOUNT_LINE", "Taxable income is invoiced, not journaled.");
       }
 
+      const resolvedParties =
+        partyIds.length === 0
+          ? []
+          : await tx
+              .select({ id: parties.id })
+              .from(parties)
+              .where(and(eq(parties.orgId, scope.orgId), inArray(parties.id, partyIds)));
+
       if (resolvedParties.length !== partyIds.length) {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
       }
@@ -117,21 +122,9 @@ export const journalRouter = {
         if (!account) throw impossible(`validated journal account ${line.accountId} is missing`);
 
         return {
-          kind: "account",
-          accountId: line.accountId,
+          ...accountLine(line.accountId, line.description ?? account.name, line.amount),
           entrySide: line.side,
           partyId: line.partyId ?? null,
-          description: line.description ?? account.name,
-          amountPaise: line.amount,
-          itemId: null,
-          hsnSac: null,
-          unit: null,
-          quantity: null,
-          unitPricePaise: null,
-          taxRateId: null,
-          cgstPaise: 0n,
-          sgstPaise: 0n,
-          igstPaise: 0n,
         };
       });
 
@@ -255,7 +248,9 @@ export const journalRouter = {
     { journal: ["read"] },
     orgInput
       .extend({
-        ...documentListFields,
+        // `partyId` is omitted: a Journal's header party is null (parties sit on lines),
+        // so the shared header filter would match nothing.
+        ...documentPageFields,
         state: z.enum(["posted", "cancelled"]).optional(),
       })
       .superRefine(orderedPeriod),

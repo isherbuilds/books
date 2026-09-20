@@ -137,12 +137,6 @@ export function ReceiptForm({
   const canCreateParty = useCan(orgSlug, { party: ["create"] });
   const [createParty, setCreateParty] = useState<string | null>(null);
 
-  const closeCreate = () => {
-    setCreateParty(null);
-    // Base UI returns focus to the Sheet when the button unmounts; land after it.
-    setTimeout(() => form.setFocus("partyId"), 50);
-  };
-
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
@@ -327,10 +321,8 @@ export function ReceiptForm({
         onDone={onClose}
         onNext={() => {
           const { documentDate, paymentMethodId } = form.getValues();
-          form.reset(defaults(documentDate, paymentMethodId));
+          form.reset(defaults(documentDate, paymentMethodId), { keepSubmitCount: true });
           post.reset();
-          // Base UI returns focus to the Sheet when this button unmounts; land after it.
-          setTimeout(() => form.setFocus("partyId"), 50);
         }}
       >
         <a
@@ -411,6 +403,7 @@ export function ReceiptForm({
                   }}
                   onCreate={canCreateParty ? setCreateParty : undefined}
                   inputRef={field.ref}
+                  autoFocus={form.formState.submitCount > 0}
                   clearable={settlementKind === "direct"}
                   aria-invalid={fieldState.invalid}
                 />
@@ -685,12 +678,12 @@ export function ReceiptForm({
         orgSlug={orgSlug}
         open={createParty !== null}
         seedName={createParty ?? ""}
-        onClose={closeCreate}
+        onClose={() => setCreateParty(null)}
         onSaved={(party) => {
           if (party.id !== form.getValues("partyId")) form.setValue("allocations", {});
           form.setValue("partyId", party.id, { shouldDirty: true, shouldValidate: true });
           form.setValue("partyName", party.name);
-          closeCreate();
+          setCreateParty(null);
         }}
       />
     </Form>

@@ -32,8 +32,8 @@ posted journal lines. [ERPNext general ledger source](https://github.com/frappe/
 
 ### What the staged implementation does
 
-- `packages/api/src/routers/journal.ts:27` validates 2–100 positive lines and
-  equal debit and credit totals before any write.
+- `packages/api/src/routers/journal.ts:40` (`postInput`) validates 2–100 positive
+  lines and equal debit and credit totals before any write.
 - `packages/api/src/routers/journal.ts:67` requires the `journal.post` grant and
   resolves every account and optional party inside the verified Organization.
 - `packages/api/src/routers/journal.ts:81` posts in one database transaction.
@@ -56,13 +56,13 @@ posted journal lines. [ERPNext general ledger source](https://github.com/frappe/
 
 ### What came from the reference systems
 
-| Reference | Pattern used | Pattern not used |
-| --- | --- | --- |
-| ERPNext | Balanced multi-line Journal Entry; non-group accounts; source-document posting; reversal; specialized flows preferred for ordinary payments | Control-account settlement, reference allocation, multi-currency, dimensions, templates, many entry types |
-| Frappe Books | Simple Journal Entry form and ledger posting after submit | Desktop-only SQLite architecture, ledger-row deletion, single-tenant model |
-| Odoo | Document state plus derived journal lines; posted-entry reversal | One broad `account.move` model for every accounting document, ORM-level mutation paths, report DSL |
-| Zoho Books | Organization-scoped journal API and action-shaped transitions | Draft/publish/approval workflow, recurring journals, journal credits applied to invoices and bills |
-| TallyPrime | Voucher speed and the debit/credit mental model | Editable voucher history as the primary correction path and a local proprietary company file |
+| Reference    | Pattern used                                                                                                                                | Pattern not used                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| ERPNext      | Balanced multi-line Journal Entry; non-group accounts; source-document posting; reversal; specialized flows preferred for ordinary payments | Control-account settlement, reference allocation, multi-currency, dimensions, templates, many entry types |
+| Frappe Books | Simple Journal Entry form and ledger posting after submit                                                                                   | Desktop-only SQLite architecture, ledger-row deletion, single-tenant model                                |
+| Odoo         | Document state plus derived journal lines; posted-entry reversal                                                                            | One broad `account.move` model for every accounting document, ORM-level mutation paths, report DSL        |
+| Zoho Books   | Organization-scoped journal API and action-shaped transitions                                                                               | Draft/publish/approval workflow, recurring journals, journal credits applied to invoices and bills        |
+| TallyPrime   | Voucher speed and the debit/credit mental model                                                                                             | Editable voucher history as the primary correction path and a local proprietary company file              |
 
 Sources: [Frappe Books Journal Entries](https://docs.frappe.io/books/journal-entries),
 [Odoo journal-entry model](https://github.com/odoo/odoo/blob/19.0/addons/account/models/account_move.py),

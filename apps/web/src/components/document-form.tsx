@@ -122,16 +122,8 @@ export function FieldArrayError<TFieldValues extends FieldValues>({
   name: FieldPath<TFieldValues>;
 }) {
   const { errors } = useFormState({ control, name, exact: true });
-  const error: unknown = get(errors, name);
-
-  if (!error || typeof error !== "object") return null;
-
-  const root = "root" in error ? error.root : undefined;
-
-  const rootMessage =
-    root && typeof root === "object" && "message" in root ? root.message : undefined;
-
-  const message = rootMessage ?? ("message" in error ? error.message : undefined);
+  // A `superRefine` on the array lands on `root`; a `min`/`max` issue on the field itself.
+  const message: unknown = get(errors, `${name}.root.message`) ?? get(errors, `${name}.message`);
 
   return typeof message === "string" ? (
     <p role="alert" className="text-destructive">

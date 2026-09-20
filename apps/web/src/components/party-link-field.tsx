@@ -12,6 +12,7 @@ export function PartyLinkField({
   onCreate,
   clearable,
   inputRef,
+  autoFocus,
   id,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
@@ -22,6 +23,7 @@ export function PartyLinkField({
   onCreate?: (seed: string) => void;
   clearable?: boolean;
   inputRef: Ref<HTMLInputElement>;
+  autoFocus?: boolean;
   id?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
@@ -40,6 +42,7 @@ export function PartyLinkField({
       clearable={clearable}
       placeholder={onCreate ? "Select or create a party" : "Select a party"}
       inputRef={inputRef}
+      autoFocus={autoFocus}
       id={id}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
