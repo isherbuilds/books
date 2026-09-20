@@ -1,5 +1,5 @@
 {
-  "id": "ca5a6c3f-98c2-4114-8f09-06fd455f8087",
+  "id": "849b57f4-e3dd-4e59-9a68-cdfbd996d95f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1214,8 +1214,20 @@
           "primaryKey": false,
           "notNull": false
         },
+        "entry_side": {
+          "name": "entry_side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "item_id": {
           "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_id": {
+          "name": "party_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1363,6 +1375,21 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "document_lines_org_id_party_id_parties_org_id_id_fk": {
+          "name": "document_lines_org_id_party_id_parties_org_id_id_fk",
+          "tableFrom": "document_lines",
+          "tableTo": "parties",
+          "columnsFrom": [
+            "org_id",
+            "party_id"
+          ],
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "document_lines_org_id_tax_rate_id_tax_rates_org_id_id_fk": {
           "name": "document_lines_org_id_tax_rate_id_tax_rates_org_id_id_fk",
           "tableFrom": "document_lines",
@@ -1395,6 +1422,10 @@
         "document_lines_kind_check": {
           "name": "document_lines_kind_check",
           "value": "\"document_lines\".\"kind\" in ('item', 'account')"
+        },
+        "document_lines_entry_side_check": {
+          "name": "document_lines_entry_side_check",
+          "value": "\"document_lines\".\"entry_side\" is null or \"document_lines\".\"entry_side\" in ('debit', 'credit')"
         },
         "document_lines_quantity_check": {
           "name": "document_lines_quantity_check",
@@ -2052,6 +2083,12 @@
         },
         "credit_note_prefix": {
           "name": "credit_note_prefix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "journal_prefix": {
+          "name": "journal_prefix",
           "type": "text",
           "primaryKey": false,
           "notNull": true

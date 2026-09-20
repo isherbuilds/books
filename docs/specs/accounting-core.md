@@ -1,6 +1,6 @@
 # Spec: Accounting core
 
-Status: slices 1–3, 4a and 4b-i implemented; slices 4b-ii and 5–7 open.
+Status: slices 1–3, 4a, 4b-i and the slice 5 Journal implemented; slices 4b-ii, the rest of 5 (Opening Balance, locks), 6–7, 8 (chart of accounts) and 9 (party Journals) open.
 Authority: the founder's decisions. Git keeps the research behind them.
 
 ## Outcome
@@ -23,7 +23,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 - **Account**: `type`, `parentId` and an optional `systemKey`. Income accounts
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
   Interest is `exempt`; `notASupply` covers donations, grants, dividends,
-  capital receipts and insurance claims.
+  capital receipts and insurance claims. Templates seed the chart;
+  `account.create` adds money leaves and, from slice 8, income and expense
+  leaves with generated codes. A user never creates, retypes or archives a
+  system account.
 - **Item**: an Organization-unique `name` through `normalizedName`, optional
   `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
   `active` flag. `taxCode` is required exactly when the income Account is
@@ -40,8 +43,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   `dueDate`, `placeOfSupplyStateCode`, `partyId`, `exposureSide`,
   `settlementKind`, `advanceSupply`, `paymentMethodId`, `reference`, `source`,
   `version` (draft token), `totalPaise`, `roundOffPaise`, `affectsTax`, and a
-  print snapshot that reprints read alone. A Journal leaves the party, method
-  and settlement fields null.
+  print snapshot that reprints read alone. A Journal requires `narration` and leaves
+  the party, method and settlement fields null.
 - **Document Line**: `kind`, Account, description, `amountPaise`, and optional
   `itemId`, `hsnSac`, `unit`, integer `quantity`, integer `unitPricePaise` and
   `taxRateId`. `cgstPaise`, `sgstPaise` and `igstPaise` store the computed GST
@@ -50,7 +53,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   document settles, not the cash direction. A customer refund is a
   `receivable` Payment.
 - **Party Ledger Line**: exposure per document, party and side, positive when
-  the Party owes the Organization.
+  the Party owes the Organization. An Invoice and a non-direct Receipt write
+  one; from slice 9 a Journal writes one per party and side it touches.
 - **TDS Section**: a Form 140 `code` (Income-tax Act 2025), `rateBasisPoints`,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited. The
   database refuses a duplicate (org, code, start); the writer keeps ranges
@@ -154,30 +158,41 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     slice 4b-ii.
 
 17. **Settlement changes.** Allocations are append-only `apply` and `reverse`
-    rows; one reverse may name each apply. Only `advance` and `against`
-    Receipts are allocation sources: a `direct` Receipt credits income and
-    holds no advance (`ALLOCATION_SOURCE_INVALID`). Active means an apply
-    without a reverse. Invoice outstanding is total minus active allocations
-    targeting it; Receipt unapplied is total minus active allocations from it.
+    rows; one reverse may name each apply. A document's allocation capacity
+    for a Party is the absolute amount of its posted party ledger line on that
+    Party and side. Sources hold a credit (a negative line): `advance` and
+    `against` Receipts, and from slice 9a a Journal with a `receivables`
+    credit. Targets hold a debit (a positive line): Invoices, and from slice
+    9b a Journal with a `receivables` debit. A `direct` Receipt credits income,
+    holds no exposure and is neither (`ALLOCATION_SOURCE_INVALID`). Active
+    means an apply without a reverse. Outstanding is capacity minus active
+    allocations targeting the document; unapplied is capacity minus active
+    allocations from it.
     `allocation.apply` and `allocation.reverse` lock the source and targets
     `FOR NO KEY UPDATE` in ascending document id order, then recheck. An
     allocation insert takes `KEY SHARE` on both documents it names, and a
     `FOR UPDATE` lock would make that wait out of id order. A cancellation
     first moves the document to `cancelled`; that row lock orders it against
     any apply or reverse on the same document, so the allocations it reads next
-    are current. Applying an advance writes a journal entry with document type
+    are current. An allocation writes a journal entry only when it moves
+    exposure between control accounts. Applying an advance to an Invoice
+    writes Dr `customerAdvances` / Cr `receivables` with document type
     `allocation` and the allocation id; reversing it reverses that entry.
     Reversing an allocation made at Receipt post instead posts Dr
-    `receivables` / Cr `customerAdvances`. An Invoice with active allocations
-    refuses cancellation (`CONFLICT`, naming the Receipts); the record Sheet
-    offers Cancel only once every allocation is reversed. Receipt cancellation appends reverse rows for its active
-    allocations, with no journal entry of their own, and reverses every
-    un-reversed allocation journal entry from it. Allocation date lock checks
-    arrive with slice 5. Slice 4b-ii copies this model: it keeps ERPNext's
-    separate advance account, and rejects Zoho-style gross posting, which sends
-    every Receipt through the advance account and doubles journal rows, and the
-    Odoo and Tally shape without an advance account, which loses the liability
-    that Schedule III and GST advance tracking need.
+    `receivables` / Cr `customerAdvances`. A source already on `receivables`,
+    a Journal credit, allocates with no entry, and its reverse writes none:
+    the credit was posted once, by the Journal, and a second entry would count
+    it twice. A target with active allocations refuses cancellation
+    (`CONFLICT`, naming the sources); the record Sheet offers Cancel only once
+    every allocation is reversed. Receipt and Journal cancellation append
+    reverse rows for their active allocations, with no journal entry of their
+    own, and reverse every un-reversed allocation journal entry from the
+    document. Allocation date lock checks arrive with slice 5. Slice 4b-ii
+    copies this model: it keeps ERPNext's separate advance account, and
+    rejects Zoho-style gross posting, which sends every Receipt through the
+    advance account and doubles journal rows, and the Odoo and Tally shape
+    without an advance account, which loses the liability that Schedule III
+    and GST advance tracking need.
 18. **Due dates.** Posted Invoices expose outstanding,
     `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Invoice
     lists filter open or overdue settlement. Bills remain in slice 4b-ii.
@@ -270,9 +285,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      - Avoid correlated per-row subqueries, reads that write,
        `regexp_replace` in `WHERE`, and `Promise.all` inside a transaction.
 
-5. **Journal, Opening Balance, locks.** Open. The contract is
-   [Journal (slice 5)](#journal-slice-5). General and tax locks (`LOCKED`) and
-   expiring user exceptions, all audited.
+5. **Journal, Opening Balance, locks.** The Journal is implemented:
+   `journal.{post,get,list,accounts,cancel}`, the `/$orgSlug/journals` routes,
+   `journalPrefix` (default `JV`). Open: Opening Balance, general and tax locks
+   (`LOCKED`) and expiring user exceptions, all audited.
    - Legacy reference (a716b6c):
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
        row `FOR KEY SHARE`, so `file.delete` waits; a duplicate insert returns
@@ -304,62 +320,228 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    opening items (open documents with `source` `opening`, original due dates,
    no journal lines of their own, summing to each Party's balance), all or
    nothing.
+8. **Chart of accounts.** Open. Owner and accountant add income and expense
+   leaves; the rest of the chart stays template-seeded. Prerequisite for slice
+   9: a discount or write-off needs an expense leaf to debit, and no template
+   ships one today.
+   - `account.create` takes `kind` (`cash`, `bank`, `income`, `expense`) and
+     `name`, plus `supplyClass`, required for `income` and refused otherwise
+     (`BAD_REQUEST`). Money kinds keep their rule. An income or expense leaf
+     has no parent, the type of its kind and a generated code: the next
+     integer after the highest code of that type, inside 5000–5999 or
+     6000–6999, `ACCOUNT_CODES_FULL` when spent. A case-insensitive duplicate
+     of an active account name is `ACCOUNT_NAME_TAKEN` (an application check,
+     like `PARTY_GSTIN_TAKEN`).
+   - `account.update({ id, name, updatedAt })` renames any account; the loaded
+     `updatedAt` is the token (`CONFLICT` when stale), as `party.update`.
+   - `account.setActive({ id, active })` archives or restores a leaf without a
+     `systemKey`. Refused: a group or system account (`ACCOUNT_SYSTEM`), an
+     income leaf held by an active Item, and a money leaf held by an active
+     Payment Method (`ACCOUNT_IN_USE`, naming them). An archived account keeps
+     its lines and balance and leaves every picker: `postableAccounts`,
+     `journalAccounts` and `incomeAccountOptions` already filter `active`.
+   - `supplyClass` never changes after creation: posted lines took their tax
+     treatment from it. A wrong class is archived and recreated.
+   - The core template gains two expense leaves every legal type needs for
+     slice 9: `6810 Discount Allowed` and `6820 Bad Debts Written Off`. No
+     environment keeps data, so the seed changes in place.
+   - Web: Settings > Accounts (`account: ["read"]`) lists the chart grouped by
+     type in code order (code, name, supply class, Active/Archived), with Add
+     account (Type, Name, GST supply class for income), row rename, and
+     Archive/Restore, following Settings > Items. Banks keeps money leaves.
+   - Acceptance: an accountant creates `Tuition Fees` (income, `exempt`) and
+     `Sibling Discount` (expense); the first appears in the Item income
+     picker and the second in the Journal account picker; a rename shows on
+     the next list; archiving `Sibling Discount` removes it from the Journal
+     picker and keeps its balance; archiving `Tuition Fees` is refused once an
+     Item uses it; an operator's create is `FORBIDDEN`.
+   - Verify: integration coverage beside `account.create` in
+     `tests/integration/receipt.test.ts` and the guarded-call table in
+     `tests/integration/tenancy.test.ts`; `bun run check-types`; the Sheet
+     exercised in the app on desktop and mobile, both themes.
+   - Depends on: none. Owns: `packages/api/src/routers/account.ts`,
+     `packages/api/src/core/chart-templates.ts`,
+     `apps/web/src/routes/$orgSlug/settings/accounts.tsx`,
+     `apps/web/src/components/account-sheet.tsx`, the settings tabs in
+     `apps/web/src/lib/navigation.ts`. Touches: `apps/web/src/routeTree.gen.ts`,
+     `tests/integration/tenancy.test.ts`.
+   - Interfaces: `account.create` returns the inserted row as today;
+     `account.list` is unchanged. Slice 9's picker reads `journal.accounts`.
+9. **Party Journals.** Open, in two parts, after slice 8. A Journal line on a
+   party control account carries a required Party and writes the party ledger,
+   so the sum of party statements equals the control account by construction.
+   ERPNext's `Party Type` and `Party` on a Journal Entry row and Tally's party
+   ledger do the same. The Journal stays the escape hatch; the common cases
+   keep their document (Invoice header discount and Credit Note in 4b-ii,
+   Receipt `against`), and the form says so.
+
+   **9a. Control lines and Journal credits.**
+   - `journalAccounts` takes `controls: boolean` and, when true, returns the
+     four control accounts (`receivables`, `payables`, `customerAdvances`,
+     `supplierAdvances`) with their `systemKey`; Opening Balance passes
+     `false`. A line on a control account without `partyId` is
+     `PARTY_REQUIRED` (`BAD_REQUEST`), checked in the posting transaction
+     after the accounts resolve; elsewhere the party stays optional
+     attribution.
+   - Side follows the key: `receivable` for `receivables` and
+     `customerAdvances`, `payable` for `payables` and `supplierAdvances`. A
+     debit is positive and a credit negative on either side: a debit always
+     moves the Party's claim toward the Organization (Dr `receivables` raises
+     what the Party owes; Dr `customerAdvances` or Dr `payables` lowers what
+     the Organization owes). `postDocument` nets the control lines per party
+     and side and writes one party ledger line each, skipping a zero net.
+     `documents.partyId` and `exposureSide` stay null: one Journal may touch
+     several parties.
+   - A `receivables` credit line may carry `allocations` of
+     `{ invoiceId, amount }`, as a Receipt `against` does: each target a posted
+     Invoice of that line's party, at most 50 per line, and the total across a
+     party's lines at most that party's net `receivables` credit in the
+     Journal (a debit and a credit on the same party net first; a total above
+     the net is `BAD_REQUEST`). Posting writes the allocation rows with the
+     Journal as source and no journal entry. The unallocated rest is an
+     unapplied credit on `receivables`: not an advance, no `advanceSupply`, no
+     `customerAdvances`.
+   - Lines on `customerAdvances`, `supplierAdvances` and `payables` write
+     party ledger lines and never allocate: advance sources are Receipts, and
+     payable targets arrive with the 4b-ii Bill.
+   - `allocation.apply` takes `sourceDocumentId`, `targetDocumentId` and
+     `amount`; `applyAllocations` reads capacity from the party ledger line
+     (call 17) and admits a posted Journal with a `receivables` credit for the
+     target's party. Applying or reversing from a Journal writes no entry.
+     `party.openCredits({ partyId })` replaces `receipt.unapplied`: Receipts
+     and Journals with unapplied credit for the party, 200 oldest and
+     `hasMore`.
+   - Cancel: `reverseDocument` already reverses party ledger lines; a Journal
+     cancel appends reverse rows for its active allocations with no entry, as
+     Receipt cancel does.
+   - Web: the Journal line's Party field turns required when the account is a
+     control account, with the hint "Changes what this party owes"; a
+     `receivables` credit line shows the Receipt form's open invoices grid.
+     Journal detail lists party lines and allocations with Reverse, as Invoice
+     detail does. The party Ledger links a Journal line to its record as it
+     links Receipts. Apply advance becomes Apply credit and lists
+     `party.openCredits`.
+   - Acceptance, with Priya owing a ₹10,000 Invoice: a Journal
+     Dr `Sibling Discount` 500 / Cr `receivables` (Priya) 500 allocated to
+     that Invoice leaves outstanding 9,500, statement balance 9,500, one day
+     book entry, and `receivables` down by 500 in journal lines; the same
+     Journal without an allocation leaves outstanding 10,000, balance 9,500
+     and an open credit of 500 that Apply credit settles with no new entry; a
+     control line without a party is `PARTY_REQUIRED`;
+     Dr `receivables` (Rahul) / Cr `receivables` (Priya) 2,000 moves the
+     statements and leaves `receivables` unchanged; cancelling each Journal
+     restores every figure; Opening Balance still refuses control accounts.
+   - Verify: `tests/integration/journal.test.ts` and
+     `tests/integration/allocation.test.ts` extended per the acceptance;
+     `tests/unit/posting.test.ts` for the netting; the guarded-call table for
+     `party.openCredits`; `bun run check-types`; the form exercised in the app.
+     Re-measure the "Settlement reads at volume" registry item: capacity now
+     joins `party_ledger_lines`.
+   - Depends on: slice 8 (the expense leaf) and 4b-i. Owns:
+     `packages/api/src/lib/accounts.ts` (`journalAccounts`),
+     `packages/api/src/core/posting.ts` (`JournalLinePosting`),
+     `packages/api/src/core/documents.ts` (Journal party lines),
+     `packages/api/src/core/allocations.ts`,
+     `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
+     `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
+     `apply-advance-sheet.tsx`,
+     `apps/web/src/routes/$orgSlug/journals/$journalId.tsx`. Touches:
+     `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
+     and query), `apps/web/src/lib/domain-invalidation.ts`,
+     `tests/integration/tenancy.test.ts`.
+   - Interfaces: `JournalLinePosting` gains `systemKey` (nullable) and
+     `allocations` (`AllocationTarget[]`, empty except on a `receivables`
+     credit); `applyAllocations` keeps its argument shape and widens its
+     source rule; `party.openCredits` rows are
+     `{ id, type: "receipt" | "journal", number, documentDate, unappliedPaise }`.
+
+   **9b. Journal debits as open items.** A Journal netting to a `receivables`
+   debit for a party (the Rahul side of a transfer, a charge with no Invoice)
+   is settleable: Receipt `against` and `allocation.apply` may target it.
+   `party.openItems({ partyId })` replaces `invoice.openInvoices`: Invoices
+   and Journal debits with outstanding, 200 oldest and `hasMore`, `dueDate`
+   null for a Journal. Invoice list open and overdue filters stay
+   Invoice-only. A Journal with active allocations targeting it refuses cancel
+   (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's
+   grid is titled Open items and shows type and number.
+   - Acceptance: after the sibling transfer, a Receipt `against` Rahul settles
+     the 2,000 Journal debit; Rahul's balance and `receivables` both fall by
+     2,000; the Journal refuses cancel until that allocation is reversed.
+   - Verify: as 9a. Depends on: 9a. Owns:
+     `packages/api/src/core/allocations.ts` (target rule),
+     `packages/api/src/routers/party.ts`, `invoice.ts`, `receipt.ts`,
+     `apps/web/src/components/receipt-form.tsx`. Interfaces: `party.openItems`
+     rows are
+     `{ id, type: "invoice" | "journal", number, documentDate, dueDate, outstandingPaise }`.
 
 ## Journal (slice 5)
 
-The contract for the first manual Journal (journal voucher). Nothing is built.
-Today's code needs only additive changes.
+Implemented and runtime verified in the app; CA acceptance is open. Opening
+Balance and locks remain open; party lines are slice 9.
 
 - **Document.** Type `journal`, a Billing document like Receipt, posted in full
   with no draft. Header: `documentDate`, a required `narration` (1–500), an
   optional `reference` (120), and `totalPaise` as the debit total. Party,
   method, settlement fields and the print snapshot stay null.
 - **Lines.** 2 to 100. Each has `accountId`, `side` (`debit` or `credit`),
-  `amountPaise` above 0, an optional `partyId` (attribution only) and an
-  optional `description`. At least one debit and one credit; the totals are
-  equal. The router refuses bad input as `BAD_REQUEST` before the core.
-- **Accounts.** Any active leaf, money leaves included. Refused: groups, the
-  party control accounts (`receivables`, `payables`, `customerAdvances`,
-  `supplierAdvances`), GST input, output and cess accounts, and `taxable` income
-  when the Organization has a `gstin` (the call 16 guard). So `affectsTax` is
-  false and the Journal writes no party ledger lines. A new batch predicate,
-  `journalAccounts`, sits beside `postableAccount` in `lib/accounts.ts` and
+  `amountPaise` above 0, an optional `partyId` (attribution, and required on
+  a control account from slice 9a) and an optional `description`. From slice
+  9a a `receivables` credit line may carry `allocations`. At least one debit
+  and one credit; the totals are equal. The router refuses bad input as
+  `BAD_REQUEST` before the core.
+- **Accounts.** Any active leaf, money leaves included. Refused: groups, GST
+  input, output and cess accounts, and `taxable` income when the Organization
+  has a `gstin` (the call 16 guard). The party control accounts
+  (`receivables`, `payables`, `customerAdvances`, `supplierAdvances`) are
+  refused until slice 9a admits them with a required Party; Opening Balance
+  keeps refusing them. Thus `affectsTax` is false, and before slice 9 the
+  Journal writes no party ledger lines. The batch predicate `journalAccounts`
+  runs inside the posting transaction after a `FOR SHARE` read of
+  `organization_settings`, so a concurrent GSTIN change cannot let a taxable
+  line through. It is beside `postableAccount` in `lib/accounts.ts` and
   reuses `isLeaf`; `postableAccount` does not change.
-- **Storage.** One migration adds nullable `entry_side` (`debit`, `credit`) and
-  `party_id` (composite key to `parties`) to `document_lines`. `amount_paise`
-  stays positive. The ledger derives from these lines.
-- **Posting.** `JournalPosting { type: "journal", amountPaise, lines }` joins
-  `DocumentPosting`. A pure `postJournal` checks the lines, `recordEntry`'s
-  dispatch becomes a switch, and `assertBalanced` also refuses an empty entry.
-- **Write path and number.** The slice 4a `postDocument`. A `journalPrefix`
-  setting (default `JV`, the `documentPrefix` rule, a database default for
-  existing rows) gives `JV26-27/1`.
+- **Storage.** The baseline migration carries: nullable `entry_side` (`debit`, `credit`)
+  and `party_id` (composite key to `parties`) on `document_lines`, and
+  `journal_prefix` on `organization_settings`. `amount_paise` stays positive.
+  The ledger derives from these lines.
+- **Posting.** `JournalPosting { type: "journal", amountPaise, lines }` is a
+  `DocumentPosting` variant. A pure `postJournal` checks the lines, and
+  `recordEntry` uses a switch.
+- **Write path and number.** The slice 4a `postDocument` handles the write
+  path. A `journalPrefix` setting (default `JV` via `SETTINGS_DEFAULTS`, the
+  `documentPrefix` rule) produces `JV26-27/1`.
 - **Cancel.** `reverseDocument` as it is: once, with a reason, dated the cancel
   day. A wrong date is fixed by a new Journal, not by editing.
 - **Contra** is a label for a Journal whose lines are all money leaves (bank to
   bank, a cash deposit). One type, one series.
-- **Wiring.** `journal.{post,get,list,cancel}` with their own get and list (not
-  `settlementDetail`), the tenancy guarded-call table, a nav entry with
-  `journal: ["read"]`, audit on post and cancel, and a ledger label. Grants
-  already exist. The day book and `account.moneyBalances` already read journal
-  entries.
+- **Wiring.** The `journal.{post,get,list,accounts,cancel}` procedures have
+  their own get and list (not `settlementDetail`), the tenancy guarded-call
+  table, a nav entry with `journal: ["read"]`, and audit on post and cancel.
+  `journal.accounts` returns pickable accounts: active non-system leaves plus
+  the four journalable system accounts (`tdsPayable`, `tdsReceivable`,
+  `roundOff`, `openingEquity`), bounded by `MASTER_LIST_LIMIT`, and minus
+  `taxable` income when the Organization has a `gstin`. A taxable account line
+  is refused as `TAXABLE_ACCOUNT_LINE`, an
+  unresolvable account as `ACCOUNT_INVALID`, and a foreign party as
+  `PARTY_INVALID`. Grants already exist. The day book and
+  `account.moneyBalances` already read journal entries.
 - **Opening Balance.** One per Organization (a partial unique index on posted
   `openingBalance`), dated the cutover, balanced to `openingEquity`, with a
-  fixed `OB` prefix. It uses the Journal lines and account rule, so party
-  balances come only from the slice 7 opening items, never twice.
+  fixed `OB` prefix. It uses the Journal lines and the account rule with
+  `controls: false`, so party balances come only from the slice 7 opening
+  items, never twice.
 - **Locks.** A `lock.set` procedure and a lock table, not `settings.update`
   (the CA cannot call it, and it replaces every field). `postDocument` and
   `reverseDocument` read the lock inside their transaction.
 
-| Not in the first Journal                              | Gate                                                                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Party lines on control accounts, bill-wise references | Slice 4b allocations and a CA example (set-off, bad-debt write-off); then side follows the account key |
-| GST accounts and line tax                             | The monthly GST-on-fee reclass gate                                                                    |
-| Drafts and approval                                   | Slice 4a drafts proven; more posters than reviewers                                                    |
-| Recurring, templates, auto-reversal                   | One Journal posted three months running, or a CA accrual workflow                                      |
-| A Contra series or a Transfer document                | The CA asks, or bank reconciliation opens                                                              |
-| Multi-currency, inter-company                         | Their own spec; two live Organizations for one owner                                                   |
-| Print, attachments, cost centres                      | The CA asks, or a pilot report needs one                                                               |
+| Not in the first Journal               | Gate                                                              |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| GST accounts and line tax              | The monthly GST-on-fee reclass gate                               |
+| Drafts and approval                    | Slice 4a drafts proven; more posters than reviewers               |
+| Recurring, templates, auto-reversal    | One Journal posted three months running, or a CA accrual workflow |
+| A Contra series or a Transfer document | The CA asks, or bank reconciliation opens                         |
+| Multi-currency, inter-company          | Their own spec; two live Organizations for one owner              |
+| Print, attachments, cost centres       | The CA asks, or a pilot report needs one                          |
 
 ## Deferred
 

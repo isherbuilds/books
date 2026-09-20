@@ -79,6 +79,7 @@ const formSchema = z
     receiptPrefix: documentPrefix,
     paymentPrefix: documentPrefix,
     creditNotePrefix: documentPrefix,
+    journalPrefix: documentPrefix,
   })
   .superRefine(validateGstinIdentity);
 
@@ -365,6 +366,18 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment prefix</FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={4} className="uppercase" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <RegisteredFormField
+                name="journalPrefix"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Journal prefix</FormLabel>
                     <FormControl>
                       <Input {...field} maxLength={4} className="uppercase" />
                     </FormControl>

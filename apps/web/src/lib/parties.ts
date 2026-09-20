@@ -1,3 +1,5 @@
+import type { AppRouterClient } from "@accly/api/routers/index";
+
 import { orpc } from "@/lib/orpc";
 
 // Mirrors PARTY_ROLES in @accly/db, kept local so no server schema module reaches
@@ -27,6 +29,20 @@ export const ROLE_LABELS: Record<PartyRole, string> = {
 export const partyListOptions = (orgSlug: string) => ({
   ...orpc.party.list.queryOptions({ input: { orgSlug } }),
   staleTime: 5 * 60_000,
+});
+
+/** The active rows a Link Field offers: id, name and GSTIN. */
+export type PartyOption = { id: string; name: string; gstin?: string | null };
+
+type PartyListRow = Awaited<ReturnType<AppRouterClient["party"]["list"]>>[number];
+
+function activeParties(parties: PartyListRow[]): PartyOption[] {
+  return parties.filter((party) => party.active);
+}
+
+export const partyPickerOptions = (orgSlug: string) => ({
+  ...partyListOptions(orgSlug),
+  select: activeParties,
 });
 
 // Receipt money per party, a separate read so posting a receipt never refetches

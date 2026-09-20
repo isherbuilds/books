@@ -1,9 +1,13 @@
-import { db } from "@accly/db";
-import { accounts, type AccountType } from "@accly/db/schema/accounts";
-import { and, eq, getTableColumns, inArray, isNull, notExists } from "drizzle-orm";
+import { db, type DbTransaction } from "@accly/db";
+import { accounts, type AccountType, type SupplyClass } from "@accly/db/schema/accounts";
+import { and, asc, eq, getTableColumns, inArray, isNull, ne, notExists, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { MONEY_KINDS } from "@accly/db/schema/money-kinds";
+
+import { MASTER_LIST_LIMIT } from "../lib/master-list";
+
+const JOURNAL_SYSTEM_KEYS = ["tdsPayable", "tdsReceivable", "roundOff", "openingEquity"] as const;
 
 // Which accounts a document may name directly. Every read is scoped to the org.
 
@@ -68,4 +72,41 @@ export async function postableAccount(
   const [row] = await postableAccounts(orgId, [id], types);
 
   return row;
+}
+
+/**
+ * Journal lines may name active leaves of any account type, including money
+ * leaves. Non-system leaves and the TDS payable/receivable, round-off and opening
+ * equity system accounts are allowed; new system keys are refused by default.
+ * Registered organizations cannot journal taxable supply accounts. Unresolved ids
+ * are omitted from the result.
+ */
+export async function journalAccounts(
+  executor: DbTransaction | typeof db,
+  orgId: string,
+  options: { gstin: string | null; ids?: readonly string[] },
+): Promise<Array<{ id: string; code: string; name: string; supplyClass: SupplyClass | null }>> {
+  const query = executor
+    .select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      supplyClass: accounts.supplyClass,
+    })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.orgId, orgId),
+        options.ids ? inArray(accounts.id, [...options.ids]) : undefined,
+        eq(accounts.active, true),
+        or(isNull(accounts.systemKey), inArray(accounts.systemKey, [...JOURNAL_SYSTEM_KEYS])),
+        options.gstin
+          ? or(isNull(accounts.supplyClass), ne(accounts.supplyClass, "taxable"))
+          : undefined,
+        isLeaf(orgId),
+      ),
+    )
+    .orderBy(asc(accounts.code), asc(accounts.id));
+
+  return options.ids ? query : query.limit(MASTER_LIST_LIMIT + 1);
 }

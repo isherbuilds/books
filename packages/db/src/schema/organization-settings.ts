@@ -24,6 +24,7 @@ export const SETTINGS_DEFAULTS = {
   receiptPrefix: "RCT",
   paymentPrefix: "PMT",
   creditNotePrefix: "CN",
+  journalPrefix: "JV",
 } as const;
 
 export const organizationSettings = pgTable(
@@ -48,6 +49,7 @@ export const organizationSettings = pgTable(
     receiptPrefix: text("receipt_prefix").notNull(),
     paymentPrefix: text("payment_prefix").notNull(),
     creditNotePrefix: text("credit_note_prefix").notNull(),
+    journalPrefix: text("journal_prefix").notNull(),
     // SETTINGS_DEFAULTS is the application source for new rows.
     timeZone: text("time_zone").notNull().default("Asia/Kolkata"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

@@ -21,6 +21,11 @@ export function parseMoney(value: string): bigint {
   return negative ? -amount : amount;
 }
 
+/** A rupee text field's paise while typing; zero until it parses. */
+export function enteredPaise(value: string): bigint {
+  return NON_NEGATIVE_MONEY_PATTERN.test(value) ? parseMoney(value) : ZERO_MONEY;
+}
+
 /** Half-up integer division for non-negative money and a positive denominator. */
 export function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator / 2n) / denominator;

@@ -1,3 +1,4 @@
+import { searchQuery } from "@accly/api/lib/schemas";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
@@ -50,7 +51,7 @@ export const Route = createFileRoute("/$orgSlug/parties")({
     create: z.boolean().optional().catch(undefined),
     // The quick look: one party opened over the list.
     party: z.uuid().optional().catch(undefined),
-    q: z.string().trim().min(1).max(100).optional().catch(undefined),
+    q: searchQuery.catch(undefined),
     status: z.enum(PARTY_STATUSES).optional().catch(undefined),
     roles: z.array(z.enum(PARTY_ROLES)).min(1).optional().catch(undefined),
     gst: z.enum(GST_FILTERS).optional().catch(undefined),

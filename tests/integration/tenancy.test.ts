@@ -199,7 +199,7 @@ test("one client can update settings and post receipts and payments in different
   expect(paymentsTwo.rows.map(({ id }) => id)).toEqual([paymentTwo.id]);
 });
 
-test("one client keeps Items, Invoices, Receipts, and Allocations isolated across two orgs", async () => {
+test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isolated across two orgs", async () => {
   const user = await createTestUser("domain-isolation");
   const alpha = await createOrganization(user, "domain-alpha");
   const beta = await createOrganization(user, "domain-beta");
@@ -220,6 +220,30 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
   const betaIncome = required(
     betaAccounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
     "beta exempt income account",
+  );
+
+  const alphaCashGroup = required(
+    alphaAccounts.find(({ systemKey }) => systemKey === "cash"),
+    "alpha cash group",
+  );
+
+  const betaCashGroup = required(
+    betaAccounts.find(({ systemKey }) => systemKey === "cash"),
+    "beta cash group",
+  );
+
+  const alphaCash = required(
+    alphaAccounts.find(
+      ({ active, parentId, type }) => active && type === "asset" && parentId === alphaCashGroup.id,
+    ),
+    "alpha cash account",
+  );
+
+  const betaCash = required(
+    betaAccounts.find(
+      ({ active, parentId, type }) => active && type === "asset" && parentId === betaCashGroup.id,
+    ),
+    "beta cash account",
   );
 
   const alphaMethod = required(
@@ -244,6 +268,27 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
       name: "Shared Customer",
       roles: ["customer"],
       stateCode: "27",
+    }),
+  ]);
+
+  const [alphaJournal, betaJournal] = await Promise.all([
+    api.journal.post({
+      orgSlug: alpha.slug,
+      documentDate: "2026-04-01",
+      narration: "Alpha journal",
+      lines: [
+        { accountId: alphaCash.id, side: "debit", amount: "5.00" },
+        { accountId: alphaIncome.id, side: "credit", amount: "5.00" },
+      ],
+    }),
+    api.journal.post({
+      orgSlug: beta.slug,
+      documentDate: "2026-04-01",
+      narration: "Beta journal",
+      lines: [
+        { accountId: betaCash.id, side: "debit", amount: "5.00" },
+        { accountId: betaIncome.id, side: "credit", amount: "5.00" },
+      ],
     }),
   ]);
 
@@ -311,20 +356,32 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
     }),
   ]);
 
-  const [alphaItems, betaItems, alphaInvoices, betaInvoices, alphaUnapplied, betaUnapplied] =
-    await Promise.all([
-      api.item.list({ orgSlug: alpha.slug }),
-      api.item.list({ orgSlug: beta.slug }),
-      api.invoice.list({ orgSlug: alpha.slug }),
-      api.invoice.list({ orgSlug: beta.slug }),
-      api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
-      api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
-    ]);
+  const [
+    alphaItems,
+    betaItems,
+    alphaInvoices,
+    betaInvoices,
+    alphaJournals,
+    betaJournals,
+    alphaUnapplied,
+    betaUnapplied,
+  ] = await Promise.all([
+    api.item.list({ orgSlug: alpha.slug }),
+    api.item.list({ orgSlug: beta.slug }),
+    api.invoice.list({ orgSlug: alpha.slug }),
+    api.invoice.list({ orgSlug: beta.slug }),
+    api.journal.list({ orgSlug: alpha.slug }),
+    api.journal.list({ orgSlug: beta.slug }),
+    api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
+    api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+  ]);
 
   expect(alphaItems.map(({ id }) => id)).toEqual([alphaItem.id]);
   expect(betaItems.map(({ id }) => id)).toEqual([betaItem.id]);
   expect(alphaInvoices.rows.map(({ id }) => id)).toEqual([alphaInvoice.id]);
   expect(betaInvoices.rows.map(({ id }) => id)).toEqual([betaInvoice.id]);
+  expect(alphaJournals.rows.map(({ id }) => id)).toEqual([alphaJournal.id]);
+  expect(betaJournals.rows.map(({ id }) => id)).toEqual([betaJournal.id]);
   expect(alphaUnapplied.rows.map(({ id }) => id)).toEqual([alphaReceipt.id]);
   expect(betaUnapplied.rows.map(({ id }) => id)).toEqual([betaReceipt.id]);
 
@@ -352,6 +409,47 @@ test("one client keeps Items, Invoices, Receipts, and Allocations isolated acros
       amount: "1.00",
     }),
     "ALLOCATION_SOURCE_INVALID",
+  );
+  await expectORPCCode(
+    api.journal.get({ orgSlug: beta.slug, journalId: alphaJournal.id }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.journal.cancel({
+      orgSlug: beta.slug,
+      journalId: alphaJournal.id,
+      reason: "cross-org attempt",
+    }),
+    "CONFLICT",
+  );
+  await expectReason(
+    api.journal.post({
+      orgSlug: beta.slug,
+      documentDate: "2026-04-01",
+      narration: "Foreign account",
+      lines: [
+        { accountId: alphaCash.id, side: "debit", amount: "1.00" },
+        { accountId: betaIncome.id, side: "credit", amount: "1.00" },
+      ],
+    }),
+    "ACCOUNT_INVALID",
+  );
+  await expectReason(
+    api.journal.post({
+      orgSlug: beta.slug,
+      documentDate: "2026-04-01",
+      narration: "Foreign party",
+      lines: [
+        {
+          accountId: betaCash.id,
+          partyId: alphaParty.id,
+          side: "debit",
+          amount: "1.00",
+        },
+        { accountId: betaIncome.id, side: "credit", amount: "1.00" },
+      ],
+    }),
+    "PARTY_INVALID",
   );
 
   const [alphaUnappliedAfter, betaUnappliedAfter] = await Promise.all([
@@ -605,6 +703,21 @@ const GUARDED_CALLS = {
   "receipt.partyTotals": (api, claim) => api.receipt.partyTotals({ ...claim }),
   "receipt.unapplied": (api, claim) =>
     api.receipt.unapplied({ ...claim, partyId: crypto.randomUUID() }),
+  "journal.post": (api, claim) =>
+    api.journal.post({
+      ...claim,
+      documentDate: "2026-04-01",
+      narration: "Intrusion",
+      lines: [
+        { accountId: crypto.randomUUID(), side: "debit", amount: "1.00" },
+        { accountId: crypto.randomUUID(), side: "credit", amount: "1.00" },
+      ],
+    }),
+  "journal.get": (api, claim) => api.journal.get({ ...claim, journalId: crypto.randomUUID() }),
+  "journal.list": (api, claim) => api.journal.list({ ...claim }),
+  "journal.accounts": (api, claim) => api.journal.accounts({ ...claim }),
+  "journal.cancel": (api, claim) =>
+    api.journal.cancel({ ...claim, journalId: crypto.randomUUID(), reason: "Intrusion" }),
   "allocation.apply": (api, claim) =>
     api.allocation.apply({
       ...claim,
@@ -651,6 +764,7 @@ const GUARDED_CALLS = {
       invoicePrefix: "INV",
       receiptPrefix: "RCT",
       paymentPrefix: "PMT",
+      journalPrefix: "JV",
       creditNotePrefix: "CN",
     }),
   "audit.list": (api, claim) => api.audit.list({ ...claim }),

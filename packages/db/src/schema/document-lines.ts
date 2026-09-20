@@ -14,7 +14,12 @@ import { accounts } from "./accounts";
 import { organization } from "./auth";
 import { documents } from "./documents";
 import { items } from "./items";
+import { parties } from "./parties";
 import { taxRates } from "./tax-rates";
+
+export const ENTRY_SIDES = ["debit", "credit"] as const;
+
+export type EntrySide = (typeof ENTRY_SIDES)[number];
 
 export const documentLines = pgTable(
   "document_lines",
@@ -27,7 +32,9 @@ export const documentLines = pgTable(
     position: integer("position").notNull(),
     kind: text("kind", { enum: ["item", "account"] }).notNull(),
     accountId: text("account_id"),
+    entrySide: text("entry_side", { enum: ENTRY_SIDES }),
     itemId: text("item_id"),
+    partyId: text("party_id"),
     description: text("description").notNull(),
     hsnSac: text("hsn_sac"),
     unit: text("unit"),
@@ -53,12 +60,20 @@ export const documentLines = pgTable(
       foreignColumns: [items.orgId, items.id],
     }),
     foreignKey({
+      columns: [table.orgId, table.partyId],
+      foreignColumns: [parties.orgId, parties.id],
+    }),
+    foreignKey({
       columns: [table.orgId, table.taxRateId],
       foreignColumns: [taxRates.orgId, taxRates.id],
     }),
     unique("document_lines_org_id_id_unique").on(table.orgId, table.id),
     index("document_lines_org_document_idx").on(table.orgId, table.documentId),
     check("document_lines_kind_check", sql`${table.kind} in ('item', 'account')`),
+    check(
+      "document_lines_entry_side_check",
+      sql`${table.entrySide} is null or ${table.entrySide} in ('debit', 'credit')`,
+    ),
     check(
       "document_lines_quantity_check",
       sql`${table.quantity} is null or ${table.quantity} >= 1`,

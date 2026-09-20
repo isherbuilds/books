@@ -36,6 +36,7 @@ const editableSettings = {
   receiptPrefix: documentPrefix,
   paymentPrefix: documentPrefix,
   creditNotePrefix: documentPrefix,
+  journalPrefix: documentPrefix,
 };
 
 const settingsFields = z.object(editableSettings).superRefine(validateGstinIdentity);

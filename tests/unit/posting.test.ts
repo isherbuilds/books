@@ -7,8 +7,10 @@ import {
   postAllocation,
   postPayment,
   postReceipt,
+  postJournal,
   reverseLines,
   type InvoicePosting,
+  type JournalPosting,
   type PaymentPosting,
   type ReceiptPosting,
 } from "@accly/api/core/posting";
@@ -16,6 +18,16 @@ import { receiptTax } from "@accly/api/core/documents";
 import { SYSTEM_ACCOUNT_KEYS } from "@accly/api/core/chart-templates";
 
 const accounts = new Map(SYSTEM_ACCOUNT_KEYS.map((key) => [key, `${key}-account`]));
+
+const balanced: JournalPosting = {
+  type: "journal",
+  amountPaise: 10_000n,
+  lines: [
+    { accountId: "cash", partyId: null, side: "debit", amountPaise: 6_000n },
+    { accountId: "bank", partyId: "party-1", side: "debit", amountPaise: 4_000n },
+    { accountId: "income", partyId: null, side: "credit", amountPaise: 10_000n },
+  ],
+};
 
 test("receipt tax classifies registered direct income once", () => {
   expect(receiptTax(null, "exempt")).toEqual({ refused: false, affectsTax: false });
@@ -395,6 +407,27 @@ test("assertBalanced rejects an unbalanced entry", () => {
       { accountId: "income-account", partyId: null, debit: 0n, credit: 499n },
     ]),
   ).toThrow();
+});
+
+test("maps balanced lines in order and preserves parties", () => {
+  expect(postJournal(balanced)).toEqual([
+    { accountId: "cash", partyId: null, debit: 6_000n, credit: 0n },
+    { accountId: "bank", partyId: "party-1", debit: 4_000n, credit: 0n },
+    { accountId: "income", partyId: null, debit: 0n, credit: 10_000n },
+  ]);
+});
+
+test("rejects unbalanced totals", () => {
+  expect(() =>
+    postJournal({
+      ...balanced,
+      lines: [balanced.lines[0]!, { ...balanced.lines[2]!, amountPaise: 5_999n }],
+    }),
+  ).toThrow();
+});
+
+test("rejects fewer than two lines", () => {
+  expect(() => postJournal({ ...balanced, lines: [balanced.lines[0]!] })).toThrow();
 });
 
 test("invoice posting groups income accounts and posts tax and positive round-off", () => {

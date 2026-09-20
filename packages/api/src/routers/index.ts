@@ -7,6 +7,7 @@ import { exportRouter } from "./export";
 import { fileRouter } from "./file";
 import { invoiceRouter } from "./invoice";
 import { itemRouter } from "./item";
+import { journalRouter } from "./journal";
 import { memberRouter } from "./member";
 import { organizationRouter } from "./organization";
 import { partyRouter } from "./party";
@@ -23,6 +24,7 @@ export const appRouter = {
   file: fileRouter,
   invoice: invoiceRouter,
   item: itemRouter,
+  journal: journalRouter,
   member: memberRouter,
   organization: organizationRouter,
   party: partyRouter,

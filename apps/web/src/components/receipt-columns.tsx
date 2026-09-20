@@ -3,7 +3,6 @@
 // cancelled documents, right-aligned amount, actions) and invoices/actions-menu.tsx.
 import { formatMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
-import { Badge } from "@accly/ui/components/badge";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { cn } from "@accly/ui/lib/utils";
 import type { RouterClient } from "@orpc/server";
@@ -11,20 +10,12 @@ import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
+import { CancelledBadge, struck } from "@/components/document-columns";
 import { formatDay } from "@/lib/org-datetime";
 
 type ReceiptRow = Awaited<ReturnType<RouterClient<AppRouter>["receipt"]["list"]>>["rows"][number];
 
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, ReceiptRow>();
-
-// Only the exception is marked: a posted receipt carries no badge.
-function struck(receipt: ReceiptRow) {
-  return receipt.state === "cancelled" && "text-muted-foreground line-through";
-}
-
-function CancelledBadge({ receipt }: { receipt: ReceiptRow }) {
-  return receipt.state === "cancelled" ? <Badge variant="muted">Cancelled</Badge> : null;
-}
 
 // No header sorts: the keyset cursor fixes the order to newest first.
 export const RECEIPT_COLUMNS = [
@@ -33,8 +24,8 @@ export const RECEIPT_COLUMNS = [
     meta: { className: "w-48" },
     cell: ({ row: { original: receipt } }) => (
       <>
-        <span className={cn("font-mono", struck(receipt))}>{receipt.number ?? "—"}</span>
-        <CancelledBadge receipt={receipt} />
+        <span className={cn("font-mono", struck(receipt.state))}>{receipt.number ?? "—"}</span>
+        <CancelledBadge state={receipt.state} />
       </>
     ),
   }),
@@ -61,7 +52,9 @@ export const RECEIPT_COLUMNS = [
     header: "Amount",
     meta: { align: "right", className: "w-32" },
     cell: ({ row: { original: receipt } }) => (
-      <span className={cn("tabular-nums", struck(receipt))}>{formatMoney(receipt.totalPaise)}</span>
+      <span className={cn("tabular-nums", struck(receipt.state))}>
+        {formatMoney(receipt.totalPaise)}
+      </span>
     ),
   }),
   col.display({
@@ -81,12 +74,12 @@ export function ReceiptCard({ receipt }: { receipt: ReceiptRow }) {
     <>
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
-          <span className={cn("font-mono font-medium", struck(receipt))}>
+          <span className={cn("font-mono font-medium", struck(receipt.state))}>
             {receipt.number ?? "—"}
           </span>
-          <CancelledBadge receipt={receipt} />
+          <CancelledBadge state={receipt.state} />
         </span>
-        <span className={cn("shrink-0 tabular-nums", struck(receipt))}>
+        <span className={cn("shrink-0 tabular-nums", struck(receipt.state))}>
           {formatMoney(receipt.totalPaise)}
         </span>
       </div>

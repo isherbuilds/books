@@ -1,6 +1,7 @@
 import type { AppPermission } from "@accly/auth/access";
 import {
   Building2Icon,
+  BookOpenTextIcon,
   ContactRoundIcon,
   FileIcon,
   FileTextIcon,
@@ -38,7 +39,11 @@ export const BANKS_MANAGE_PERMISSION: AppPermission = {
 type NavGroup = (typeof NAV_GROUPS)[number];
 
 type PrimaryNavItem = NavEntry<
-  "/$orgSlug/receipts" | "/$orgSlug/invoices" | "/$orgSlug/parties" | "/$orgSlug/files"
+  | "/$orgSlug/receipts"
+  | "/$orgSlug/invoices"
+  | "/$orgSlug/journals"
+  | "/$orgSlug/parties"
+  | "/$orgSlug/files"
 > & {
   icon: LucideIcon;
   group: NavGroup;
@@ -60,6 +65,13 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
     icon: FileTextIcon,
     group: "Sales",
     permission: { invoice: ["read"] },
+  },
+  {
+    to: "/$orgSlug/journals",
+    label: "Journals",
+    icon: BookOpenTextIcon,
+    group: "Workspace",
+    permission: { journal: ["read"] },
   },
   {
     to: "/$orgSlug/parties",

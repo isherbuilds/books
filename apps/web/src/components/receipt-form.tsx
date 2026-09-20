@@ -1,6 +1,7 @@
 import {
   NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
+  enteredPaise,
   formatMoney,
   isPositiveMoney,
   isZeroMoney,
@@ -29,7 +30,7 @@ import {
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Watch, useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -37,20 +38,17 @@ import { z } from "zod";
 import { DocumentForm, LineGrid, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { ErrorNote } from "@/components/page";
+import { PartySheet } from "@/components/party-form";
 import { PartyLinkField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState } from "@/lib/domain-invalidation";
+import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { formatDay } from "@/lib/org-datetime";
 import { applyOrpcFieldError, errorReason, isRefusal } from "@/lib/orpc-error";
+import { partyPickerOptions } from "@/lib/parties";
 import { paymentMethodListOptions } from "@/lib/receipts";
-
-function enteredPaise(value: string): bigint {
-  if (!NON_NEGATIVE_MONEY_PATTERN.test(value)) return ZERO_MONEY;
-
-  return parseMoney(value);
-}
 
 const receiptSchema = z
   .object({
@@ -135,6 +133,16 @@ export function ReceiptForm({
   const queryClient = useQueryClient();
 
   const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
+  const parties = useQuery(partyPickerOptions(orgSlug));
+  const canCreateParty = useCan(orgSlug, { party: ["create"] });
+  const [createParty, setCreateParty] = useState<string | null>(null);
+
+  const closeCreate = () => {
+    setCreateParty(null);
+    // Base UI returns focus to the Sheet when the button unmounts; land after it.
+    setTimeout(() => form.setFocus("partyId"), 50);
+  };
+
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
@@ -392,7 +400,7 @@ export function ReceiptForm({
               <FormLabel>Party{settlementKind === "direct" ? " (optional)" : ""}</FormLabel>
               <FormControl>
                 <PartyLinkField
-                  orgSlug={orgSlug}
+                  parties={parties}
                   value={
                     field.value ? { id: field.value, name: form.getValues("partyName") } : null
                   }
@@ -401,6 +409,7 @@ export function ReceiptForm({
                     field.onChange(party?.id ?? null);
                     form.setValue("partyName", party?.name ?? "");
                   }}
+                  onCreate={canCreateParty ? setCreateParty : undefined}
                   inputRef={field.ref}
                   clearable={settlementKind === "direct"}
                   aria-invalid={fieldState.invalid}
@@ -672,6 +681,18 @@ export function ReceiptForm({
           )}
         />
       </DocumentForm>
+      <PartySheet
+        orgSlug={orgSlug}
+        open={createParty !== null}
+        seedName={createParty ?? ""}
+        onClose={closeCreate}
+        onSaved={(party) => {
+          if (party.id !== form.getValues("partyId")) form.setValue("allocations", {});
+          form.setValue("partyId", party.id, { shouldDirty: true, shouldValidate: true });
+          form.setValue("partyName", party.name);
+          closeCreate();
+        }}
+      />
     </Form>
   );
 }
