@@ -115,7 +115,8 @@ Query, form and invalidation rules are in
 ## Audit and files
 
 `audit()` is fire-and-forget. It records role denials and sensitive successes
-(membership and settings changes, file deletion, posts, cancellations), never
+(membership and settings changes, file deletion, posts, cancellations, lock
+changes and exceptions), never
 reads or ordinary writes. A foreign claim cannot write another tenant's log.
 URLs, tokens and secrets never enter metadata; an unverified file key is stored
 as a digest. Journal entries differ: they commit with their document, because ledger
@@ -190,6 +191,16 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
   party ledger lines and entry are reversed, dated today in the Organization
   time zone.
+- `organization_settings.lockedThrough` and `taxLockedThrough` own the current
+  lock dates. Every ledger writer reads settings `FOR SHARE` inside its
+  transaction before document locks, using that same row for tax, numbering
+  and dates. `assertPeriodOpen` (`core/locks.ts`) checks the held dates and reads
+  `lock_exceptions` only when the general lock needs a bypass.
+  `lock.set` updates a date and appends its history atomically; the UPDATE
+  waits for in-flight postings. Revocation reads settings `FOR UPDATE` before
+  changing the exception, so it also waits for passed checks. Posting never
+  scans lock history. Expiry uses `statement_timestamp()`. Spec
+  [call 7](./specs/accounting-core.md#architecture-calls).
 - One `post` entry and at most one `reverse` entry exist per document:
   `journal_entries` has a unique index on
   `(orgId, documentType, documentId, kind)` and a partial unique index on

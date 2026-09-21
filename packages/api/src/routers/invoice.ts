@@ -1,9 +1,10 @@
-import { db } from "@accly/db";
+import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import { accounts } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents } from "@accly/db/schema/documents";
 import { items } from "@accly/db/schema/items";
+import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
@@ -64,8 +65,10 @@ function boundedPaise(amountPaise: bigint): bigint {
 }
 
 async function resolveInvoice(
+  executor: typeof db | DbTransaction,
   scope: Scope,
   input: InvoiceFields,
+  settings: typeof organizationSettings.$inferSelect,
 ): Promise<{ numbering: DocumentNumbering; invoice: ResolvedInvoice }> {
   const itemIds = [
     ...new Set(input.lines.flatMap((line) => (line.kind === "item" ? [line.itemId] : []))),
@@ -75,23 +78,19 @@ async function resolveInvoice(
     ...new Set(input.lines.flatMap((line) => (line.kind === "account" ? [line.accountId] : []))),
   ];
 
-  const [settings, party, storedItems, storedAccounts] = await Promise.all([
-    orgSettings(scope.orgId),
-    db
-      .select()
-      .from(parties)
-      .where(
-        and(
-          eq(parties.orgId, scope.orgId),
-          eq(parties.id, input.partyId),
-          eq(parties.active, true),
-        ),
-      )
-      .limit(1)
-      .then(([row]) => row),
+  // A posting resolves through one transaction connection; do not queue concurrent queries.
+  const [party] = await executor
+    .select()
+    .from(parties)
+    .where(
+      and(eq(parties.orgId, scope.orgId), eq(parties.id, input.partyId), eq(parties.active, true)),
+    )
+    .limit(1);
+
+  const storedItems =
     itemIds.length === 0
       ? []
-      : db
+      : await executor
           .select({ item: items, account: accounts })
           .from(items)
           .innerJoin(
@@ -105,9 +104,9 @@ async function resolveInvoice(
           )
           .where(
             and(eq(items.orgId, scope.orgId), eq(items.active, true), inArray(items.id, itemIds)),
-          ),
-    postableAccounts(scope.orgId, accountIds, ["income"]),
-  ]);
+          );
+
+  const storedAccounts = await postableAccounts(executor, scope.orgId, accountIds, ["income"]);
 
   const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
@@ -150,7 +149,7 @@ async function resolveInvoice(
   const effectiveRates =
     taxCodes.length === 0
       ? []
-      : await db
+      : await executor
           .select({
             id: taxRates.id,
             code: taxRates.code,
@@ -303,7 +302,8 @@ const invoiceInput = orgInput
 export const invoiceRouter = {
   saveDraft: orgProcedure({ invoice: ["create"] }, invoiceInput).handler(
     async ({ context, input }) => {
-      const { numbering, invoice } = await resolveInvoice(context.scope, input);
+      const settings = await orgSettings(context.scope.orgId);
+      const { numbering, invoice } = await resolveInvoice(db, context.scope, input, settings);
 
       const written = await db.transaction((tx) =>
         writeDraft(tx, context.scope, numbering, { ...invoice, draft: input.draft ?? null }),
@@ -314,18 +314,24 @@ export const invoiceRouter = {
   ),
 
   post: orgProcedure({ invoice: ["post"] }, invoiceInput).handler(async ({ context, input }) => {
-    const { numbering, invoice } = await resolveInvoice(context.scope, input);
+    const { posted, amountPaise } = await db.transaction(async (tx) => {
+      const settings = await orgSettings(context.scope.orgId, tx);
+      const { invoice } = await resolveInvoice(tx, context.scope, input, settings);
 
-    const posted = await db.transaction((tx) =>
-      postDocument(tx, context.scope, numbering, { ...invoice, draft: input.draft ?? null }),
-    );
+      const posted = await postDocument(tx, context.scope, settings, settings.invoicePrefix, {
+        ...invoice,
+        draft: input.draft ?? null,
+      });
+
+      return { posted, amountPaise: invoice.posting.amountPaise };
+    });
 
     audit({
       action: "invoice.post",
       actorId: context.scope.userId,
       orgId: context.scope.orgId,
       target: posted.id,
-      meta: { number: posted.number, amount: formatDecimal(invoice.posting.amountPaise) },
+      meta: { number: posted.number, amount: formatDecimal(amountPaise) },
     });
 
     return posted;

@@ -92,6 +92,8 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
 type SettingsTab = NavEntry<
   | "/$orgSlug/settings/organization"
   | "/$orgSlug/settings/banks"
+  | "/$orgSlug/settings/opening-balance"
+  | "/$orgSlug/settings/locks"
   | "/$orgSlug/settings/members"
   | "/$orgSlug/settings/audit"
   | "/$orgSlug/settings/items"
@@ -106,6 +108,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     permission: { settings: ["update"] },
   },
   { to: "/$orgSlug/settings/banks", label: "Banks", permission: BANKS_PERMISSION },
+  {
+    to: "/$orgSlug/settings/opening-balance",
+    label: "Opening balance",
+    permission: { openingBalance: ["read"] },
+  },
+  { to: "/$orgSlug/settings/locks", label: "Locks", permission: { lock: ["read"] } },
   { to: "/$orgSlug/settings/members", label: "Members", permission: { member: ["read"] } },
   { to: "/$orgSlug/settings/audit", label: "Audit", permission: { audit: ["read"] } },
   { to: "/$orgSlug/settings/items", label: "Items", permission: { item: ["read"] } },

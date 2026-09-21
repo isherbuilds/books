@@ -154,6 +154,7 @@ type InvoiceFormReturn = UseFormReturn<InvoiceFormValues, unknown, z.output<type
 type InvoiceApiLine = Parameters<AppRouterClient["invoice"]["saveDraft"]>[0]["lines"][number];
 
 const SERVER_FIELDS = {
+  LOCKED: "documentDate",
   PARTY_INVALID: "partyId",
   DUE_DATE_BEFORE_DOCUMENT: "dueDate",
   ITEM_INVALID: "lines",

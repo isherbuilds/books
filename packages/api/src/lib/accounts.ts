@@ -41,13 +41,14 @@ export function isLeaf(orgId: string) {
  * omitted from the result.
  */
 export async function postableAccounts(
+  executor: typeof db | DbTransaction,
   orgId: string,
   ids: readonly string[],
   types: readonly AccountType[],
 ): Promise<Array<typeof accounts.$inferSelect>> {
   if (ids.length === 0) return [];
 
-  return db
+  return executor
     .select(getTableColumns(accounts))
     .from(accounts)
     .leftJoin(moneyGroup, underMoneyGroup(orgId))
@@ -69,7 +70,7 @@ export async function postableAccount(
   id: string,
   types: readonly AccountType[],
 ): Promise<typeof accounts.$inferSelect | undefined> {
-  const [row] = await postableAccounts(orgId, [id], types);
+  const [row] = await postableAccounts(db, orgId, [id], types);
 
   return row;
 }

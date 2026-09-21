@@ -10,6 +10,12 @@ type QueryInvalidator = {
 // on success and on an uncertain result alike; a broader set would refetch every
 // mounted register and balance for a draft that touched none of them.
 
+export function invalidateLockState(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({
+    queryKey: orpc.lock.get.key({ input: { orgSlug } }),
+  });
+}
+
 // A draft save or discard changes only invoice reads.
 export function invalidateInvoiceDrafts(queryClient: QueryInvalidator, orgSlug: string) {
   return queryClient.invalidateQueries({ queryKey: orpc.invoice.key({ input: { orgSlug } }) });
@@ -54,6 +60,21 @@ export async function invalidateJournalState(
     }),
     queryClient.invalidateQueries({
       queryKey: orpc.journal.get.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
+    }),
+  ]);
+}
+
+// Opening balances move their document read and account balances together.
+export async function invalidateOpeningBalanceState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: orpc.openingBalance.get.key({ input: { orgSlug } }),
     }),
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),

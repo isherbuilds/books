@@ -58,8 +58,7 @@ export const paymentRouter = {
     const { settlementKind } = input;
 
     // postDocument checks the Payment Method under a lock inside the transaction.
-    const [settings, party, expenseAccount, section] = await Promise.all([
-      orgSettings(scope.orgId),
+    const [party, expenseAccount, section] = await Promise.all([
       input.partyId
         ? db
             .select()
@@ -81,102 +80,95 @@ export const paymentRouter = {
         : undefined,
     ]);
 
-    const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
-
-    if (input.partyId && !party) {
-      throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
-    }
-
-    if (
-      input.tdsSectionId &&
-      (!section ||
-        section.effectiveFrom > documentDate ||
-        (section.effectiveTo !== null && documentDate > section.effectiveTo))
-    ) {
-      throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
-    }
-
-    if (section) {
-      if (!party) {
-        throw badRequest("TDS_PARTY_REQUIRED", "Choose the party whose TDS is deducted.");
-      }
-
-      // Without a PAN the law requires a higher rate, which is not modelled; refuse rather
-      // than under-deduct at the section rate.
-      if (!party.pan) {
-        throw badRequest("TDS_PAN_REQUIRED", "Record the party's PAN before deducting TDS.");
-      }
-    }
-
     const tds = section
       ? { sectionId: section.id, amountPaise: computeTds(input.amount, section.rateBasisPoints) }
       : null;
 
-    let lineDescription: string;
-    let posting: PostDocumentInput["posting"];
+    const posted = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+      const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
-    if (settlementKind === "advance") {
-      lineDescription = input.narration ?? "Advance paid";
-      posting = {
-        paymentMethodId: input.paymentMethodId,
-        type: "payment",
-        settlementKind,
-        exposureSide: "payable",
-        // The batch above proved this id resolves to a party in this organization.
-        partyId: input.partyId,
-        accountId: null,
-        amountPaise: input.amount,
-        tds,
-      };
-    } else {
-      if (!expenseAccount) {
-        throw badRequest(
-          "EXPENSE_ACCOUNT_INVALID",
-          "Choose an active expense or asset account that is not a group, system or money account.",
-        );
+      if (input.partyId && !party) {
+        throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
       }
 
-      lineDescription = input.narration ?? expenseAccount.name;
-      posting = {
-        paymentMethodId: input.paymentMethodId,
-        type: "payment",
-        settlementKind,
-        exposureSide: null,
-        partyId: party?.id ?? null,
-        accountId: expenseAccount.id,
-        amountPaise: input.amount,
-        tds,
+      if (
+        input.tdsSectionId &&
+        (!section ||
+          section.effectiveFrom > documentDate ||
+          (section.effectiveTo !== null && documentDate > section.effectiveTo))
+      ) {
+        throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
+      }
+
+      if (section) {
+        if (!party) {
+          throw badRequest("TDS_PARTY_REQUIRED", "Choose the party whose TDS is deducted.");
+        }
+
+        // Without a PAN the law requires a higher rate, which is not modelled; refuse rather
+        // than under-deduct at the section rate.
+        if (!party.pan) {
+          throw badRequest("TDS_PAN_REQUIRED", "Record the party's PAN before deducting TDS.");
+        }
+      }
+
+      let lineDescription: string;
+      let posting: PostDocumentInput["posting"];
+
+      if (settlementKind === "advance") {
+        lineDescription = input.narration ?? "Advance paid";
+        posting = {
+          paymentMethodId: input.paymentMethodId,
+          type: "payment",
+          settlementKind,
+          exposureSide: "payable",
+          // The batch above proved this id resolves to a party in this organization.
+          partyId: input.partyId,
+          accountId: null,
+          amountPaise: input.amount,
+          tds,
+        };
+      } else {
+        if (!expenseAccount) {
+          throw badRequest(
+            "EXPENSE_ACCOUNT_INVALID",
+            "Choose an active expense or asset account that is not a group, system or money account.",
+          );
+        }
+
+        lineDescription = input.narration ?? expenseAccount.name;
+        posting = {
+          paymentMethodId: input.paymentMethodId,
+          type: "payment",
+          settlementKind,
+          exposureSide: null,
+          partyId: party?.id ?? null,
+          accountId: expenseAccount.id,
+          amountPaise: input.amount,
+          tds,
+        };
+      }
+
+      const printSnapshot = {
+        organization: organizationSnapshot(settings),
+        party: partySnapshot(party),
+        lines: [{ description: lineDescription }],
       };
-    }
 
-    const printSnapshot = {
-      organization: organizationSnapshot(settings),
-      party: partySnapshot(party),
-      lines: [{ description: lineDescription }],
-    };
-
-    const posted = await db.transaction((tx) =>
-      postDocument(
-        tx,
-        scope,
-        {
-          prefix: settings.paymentPrefix,
-          fiscalYearStartMonth: settings.financialYearStart,
-        },
-        {
-          documentDate,
-          dueDate: null,
-          placeOfSupplyStateCode: null,
-          reference: input.reference ?? null,
-          narration: input.narration ?? null,
-          affectsTax: false,
-          printSnapshot,
-          lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
-          posting,
-          draft: null,
-        },
-      ),
-    );
+      return postDocument(tx, scope, settings, settings.paymentPrefix, {
+        documentDate,
+        dueDate: null,
+        placeOfSupplyStateCode: null,
+        reference: input.reference ?? null,
+        narration: input.narration ?? null,
+        affectsTax: false,
+        printSnapshot,
+        lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
+        posting,
+        draft: null,
+      });
+    });
 
     audit({
       action: "payment.post",

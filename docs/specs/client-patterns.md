@@ -1,9 +1,9 @@
 # Spec: Client patterns
 
-Status: slices 1–2 implemented, slice 3 partly, slices 4–5 open. Authority: the
-founder's direction: a command palette and conventional fast forms, no shortcut
-grammar before measurement, Midday's components on Base UI, cmdk and TanStack,
-records in Sheets, no side panes.
+Status: slices 1–2 implemented, slice 3 partly, slice 4 implemented, and slice
+5 partly implemented. Authority: the founder's direction: a command palette and
+conventional fast forms, no shortcut grammar before measurement, Midday's
+components on Base UI, cmdk and TanStack, records in Sheets, no side panes.
 
 ## Speed gate (H4)
 
@@ -131,21 +131,28 @@ financial rollback are not adopted.
        `limit + 1` page, in one query
        (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The
        window reads every match before `LIMIT`; measure at pilot volume.
-5. **Remaining forms.** Open.
-   - Acceptance: Payment (`direct`, `advance`, `against` open Bills with
-     allocations, a TDS section Link Field); Bill (lines with `itcEligible`, an
-     optional TDS section, due date, and the Invoice settlement display and
-     cancellation flow); Credit Note and Debit Note against a source Document;
-     Journal (balanced lines; an unbalanced Journal is refused on the field);
-     Opening Balance; lock and Lock Exception forms; import (template download,
-     upload, row errors listed, nothing written on any error). Each uses
-     `DocumentForm` or the settings form pattern with the four posting states,
-     has a list route with the same shell, `DataTable` and record Sheet, and is
-     reachable from the palette.
+5. **Remaining forms.** Partly implemented.
+   - Acceptance: Journal, Opening Balance and lock/Lock Exception forms are
+     implemented (`components/entry-lines.tsx` is shared by the Journal and
+     Opening Balance forms; `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
+     `components/{opening-balance-form,lock-sheet,lock-exception-sheet}.tsx`).
+     An exception expiry is typed as wall-clock time in the Organization zone
+     and converted with `orgLocalToInstant`; the server judges "in the future".
+     Payment (`direct`, `advance`, `against` open Bills with allocations, a TDS
+     section Link Field); Bill (lines with `itcEligible`, an optional TDS section,
+     due date, and the Invoice settlement display and cancellation flow); notes
+     (Credit Note and Debit Note against a source Document); and import (template
+     download, upload, row errors listed, nothing written on any error) remain
+     open.
+     Open document forms use `DocumentForm` with the four posting states and have
+     a list route with the same shell, `DataTable` and record Sheet. Settings
+     forms use the settings form pattern. Forms are reachable from the palette.
    - Depends on: slice 4 and accounting-core slices 3, 5 and 7.
    - Owns: `routes/$orgSlug/{payments,bills,notes,journals}/`,
-     `routes/$orgSlug/settings/{locks,import}.tsx`, their `*-form.tsx`,
-     `lib/domain-invalidation.ts`.
+     `routes/$orgSlug/settings/{opening-balance,locks,import}.tsx`,
+     `components/entry-lines.tsx`,
+     `components/{opening-balance-form,lock-sheet,lock-exception-sheet}.tsx`,
+     their `*-form.tsx`, `lib/domain-invalidation.ts`.
    - Interfaces: one `invalidate<Type>State` per Document type; the forms
      consume the slice 4 parts unchanged.
 

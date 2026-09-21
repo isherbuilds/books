@@ -1,3 +1,4 @@
+import { ENTRY_SIDES, type EntrySide } from "@accly/db/schema/document-lines";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { z } from "zod";
 
@@ -14,6 +15,39 @@ export const positiveMoney = money.refine((value) => value > 0n);
 
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
+
+export const entryLineFields = {
+  accountId: z.uuid(),
+  side: z.enum(ENTRY_SIDES),
+  amount: positiveMoney,
+  description: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((value) => value || undefined)
+    .optional(),
+};
+
+export function balancedEntryLines(
+  input: { lines: readonly { side: EntrySide; amount: bigint }[] },
+  context: z.RefinementCtx,
+): void {
+  let debitTotal = 0n;
+  let creditTotal = 0n;
+
+  for (const line of input.lines) {
+    if (line.side === "debit") debitTotal += line.amount;
+    else creditTotal += line.amount;
+  }
+
+  if (debitTotal === 0n || creditTotal === 0n || debitTotal !== creditTotal) {
+    context.addIssue({
+      code: "custom",
+      path: ["lines"],
+      message: "Debits must equal credits.",
+    });
+  }
+}
 
 export const indianStateCode = z
   .string()

@@ -16,6 +16,7 @@ import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
 import { activeAllocationsOf, applyAllocations } from "./allocations";
+import { assertPeriodOpen } from "./locks";
 import { financialYearOf, postNumbered } from "./numbering";
 import { reversePartyLedgerLines, writePartyLedgerLine } from "./party-ledger";
 import { recordEntry, reverseEntries, type DocumentPosting } from "./posting";
@@ -26,7 +27,7 @@ export type DocumentNumbering = {
 };
 
 // A Receipt or Payment names its Payment Method; `postDocument` locks the method and
-// swaps in its account. An Invoice or a Journal has none.
+// swaps in its account. An Invoice, Journal or Opening Balance has none.
 type Draftable<T> = T extends { methodAccountId: string }
   ? Omit<T, "methodAccountId"> & { paymentMethodId: string }
   : T;
@@ -184,7 +185,11 @@ export async function writeDraft(
   let paymentMethodId: string | null = null;
   let paymentMethodName: string | null = null;
 
-  if (input.posting.type === "invoice" || input.posting.type === "journal") {
+  if (
+    input.posting.type === "invoice" ||
+    input.posting.type === "journal" ||
+    input.posting.type === "openingBalance"
+  ) {
     posting = input.posting;
   } else {
     // FOR SHARE: concurrent posts share the row, while an archive waits for them to
@@ -232,6 +237,7 @@ export async function writeDraft(
           roundOffPaise: 0n,
         };
       case "journal":
+      case "openingBalance":
         return {
           partyId: null,
           exposureSide: null,
@@ -323,17 +329,30 @@ export async function writeDraft(
   return { draft, posting, financialYear };
 }
 
+// The caller holds this settings row FOR SHARE (or stronger) in the same
+// transaction before taking any document locks.
 export async function postDocument(
   tx: DbTransaction,
   scope: Scope,
-  numbering: DocumentNumbering,
+  settings: typeof organizationSettings.$inferSelect,
+  prefix: string,
   input: PostDocumentInput,
 ): Promise<{ id: string; number: string }> {
+  await assertPeriodOpen(tx, scope, settings, {
+    entryDate: input.documentDate,
+    affectsTax: input.affectsTax,
+  });
+
   const {
     draft: { id },
     posting,
     financialYear,
-  } = await writeDraft(tx, scope, numbering, input);
+  } = await writeDraft(
+    tx,
+    scope,
+    { prefix, fiscalYearStartMonth: settings.financialYearStart },
+    input,
+  );
 
   if (posting.type === "receipt" && posting.settlementKind === "against") {
     await applyAllocations(tx, scope, {
@@ -353,7 +372,11 @@ export async function postDocument(
       amountPaise: posting.amountPaise,
       entryDate: input.documentDate,
     });
-  } else if (posting.type !== "journal" && posting.settlementKind !== "direct") {
+  } else if (
+    posting.type !== "journal" &&
+    posting.type !== "openingBalance" &&
+    posting.settlementKind !== "direct"
+  ) {
     await writePartyLedgerLine(tx, scope.orgId, {
       partyId: posting.partyId,
       documentId: id,
@@ -386,30 +409,23 @@ export async function postDocument(
     narration: input.narration ?? firstLine.description,
   });
 
-  const number = await postNumbered(
-    tx,
-    scope.orgId,
-    id,
-    posting.type,
-    financialYear,
-    numbering.prefix,
-  );
+  const number = await postNumbered(tx, scope.orgId, id, posting.type, financialYear, prefix);
 
   return { id, number };
 }
 
-// The state change runs first: its row lock serializes this cancel with an apply or
-// reverse that locks the same document, so the allocations read after it are current.
+// The caller holds settings FOR SHARE (or stronger) before this document update.
+// The document's row lock then serializes cancellation with allocations.
 export async function reverseDocument(
   tx: DbTransaction,
   scope: Scope,
-  timeZone: string,
+  settings: typeof organizationSettings.$inferSelect,
   type: DocumentPosting["type"],
   documentId: string,
   reason: string,
 ): Promise<typeof documents.$inferSelect> {
   const cancelledAt = new Date();
-  const entryDate = businessDate(cancelledAt, timeZone);
+  const entryDate = businessDate(cancelledAt, settings.timeZone);
 
   const [cancelled] = await tx
     .update(documents)
@@ -427,6 +443,9 @@ export async function reverseDocument(
   if (!cancelled) {
     throw new ORPCError("CONFLICT", { message: "This document is not posted." });
   }
+
+  // A cancellation is checked on its reversal date (spec call 7).
+  await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: cancelled.affectsTax });
 
   const active = await activeAllocationsOf(tx, scope.orgId, [documentId]);
   const asTarget = active.filter((row) => row.targetDocumentId === documentId);

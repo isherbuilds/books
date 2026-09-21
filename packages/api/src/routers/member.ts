@@ -8,6 +8,7 @@ import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern } from "../lib/schemas";
 
@@ -132,6 +133,19 @@ export const memberRouter = {
       members,
       invitations: invited.map((row) => ({ ...row, url: invitationUrl(row.id) })),
     };
+  }),
+
+  // The complete roster for a Link Field: complete or refused, never a page (client-patterns.md).
+  options: orgProcedure({ member: ["read"] }, orgInput).handler(async ({ context }) => {
+    const rows = await db
+      .select({ userId: member.userId, name: user.name, email: user.email })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(eq(member.organizationId, context.scope.orgId))
+      .orderBy(asc(user.name), asc(member.userId))
+      .limit(MASTER_LIST_LIMIT + 1);
+
+    return capMasterList(rows);
   }),
 
   invite: orgProcedure(

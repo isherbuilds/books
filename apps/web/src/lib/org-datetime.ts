@@ -64,6 +64,68 @@ export function orgToday(timeZone: string, now = new Date()): string {
   }).format(now);
 }
 
+/** Milliseconds the zone's wall clock runs ahead of UTC at `instant`. */
+function zoneOffset(instant: Date, timeZone: string): number {
+  const parts = formatter(`offset|${timeZone}`, "en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+
+  const at = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+
+  const wall = Date.UTC(
+    at("year"),
+    at("month") - 1,
+    at("day"),
+    at("hour"),
+    at("minute"),
+    at("second"),
+  );
+
+  return wall - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/**
+ * The instant a wall-clock time typed in the org zone (`YYYY-MM-DDTHH:mm`, as a
+ * `datetime-local` input yields) names. The browser's own zone plays no part.
+ * The offset is read at the guessed instant and once more at the corrected one,
+ * so a DST change between the two settles on the right side. A skipped local time
+ * is rejected instead of silently moving the operator's input across the DST gap.
+ */
+export function orgLocalToInstant(local: string, timeZone: string): Date {
+  const asUtc = new Date(`${local}Z`);
+  const guess = new Date(asUtc.getTime() - zoneOffset(asUtc, timeZone));
+  const instant = new Date(asUtc.getTime() - zoneOffset(guess, timeZone));
+
+  const parts = formatter(`localMinute|${timeZone}`, "en-CA", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(instant);
+
+  const at = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+
+  const roundTrip = `${at("year")}-${at("month")}-${at("day")}T${at("hour")}:${at("minute")}`;
+
+  if (roundTrip !== local) {
+    throw new RangeError("This local time does not exist in the organization's time zone");
+  }
+
+  return instant;
+}
+
 /**
  * All three resolved by the layout loader, so server and client agree across
  * hydration and a list's default period cannot differ between them.

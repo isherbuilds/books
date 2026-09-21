@@ -107,6 +107,10 @@ export const documents = pgTable(
     uniqueIndex("documents_org_number_idx")
       .on(table.orgId, table.type, table.financialYear, table.number)
       .where(sql`${table.number} is not null`),
+    // One posted Opening Balance per Organization.
+    uniqueIndex("documents_org_opening_balance_idx")
+      .on(table.orgId)
+      .where(sql`${table.type} = 'openingBalance' and ${table.state} = 'posted'`),
     index("documents_org_type_date_idx").on(table.orgId, table.type, table.documentDate),
     // The newest-first keyset of each document list, without filtering type on the heap.
     index("documents_org_type_id_idx").on(table.orgId, table.type, table.id),

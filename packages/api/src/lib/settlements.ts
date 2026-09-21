@@ -78,6 +78,7 @@ export async function settlementDetail(
 export async function orgSettings(
   orgId: string,
   lock?: DbTransaction,
+  mode: "share" | "update" = "share",
 ): Promise<typeof organizationSettings.$inferSelect> {
   const query = (lock ?? db)
     .select()
@@ -85,9 +86,9 @@ export async function orgSettings(
     .where(eq(organizationSettings.orgId, orgId))
     .limit(1);
 
-  // FOR SHARE: concurrent posts share the row, while a settings update waits for them
-  // to commit, so one document cannot mix settings from either side of an update.
-  const [settings] = lock ? await query.for("share") : await query;
+  // Hold settings and lock dates stable until the writer commits. Exclusive readers
+  // serialize Opening Balance posts and exception revocation against those writers.
+  const [settings] = lock ? await query.for(mode) : await query;
 
   if (!settings) throw new Error(`Organization ${orgId} is missing its settings`);
 
@@ -106,11 +107,11 @@ export async function cancelDocument(
   documentId: string,
   reason: string,
 ): Promise<typeof documents.$inferSelect> {
-  const timeZone = await orgTimeZone(scope.orgId);
+  const cancelled = await db.transaction(async (tx) => {
+    const settings = await orgSettings(scope.orgId, tx);
 
-  const cancelled = await db.transaction((tx) =>
-    reverseDocument(tx, scope, timeZone, type, documentId, reason),
-  );
+    return reverseDocument(tx, scope, settings, type, documentId, reason);
+  });
 
   audit({
     action: `${type}.cancel`,

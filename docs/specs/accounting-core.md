@@ -1,6 +1,8 @@
 # Spec: Accounting core
 
-Status: slices 1–3, 4a, 4b-i and the slice 5 Journal implemented; slices 4b-ii, the rest of 5 (Opening Balance, locks), 6–7, 8 (chart of accounts) and 9 (party Journals) open.
+Status: slices 1–3, 4a, 4b-i and 5 are implemented in full (Journal, Opening
+Balance, locks); slices 4b-ii, 6–7, 8 (chart of accounts) and 9 (party
+Journals) are open.
 Authority: the founder's decisions. Git keeps the research behind them.
 
 ## Outcome
@@ -97,8 +99,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    line prints Tax Invoice, and a Receipt prints Receipt. Printed fields are
    data that the CA approves.
 7. **Locks.** From slice 5, posting on or before the general lock needs an
-   exception. The tax lock follows `affectsTax`, stored at post, which marks
-   any document in a GST register, exempt direct Receipts included.
+   exception. An exception clears the general lock only; the tax lock is
+   reopened by `lock.set` with an earlier date or null and a reason. The tax
+   lock follows `affectsTax`, stored at post, which marks any document in a GST
+   register, exempt direct Receipts included. `allocation.apply` and
+   `allocation.reverse` check the lock on their entry date.
    Back-dating before a lock rewrites nothing. A cancellation is checked on its
    **reversal date, never the original document date**: `reverseDocument`
    stamps the reversal with today's business date, so a locked period's journal
@@ -200,12 +205,12 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     every allocation is reversed. Receipt and Journal cancellation append
     reverse rows for their active allocations, with no journal entry of their
     own, and reverse every un-reversed allocation journal entry from the
-    document. Allocation date lock checks arrive with slice 5. Slice 4b-ii
-    copies this model: it keeps ERPNext's separate advance account, and
-    rejects Zoho-style gross posting, which sends every Receipt through the
-    advance account and doubles journal rows, and the Odoo and Tally shape
-    without an advance account, which loses the liability that Schedule III
-    and GST advance tracking need.
+    document. `allocation.apply` and `allocation.reverse` check the period lock
+    on their entry date. Slice 4b-ii copies this model: it keeps ERPNext's
+    separate advance account, and rejects Zoho-style gross posting, which sends
+    every Receipt through the advance account and doubles journal rows, and the
+    Odoo and Tally shape without an advance account, which loses the liability
+    that Schedule III and GST advance tracking need.
 18. **Due dates.** Posted Invoices expose outstanding,
     `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Invoice
     lists filter open or overdue settlement. Bills remain in slice 4b-ii.
@@ -298,10 +303,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      - Avoid correlated per-row subqueries, reads that write,
        `regexp_replace` in `WHERE`, and `Promise.all` inside a transaction.
 
-5. **Journal, Opening Balance, locks.** The Journal is implemented:
-   `journal.{post,get,list,accounts,cancel}`, the `/$orgSlug/journals` routes,
-   `journalPrefix` (default `JV`). Open: Opening Balance, general and tax locks
-   (`LOCKED`) and expiring user exceptions, all audited.
+5. **Journal, Opening Balance, locks.** Implemented: `journal.*`,
+   `openingBalance.{post,get,cancel}`,
+   `lock.{get,set,grantException,revokeException}`, the `/$orgSlug/journals`
+   routes and Settings > Opening balance and Settings > Locks. Open: CA
+   acceptance.
    - Legacy reference (a716b6c):
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
        row `FOR KEY SHARE`, so `file.delete` waits; a duplicate insert returns
@@ -485,10 +491,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      rows are
      `{ id, type: "invoice" | "journal", number, documentDate, dueDate, outstandingPaise }`.
 
-## Journal (slice 5)
+## Journal, Opening Balance and locks (slice 5)
 
-Implemented and runtime verified in the app; CA acceptance is open. Opening
-Balance and locks remain open; party lines are slice 9.
+Implemented. Runtime verification is open in the
+[work registry](../README.md#work-lifecycle) (Opening balance and locks); CA
+acceptance is open; party lines are slice 9.
 
 - **Document.** Type `journal`, a Billing document like Receipt, posted in full
   with no draft. Header: `documentDate`, a required `narration` (1–500), an
@@ -512,19 +519,24 @@ Balance and locks remain open; party lines are slice 9.
   `organization_settings`, so a concurrent GSTIN change cannot let a taxable
   line through. It is beside `postableAccount` in `lib/accounts.ts` and
   reuses `isLeaf`; `postableAccount` does not change.
-- **Storage.** The baseline migration carries: nullable `entry_side` (`debit`, `credit`)
-  and `party_id` (composite key to `parties`) on `document_lines`, and
-  `journal_prefix` on `organization_settings`. `amount_paise` stays positive.
-  The ledger derives from these lines. This slice regenerated the baseline
-  (`0000_unknown_the_stranger`, a new `when`), which is only correct under the
-  rule that no environment keeps data yet: a database that applied the earlier
-  baseline must be reset (`bun run db:seed -- --reset`), not migrated, or
-  `runMigrations()` replays the DDL and fails on existing tables.
-- **Posting.** `JournalPosting { type: "journal", amountPaise, lines }` is a
-  `DocumentPosting` variant. A pure `postJournal` checks the lines, and
-  `recordEntry` uses a switch.
-- **Write path and number.** The slice 4a `postDocument` handles the write
-  path. A `journalPrefix` setting (default `JV` via `SETTINGS_DEFAULTS`, the
+- **Storage.** The baseline migration carries: nullable `entry_side` (`debit`,
+  `credit`) and `party_id` (composite key to `parties`) on `document_lines`,
+  `journal_prefix`, `locked_through` and `tax_locked_through` on `organization_settings`, `period_locks`,
+  `lock_exceptions`, and the partial unique index
+  `documents_org_opening_balance_idx` on posted Opening Balance documents.
+  `amount_paise` stays positive. The ledger derives from these lines. This
+  slice regenerates the baseline, which is only correct under the rule that
+  no environment keeps data yet: a
+  database that applied the earlier baseline must be reset
+  (`bun run db:seed -- --reset`), not migrated, or `runMigrations()` replays
+  the DDL and fails on existing tables.
+- **Posting.** `JournalPosting { type: "journal" | "openingBalance", amountPaise,
+lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
+  lines, and `recordEntry` uses a switch.
+- **Write path and number.** `postEntryLines` shares account validation and line
+  preparation between Journal and Opening Balance, then calls `postDocument`.
+  Input line fields and the balance refinement live in `lib/schemas.ts`.
+  A `journalPrefix` setting (default `JV` via `SETTINGS_DEFAULTS`, the
   `documentPrefix` rule) produces `JV26-27/1`.
 - **Cancel.** `reverseDocument` as it is: once, with a reason, dated the cancel
   day. A wrong date is fixed by a new Journal, not by editing.
@@ -536,22 +548,53 @@ Balance and locks remain open; party lines are slice 9.
   `journal.accounts` returns pickable accounts: active non-system leaves plus
   the four journalable system accounts (`tdsPayable`, `tdsReceivable`,
   `roundOff`, `openingEquity`), bounded by `MASTER_LIST_LIMIT`, and minus
-  `taxable` income when the Organization has a `gstin`. A taxable account line
+  `taxable` income when the Organization has a `gstin`. Opening Balance uses
+  this same picker and cache key, including settings-change invalidation.
+  A taxable account line
   is refused as `TAXABLE_ACCOUNT_LINE`, an
   unresolvable account as `ACCOUNT_INVALID`, and a foreign party as
   `PARTY_INVALID`. Grants already exist. The day book and
   `account.moneyBalances` already read journal entries.
-- **Opening Balance.** One per Organization (a partial unique index on posted
-  `openingBalance`), dated the cutover, balanced to `openingEquity`, with a
-  fixed `OB` prefix. It uses the Journal lines and the account rule with
-  `controls: false`, so party balances come only from the slice 7 opening
-  items, never twice.
-- **Locks.** A `lock.set` procedure and a lock table, not `settings.update`
-  (the CA cannot call it, and it replaces every field). `postDocument` and
-  `reverseDocument` read the lock inside their transaction, each against its own
-  entry date. A lock and an unlock both require a reason, stored on the row. An
-  exception is a row naming a user and never a consequence of holding every
-  grant, so the owner has no implicit bypass.
+- **Opening Balance.** Type `openingBalance`, one posted per Organization
+  (partial unique index `documents_org_opening_balance_idx`; a second post is
+  `CONFLICT` until the first is cancelled; the post takes the settings row
+  `FOR UPDATE` so concurrent posts serialize), fixed `OB` prefix
+  (`OB26-27/1`), `documentDate` is the cutover, narration `Opening balances`,
+  lines as the Journal minus party (`controls: false`). A complete balanced
+  trial balance needs no `openingEquity` line; any opening-equity amount is an
+  explicit line the user enters, never a silent plug.
+  `affectsTax` false, no party ledger lines, cancel via `reverseDocument`.
+  `openingBalance.get` returns the posted document or null.
+- **Locks.** `organization_settings.lockedThrough` and `taxLockedThrough` own
+  the current dates; null means unlocked. `lock.set` updates the appropriate
+  date and appends its `period_locks` history row
+  `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
+  History's highest identity id per kind supplies the latest reason and setter
+  to the settings screen, not a posting-time lookup. `lock_exceptions` stores
+  `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy/revokeReason }`;
+  active means not revoked and not expired on the database clock.
+  Every posting, cancellation and allocation reads settings once `FOR SHARE`
+  inside its transaction, before document locks. `lock.set`'s UPDATE and
+  `lock.revokeException`'s `FOR UPDATE` wait for those readers to commit.
+  `assertPeriodOpen` checks those already-held dates and queries exceptions only
+  for a general-lock bypass. It runs in `postDocument` (document date),
+  `reverseDocument` (reversal date) and allocations (entry date):
+  `LOCKED` (`BAD_REQUEST`) when the date is on or before the general lock and
+  the caller holds no active exception, or on or before the tax lock and the
+  entry `affectsTax`. Procedures and permissions: `lock.get` (`lock:read` —
+  owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
+  `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
+  ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
+  `CONFLICT`); all three mutations audited. Web: Settings > Opening balance
+  (form when none is posted, record with Cancel when one is) and Settings >
+  Locks (both locks with Change, exceptions with Grant and Revoke); forms show
+  `LOCKED` on the date field. Change and Grant are URL-backed Sheets; Change
+  requires a loaded lock state. The exception list states that it reflects the
+  last fetch and offers Refresh, rather than polling settings.
+  Expiry retains time-of-day precision in the Organization zone and rejects
+  nonexistent DST times instead of shifting them. Exceptions are
+  user-scoped until revoked or expired: removing membership denies all access,
+  but re-admitting the same user does not revoke a still-live grant.
 
 | Not in the first Journal               | Gate                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- |
@@ -593,6 +636,7 @@ Balance and locks remain open; party lines are slice 9.
   the worked examples below.
 - **GSTR-1 Table 13.** Gate: the slice 4b-ii registers.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
+- **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
 - **Billing without General Accounting.** Gate: a hospital customer keeps
   Tally, or the hospital system joins this repository.

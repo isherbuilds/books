@@ -39,7 +39,9 @@ import { Route as OrgSlugSettingsIndexRouteImport } from './routes/$orgSlug/sett
 import { Route as OrgSlugSettingsAuditRouteImport } from './routes/$orgSlug/settings/audit'
 import { Route as OrgSlugSettingsBanksRouteImport } from './routes/$orgSlug/settings/banks'
 import { Route as OrgSlugSettingsItemsRouteImport } from './routes/$orgSlug/settings/items'
+import { Route as OrgSlugSettingsLocksRouteImport } from './routes/$orgSlug/settings/locks'
 import { Route as OrgSlugSettingsMembersRouteImport } from './routes/$orgSlug/settings/members'
+import { Route as OrgSlugSettingsOpeningBalanceRouteImport } from './routes/$orgSlug/settings/opening-balance'
 import { Route as OrgSlugSettingsOrganizationRouteImport } from './routes/$orgSlug/settings/organization'
 import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlug/parties_.$partyId.index'
 import { Route as OrgSlugPartiesPartyIdLedgerRouteImport } from './routes/$orgSlug/parties_.$partyId.ledger'
@@ -199,11 +201,22 @@ const OrgSlugSettingsItemsRoute = OrgSlugSettingsItemsRouteImport.update({
   path: '/items',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
+const OrgSlugSettingsLocksRoute = OrgSlugSettingsLocksRouteImport.update({
+  id: '/locks',
+  path: '/locks',
+  getParentRoute: () => OrgSlugSettingsRouteRoute,
+} as any)
 const OrgSlugSettingsMembersRoute = OrgSlugSettingsMembersRouteImport.update({
   id: '/members',
   path: '/members',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
+const OrgSlugSettingsOpeningBalanceRoute =
+  OrgSlugSettingsOpeningBalanceRouteImport.update({
+    id: '/opening-balance',
+    path: '/opening-balance',
+    getParentRoute: () => OrgSlugSettingsRouteRoute,
+  } as any)
 const OrgSlugSettingsOrganizationRoute =
   OrgSlugSettingsOrganizationRouteImport.update({
     id: '/organization',
@@ -265,7 +278,9 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
+  '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -300,7 +315,9 @@ export interface FileRoutesByTo {
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
+  '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings': typeof OrgSlugSettingsIndexRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -339,7 +356,9 @@ export interface FileRoutesById {
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/banks': typeof OrgSlugSettingsBanksRoute
   '/$orgSlug/settings/items': typeof OrgSlugSettingsItemsRoute
+  '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
+  '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
   '/$orgSlug/parties_/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -379,7 +398,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
+    | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings/'
     | '/$orgSlug/parties/$partyId/ledger'
@@ -414,7 +435,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
+    | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings'
     | '/$orgSlug/parties/$partyId/ledger'
@@ -452,7 +475,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/banks'
     | '/$orgSlug/settings/items'
+    | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
+    | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
     | '/$orgSlug/settings/'
     | '/$orgSlug/parties_/$partyId/ledger'
@@ -691,11 +716,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugSettingsItemsRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
+    '/$orgSlug/settings/locks': {
+      id: '/$orgSlug/settings/locks'
+      path: '/locks'
+      fullPath: '/$orgSlug/settings/locks'
+      preLoaderRoute: typeof OrgSlugSettingsLocksRouteImport
+      parentRoute: typeof OrgSlugSettingsRouteRoute
+    }
     '/$orgSlug/settings/members': {
       id: '/$orgSlug/settings/members'
       path: '/members'
       fullPath: '/$orgSlug/settings/members'
       preLoaderRoute: typeof OrgSlugSettingsMembersRouteImport
+      parentRoute: typeof OrgSlugSettingsRouteRoute
+    }
+    '/$orgSlug/settings/opening-balance': {
+      id: '/$orgSlug/settings/opening-balance'
+      path: '/opening-balance'
+      fullPath: '/$orgSlug/settings/opening-balance'
+      preLoaderRoute: typeof OrgSlugSettingsOpeningBalanceRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
     '/$orgSlug/settings/organization': {
@@ -773,7 +812,9 @@ interface OrgSlugSettingsRouteRouteChildren {
   OrgSlugSettingsAuditRoute: typeof OrgSlugSettingsAuditRoute
   OrgSlugSettingsBanksRoute: typeof OrgSlugSettingsBanksRoute
   OrgSlugSettingsItemsRoute: typeof OrgSlugSettingsItemsRoute
+  OrgSlugSettingsLocksRoute: typeof OrgSlugSettingsLocksRoute
   OrgSlugSettingsMembersRoute: typeof OrgSlugSettingsMembersRoute
+  OrgSlugSettingsOpeningBalanceRoute: typeof OrgSlugSettingsOpeningBalanceRoute
   OrgSlugSettingsOrganizationRoute: typeof OrgSlugSettingsOrganizationRoute
   OrgSlugSettingsIndexRoute: typeof OrgSlugSettingsIndexRoute
 }
@@ -782,7 +823,9 @@ const OrgSlugSettingsRouteRouteChildren: OrgSlugSettingsRouteRouteChildren = {
   OrgSlugSettingsAuditRoute: OrgSlugSettingsAuditRoute,
   OrgSlugSettingsBanksRoute: OrgSlugSettingsBanksRoute,
   OrgSlugSettingsItemsRoute: OrgSlugSettingsItemsRoute,
+  OrgSlugSettingsLocksRoute: OrgSlugSettingsLocksRoute,
   OrgSlugSettingsMembersRoute: OrgSlugSettingsMembersRoute,
+  OrgSlugSettingsOpeningBalanceRoute: OrgSlugSettingsOpeningBalanceRoute,
   OrgSlugSettingsOrganizationRoute: OrgSlugSettingsOrganizationRoute,
   OrgSlugSettingsIndexRoute: OrgSlugSettingsIndexRoute,
 }
