@@ -116,13 +116,18 @@ export const invoiceFields = {
     .max(100),
 };
 
-/** The keyset, party, period and search fields every document register takes. */
-export const documentListFields = {
+/** The keyset, period and search fields every document register takes. */
+export const documentPageFields = {
   q: searchQuery,
-  partyId: z.uuid().optional(),
   ...period,
   cursor: z.uuid().optional(),
   limit: pageLimit,
+};
+
+/** `documentPageFields` plus the header party filter, for registers whose document names a party. */
+export const documentListFields = {
+  ...documentPageFields,
+  partyId: z.uuid().optional(),
 };
 
 export const settlementListFields = {

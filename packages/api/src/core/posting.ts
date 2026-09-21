@@ -1,5 +1,6 @@
 import type { DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import type { EntrySide } from "@accly/db/schema/document-lines";
 import type { AdvanceSupply, DocumentType } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
@@ -97,6 +98,19 @@ export type InvoicePosting = {
   roundOffPaise: bigint;
 };
 
+export type JournalLinePosting = {
+  accountId: string;
+  partyId: string | null;
+  side: EntrySide;
+  amountPaise: bigint;
+};
+
+export type JournalPosting = {
+  type: "journal";
+  amountPaise: bigint;
+  lines: readonly JournalLinePosting[];
+};
+
 export type AllocationPosting = {
   type: "allocation";
   direction: "advanceToInvoice" | "invoiceToAdvance";
@@ -104,7 +118,7 @@ export type AllocationPosting = {
   amountPaise: bigint;
 };
 
-export type DocumentPosting = ReceiptPosting | PaymentPosting | InvoicePosting;
+export type DocumentPosting = ReceiptPosting | PaymentPosting | InvoicePosting | JournalPosting;
 
 export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): JournalLineInput[] {
   if (document.amountPaise <= 0n) {
@@ -305,6 +319,44 @@ export function postInvoice(document: InvoicePosting, byKey: SystemAccounts): Jo
   return lines;
 }
 
+export function postJournal(document: JournalPosting): JournalLineInput[] {
+  if (document.lines.length < 2) {
+    throw new Error("Journal must have at least two lines");
+  }
+
+  let debitTotal = 0n;
+  let creditTotal = 0n;
+
+  const lines = document.lines.map((line) => {
+    if (line.amountPaise <= 0n) {
+      throw new Error("Journal line amount must be positive");
+    }
+
+    if (line.side === "debit") {
+      debitTotal += line.amountPaise;
+    } else {
+      creditTotal += line.amountPaise;
+    }
+
+    return {
+      accountId: line.accountId,
+      partyId: line.partyId,
+      debit: line.side === "debit" ? line.amountPaise : 0n,
+      credit: line.side === "credit" ? line.amountPaise : 0n,
+    };
+  });
+
+  if (debitTotal !== creditTotal) {
+    throw new Error("Journal debit and credit totals must match");
+  }
+
+  if (debitTotal !== document.amountPaise) {
+    throw new Error("Journal debit total must match document amount");
+  }
+
+  return lines;
+}
+
 export function assertBalanced(lines: readonly JournalLineInput[]): void {
   let debitTotal = 0n;
   let creditTotal = 0n;
@@ -380,31 +432,35 @@ export async function recordEntry(
     const { posting } = args.document;
     document = { id: args.document.id, type: posting.type };
 
-    // All of them, not only the keys this posting needs: at most 18 rows on one partial
-    // index, and each posting function stays the only list of its keys.
-    const systemRows = await tx
-      .select({ id: accounts.id, systemKey: accounts.systemKey })
-      .from(accounts)
-      .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
+    if (posting.type === "journal") {
+      lines = postJournal(posting);
+    } else {
+      // All of them, not only the keys this posting needs: at most 18 rows on one partial
+      // index, and each posting function stays the only list of its keys.
+      const systemRows = await tx
+        .select({ id: accounts.id, systemKey: accounts.systemKey })
+        .from(accounts)
+        .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
 
-    const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
+      const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
 
-    switch (posting.type) {
-      case "receipt":
-        lines = postReceipt(posting, byKey);
-        break;
-      case "payment":
-        lines = postPayment(posting, byKey);
-        break;
-      case "invoice":
-        lines = postInvoice(posting, byKey);
-        break;
-      case "allocation":
-        lines = postAllocation(posting, byKey);
-        break;
-      default:
-        posting satisfies never;
-        throw new Error("Unsupported posting");
+      switch (posting.type) {
+        case "receipt":
+          lines = postReceipt(posting, byKey);
+          break;
+        case "payment":
+          lines = postPayment(posting, byKey);
+          break;
+        case "invoice":
+          lines = postInvoice(posting, byKey);
+          break;
+        case "allocation":
+          lines = postAllocation(posting, byKey);
+          break;
+        default:
+          posting satisfies never;
+          throw new Error("Unsupported posting");
+      }
     }
 
     assertBalanced(lines);

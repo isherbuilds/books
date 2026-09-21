@@ -166,6 +166,8 @@ export function FilterChips({
   );
 }
 
+const ALL_TIME: SearchRange = { from: undefined, to: undefined };
+
 /**
  * Presets write their dates to the URL; All time removes both dates. The URL never
  * stores which label the operator clicked.
@@ -183,33 +185,25 @@ export function PresetItems({
   onSelect: (range: SearchRange) => void;
   onCustom: () => void;
 }) {
-  const options = PRESETS.map((preset) => ({
-    preset,
-    range: presetRange(preset, today, financialYearStart),
-  }));
-
   const applied = presetOf(range, today, financialYearStart);
   const hasRange = Boolean(range.from || range.to);
 
   return (
     <>
-      <DropdownMenuCheckboxItem
-        checked={!hasRange}
-        onCheckedChange={() => onSelect({ from: undefined, to: undefined })}
-      >
+      <DropdownMenuCheckboxItem checked={!hasRange} onCheckedChange={() => onSelect(ALL_TIME)}>
         All time
       </DropdownMenuCheckboxItem>
-      {options.map((option) => (
+      {PRESETS.map((preset) => (
         <DropdownMenuCheckboxItem
-          key={option.preset}
-          checked={applied === option.preset}
+          key={preset}
+          checked={applied === preset}
           // Unchecking an applied period returns the list to all time, so it is never
           // left half-filtered.
           onCheckedChange={(checked) =>
-            onSelect(checked ? option.range : { from: undefined, to: undefined })
+            onSelect(checked ? presetRange(preset, today, financialYearStart) : ALL_TIME)
           }
         >
-          {presetLabel(option.preset, today, financialYearStart)}
+          {presetLabel(preset, today, financialYearStart)}
         </DropdownMenuCheckboxItem>
       ))}
       <DropdownMenuSeparator className="my-1" />

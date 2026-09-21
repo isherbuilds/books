@@ -1,4 +1,5 @@
 import { formatMoney } from "@accly/api/core/money";
+import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { cn } from "@accly/ui/lib/utils";
@@ -39,7 +40,7 @@ const SETTLEMENT_FILTER_LABELS = { open: "Open", overdue: "Overdue" } as const;
 
 const invoiceSearch = z.object({
   create: z.boolean().optional().catch(undefined),
-  q: z.string().trim().min(1).max(100).optional().catch(undefined),
+  q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   state: z.enum(INVOICE_STATES).optional().catch(undefined),
   settlement: z.enum(SETTLEMENT_FILTERS).optional().catch(undefined),

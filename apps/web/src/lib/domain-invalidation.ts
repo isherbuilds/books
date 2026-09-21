@@ -6,7 +6,7 @@ type QueryInvalidator = {
   invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<void>;
 };
 
-// Three sets, one per kind of write. Each mutation calls the set for what it moved,
+// Each set covers one kind of write. Every mutation calls the set for what it moved,
 // on success and on an uncertain result alike; a broader set would refetch every
 // mounted register and balance for a draft that touched none of them.
 
@@ -37,6 +37,24 @@ export async function invalidateCashState(
 ): Promise<void> {
   await Promise.all([
     invalidateSettlementState(queryClient, orgSlug),
+    queryClient.invalidateQueries({
+      queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
+    }),
+  ]);
+}
+
+// Journals move account balances without writing the party ledger.
+export async function invalidateJournalState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: orpc.journal.list.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.journal.get.key({ input: { orgSlug } }),
+    }),
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
     }),

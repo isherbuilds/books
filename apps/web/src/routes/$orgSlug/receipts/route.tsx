@@ -1,3 +1,4 @@
+import { searchQuery } from "@accly/api/lib/schemas";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
@@ -43,7 +44,7 @@ const SETTLEMENT_LABELS = { advance: "Advance", direct: "Direct" } as const;
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
-  q: z.string().trim().min(1).max(100).optional().catch(undefined),
+  q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   from: z.iso.date().optional().catch(undefined),
   to: z.iso.date().optional().catch(undefined),

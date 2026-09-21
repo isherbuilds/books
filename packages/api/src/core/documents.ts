@@ -1,7 +1,7 @@
 import type { DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import type { SupplyClass } from "@accly/db/schema/accounts";
-import { documentLines } from "@accly/db/schema/document-lines";
+import { documentLines, type EntrySide } from "@accly/db/schema/document-lines";
 import { documents, type PrintSnapshot } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
@@ -26,7 +26,7 @@ export type DocumentNumbering = {
 };
 
 // A Receipt or Payment names its Payment Method; `postDocument` locks the method and
-// swaps in its account. An Invoice (and later a Journal) has none.
+// swaps in its account. An Invoice or a Journal has none.
 type Draftable<T> = T extends { methodAccountId: string }
   ? Omit<T, "methodAccountId"> & { paymentMethodId: string }
   : T;
@@ -36,6 +36,8 @@ export type PostDocumentLine = {
   accountId: string | null;
   description: string;
   amountPaise: bigint;
+  entrySide: EntrySide | null;
+  partyId: string | null;
   itemId: string | null;
   hsnSac: string | null;
   unit: string | null;
@@ -54,7 +56,7 @@ export type PostDocumentInput = {
   reference: string | null;
   narration: string | null;
   affectsTax: boolean;
-  printSnapshot: Omit<PrintSnapshot, "paymentMethod">;
+  printSnapshot: Omit<PrintSnapshot, "paymentMethod"> | null;
   lines: readonly PostDocumentLine[];
   posting: Draftable<DocumentPosting>;
   draft: { id: string; version: number } | null;
@@ -70,6 +72,8 @@ export function accountLine(
     accountId,
     description,
     amountPaise,
+    entrySide: null,
+    partyId: null,
     itemId: null,
     hsnSac: null,
     unit: null,
@@ -180,7 +184,7 @@ export async function writeDraft(
   let paymentMethodId: string | null = null;
   let paymentMethodName: string | null = null;
 
-  if (input.posting.type === "invoice") {
+  if (input.posting.type === "invoice" || input.posting.type === "journal") {
     posting = input.posting;
   } else {
     // FOR SHARE: concurrent posts share the row, while an archive waits for them to
@@ -207,8 +211,39 @@ export async function writeDraft(
   }
 
   const financialYear = financialYearOf(input.documentDate, numbering.fiscalYearStartMonth);
-  const roundOffPaise = posting.type === "invoice" ? posting.roundOffPaise : 0n;
-  const settlementKind = posting.type === "invoice" ? null : posting.settlementKind;
+
+  const postingHeader = (() => {
+    switch (posting.type) {
+      case "invoice":
+        return {
+          partyId: posting.partyId,
+          exposureSide: posting.exposureSide,
+          settlementKind: null,
+          advanceSupply: null,
+          roundOffPaise: posting.roundOffPaise,
+        };
+      case "receipt":
+      case "payment":
+        return {
+          partyId: posting.partyId,
+          exposureSide: posting.exposureSide,
+          settlementKind: posting.settlementKind,
+          advanceSupply,
+          roundOffPaise: 0n,
+        };
+      case "journal":
+        return {
+          partyId: null,
+          exposureSide: null,
+          settlementKind: null,
+          advanceSupply: null,
+          roundOffPaise: 0n,
+        };
+      default:
+        posting satisfies never;
+        throw new Error("Unsupported document posting");
+    }
+  })();
 
   const header = {
     type: posting.type,
@@ -218,17 +253,16 @@ export async function writeDraft(
     documentDate: input.documentDate,
     dueDate: input.dueDate,
     placeOfSupplyStateCode: input.placeOfSupplyStateCode,
-    partyId: posting.partyId,
-    exposureSide: posting.exposureSide,
-    settlementKind,
-    advanceSupply,
+    ...postingHeader,
     paymentMethodId,
     reference: input.reference,
     narration: input.narration,
     totalPaise: posting.amountPaise,
-    roundOffPaise,
     affectsTax: input.affectsTax,
-    printSnapshot: { ...input.printSnapshot, paymentMethod: paymentMethodName },
+    printSnapshot:
+      input.printSnapshot === null
+        ? null
+        : { ...input.printSnapshot, paymentMethod: paymentMethodName },
   };
 
   let draft: { id: string; version: number };
@@ -319,10 +353,7 @@ export async function postDocument(
       amountPaise: posting.amountPaise,
       entryDate: input.documentDate,
     });
-  } else if (
-    posting.settlementKind === "advance" ||
-    (posting.type === "receipt" && posting.settlementKind === "against")
-  ) {
+  } else if (posting.type !== "journal" && posting.settlementKind !== "direct") {
     await writePartyLedgerLine(tx, scope.orgId, {
       partyId: posting.partyId,
       documentId: id,

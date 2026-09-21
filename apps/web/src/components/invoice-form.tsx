@@ -24,22 +24,22 @@ import {
 } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
-import {
-  useFieldArray,
-  useFormState,
-  useWatch,
-  type Control,
-  type FieldPath,
-  type UseFormReturn,
-} from "react-hook-form";
+import { useFieldArray, useWatch, type FieldPath, type UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { DocumentForm, LineGrid, PostBar, PostedView } from "@/components/document-form";
+import {
+  DocumentForm,
+  FieldArrayError,
+  LineGrid,
+  PostBar,
+  PostedView,
+} from "@/components/document-form";
 import { FormSheet } from "@/components/form-sheet";
 import { InvoiceTotals } from "@/components/invoice-summary";
 import { ItemSheet, type SavedItem } from "@/components/item-sheet";
 import { LinkField } from "@/components/link-field";
+import { PartySheet } from "@/components/party-form";
 import { PartyLinkField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
@@ -49,6 +49,7 @@ import { itemListOptions, type ItemListRow } from "@/lib/items";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, hasErrorCode, isRefusal } from "@/lib/orpc-error";
+import { partyPickerOptions, type PartyOption } from "@/lib/parties";
 
 /** The active item master, with the id lookup every line needs, built once. */
 type ItemMaster = {
@@ -391,17 +392,6 @@ function AccountLineFields({
   );
 }
 
-function LinesError({ control }: { control: Control<InvoiceFormValues> }) {
-  const { errors } = useFormState({ control, name: "lines", exact: true });
-  const message = errors.lines?.message;
-
-  return typeof message === "string" ? (
-    <p role="alert" className="text-destructive">
-      {message}
-    </p>
-  ) : null;
-}
-
 function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: InvoiceSheetProps) {
   const queryClient = useQueryClient();
   const dueDateEdited = useRef(Boolean(draft?.dueDate));
@@ -411,6 +401,9 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
   const canSave = useCan(orgSlug, { invoice: ["create"] });
   const canPost = useCan(orgSlug, { invoice: ["post"] });
   const form = useZodForm(invoiceSchema, { defaultValues: defaults(today, draft) });
+  const parties = useQuery(partyPickerOptions(orgSlug));
+  const canCreateParty = useCan(orgSlug, { party: ["create"] });
+  const [createParty, setCreateParty] = useState<string | null>(null);
   const linesField = useFieldArray({ control: form.control, name: "lines" });
   const documentDate = useWatch({ control: form.control, name: "documentDate" });
   // One subscription per editor: every line reads these results through props.
@@ -435,6 +428,19 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
       },
       (error) => toast.error(errorMessage(error, "Could not load the party's state")),
     );
+
+  const selectParty = (party: PartyOption | null) => {
+    const changed = party?.id !== form.getValues("partyId");
+
+    form.setValue("partyId", party?.id ?? null, { shouldDirty: true, shouldValidate: true });
+    form.setValue("partyName", party?.name ?? "");
+
+    if (!changed) return;
+
+    form.setValue("placeOfSupplyStateCode", "");
+
+    if (party) void defaultPlaceOfSupply(party.id);
+  };
 
   const invoiceInput = (values: InvoiceFormValues) => {
     if (!values.partyId) return null;
@@ -574,11 +580,9 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         number={posted.number}
         onDone={() => onPosted(posted.id)}
         onNext={() => {
-          form.reset(defaults(form.getValues("documentDate")));
+          form.reset(defaults(form.getValues("documentDate")), { keepSubmitCount: true });
           post.reset();
           dueDateEdited.current = false;
-          // Base UI returns focus to the Sheet when this button unmounts; land after it.
-          setTimeout(() => form.setFocus("partyId"), 50);
         }}
       />
     );
@@ -615,23 +619,14 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
               <FormLabel>Party</FormLabel>
               <FormControl>
                 <PartyLinkField
-                  orgSlug={orgSlug}
+                  parties={parties}
                   value={
                     field.value ? { id: field.value, name: form.getValues("partyName") } : null
                   }
-                  onSelect={(party) => {
-                    const changed = party?.id !== field.value;
-
-                    field.onChange(party?.id ?? null);
-                    form.setValue("partyName", party?.name ?? "");
-
-                    if (!changed) return;
-
-                    form.setValue("placeOfSupplyStateCode", "");
-
-                    if (party) void defaultPlaceOfSupply(party.id);
-                  }}
+                  onSelect={selectParty}
+                  onCreate={canCreateParty ? setCreateParty : undefined}
                   inputRef={field.ref}
+                  autoFocus={form.formState.submitCount > 0}
                   aria-invalid={fieldState.invalid}
                 />
               </FormControl>
@@ -771,7 +766,7 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
               )}
             </fieldset>
           ))}
-          <LinesError control={form.control} />
+          <FieldArrayError control={form.control} name="lines" />
         </LineGrid>
 
         <section className="grid gap-2 border-y border-border py-3">
@@ -811,6 +806,16 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
           )}
         />
       </DocumentForm>
+      <PartySheet
+        orgSlug={orgSlug}
+        open={createParty !== null}
+        seedName={createParty ?? ""}
+        onClose={() => setCreateParty(null)}
+        onSaved={(party) => {
+          selectParty(party);
+          setCreateParty(null);
+        }}
+      />
     </Form>
   );
 }

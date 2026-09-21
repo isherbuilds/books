@@ -21,10 +21,14 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 4b-ii and
-  5–7, plus CA acceptance and the native PostgreSQL posting baseline for slices
-  1–3. Slices 4a and 4b-i are implemented and runtime verified in the app; CA
-  acceptance is open.
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 4b-ii,
+  the slice 5 Opening Balance and locks, 6–7, 8 (user-created income and
+  expense accounts) and 9 (party lines on Journals, Journal credits and
+  debits as allocation sources and targets), plus CA acceptance and the
+  native PostgreSQL posting baseline for slices 1–3. Slice 8 precedes 9: a
+  discount or write-off needs an expense leaf no template ships. Slices 4a,
+  4b-i and the slice 5 Journal are implemented and runtime verified in the
+  app; CA acceptance is open.
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as a
   released credit distinct from an advance, before any tax workflow reads

@@ -38,9 +38,15 @@ function MoneyAccountForm({ orgSlug, onClose }: { orgSlug: string; onClose: () =
   const create = useMutation(
     orpc.account.create.mutationOptions({
       onSuccess: async () => {
-        await queryClient.invalidateQueries({
-          queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
-        });
+        // A new money leaf is also a journal-pickable account.
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.journal.accounts.key({ input: { orgSlug } }),
+          }),
+        ]);
         toast.success("Account added");
         onClose();
       },

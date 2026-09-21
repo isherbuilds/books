@@ -1,6 +1,7 @@
 import { Button } from "@accly/ui/components/button";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { useId, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
+import { get, useFormState, type Control, type FieldPath, type FieldValues } from "react-hook-form";
 
 // React bubbles portal events through the tree, so a stacked quick-create Sheet's
 // keys and submit would reach this form; only events from its own DOM count.
@@ -111,6 +112,24 @@ export function PostedView({
       </PostBar>
     </div>
   );
+}
+
+export function FieldArrayError<TFieldValues extends FieldValues>({
+  control,
+  name,
+}: {
+  control: Control<TFieldValues>;
+  name: FieldPath<TFieldValues>;
+}) {
+  const { errors } = useFormState({ control, name, exact: true });
+  // A `superRefine` on the array lands on `root`; a `min`/`max` issue on the field itself.
+  const message: unknown = get(errors, `${name}.root.message`) ?? get(errors, `${name}.message`);
+
+  return typeof message === "string" ? (
+    <p role="alert" className="text-destructive">
+      {message}
+    </p>
+  ) : null;
 }
 
 export function LineGrid({

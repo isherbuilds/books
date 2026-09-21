@@ -125,7 +125,9 @@ CREATE TABLE "document_lines" (
 	"position" integer NOT NULL,
 	"kind" text NOT NULL,
 	"account_id" text,
+	"entry_side" text,
 	"item_id" text,
+	"party_id" text,
 	"description" text NOT NULL,
 	"hsn_sac" text,
 	"unit" text,
@@ -138,6 +140,7 @@ CREATE TABLE "document_lines" (
 	"amount_paise" bigint NOT NULL,
 	CONSTRAINT "document_lines_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "document_lines_kind_check" CHECK ("document_lines"."kind" in ('item', 'account')),
+	CONSTRAINT "document_lines_entry_side_check" CHECK ("document_lines"."entry_side" is null or "document_lines"."entry_side" in ('debit', 'credit')),
 	CONSTRAINT "document_lines_quantity_check" CHECK ("document_lines"."quantity" is null or "document_lines"."quantity" >= 1),
 	CONSTRAINT "document_lines_cgst_paise_check" CHECK ("document_lines"."cgst_paise" >= 0),
 	CONSTRAINT "document_lines_sgst_paise_check" CHECK ("document_lines"."sgst_paise" >= 0),
@@ -211,6 +214,7 @@ CREATE TABLE "organization_settings" (
 	"receipt_prefix" text NOT NULL,
 	"payment_prefix" text NOT NULL,
 	"credit_note_prefix" text NOT NULL,
+	"journal_prefix" text NOT NULL,
 	"time_zone" text DEFAULT 'Asia/Kolkata' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -374,6 +378,7 @@ ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_organization_
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_document_id_documents_org_id_id_fk" FOREIGN KEY ("org_id","document_id") REFERENCES "public"."documents"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_account_id_accounts_org_id_id_fk" FOREIGN KEY ("org_id","account_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_item_id_items_org_id_id_fk" FOREIGN KEY ("org_id","item_id") REFERENCES "public"."items"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_party_id_parties_org_id_id_fk" FOREIGN KEY ("org_id","party_id") REFERENCES "public"."parties"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_tax_rate_id_tax_rates_org_id_id_fk" FOREIGN KEY ("org_id","tax_rate_id") REFERENCES "public"."tax_rates"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

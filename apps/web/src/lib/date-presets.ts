@@ -19,7 +19,7 @@ export type SearchRange = { from?: string; to?: string };
 
 export const PRESETS = ["today", "this-month", "last-month", "this-year", "last-year"] as const;
 
-export type Preset = (typeof PRESETS)[number];
+type Preset = (typeof PRESETS)[number];
 
 // UTC throughout: a business date names a day, so a preset never shifts across zones.
 function day(year: number, month: number, date: number): string {
@@ -77,24 +77,6 @@ export function presetOf(
   });
 }
 
-const YEAR_LABELS: Record<"this-year" | "last-year", string> = {
-  "this-year": "This year",
-  "last-year": "Last year",
-};
-
-/**
- * A financial year is named by its span (`2025–26`), never by one calendar year: an
- * April start makes "2025" ambiguous to the operator reading the chip.
- */
-function financialYearLabel(preset: "this-year" | "last-year", range: DateRange): string {
-  const startYear = Number(range.from.slice(0, 4));
-  const endYear = Number(range.to.slice(0, 4));
-
-  return startYear === endYear
-    ? `${YEAR_LABELS[preset]} (${startYear})`
-    : `${YEAR_LABELS[preset]} (${startYear}–${String(endYear % 100).padStart(2, "0")})`;
-}
-
 export function presetLabel(preset: Preset, today: string, financialYearStart: number): string {
   switch (preset) {
     case "today":
@@ -103,9 +85,19 @@ export function presetLabel(preset: Preset, today: string, financialYearStart: n
       return "This month";
     case "last-month":
       return "Last month";
+    // A financial year is named by its span (`2025–26`), never by one calendar year: an
+    // April start makes "2025" ambiguous to the operator reading the chip.
     case "this-year":
-    case "last-year":
-      return financialYearLabel(preset, presetRange(preset, today, financialYearStart));
+    case "last-year": {
+      const { from, to } = presetRange(preset, today, financialYearStart);
+      const name = preset === "this-year" ? "This year" : "Last year";
+      const startYear = Number(from.slice(0, 4));
+      const endYear = Number(to.slice(0, 4));
+
+      return startYear === endYear
+        ? `${name} (${startYear})`
+        : `${name} (${startYear}–${String(endYear % 100).padStart(2, "0")})`;
+    }
   }
 }
 

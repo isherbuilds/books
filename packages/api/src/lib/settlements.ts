@@ -1,4 +1,4 @@
-import { db } from "@accly/db";
+import { db, type DbTransaction } from "@accly/db";
 import { documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
@@ -33,7 +33,7 @@ export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boole
 /** The party name printed on a document; registers show and search it. */
 export const printedPartyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
 
-/** The keyset, party, period and search predicates every document register shares. */
+/** The keyset, party, period, number, reference, narration and party-name predicates every document register shares. */
 export function documentListWhere(orgId: string, type: DocumentType, input: DocumentListInput) {
   const pattern = input.q ? likePattern(input.q) : undefined;
 
@@ -48,6 +48,7 @@ export function documentListWhere(orgId: string, type: DocumentType, input: Docu
       ? or(
           ilike(documents.number, pattern),
           ilike(documents.reference, pattern),
+          ilike(documents.narration, pattern),
           ilike(printedPartyName, pattern),
         )
       : undefined,
@@ -76,12 +77,17 @@ export async function settlementDetail(
 
 export async function orgSettings(
   orgId: string,
+  lock?: DbTransaction,
 ): Promise<typeof organizationSettings.$inferSelect> {
-  const [settings] = await db
+  const query = (lock ?? db)
     .select()
     .from(organizationSettings)
     .where(eq(organizationSettings.orgId, orgId))
     .limit(1);
+
+  // FOR SHARE: concurrent posts share the row, while a settings update waits for them
+  // to commit, so one document cannot mix settings from either side of an update.
+  const [settings] = lock ? await query.for("share") : await query;
 
   if (!settings) throw new Error(`Organization ${orgId} is missing its settings`);
 

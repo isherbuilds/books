@@ -32,6 +32,8 @@ export type LinkFieldProps<T> = {
   clearable?: boolean;
   placeholder?: string;
   inputRef?: Ref<HTMLInputElement>;
+  /** Focus on mount, for a field that remounts while its Sheet stays open. */
+  autoFocus?: boolean;
   id?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
@@ -66,6 +68,7 @@ export function LinkField<T>({
   clearable,
   placeholder,
   inputRef,
+  autoFocus,
   id,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
@@ -194,6 +197,7 @@ export function LinkField<T>({
         inputProps={{
           id,
           placeholder,
+          autoFocus,
           autoComplete: "off",
           "aria-invalid": ariaInvalid,
           "aria-describedby": ariaDescribedBy,
