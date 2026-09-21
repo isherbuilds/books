@@ -3,6 +3,7 @@ import type { organizationSettings } from "@accly/db/schema/organization-setting
 import { lockExceptions } from "@accly/db/schema/period-locks";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
+import { formatBusinessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
 
@@ -21,7 +22,10 @@ export async function assertPeriodOpen(
   const { lockedThrough, taxLockedThrough } = settings;
 
   if (args.affectsTax && taxLockedThrough !== null && args.entryDate <= taxLockedThrough) {
-    throw badRequest("LOCKED", `The tax period is locked through ${taxLockedThrough}.`);
+    throw badRequest(
+      "LOCKED",
+      `The tax period is locked through ${formatBusinessDate(taxLockedThrough)}.`,
+    );
   }
 
   if (lockedThrough === null || args.entryDate > lockedThrough) return;
@@ -42,7 +46,7 @@ export async function assertPeriodOpen(
   if (!exception) {
     throw badRequest(
       "LOCKED",
-      `Books are locked through ${lockedThrough}. Ask for an exception to post on or before that date.`,
+      `Books are locked through ${formatBusinessDate(lockedThrough)}. Ask for an exception to post on or before that date.`,
     );
   }
 }

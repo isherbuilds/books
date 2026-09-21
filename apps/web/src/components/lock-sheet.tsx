@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
-import { formatBusinessDate } from "@/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { LOCK_KIND_LABELS } from "@/lib/locks";
 import { orpc } from "@/lib/orpc";

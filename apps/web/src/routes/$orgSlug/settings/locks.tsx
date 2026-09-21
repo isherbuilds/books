@@ -18,7 +18,7 @@ import { ReasonDialog } from "@/components/confirm-dialog";
 import { LockExceptionSheet } from "@/components/lock-exception-sheet";
 import { LockSheet } from "@/components/lock-sheet";
 import { ListState, PageBody, PageHeader, Panel } from "@/components/page";
-import { formatBusinessDate } from "@/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { LOCK_KIND_LABELS, lockStateOptions } from "@/lib/locks";
 import { useCan } from "@/lib/membership";

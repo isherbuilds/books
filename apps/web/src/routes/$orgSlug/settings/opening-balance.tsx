@@ -22,7 +22,7 @@ import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { invalidateOpeningBalanceState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { openingBalanceOptions } from "@/lib/opening-balance";
-import { formatBusinessDate } from "@/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { errorMessage, hasErrorCode, isRefusal } from "@/lib/orpc-error";
