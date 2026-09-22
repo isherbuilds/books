@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
+import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import { journalEntries } from "@accly/db/schema/journal-entries";
+import { journalLines } from "@accly/db/schema/journal-lines";
+import { and, eq, lte, sql } from "drizzle-orm";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
 import { required } from "../support/assert";
@@ -9,6 +13,30 @@ import { clientFor, expectORPCCode, expectReason } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 
 type Account = typeof accounts.$inferSelect;
+
+async function balanceOn(orgId: string, accountId: string, through: string) {
+  const [row] = await db
+    .select({
+      balancePaise:
+        sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
+          BigInt,
+        ),
+    })
+    .from(journalLines)
+    .innerJoin(
+      journalEntries,
+      and(eq(journalEntries.orgId, orgId), eq(journalEntries.id, journalLines.entryId)),
+    )
+    .where(
+      and(
+        eq(journalLines.orgId, orgId),
+        eq(journalLines.accountId, accountId),
+        lte(journalEntries.entryDate, through),
+      ),
+    );
+
+  return required(row, `balance for account ${accountId} through ${through}`).balancePaise;
+}
 
 function openingBalanceAccountsOf(rows: Account[]) {
   const cashGroup = required(
@@ -45,10 +73,11 @@ await resetTestDatabase();
 
 const founder = await createFounderSession();
 
-test("an opening balance posts once, moves balances, cancels, and can be replaced", async () => {
+test("opening correction enforces the cutover lock and corrects historical balances", async () => {
   const fixture = await createAccountingFixture(founder, "opening-balance-workflow");
   const { cash, bank, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
   const claim = { orgSlug: fixture.organization.slug };
+  const originalDate = "2026-04-01";
 
   const lines = [
     { accountId: cash.id, side: "debit" as const, amount: "60.00", description: "Cash on hand" },
@@ -64,6 +93,7 @@ test("an opening balance posts once, moves balances, cancels, and can be replace
   expect(await fixture.api.openingBalance.get(claim)).toBeNull();
 
   const balancesBefore = await fixture.api.account.moneyBalances(claim);
+  const historicalCashBefore = await balanceOn(fixture.organization.id, cash.id, originalDate);
 
   const cashBefore = required(
     balancesBefore.find(({ id }) => id === cash.id),
@@ -77,7 +107,7 @@ test("an opening balance posts once, moves balances, cancels, and can be replace
 
   const posted = await fixture.api.openingBalance.post({
     ...claim,
-    documentDate: "2026-04-01",
+    documentDate: originalDate,
     lines,
   });
 
@@ -125,6 +155,33 @@ test("an opening balance posts once, moves balances, cancels, and can be replace
     ).balancePaise,
   ).toBe(bankBefore + 4_000n);
 
+  const ownerApi = clientFor(founder);
+  await ownerApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: originalDate,
+    expectedLockedThrough: null,
+    reason: "Cutover signed off",
+  });
+  await expectReason(
+    fixture.api.openingBalance.cancel({
+      ...claim,
+      openingBalanceId: posted.id,
+      reason: "Correct locked opening figures",
+    }),
+    "LOCKED",
+  );
+  expect(await fixture.api.openingBalance.get(claim)).toMatchObject({ id: posted.id });
+  expect(await balanceOn(fixture.organization.id, cash.id, originalDate)).toBe(
+    historicalCashBefore + 6_000n,
+  );
+  await ownerApi.lock.grantException({
+    ...claim,
+    userId: fixture.accountant.user.id,
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    reason: "Approve historical opening correction",
+  });
+
   const cancelled = await fixture.api.openingBalance.cancel({
     ...claim,
     openingBalanceId: posted.id,
@@ -134,13 +191,55 @@ test("an opening balance posts once, moves balances, cancels, and can be replace
   expect(cancelled.state).toBe("cancelled");
   expect(await fixture.api.openingBalance.get(claim)).toBeNull();
 
+  const reversal = await postingOf(fixture.organization.id, posted.id, "reverse");
+  expect(reversal.entry.reversesEntryId).toBe(posting.entry.id);
+  expect(reversal.entry.entryDate).toBe(originalDate);
+  expect(await balanceOn(fixture.organization.id, cash.id, originalDate)).toBe(
+    historicalCashBefore,
+  );
+
   const replacement = await fixture.api.openingBalance.post({
     ...claim,
-    documentDate: "2026-04-01",
-    lines,
+    documentDate: originalDate,
+    lines: [
+      { accountId: cash.id, side: "debit", amount: "80.00" },
+      { accountId: bank.id, side: "debit", amount: "40.00" },
+      { accountId: openingEquity.id, side: "credit", amount: "120.00" },
+    ],
   });
 
   expect(replacement.number).toMatch(/^OB\d{2}-\d{2}\/2$/);
+
+  const balancesAfterReplacement = await fixture.api.account.moneyBalances(claim);
+  expect(
+    required(
+      balancesAfterReplacement.find(({ id }) => id === cash.id),
+      "cash balance after replacement opening balance",
+    ).balancePaise,
+  ).toBe(cashBefore + 8_000n);
+  expect(
+    required(
+      balancesAfterReplacement.find(({ id }) => id === bank.id),
+      "bank balance after replacement opening balance",
+    ).balancePaise,
+  ).toBe(bankBefore + 4_000n);
+  expect(await balanceOn(fixture.organization.id, cash.id, originalDate)).toBe(
+    historicalCashBefore + 8_000n,
+  );
+
+  const isolated = await createAccountingFixture(founder, "opening-balance-isolation");
+  const isolatedAccounts = openingBalanceAccountsOf(isolated.accounts);
+
+  const isolatedOpening = await isolated.api.openingBalance.post({
+    orgSlug: isolated.organization.slug,
+    documentDate: originalDate,
+    lines: [
+      { accountId: isolatedAccounts.cash.id, side: "debit", amount: "1.00" },
+      { accountId: isolatedAccounts.openingEquity.id, side: "credit", amount: "1.00" },
+    ],
+  });
+
+  expect(isolatedOpening.number).toMatch(/^OB\d{2}-\d{2}\/1$/);
 });
 
 test("opening balance refuses a second posted document, control accounts, and CA posting", async () => {
@@ -165,11 +264,12 @@ test("opening balance refuses a second posted document, control accounts, and CA
     openingBalanceId: posted.id,
     reason: "Test the replacement validation",
   });
+  const reversal = await postingOf(fixture.organization.id, posted.id, "reverse");
 
   await expectReason(
     fixture.api.openingBalance.post({
       ...claim,
-      documentDate: "2026-04-01",
+      documentDate: reversal.entry.entryDate,
       lines: [
         { accountId: receivables.id, side: "debit", amount: "1.00" },
         { accountId: openingEquity.id, side: "credit", amount: "1.00" },

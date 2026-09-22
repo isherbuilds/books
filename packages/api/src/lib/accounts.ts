@@ -38,7 +38,8 @@ export function isLeaf(orgId: string) {
 /**
  * Active, non-system leaves of one of `types` that are not money accounts: money
  * moves between money accounts only by the slice 5 Journal. Unresolved ids are
- * omitted from the result.
+ * omitted from the result. A transaction executor holds the resolved account rows
+ * through commit so a concurrent archive cannot invalidate a posting.
  */
 export async function postableAccounts(
   executor: typeof db | DbTransaction,
@@ -48,29 +49,35 @@ export async function postableAccounts(
 ): Promise<Array<typeof accounts.$inferSelect>> {
   if (ids.length === 0) return [];
 
-  return executor
-    .select(getTableColumns(accounts))
-    .from(accounts)
-    .leftJoin(moneyGroup, underMoneyGroup(orgId))
-    .where(
-      and(
-        eq(accounts.orgId, orgId),
-        inArray(accounts.id, [...ids]),
-        eq(accounts.active, true),
-        inArray(accounts.type, [...types]),
-        isNull(accounts.systemKey),
-        isNull(moneyGroup.id),
-        isLeaf(orgId),
-      ),
-    );
+  return (
+    executor
+      .select(getTableColumns(accounts))
+      .from(accounts)
+      .leftJoin(moneyGroup, underMoneyGroup(orgId))
+      .where(
+        and(
+          eq(accounts.orgId, orgId),
+          inArray(accounts.id, [...ids]),
+          eq(accounts.active, true),
+          inArray(accounts.type, [...types]),
+          isNull(accounts.systemKey),
+          isNull(moneyGroup.id),
+          isLeaf(orgId),
+        ),
+      )
+      // Lock only the owned account row: PostgreSQL cannot lock the nullable side of
+      // the outer join. A concurrent archive then waits for the posting transaction.
+      .for("share", { of: accounts })
+  );
 }
 
 export async function postableAccount(
+  executor: typeof db | DbTransaction,
   orgId: string,
   id: string,
   types: readonly AccountType[],
 ): Promise<typeof accounts.$inferSelect | undefined> {
-  const [row] = await postableAccounts(db, orgId, [id], types);
+  const [row] = await postableAccounts(executor, orgId, [id], types);
 
   return row;
 }

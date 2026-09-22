@@ -189,18 +189,27 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
 - `reverseDocument` is one transaction. A conditional update first moves the
   posted document to `cancelled` (anything else is `CONFLICT`). Allocations then
   follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
-  party ledger lines and entry are reversed, dated today in the Organization
-  time zone.
+  party ledger lines and entry are reversed. Ordinary documents reverse on
+  today's business date in the Organization time zone; Opening Balance reverses
+  on its original cutover so a replacement corrects historical balances.
+  The reversal date must pass the period lock. A refusal rolls back the state
+  change; `cancelledAt` remains the actual cancellation instant.
 - `organization_settings.lockedThrough` and `taxLockedThrough` own the current
-  lock dates. Every ledger writer reads settings `FOR SHARE` inside its
+  lock dates. Every ledger writer reads settings `FOR SHARE` (or stronger) inside its
   transaction before document locks, using that same row for tax, numbering
   and dates. `assertPeriodOpen` (`core/locks.ts`) checks the held dates and reads
   `lock_exceptions` only when the general lock needs a bypass.
-  `lock.set` updates a date and appends its history atomically; the UPDATE
-  waits for in-flight postings. Revocation reads settings `FOR UPDATE` before
+  `lock.set` compares the submitted `expectedLockedThrough` with the current date,
+  then updates it and appends history atomically. A stale comparison is `CONFLICT`;
+  the client refreshes and closes the stale form. The UPDATE waits for in-flight
+  postings. Revocation reads settings `FOR UPDATE` before
   changing the exception, so it also waits for passed checks. Posting never
   scans lock history. Expiry uses `statement_timestamp()`. Spec
   [call 7](./specs/accounting-core.md#architecture-calls).
+- Receipt and Payment resolve every posting-critical mutable Party, Account,
+  Payment Method and TDS Section inside the posting transaction, after settings,
+  and hold each resolved row `FOR SHARE` until commit. See
+  [PR #4 correction review](./research/pr4-review-2026-09-22.md).
 - One `post` entry and at most one `reverse` entry exist per document:
   `journal_entries` has a unique index on
   `(orgId, documentType, documentId, kind)` and a partial unique index on

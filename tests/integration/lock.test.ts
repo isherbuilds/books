@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 
+import { drainAuditWrites } from "@accly/api/audit";
 import { assertPeriodOpen } from "@accly/api/core/locks";
 import type { Scope } from "@accly/api/lib/procedures/factory";
 import { orgSettings } from "@accly/api/lib/settlements";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { sql } from "drizzle-orm";
+import { auditLog } from "@accly/db/schema/audit";
+import { periodLocks } from "@accly/db/schema/period-locks";
+import { and, eq, sql } from "drizzle-orm";
 
 import { createAccountingFixture } from "../support/accounting";
 import { required } from "../support/assert";
@@ -69,59 +72,129 @@ function postJournal(
   });
 }
 
+async function lockChangeCounts(orgId: string) {
+  await drainAuditWrites();
+
+  const [[history], [audits]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(periodLocks)
+      .where(and(eq(periodLocks.orgId, orgId), eq(periodLocks.kind, "general"))),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(auditLog)
+      .where(and(eq(auditLog.orgId, orgId), eq(auditLog.action, "lock.set"))),
+  ]);
+
+  return {
+    history: required(history, "general lock history count").count,
+    audits: required(audits, "lock audit count").count,
+  };
+}
+
 /**
  * Runs `change` while a posting holds its passed period check open in an uncommitted
- * transaction. Resolves "waiting" once Postgres reports the change blocked on a row
- * lock, the only outcome the mutex allows; "changed" means it landed between the
- * check and the commit. No timer: the loop ends on observed state either way.
+ * transaction. The holder backend is captured inside that transaction, then
+ * pg_blocking_pids identifies a waiter blocked by that specific backend.
  */
 async function raceLockChange(
   scope: Scope,
   change: () => Promise<unknown>,
 ): Promise<"changed" | "waiting"> {
-  const checked = Promise.withResolvers<void>();
+  const ready = Promise.withResolvers<{ holderPid: number } | { error: unknown }>();
   const release = Promise.withResolvers<void>();
 
-  const inFlight = db.transaction(async (tx) => {
-    const settings = await orgSettings(scope.orgId, tx);
-    await assertPeriodOpen(tx, scope, settings, { entryDate: today, affectsTax: false });
-    checked.resolve();
-    await release.promise;
-  });
+  const inFlight = db
+    .transaction(async (tx) => {
+      const { rows } = await tx.execute<{ pid: number }>(sql`select pg_backend_pid()::int as pid`);
 
-  await checked.promise;
+      const holderPid = rows[0]?.pid;
 
-  let settled = false;
-  let blocked = false;
+      if (holderPid === undefined) throw new Error("could not identify lock holder backend");
 
-  const pending = change().finally(() => {
-    settled = true;
-  });
+      const settings = await orgSettings(scope.orgId, tx);
+      await assertPeriodOpen(tx, scope, settings, { entryDate: today, affectsTax: false });
+      ready.resolve({ holderPid });
+      await release.promise;
+    })
+    .then(
+      () => ({ ok: true as const }),
+      (error: unknown) => {
+        ready.resolve({ error });
 
-  // A waiter holds a granted tuple lock on the settings table while it waits on the
-  // holder's transaction, and pg_blocking_pids names who blocks it.
+        return { ok: false as const, error };
+      },
+    );
+
+  const readiness = await ready.promise;
+
+  if ("error" in readiness) {
+    release.resolve();
+    await inFlight;
+    throw readiness.error;
+  }
+
+  let completed = false;
+
+  const pending = Promise.resolve()
+    .then(change)
+    .then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    )
+    .finally(() => {
+      completed = true;
+    });
+
+  let outcome: "changed" | "waiting" | "timeout" = "timeout";
+  let observationResult: { ok: true } | { ok: false; error: unknown } = { ok: true };
+
   try {
-    for (let probes = 0; probes < 5000 && !settled && !blocked; probes++) {
+    const deadline = performance.now() + 1_000;
+
+    while (performance.now() < deadline) {
+      if (completed) {
+        outcome = "changed";
+        break;
+      }
+
       const { rows } = await db.execute<{ blocked: boolean }>(
         sql`select exists(
-          select 1 from pg_locks l join pg_class c on c.oid = l.relation
-          where c.relname = 'organization_settings' and l.locktype = 'tuple'
-            and cardinality(pg_blocking_pids(l.pid)) > 0
+          select 1
+          from pg_stat_activity waiter
+          where waiter.pid <> ${readiness.holderPid}
+            and ${readiness.holderPid} = any(pg_blocking_pids(waiter.pid))
         ) as blocked`,
       );
 
-      blocked = rows[0]?.blocked ?? false;
+      if (rows[0]?.blocked) {
+        outcome = "waiting";
+        break;
+      }
+
+      // This polls live PostgreSQL process state; fake timers cannot advance backend waits.
+      await Bun.sleep(20);
     }
-  } finally {
-    release.resolve();
-    await inFlight;
+
+    if (completed) outcome = "changed";
+  } catch (error) {
+    observationResult = { ok: false, error };
   }
 
-  await pending;
+  release.resolve();
+  const [holderResult, changeResult] = await Promise.all([inFlight, pending]);
 
-  if (!settled && !blocked) throw new Error("the change neither settled nor blocked");
+  if (!observationResult.ok) throw observationResult.error;
 
-  return blocked ? "waiting" : "changed";
+  if (!holderResult.ok) throw holderResult.error;
+
+  if (!changeResult.ok) throw changeResult.error;
+
+  if (outcome === "timeout") {
+    throw new Error("the change neither completed nor blocked within 1s");
+  }
+
+  return outcome;
 }
 
 await resetTestDatabase();
@@ -140,6 +213,7 @@ test("a general lock is inclusive and only an active user exception bypasses it"
     ...claim,
     kind: "general",
     lockedThrough: today,
+    expectedLockedThrough: null,
     reason: "Month closed",
   });
 
@@ -218,6 +292,7 @@ test("a general lock is inclusive and only an active user exception bypasses it"
       ...claim,
       kind: "general",
       lockedThrough: null,
+      expectedLockedThrough: today,
       reason: "Not permitted",
     }),
     "FORBIDDEN",
@@ -227,6 +302,7 @@ test("a general lock is inclusive and only an active user exception bypasses it"
     ...claim,
     kind: "general",
     lockedThrough: null,
+    expectedLockedThrough: today,
     reason: "Reopened",
   });
   await postJournal(fixture.api, claim.orgSlug, cash, exemptIncome, today, "Posted after reopen");
@@ -235,6 +311,57 @@ test("a general lock is inclusive and only an active user exception bypasses it"
     lockedThrough: null,
     reason: "Reopened",
   });
+});
+
+test("a stale lock change cannot reopen a newer close", async () => {
+  const fixture = await createAccountingFixture(founder, "stale-lock", { timeZone: "UTC" });
+  const ca = await createTestUser("stale-lock-ca");
+  await joinOrganization(ca, fixture.organization.id, "ca");
+  const caApi = clientFor(ca);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  await caApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: yesterday,
+    expectedLockedThrough: null,
+    reason: "Initial close",
+  });
+  const staleExpected = (await caApi.lock.get(claim)).general?.lockedThrough ?? null;
+
+  await caApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: today,
+    expectedLockedThrough: staleExpected,
+    reason: "Newer close",
+  });
+  const countsBefore = await lockChangeCounts(fixture.organization.id);
+  expect(countsBefore).toEqual({ history: 2, audits: 2 });
+
+  await expectORPCCode(
+    caApi.lock.set({
+      ...claim,
+      kind: "general",
+      lockedThrough: null,
+      expectedLockedThrough: staleExpected,
+      reason: "Stale reopen",
+    }),
+    "CONFLICT",
+  );
+  const countsAfter = await lockChangeCounts(fixture.organization.id);
+
+  expect(countsAfter).toEqual(countsBefore);
+  expect((await caApi.lock.get(claim)).general?.lockedThrough).toBe(today);
+
+  await caApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: null,
+    expectedLockedThrough: today,
+    reason: "Deliberate reopen",
+  });
+  expect((await caApi.lock.get(claim)).general?.lockedThrough).toBeNull();
 });
 
 test("the tax lock follows affectsTax while cancellations use the reversal date", async () => {
@@ -280,6 +407,7 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
     ...claim,
     kind: "tax",
     lockedThrough: today,
+    expectedLockedThrough: null,
     reason: "GST return filed",
   });
 
@@ -316,6 +444,7 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
     ...claim,
     kind: "tax",
     lockedThrough: yesterday,
+    expectedLockedThrough: today,
     reason: "Reopened current tax date",
   });
   expect(
@@ -337,6 +466,7 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
     ...claim,
     kind: "general",
     lockedThrough: today,
+    expectedLockedThrough: null,
     reason: "Books closed",
   });
   await expectReason(
@@ -366,7 +496,13 @@ test("a lock change waits for a posting that already passed its check", async ()
 
   expect(
     await raceLockChange(scope, () =>
-      caApi.lock.set({ ...claim, kind: "general", lockedThrough: today, reason: "Close today" }),
+      caApi.lock.set({
+        ...claim,
+        kind: "general",
+        lockedThrough: today,
+        expectedLockedThrough: null,
+        reason: "Close today",
+      }),
     ),
   ).toBe("waiting");
   await expectReason(

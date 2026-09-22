@@ -183,7 +183,7 @@ function OpeningBalanceRoute() {
           open={cancelOpen}
           pending={cancel.isPending}
           title="Cancel opening balance"
-          description="This posts a reversal. The opening balance remains in the audit history."
+          description="This reverses the balance on its original cutover date, changing historical balances. The original remains in the audit history."
           placeholder="Why is this opening balance being cancelled?"
           keepLabel="Keep opening balance"
           confirmLabel="Cancel opening balance"

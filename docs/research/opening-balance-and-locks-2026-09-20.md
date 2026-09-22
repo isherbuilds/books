@@ -137,12 +137,12 @@ Three distinct models, all first-party:
 
 Detail worth carrying:
 
-- **Inclusive comparison is standard.** ERPNext throws when
-  `getdate(posting_date) <= getdate(acc_frozen_upto)`,
-  `general_ledger.py:783-804`. Zoho documents the same off-by-one as a user
-  warning: "If you do not want transactions to be created on the date specified
-  as the lock date, set the next date from the intended date as the lock date."
-  Our spec's "on or before the general lock" matches.
+- **ERPNext's freeze comparison is inclusive.** It throws when
+  `getdate(posting_date) <= getdate(acc_frozen_upto)`. Our spec uses the same
+  “on or before” boundary. Zoho's current [UI help](https://www.zoho.com/us/books/help/accountant/transaction-lock.html)
+  says “before,” while its [API overview](https://www.zoho.com/books/api/v3/transaction-locking/)
+  says “on or before.” These are not equivalent; Zoho does not independently
+  establish our chosen boundary.
 - **ERPNext explicitly blocks Administrator**, with the reason in the docstring:
   "Administrator has all the roles so this check will be bypassed if any role is
   allowed to post. Hence stop admin to bypass." The bypass must be an explicit
@@ -161,22 +161,25 @@ Detail worth carrying:
 
 This is the one place the sources answer a question our spec gets wrong.
 
-ERPNext checks the freeze on cancellation from `make_reverse_gl_entries`
-(`general_ledger.py:708`). Which date it checks depends on a setting:
+In the pinned ERPNext v15.121.3 source, `make_reverse_gl_entries` selects the
+date passed to the freeze check according to a setting:
 
-- Default: the **original posting date** is validated, so an old document cannot
-  be cancelled once its period is frozen.
-- With `Accounts Settings.enable_immutable_ledger` on: the reversal is **dated
-  today** and today is what gets validated (`general_ledger.py:678, 704-708`).
+- With `Accounts Settings.enable_immutable_ledger` off: the original posting
+  date is used unless an explicit posting date is supplied.
+- With it on: an explicit argument or request posting date is used, falling
+  back to today. Ordinary Journal Entry cancellation supplies no explicit date.
 
-We already behave like the second mode. `reverseDocument` computes
-`entryDate = businessDate(cancelledAt, timeZone)`
-(`packages/api/src/core/documents.ts:403`), so a cancellation never alters the
-original period's journal lines. Under that design, validating the original
-document date as well would block cancelling any old document forever while
-protecting nothing extra, because the locked period's trial balance cannot move.
+Our default reversal date matches the second mode's fallback:
+`entryDate = businessDate(cancelledAt, timeZone)` in `reverseDocument`.
+That forward-dated reversal alone does not move an earlier trial balance.
+This is a date-policy comparison, not complete ERPNext equivalence: its
+cancellation flags and opening-report predicates differ from our ledger.
 
-Neither ERPNext mode checks both dates. No other system checks two dates either.
+**22 September clarification:** ERPNext also validates Accounting Period against
+the original posting date before selecting the reversal date, and checks Period
+Closing Vouchers. The previous claim that neither mode checks both dates was
+too broad. This freeze comparison did not establish an Opening Balance
+replacement policy; see the [correction-workflow follow-up](./opening-balance-correction-policy-2026-09-22.md).
 
 ### Tax-period lock
 

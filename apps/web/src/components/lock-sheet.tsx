@@ -23,10 +23,11 @@ import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { LOCK_KIND_LABELS } from "@/lib/locks";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, isRefusal } from "@/lib/orpc-error";
+import { errorMessage, hasErrorCode, isRefusal } from "@/lib/orpc-error";
 
 const lockSchema = z.object({
   lockedThrough: z.union([z.literal(""), dateOnly]),
+  expectedLockedThrough: dateOnly.nullable(),
   reason,
 });
 
@@ -45,7 +46,11 @@ function LockForm({
   const label = LOCK_KIND_LABELS[kind];
 
   const form = useZodForm(lockSchema, {
-    defaultValues: { lockedThrough: current?.lockedThrough ?? "", reason: "" },
+    defaultValues: {
+      lockedThrough: current?.lockedThrough ?? "",
+      expectedLockedThrough: current?.lockedThrough ?? null,
+      reason: "",
+    },
   });
 
   const setLock = useMutation(
@@ -60,12 +65,15 @@ function LockForm({
         onClose();
       },
       onError: async (error) => {
-        // Retrying could append a second lock row and audit entry; the page shows
-        // whether it went through.
-        if (!isRefusal(error)) {
+        // A lost response or conflict makes this form's loaded lock snapshot stale.
+        if (!isRefusal(error) || hasErrorCode(error, "CONFLICT")) {
           onClose();
           await invalidateLockState(queryClient, orgSlug);
-          toast.error("The result is uncertain. Check the lock before setting it again.");
+          toast.error(
+            isRefusal(error)
+              ? errorMessage(error, `Could not update the ${label.toLowerCase()} lock`)
+              : "The result is uncertain. Check the lock before setting it again.",
+          );
 
           return;
         }
@@ -75,13 +83,15 @@ function LockForm({
     }),
   );
 
-  const onSubmit = form.handleSubmit(({ lockedThrough, reason: lockReason }) =>
-    setLock.mutate({
-      orgSlug,
-      kind,
-      lockedThrough: lockedThrough || null,
-      reason: lockReason,
-    }),
+  const onSubmit = form.handleSubmit(
+    ({ lockedThrough, expectedLockedThrough, reason: lockReason }) =>
+      setLock.mutate({
+        orgSlug,
+        kind,
+        lockedThrough: lockedThrough || null,
+        expectedLockedThrough,
+        reason: lockReason,
+      }),
   );
 
   return (

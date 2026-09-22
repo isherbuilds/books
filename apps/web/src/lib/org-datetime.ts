@@ -1,3 +1,4 @@
+import { tzOffset } from "@date-fns/tz";
 import { getRouteApi } from "@tanstack/react-router";
 
 export { formatBusinessDate } from "@accly/api/lib/business-date";
@@ -64,34 +65,6 @@ export function orgToday(timeZone: string, now = new Date()): string {
   }).format(now);
 }
 
-/** Milliseconds the zone's wall clock runs ahead of UTC at `instant`. */
-function zoneOffset(instant: Date, timeZone: string): number {
-  const parts = formatter(`offset|${timeZone}`, "en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(instant);
-
-  const at = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((part) => part.type === type)?.value);
-
-  const wall = Date.UTC(
-    at("year"),
-    at("month") - 1,
-    at("day"),
-    at("hour"),
-    at("minute"),
-    at("second"),
-  );
-
-  return wall - Math.floor(instant.getTime() / 1000) * 1000;
-}
-
 /**
  * The instant a wall-clock time typed in the org zone (`YYYY-MM-DDTHH:mm`, as a
  * `datetime-local` input yields) names. The browser's own zone plays no part.
@@ -101,8 +74,8 @@ function zoneOffset(instant: Date, timeZone: string): number {
  */
 export function orgLocalToInstant(local: string, timeZone: string): Date {
   const asUtc = new Date(`${local}Z`);
-  const guess = new Date(asUtc.getTime() - zoneOffset(asUtc, timeZone));
-  const instant = new Date(asUtc.getTime() - zoneOffset(guess, timeZone));
+  const guess = new Date(asUtc.getTime() - tzOffset(timeZone, asUtc) * 60_000);
+  const instant = new Date(asUtc.getTime() - tzOffset(timeZone, guess) * 60_000);
 
   const parts = formatter(`localMinute|${timeZone}`, "en-CA", {
     timeZone,

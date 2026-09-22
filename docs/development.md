@@ -60,9 +60,11 @@ method.
 | `bun run dev`                | Services, migrations, all apps                      |
 | `bun run dev:status`         | Read-only service and migration check               |
 | `bun run check-types`        | Type-check packages and `tests/`                    |
-| `bun run check`              | oxlint and oxfmt; writes formatting                 |
-| `bun run test`               | Real-PostgreSQL tests; wipes `accly_test`           |
-| `bun run build`              | Build all workspaces                                |
+| `bunx oxlint`                | Non-writing lint check                              |
+| `bunx oxfmt --check .`       | Non-writing repository format check                 |
+| `bun run check`              | Run oxlint, then write formatting                   |
+| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test` |
+| `bun run build`              | Production-build all workspaces                     |
 | `bun run db:up`              | Start PostgreSQL and SeaweedFS                      |
 | `bun run db:generate`        | Generate a migration from the schema                |
 | `bun run db:migrate`         | Apply migrations                                    |
@@ -75,11 +77,18 @@ method.
 page loads; `benchmark:navigation` times in-app route changes. Quote a
 performance number only on `db:seed:volume` data or more.
 
-**Check policy.** `check-types`, `check` and `test` are the repository gates. A
-focused change runs the smallest existing checks that cover it. A docs-only
-change runs `bunx oxfmt --check <files>`. End-user content runs
-`bun run --cwd apps/fumadocs build`. An SSR or UI change needs a production
-build and the running app. A read-only review never runs `check` or `test`.
+**Check policy.** Every pull request and push to `main` runs a frozen install,
+non-writing lint and format checks, type checks, the full test suite against
+disposable PostgreSQL and SeaweedFS services, and production builds. `bun run
+check` is a local fixer because it writes formatting. A focused change runs the
+smallest existing checks that cover it. A docs-only change runs `bunx oxfmt
+--check <files>`. End-user content runs `bun run --cwd apps/fumadocs build`. An
+SSR or UI change needs a production build and the running app. A read-only
+review never runs `check` or `test`.
+
+The web build passes and hashes `VITE_*` through Turborepo and hashes
+`packages/env/.env*` as an input. Inject server-only settings when starting the
+built server; do not expose them through public Vite variables.
 
 Package dependencies use SemVer ranges; `bun.lock` records resolved versions.
 Keep required peer pairs compatible when updating them. Bun's runtime version

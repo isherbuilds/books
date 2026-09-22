@@ -724,6 +724,7 @@ const GUARDED_CALLS = {
       ...claim,
       kind: "general",
       lockedThrough: "2026-03-31",
+      expectedLockedThrough: null,
       reason: "Intrusion",
     }),
   "lock.grantException": (api, claim) =>

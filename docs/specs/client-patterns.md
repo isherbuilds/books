@@ -138,6 +138,8 @@ financial rollback are not adopted.
      `components/{opening-balance-form,lock-sheet,lock-exception-sheet}.tsx`).
      An exception expiry is typed as wall-clock time in the Organization zone
      and converted with `orgLocalToInstant`; the server judges "in the future".
+     Conversion uses `@date-fns/tz` only for offsets, retaining round-trip gap
+     rejection and separate date-only arithmetic ([decision](../research/midday-timezones-2026-09-22.md)).
      Payment (`direct`, `advance`, `against` open Bills with allocations, a TDS
      section Link Field); Bill (lines with `itcEligible`, an optional TDS section,
      due date, and the Invoice settlement display and cancellation flow); notes

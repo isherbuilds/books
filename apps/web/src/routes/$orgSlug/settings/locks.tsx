@@ -355,7 +355,7 @@ function LocksRoute() {
         open={revokeId !== null}
         pending={revoke.isPending}
         title="Revoke exception?"
-        description="This member will no longer be able to post on or before the books lock."
+        description="This exception will stop applying. Other active exceptions remain valid."
         placeholder="Why is this exception being revoked?"
         keepLabel="Keep exception"
         confirmLabel="Revoke exception"

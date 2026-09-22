@@ -104,13 +104,14 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    lock follows `affectsTax`, stored at post, which marks any document in a GST
    register, exempt direct Receipts included. `allocation.apply` and
    `allocation.reverse` check the lock on their entry date.
-   Back-dating before a lock rewrites nothing. A cancellation is checked on its
-   **reversal date, never the original document date**: `reverseDocument`
-   stamps the reversal with today's business date, so a locked period's journal
-   lines cannot move, and checking the original date would make every document
-   in a closed period permanently uncancellable while protecting nothing. This
-   is ERPNext's behaviour under `enable_immutable_ledger`
-   ([research](../research/opening-balance-and-locks-2026-09-20.md)).
+   A cancellation is checked on its reversal date. Ordinary documents reverse
+   on today's business date in the Organization's time zone. **Opening Balance
+   reverses on its original cutover date**, so cancellation and replacement
+   correct historical balances. A locked cutover needs an authorized exception
+   or reopening; keeping the period closed instead calls for a current-period
+   Journal adjustment without cancelling the opening. Ledger rows remain
+   append-only and `cancelledAt` records the actual cancellation instant
+   ([approved policy and references](../research/opening-balance-correction-policy-2026-09-22.md)).
 8. **External posting is post-MVP.** References, digests, deduplication,
    ingestion and API keys arrive together.
 9. **Reports.** Accounting reports read journal lines. P&L and balance sheet
@@ -493,9 +494,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 
 ## Journal, Opening Balance and locks (slice 5)
 
-Implemented. Runtime verification is open in the
-[work registry](../README.md#work-lifecycle) (Opening balance and locks); CA
-acceptance is open; party lines are slice 9.
+Implemented and runtime verified, including the [original-cutover correction and lock boundary](../research/pr4-review-2026-09-22.md#pr4-p1-opening-lifecycle).
+CA acceptance is open; party lines are slice 9.
 
 - **Document.** Type `journal`, a Billing document like Receipt, posted in full
   with no draft. Header: `documentDate`, a required `narration` (1–500), an
@@ -517,8 +517,8 @@ acceptance is open; party lines are slice 9.
   Journal writes no party ledger lines. The batch predicate `journalAccounts`
   runs inside the posting transaction after a `FOR SHARE` read of
   `organization_settings`, so a concurrent GSTIN change cannot let a taxable
-  line through. It is beside `postableAccount` in `lib/accounts.ts` and
-  reuses `isLeaf`; `postableAccount` does not change.
+  line through. It is beside `postableAccount` in `lib/accounts.ts` and reuses
+  `isLeaf`.
 - **Storage.** The baseline migration carries: nullable `entry_side` (`debit`,
   `credit`) and `party_id` (composite key to `parties`) on `document_lines`,
   `journal_prefix`, `locked_through` and `tax_locked_through` on `organization_settings`, `period_locks`,
@@ -538,8 +538,9 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   Input line fields and the balance refinement live in `lib/schemas.ts`.
   A `journalPrefix` setting (default `JV` via `SETTINGS_DEFAULTS`, the
   `documentPrefix` rule) produces `JV26-27/1`.
-- **Cancel.** `reverseDocument` as it is: once, with a reason, dated the cancel
-  day. A wrong date is fixed by a new Journal, not by editing.
+- **Cancel.** Journal cancellation uses `reverseDocument`: once, with a reason,
+  dated the cancel day. A wrong date is fixed by a new Journal, not by editing.
+  Opening Balance uses the original-cutover rule below.
 - **Contra** is a label for a Journal whose lines are all money leaves (bank to
   bank, a cash deposit). One type, one series.
 - **Wiring.** The `journal.{post,get,list,accounts,cancel}` procedures have
@@ -563,17 +564,23 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   lines as the Journal minus party (`controls: false`). A complete balanced
   trial balance needs no `openingEquity` line; any opening-equity amount is an
   explicit line the user enters, never a silent plug.
-  `affectsTax` false, no party ledger lines, cancel via `reverseDocument`.
+  `affectsTax` false, no party ledger lines. Cancellation via `reverseDocument`
+  posts an opposite entry on the original cutover and checks that date's lock;
+  refusal rolls back the cancellation. The original and reversal remain
+  auditable. A replacement can use the same cutover, subject to normal posting
+  locks; there is no separate replacement-after-reversal cutoff.
   `openingBalance.get` returns the posted document or null.
 - **Locks.** `organization_settings.lockedThrough` and `taxLockedThrough` own
-  the current dates; null means unlocked. `lock.set` updates the appropriate
-  date and appends its `period_locks` history row
+  the current dates; null means unlocked. `lock.set` requires
+  `expectedLockedThrough`; a stale value is `CONFLICT`, while a fresh value
+  deliberately permits reopening with an earlier date or null. The update
+  appends its `period_locks` history row
   `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
   History's highest identity id per kind supplies the latest reason and setter
   to the settings screen, not a posting-time lookup. `lock_exceptions` stores
   `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy/revokeReason }`;
   active means not revoked and not expired on the database clock.
-  Every posting, cancellation and allocation reads settings once `FOR SHARE`
+  Every posting, cancellation and allocation reads settings once `FOR SHARE` (or stronger)
   inside its transaction, before document locks. `lock.set`'s UPDATE and
   `lock.revokeException`'s `FOR UPDATE` wait for those readers to commit.
   `assertPeriodOpen` checks those already-held dates and queries exceptions only

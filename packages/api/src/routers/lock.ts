@@ -66,11 +66,21 @@ export const lockRouter = {
 
   set: orgProcedure(
     { lock: ["set"] },
-    orgInput.extend({ kind: z.enum(LOCK_KINDS), lockedThrough: dateOnly.nullable(), reason }),
+    orgInput.extend({
+      kind: z.enum(LOCK_KINDS),
+      lockedThrough: dateOnly.nullable(),
+      expectedLockedThrough: dateOnly.nullable(),
+      reason,
+    }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
     const row = await db.transaction(async (tx) => {
+      const lockedThroughColumn =
+        input.kind === "general"
+          ? organizationSettings.lockedThrough
+          : organizationSettings.taxLockedThrough;
+
       // UPDATE itself waits for in-flight postings holding settings FOR SHARE.
       const [settings] = await tx
         .update(organizationSettings)
@@ -79,10 +89,19 @@ export const lockRouter = {
             ? { lockedThrough: input.lockedThrough }
             : { taxLockedThrough: input.lockedThrough },
         )
-        .where(eq(organizationSettings.orgId, scope.orgId))
+        .where(
+          and(
+            eq(organizationSettings.orgId, scope.orgId),
+            sql`${lockedThroughColumn} is not distinct from ${input.expectedLockedThrough}`,
+          ),
+        )
         .returning({ orgId: organizationSettings.orgId });
 
-      if (!settings) throw impossible(`organization ${scope.orgId} is missing its settings`);
+      if (!settings) {
+        throw new ORPCError("CONFLICT", {
+          message: "This lock changed after you opened it.",
+        });
+      }
 
       const [inserted] = await tx
         .insert(periodLocks)

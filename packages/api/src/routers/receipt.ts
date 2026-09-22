@@ -89,28 +89,33 @@ export const receiptRouter = {
       );
     }
 
-    // Independent lookups; validation order below still reports the first missing input.
-    // postDocument checks the Payment Method under a lock inside the transaction.
-    const [party, incomeAccount] = await Promise.all([
-      input.partyId
-        ? db
-            .select()
-            .from(parties)
-            .where(and(eq(parties.orgId, scope.orgId), eq(parties.id, input.partyId)))
-            .limit(1)
-            .then(([row]) => row)
-        : undefined,
-      settlementKind === "direct"
-        ? postableAccount(scope.orgId, input.incomeAccountId, ["income"])
-        : undefined,
-    ]);
-
-    if (input.partyId && !party) {
-      throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
-    }
-
     const posted = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
+
+      const [party] = input.partyId
+        ? await tx
+            .select()
+            .from(parties)
+            .where(
+              and(
+                eq(parties.orgId, scope.orgId),
+                eq(parties.id, input.partyId),
+                eq(parties.active, true),
+              ),
+            )
+            .limit(1)
+            .for("share")
+        : [];
+
+      const incomeAccount =
+        settlementKind === "direct"
+          ? await postableAccount(tx, scope.orgId, input.incomeAccountId, ["income"])
+          : undefined;
+
+      if (input.partyId && !party) {
+        throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
+      }
+
       const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
       let lineDescription: string;
       let affectsTax: boolean;
@@ -126,7 +131,6 @@ export const receiptRouter = {
           advanceSupply: input.advanceSupply,
           // A receipt's advance is always money the party paid ahead of its bills.
           exposureSide: "receivable",
-          // The batch above proved this id resolves to a party in this organization.
           partyId: input.partyId,
           accountId: null,
           amountPaise: input.amount,

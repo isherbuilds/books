@@ -425,7 +425,6 @@ export async function reverseDocument(
   reason: string,
 ): Promise<typeof documents.$inferSelect> {
   const cancelledAt = new Date();
-  const entryDate = businessDate(cancelledAt, settings.timeZone);
 
   const [cancelled] = await tx
     .update(documents)
@@ -444,7 +443,12 @@ export async function reverseDocument(
     throw new ORPCError("CONFLICT", { message: "This document is not posted." });
   }
 
-  // A cancellation is checked on its reversal date (spec call 7).
+  // Opening corrections belong to the cutover; ordinary cancellations belong to today.
+  const entryDate =
+    cancelled.type === "openingBalance"
+      ? cancelled.documentDate
+      : businessDate(cancelledAt, settings.timeZone);
+
   await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: cancelled.affectsTax });
 
   const active = await activeAllocationsOf(tx, scope.orgId, [documentId]);

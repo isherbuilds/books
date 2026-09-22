@@ -57,36 +57,38 @@ export const paymentRouter = {
     const { scope } = context;
     const { settlementKind } = input;
 
-    // postDocument checks the Payment Method under a lock inside the transaction.
-    const [party, expenseAccount, section] = await Promise.all([
-      input.partyId
-        ? db
+    const { posted, tds, section } = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+      const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
+
+      const [party] = input.partyId
+        ? await tx
             .select()
             .from(parties)
-            .where(and(eq(parties.orgId, scope.orgId), eq(parties.id, input.partyId)))
+            .where(
+              and(
+                eq(parties.orgId, scope.orgId),
+                eq(parties.id, input.partyId),
+                eq(parties.active, true),
+              ),
+            )
             .limit(1)
-            .then(([row]) => row)
-        : undefined,
-      settlementKind === "direct"
-        ? postableAccount(scope.orgId, input.expenseAccountId, ["expense", "asset"])
-        : undefined,
-      input.tdsSectionId
-        ? db
+            .for("share")
+        : [];
+
+      const expenseAccount =
+        settlementKind === "direct"
+          ? await postableAccount(tx, scope.orgId, input.expenseAccountId, ["expense", "asset"])
+          : undefined;
+
+      const [section] = input.tdsSectionId
+        ? await tx
             .select()
             .from(tdsSections)
             .where(and(eq(tdsSections.orgId, scope.orgId), eq(tdsSections.id, input.tdsSectionId)))
             .limit(1)
-            .then(([row]) => row)
-        : undefined,
-    ]);
-
-    const tds = section
-      ? { sectionId: section.id, amountPaise: computeTds(input.amount, section.rateBasisPoints) }
-      : null;
-
-    const posted = await db.transaction(async (tx) => {
-      const settings = await orgSettings(scope.orgId, tx);
-      const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
+            .for("share")
+        : [];
 
       if (input.partyId && !party) {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
@@ -113,6 +115,10 @@ export const paymentRouter = {
         }
       }
 
+      const tds = section
+        ? { sectionId: section.id, amountPaise: computeTds(input.amount, section.rateBasisPoints) }
+        : null;
+
       let lineDescription: string;
       let posting: PostDocumentInput["posting"];
 
@@ -123,7 +129,6 @@ export const paymentRouter = {
           type: "payment",
           settlementKind,
           exposureSide: "payable",
-          // The batch above proved this id resolves to a party in this organization.
           partyId: input.partyId,
           accountId: null,
           amountPaise: input.amount,
@@ -156,7 +161,7 @@ export const paymentRouter = {
         lines: [{ description: lineDescription }],
       };
 
-      return postDocument(tx, scope, settings, settings.paymentPrefix, {
+      const posted = await postDocument(tx, scope, settings, settings.paymentPrefix, {
         documentDate,
         dueDate: null,
         placeOfSupplyStateCode: null,
@@ -168,6 +173,8 @@ export const paymentRouter = {
         posting,
         draft: null,
       });
+
+      return { posted, tds, section };
     });
 
     audit({

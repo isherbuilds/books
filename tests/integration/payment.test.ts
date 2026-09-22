@@ -314,6 +314,37 @@ test("direct payments post without exposure and reject invalid accounts or TDS",
   expect((await postingOf(organization.id, directWithTds.id, "post")).lines).toHaveLength(3);
 });
 
+test("posting refuses an archived party", async () => {
+  const archivedVendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Archived Payment Vendor",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  await api.party.update({
+    orgSlug: organization.slug,
+    partyId: archivedVendor.id,
+    name: archivedVendor.name,
+    roles: archivedVendor.roles,
+    stateCode: archivedVendor.stateCode,
+    active: false,
+    updatedAt: archivedVendor.updatedAt.toISOString(),
+  });
+
+  await expectReason(
+    api.payment.post({
+      orgSlug: organization.slug,
+      settlementKind: "advance",
+      partyId: archivedVendor.id,
+      amount: "100.00",
+      paymentMethodId: bankTransfer.id,
+      documentDate: "2026-09-12",
+    }),
+    "PARTY_INVALID",
+  );
+});
+
 test("cancelling reverses TDS once and removes the deduction from the register", async () => {
   expect(await registerText(api, organization.slug, "2026-09-12", "2026-09-12")).toContain(
     required(primaryPayment.number, "primary payment number"),
