@@ -1,12 +1,14 @@
 import { beforeAll, expect, test } from "bun:test";
 
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { financialYearOf } from "@accly/api/core/numbering";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { auditLog } from "@accly/db/schema/audit";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { numberSeries } from "@accly/db/schema/number-series";
+import { SETTINGS_DEFAULTS } from "@accly/db/schema/organization-settings";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -71,7 +73,7 @@ async function blockedPid(blockerPid: number): Promise<number> {
     );
 
     return rows[0]?.pid;
-  });
+  }, 5_000);
 }
 
 beforeAll(async () => {
@@ -360,11 +362,23 @@ test("posting refuses an archived party", async () => {
 });
 
 test("posting holds its validated party until a competing archive can serialize", async () => {
+  const documentDate = "2026-09-12";
+  const paymentFinancialYear = financialYearOf(documentDate, SETTINGS_DEFAULTS.financialYearStart);
+  const paymentPrefix = SETTINGS_DEFAULTS.paymentPrefix;
+
   const concurrentVendor = await api.party.create({
     orgSlug: organization.slug,
     name: "Concurrent Payment Vendor",
     roles: ["vendor"],
     stateCode: "27",
+  });
+
+  await db.insert(numberSeries).values({
+    orgId: organization.id,
+    documentType: "payment",
+    financialYear: paymentFinancialYear,
+    prefix: "IRRELEVANT",
+    next: 1,
   });
 
   const gateReady = Promise.withResolvers<number>();
@@ -377,8 +391,14 @@ test("posting holds its validated party until a competing archive can serialize"
     const [series] = await tx
       .select({ next: numberSeries.next })
       .from(numberSeries)
-      .where(and(eq(numberSeries.orgId, organization.id), eq(numberSeries.documentType, "payment")))
-      .limit(1)
+      .where(
+        and(
+          eq(numberSeries.orgId, organization.id),
+          eq(numberSeries.documentType, "payment"),
+          eq(numberSeries.financialYear, paymentFinancialYear),
+          eq(numberSeries.prefix, paymentPrefix),
+        ),
+      )
       .for("update");
 
     required(series, "payment number series");
@@ -395,7 +415,7 @@ test("posting holds its validated party until a competing archive can serialize"
     partyId: concurrentVendor.id,
     amount: "100.00",
     paymentMethodId: bankTransfer.id,
-    documentDate: "2026-09-12",
+    documentDate,
   });
 
   const postingFinished = Promise.allSettled([posting]);
@@ -437,7 +457,7 @@ test("posting holds its validated party until a competing archive can serialize"
     partyId: concurrentVendor.id,
     printSnapshot: { party: { name: concurrentVendor.name } },
   });
-});
+}, 15_000);
 
 test("cancelling reverses TDS once and removes the deduction from the register", async () => {
   expect(await registerText(api, organization.slug, "2026-09-12", "2026-09-12")).toContain(

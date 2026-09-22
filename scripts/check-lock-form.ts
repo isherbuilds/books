@@ -15,13 +15,11 @@ const result = parseEvalResult(
     "eval",
     `async () => {
       const assert = (condition, message) => { if (!condition) throw new Error(message); };
-      const waitFor = async (predicate) => {
+      const waitFor = async (predicate, message = "Lock form did not settle") => {
         const deadline = performance.now() + 5000;
         while (!predicate()) {
-          if (performance.now() > deadline) throw new Error("Lock form did not settle");
-          const frame = Promise.withResolvers();
-          requestAnimationFrame(frame.resolve);
-          await frame.promise;
+          if (performance.now() > deadline) throw new Error(message);
+          await new Promise(resolve => setTimeout(resolve, 20));
         }
       };
       const dialog = () => document.querySelector('[role="dialog"]');
@@ -54,27 +52,28 @@ const result = parseEvalResult(
       assert(dialog() === containingSheet, "The regression must keep the containing Sheet mounted");
       assert(date().value === taxDate, "Tax inherited the Books date draft");
       assert(reason().value === "", "Tax inherited the Books reason draft");
-      const realFetch = window.fetch;
       let submitted;
       window.fetch = (input, init) => {
-        const requestUrl = input instanceof Request ? input.url : String(input);
-        if (new URL(requestUrl, location.href).pathname === "/rpc/lock/set") {
-          submitted = Promise.resolve(input instanceof Request ? input.clone().text() : init.body)
-            .then(body => JSON.parse(body).json);
-          return Promise.reject(new TypeError("Regression dry-run: no lock is saved"));
-        }
-        return realFetch(input, init);
+        submitted ??= { input, init };
+
+        // Intentionally never forward or restore fetch in this document. If submission
+        // is delayed or retried after an assertion fails, it must remain a dry-run.
+        return Promise.reject(new TypeError("Regression dry-run: network is blocked"));
       };
-      try {
-        fill(reason(), "Tax identity regression");
-        dialog().querySelector("form").requestSubmit();
-        await waitFor(() => submitted);
-        const payload = await submitted;
-        assert(payload.kind === "tax", "Submission targets the wrong lock");
-        assert(payload.expectedLockedThrough === (taxDate || null), "Tax inherited the Books CAS snapshot");
-      } finally {
-        window.fetch = realFetch;
-      }
+      fill(reason(), "Tax identity regression");
+      dialog().querySelector("form").requestSubmit();
+      await waitFor(
+        () => submitted,
+        "Submission did not call fetch within 5 seconds; network remains blocked",
+      );
+      const request = new Request(submitted.input, submitted.init);
+      const requestPath = new URL(request.url).pathname;
+      assert(!request.headers.has("x-orpc-batch"), "Submission unexpectedly used batched RPC transport");
+      assert(requestPath === "/rpc/lock/set", "Submission used unexpected URL: " + requestPath);
+      assert(request.method === "POST", "Submission used unexpected method: " + request.method);
+      const payload = (await request.json()).json;
+      assert(payload?.kind === "tax", "Submission targets the wrong lock");
+      assert(payload.expectedLockedThrough === (taxDate || null), "Tax inherited the Books CAS snapshot");
       return { passed: true, equalDates: generalDate === taxDate };
     }`,
   ]),

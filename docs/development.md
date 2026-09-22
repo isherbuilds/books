@@ -77,9 +77,9 @@ method.
 page loads; `benchmark:navigation` times in-app route changes. Quote a
 performance number only on `db:seed:volume` data or more.
 
-**Check policy.** Every pull request and push to `main` runs a frozen install,
-non-writing lint and format checks, type checks, the full test suite against
-disposable PostgreSQL and SeaweedFS services, and production builds. `bun run
+**Check policy.** Validation and deployment are manual. GitHub Actions is
+disabled; this repository has no CI/CD workflows or required automated status
+checks. Run the checks appropriate to each change before pushing. `bun run
 check` is a local fixer because it writes formatting. A focused change runs the
 smallest existing checks that cover it. A docs-only change runs `bunx oxfmt
 --check <files>`. End-user content runs `bun run --cwd apps/fumadocs build`. An
@@ -169,5 +169,7 @@ page through `chrome-devtools-axi` in `CHROME_DEVTOOLS_AXI_SESSION` first.
 Run once with both lock dates equal (both unlocked is sufficient) and once with
 different dates. It switches the mounted Sheet from Books to Tax, checks fresh
 drafts and the outgoing CAS snapshot, and intercepts submission without saving.
+Network requests stay blocked in that document, including after a failed check.
+Reload the page afterward to restore normal operation.
 
 When a mistake repeats, promote the fix: doc, test, type, lint, script.
