@@ -115,7 +115,8 @@ Query, form and invalidation rules are in
 ## Audit and files
 
 `audit()` is fire-and-forget. It records role denials and sensitive successes
-(membership and settings changes, file deletion, posts, cancellations), never
+(membership and settings changes, file deletion, posts, cancellations, lock
+changes and exceptions), never
 reads or ordinary writes. A foreign claim cannot write another tenant's log.
 URLs, tokens and secrets never enter metadata; an unverified file key is stored
 as a digest. Journal entries differ: they commit with their document, because ledger
@@ -188,8 +189,31 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
 - `reverseDocument` is one transaction. A conditional update first moves the
   posted document to `cancelled` (anything else is `CONFLICT`). Allocations then
   follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
-  party ledger lines and entry are reversed, dated today in the Organization
-  time zone.
+  party ledger lines and entry are reversed. Ordinary documents reverse on
+  today's business date in the Organization time zone; Opening Balance reverses
+  on its original cutover so a replacement corrects historical balances.
+  The reversal date must pass the period lock. A refusal rolls back the state
+  change; `cancelledAt` remains the actual cancellation instant.
+- `organization_settings.lockedThrough` and `taxLockedThrough` own the current
+  lock dates. Every ledger writer reads settings `FOR SHARE` (or stronger) inside its
+  transaction before document locks, using that same row for tax, numbering
+  and dates. `assertPeriodOpen` (`core/locks.ts`) checks the held dates and reads
+  `lock_exceptions` only when the general lock needs a bypass.
+  `lock.set` reads settings `FOR UPDATE`, compares `expectedLockedThrough` with
+  the current date, then updates it and appends history atomically. Missing
+  settings is an integrity failure; a stale date is `CONFLICT`, so the client
+  refreshes and closes the stale form. Lock changes and revocation wait for
+  in-flight postings before changing the held settings or exception. Posting never
+  scans lock history. Expiry uses `statement_timestamp()`. Spec
+  [call 7](./specs/accounting-core.md#architecture-calls).
+- Receipt and Payment validate posting-critical masters after locking settings,
+  holding the resolved rows `FOR SHARE` until commit: the active Party supplies
+  the snapshot and exposure; the direct income/expense Account supplies posting
+  eligibility and supply class; the TDS Section supplies effective dates and rate;
+  the Payment Method supplies its active state and account mapping. Updates or
+  deactivation wait until the posting commits. The stored posting and snapshot
+  retain those validated values. Locks belong to these transaction paths, not
+  to all master reads; Item and Invoice draft validation use unlocked reads.
 - One `post` entry and at most one `reverse` entry exist per document:
   `journal_entries` has a unique index on
   `(orgId, documentType, documentId, kind)` and a partial unique index on

@@ -60,9 +60,11 @@ method.
 | `bun run dev`                | Services, migrations, all apps                      |
 | `bun run dev:status`         | Read-only service and migration check               |
 | `bun run check-types`        | Type-check packages and `tests/`                    |
-| `bun run check`              | oxlint and oxfmt; writes formatting                 |
-| `bun run test`               | Real-PostgreSQL tests; wipes `accly_test`           |
-| `bun run build`              | Build all workspaces                                |
+| `bunx oxlint`                | Non-writing lint check                              |
+| `bunx oxfmt --check .`       | Non-writing repository format check                 |
+| `bun run check`              | Run oxlint, then write formatting                   |
+| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test` |
+| `bun run build`              | Production-build all workspaces                     |
 | `bun run db:up`              | Start PostgreSQL and SeaweedFS                      |
 | `bun run db:generate`        | Generate a migration from the schema                |
 | `bun run db:migrate`         | Apply migrations                                    |
@@ -75,11 +77,18 @@ method.
 page loads; `benchmark:navigation` times in-app route changes. Quote a
 performance number only on `db:seed:volume` data or more.
 
-**Check policy.** `check-types`, `check` and `test` are the repository gates. A
-focused change runs the smallest existing checks that cover it. A docs-only
-change runs `bunx oxfmt --check <files>`. End-user content runs
-`bun run --cwd apps/fumadocs build`. An SSR or UI change needs a production
-build and the running app. A read-only review never runs `check` or `test`.
+**Check policy.** Validation and deployment are manual. GitHub Actions is
+disabled; this repository has no CI/CD workflows or required automated status
+checks. Run the checks appropriate to each change before pushing. `bun run
+check` is a local fixer because it writes formatting. A focused change runs the
+smallest existing checks that cover it. A docs-only change runs `bunx oxfmt
+--check <files>`. End-user content runs `bun run --cwd apps/fumadocs build`. An
+SSR or UI change needs a production build and the running app. A read-only
+review never runs `check` or `test`.
+
+The web build passes and hashes `VITE_*` through Turborepo and hashes
+`packages/env/.env*` as an input. Inject server-only settings when starting the
+built server; do not expose them through public Vite variables.
 
 Package dependencies use SemVer ranges; `bun.lock` records resolved versions.
 Keep required peer pairs compatible when updating them. Bun's runtime version
@@ -153,5 +162,14 @@ codes, invariants and state, not copy. Use `eventually` and
 `drainAuditWrites()`; never sleep. Every org-scoped domain extends
 `GUARDED_CALLS` in `tests/integration/tenancy.test.ts` and proves its rows are
 invisible to other tenants.
+
+The lock-form identity regression uses the existing browser tooling:
+`bun scripts/check-lock-form.ts <fixture Locks URL>`. Select a signed-in browser
+page through `chrome-devtools-axi` in `CHROME_DEVTOOLS_AXI_SESSION` first.
+Run once with both lock dates equal (both unlocked is sufficient) and once with
+different dates. It switches the mounted Sheet from Books to Tax, checks fresh
+drafts and the outgoing CAS snapshot, and intercepts submission without saving.
+Network requests stay blocked in that document, including after a failed check.
+Reload the page afterward to restore normal operation.
 
 When a mistake repeats, promote the fix: doc, test, type, lint, script.

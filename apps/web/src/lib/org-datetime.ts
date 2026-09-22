@@ -1,6 +1,7 @@
+import { tzOffset } from "@date-fns/tz";
 import { getRouteApi } from "@tanstack/react-router";
 
-export { formatBusinessDate } from "./business-date";
+export { formatBusinessDate } from "@accly/api/lib/business-date";
 
 const orgRoute = getRouteApi("/$orgSlug");
 
@@ -62,6 +63,40 @@ export function orgToday(timeZone: string, now = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).format(now);
+}
+
+/**
+ * The instant a wall-clock time typed in the org zone (`YYYY-MM-DDTHH:mm`, as a
+ * `datetime-local` input yields) names. The browser's own zone plays no part.
+ * The offset is read at the guessed instant and once more at the corrected one,
+ * so a DST change between the two settles on the right side. A skipped local time
+ * is rejected instead of silently moving the operator's input across the DST gap.
+ */
+export function orgLocalToInstant(local: string, timeZone: string): Date {
+  const asUtc = new Date(`${local}Z`);
+  const guess = new Date(asUtc.getTime() - tzOffset(timeZone, asUtc) * 60_000);
+  const instant = new Date(asUtc.getTime() - tzOffset(timeZone, guess) * 60_000);
+
+  const parts = formatter(`localMinute|${timeZone}`, "en-CA", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(instant);
+
+  const at = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+
+  const roundTrip = `${at("year")}-${at("month")}-${at("day")}T${at("hour")}:${at("minute")}`;
+
+  if (roundTrip !== local) {
+    throw new RangeError("This local time does not exist in the organization's time zone");
+  }
+
+  return instant;
 }
 
 /**

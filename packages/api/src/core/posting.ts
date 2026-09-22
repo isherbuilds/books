@@ -105,11 +105,16 @@ export type JournalLinePosting = {
   amountPaise: bigint;
 };
 
-export type JournalPosting = {
-  type: "journal";
+// The Opening Balance is a Journal by shape: its own lines are its legs.
+type EntryLinesPosting<Type extends "journal" | "openingBalance"> = {
+  type: Type;
   amountPaise: bigint;
   lines: readonly JournalLinePosting[];
 };
+
+export type JournalPosting = EntryLinesPosting<"journal">;
+
+export type OpeningBalancePosting = EntryLinesPosting<"openingBalance">;
 
 export type AllocationPosting = {
   type: "allocation";
@@ -118,7 +123,12 @@ export type AllocationPosting = {
   amountPaise: bigint;
 };
 
-export type DocumentPosting = ReceiptPosting | PaymentPosting | InvoicePosting | JournalPosting;
+export type DocumentPosting =
+  | ReceiptPosting
+  | PaymentPosting
+  | InvoicePosting
+  | JournalPosting
+  | OpeningBalancePosting;
 
 export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): JournalLineInput[] {
   if (document.amountPaise <= 0n) {
@@ -319,7 +329,7 @@ export function postInvoice(document: InvoicePosting, byKey: SystemAccounts): Jo
   return lines;
 }
 
-export function postJournal(document: JournalPosting): JournalLineInput[] {
+export function postJournal(document: JournalPosting | OpeningBalancePosting): JournalLineInput[] {
   if (document.lines.length < 2) {
     throw new Error("Journal must have at least two lines");
   }
@@ -432,7 +442,7 @@ export async function recordEntry(
     const { posting } = args.document;
     document = { id: args.document.id, type: posting.type };
 
-    if (posting.type === "journal") {
+    if (posting.type === "journal" || posting.type === "openingBalance") {
       lines = postJournal(posting);
     } else {
       // All of them, not only the keys this posting needs: at most 18 rows on one partial

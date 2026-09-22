@@ -1,13 +1,16 @@
 import { beforeAll, expect, test } from "bun:test";
 
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { financialYearOf } from "@accly/api/core/numbering";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { auditLog } from "@accly/db/schema/audit";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
+import { numberSeries } from "@accly/db/schema/number-series";
+import { SETTINGS_DEFAULTS } from "@accly/db/schema/organization-settings";
 import { tdsSections } from "@accly/db/schema/tds-sections";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
 import { required } from "../support/assert";
@@ -58,6 +61,19 @@ async function registerText(orgApi: AppRouterClient, orgSlug: string, from: stri
   const file = await orgApi.export.tdsRegisterXlsx({ orgSlug, from, to });
 
   return readZipText(new Uint8Array(await file.arrayBuffer()), "xl/sharedStrings.xml");
+}
+
+async function blockedPid(blockerPid: number): Promise<number> {
+  return eventually(async () => {
+    const { rows } = await db.execute<{ pid: number }>(
+      sql`select waiter.pid::int as pid
+          from pg_stat_activity waiter
+          where ${blockerPid} = any(pg_blocking_pids(waiter.pid))
+          limit 1`,
+    );
+
+    return rows[0]?.pid;
+  }, 5_000);
 }
 
 beforeAll(async () => {
@@ -313,6 +329,135 @@ test("direct payments post without exposure and reject invalid accounts or TDS",
   expect(directWithTdsDetail.tds).toMatchObject({ code: "1024", amountPaise: 200n });
   expect((await postingOf(organization.id, directWithTds.id, "post")).lines).toHaveLength(3);
 });
+
+test("posting refuses an archived party", async () => {
+  const archivedVendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Archived Payment Vendor",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  await api.party.update({
+    orgSlug: organization.slug,
+    partyId: archivedVendor.id,
+    name: archivedVendor.name,
+    roles: archivedVendor.roles,
+    stateCode: archivedVendor.stateCode,
+    active: false,
+    updatedAt: archivedVendor.updatedAt.toISOString(),
+  });
+
+  await expectReason(
+    api.payment.post({
+      orgSlug: organization.slug,
+      settlementKind: "advance",
+      partyId: archivedVendor.id,
+      amount: "100.00",
+      paymentMethodId: bankTransfer.id,
+      documentDate: "2026-09-12",
+    }),
+    "PARTY_INVALID",
+  );
+});
+
+test("posting holds its validated party until a competing archive can serialize", async () => {
+  const documentDate = "2026-09-12";
+  const paymentFinancialYear = financialYearOf(documentDate, SETTINGS_DEFAULTS.financialYearStart);
+  const paymentPrefix = SETTINGS_DEFAULTS.paymentPrefix;
+
+  const concurrentVendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Concurrent Payment Vendor",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  await db.insert(numberSeries).values({
+    orgId: organization.id,
+    documentType: "payment",
+    financialYear: paymentFinancialYear,
+    prefix: "IRRELEVANT",
+    next: 1,
+  });
+
+  const gateReady = Promise.withResolvers<number>();
+  const releaseGate = Promise.withResolvers<void>();
+
+  const gate = db.transaction(async (tx) => {
+    const { rows } = await tx.execute<{ pid: number }>(sql`select pg_backend_pid()::int as pid`);
+    const holderPid = required(rows[0]?.pid, "series lock holder pid");
+
+    const [series] = await tx
+      .select({ next: numberSeries.next })
+      .from(numberSeries)
+      .where(
+        and(
+          eq(numberSeries.orgId, organization.id),
+          eq(numberSeries.documentType, "payment"),
+          eq(numberSeries.financialYear, paymentFinancialYear),
+          eq(numberSeries.prefix, paymentPrefix),
+        ),
+      )
+      .for("update");
+
+    required(series, "payment number series");
+    gateReady.resolve(holderPid);
+    await releaseGate.promise;
+  });
+
+  void gate.catch(gateReady.reject);
+  const holderPid = await gateReady.promise;
+
+  const posting = api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "advance",
+    partyId: concurrentVendor.id,
+    amount: "100.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate,
+  });
+
+  const postingFinished = Promise.allSettled([posting]);
+  let archiveFinished: Promise<unknown> = Promise.resolve();
+  let archiving: Promise<typeof concurrentVendor> | undefined;
+
+  try {
+    const postingPid = await blockedPid(holderPid);
+    archiving = api.party.update({
+      orgSlug: organization.slug,
+      partyId: concurrentVendor.id,
+      name: concurrentVendor.name,
+      roles: concurrentVendor.roles,
+      stateCode: concurrentVendor.stateCode,
+      active: false,
+      updatedAt: concurrentVendor.updatedAt.toISOString(),
+    });
+    archiveFinished = Promise.allSettled([archiving]);
+    await blockedPid(postingPid);
+  } finally {
+    releaseGate.resolve();
+    await Promise.allSettled([postingFinished, archiveFinished, gate]);
+  }
+
+  const [posted, archived] = await Promise.all([
+    posting,
+    required(archiving, "competing party archive"),
+    gate,
+  ]);
+
+  const stored = await api.payment.get({
+    orgSlug: organization.slug,
+    paymentId: posted.id,
+  });
+
+  expect(archived.active).toBe(false);
+  expect(stored).toMatchObject({
+    state: "posted",
+    partyId: concurrentVendor.id,
+    printSnapshot: { party: { name: concurrentVendor.name } },
+  });
+}, 15_000);
 
 test("cancelling reverses TDS once and removes the deduction from the register", async () => {
   expect(await registerText(api, organization.slug, "2026-09-12", "2026-09-12")).toContain(

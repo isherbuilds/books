@@ -51,6 +51,8 @@ function settingsDto(settings: typeof organizationSettings.$inferSelect): Settin
     legalType: _legalType,
     createdAt: _createdAt,
     updatedAt: _updatedAt,
+    lockedThrough: _lockedThrough,
+    taxLockedThrough: _taxLockedThrough,
     ...rest
   } = settings;
 

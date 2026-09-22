@@ -12,6 +12,8 @@ export * from "./accounts";
 
 export * from "./journal-entries";
 
+export * from "./period-locks";
+
 export * from "./journal-lines";
 
 export * from "./payment-methods";

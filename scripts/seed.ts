@@ -12,6 +12,7 @@ import { createOrganization, createOrganizationInput } from "@accly/api/core/org
 import { normalizedName } from "@accly/api/lib/normalized-name";
 import { businessDate } from "@accly/api/lib/business-date";
 import type { Scope } from "@accly/api/lib/procedures/factory";
+import { orgSettings } from "@accly/api/lib/settlements";
 import { auth } from "@accly/auth";
 import type { RoleKey } from "@accly/auth/access";
 import { createUserWithPassword } from "@accly/auth/manual-user";
@@ -587,17 +588,11 @@ export function planReceipts(
 }
 
 export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[]): Promise<void> {
-  const { settings } = org;
-
-  const numbering = {
-    prefix: settings.receiptPrefix,
-    fiscalYearStartMonth: settings.financialYearStart,
-  };
-
-  const organizationPrintSnapshot = organizationSnapshot(settings);
-
   for (let start = 0; start < plans.length; start += POST_BATCH) {
     await db.transaction(async (tx) => {
+      const settings = await orgSettings(org.scope.orgId, tx);
+      const organizationPrintSnapshot = organizationSnapshot(settings);
+
       for (const plan of plans.slice(start, start + POST_BATCH)) {
         const { party, account } = plan;
         const lineDescription = plan.narration ?? account?.name ?? "Advance received";
@@ -629,7 +624,7 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
           lines: [{ description: lineDescription }],
         };
 
-        const { id } = await postDocument(tx, org.scope, numbering, {
+        const { id } = await postDocument(tx, org.scope, settings, settings.receiptPrefix, {
           documentDate: plan.date,
           dueDate: null,
           placeOfSupplyStateCode: null,
@@ -643,7 +638,7 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
         });
 
         if (plan.cancelReason) {
-          await reverseDocument(tx, org.scope, settings.timeZone, "receipt", id, plan.cancelReason);
+          await reverseDocument(tx, org.scope, settings, "receipt", id, plan.cancelReason);
         }
       }
     });

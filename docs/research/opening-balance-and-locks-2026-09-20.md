@@ -37,14 +37,14 @@ our own code, and one is genuinely novel.
 
 ### Opening Balance mechanism and the plug account
 
-| System | Shape | Plug account |
-| --- | --- | --- |
-| ERPNext | Journal Entry, `voucher_type = "Opening Entry"`, forces `is_opening = "Yes"` | **Temporary Opening** (asset, type `Temporary`), expected to net to zero |
-| Frappe Books | Manual Journal Entry, `entryType = "Opening Entry"` | **Opening Balance Equity**, seeded but never referenced by code |
-| Zoho Books | Dedicated Settings screen, one org-level Opening Balance Date | **Opening Balance Adjustments**, posted automatically |
-| QuickBooks Online | Per-account balance plus an "As of" date; no single company date | **Opening Balance Equity**, automatic |
-| Xero | Conversion Balances screen, one conversion date, always the 1st of a month | **Historical Adjustment**, auto-filled, clears when the entry balances |
-| TallyPrime | Per-ledger `Opening Balance` field; company `Books beginning from` | **Difference in Opening Balances** |
+| System            | Shape                                                                        | Plug account                                                             |
+| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| ERPNext           | Journal Entry, `voucher_type = "Opening Entry"`, forces `is_opening = "Yes"` | **Temporary Opening** (asset, type `Temporary`), expected to net to zero |
+| Frappe Books      | Manual Journal Entry, `entryType = "Opening Entry"`                          | **Opening Balance Equity**, seeded but never referenced by code          |
+| Zoho Books        | Dedicated Settings screen, one org-level Opening Balance Date                | **Opening Balance Adjustments**, posted automatically                    |
+| QuickBooks Online | Per-account balance plus an "As of" date; no single company date             | **Opening Balance Equity**, automatic                                    |
+| Xero              | Conversion Balances screen, one conversion date, always the 1st of a month   | **Historical Adjustment**, auto-filled, clears when the entry balances   |
+| TallyPrime        | Per-ledger `Opening Balance` field; company `Books beginning from`           | **Difference in Opening Balances**                                       |
 
 - ERPNext: `is_opening` forced in `journal_entry.py:121-123`; opening rows may
   not touch a P&L account, `gl_entry.py:212-222`; Temporary Opening resolved by
@@ -98,7 +98,7 @@ Three distinct models, all first-party:
   contact-level balances, never both: "If you ... have already entered the
   opening balance for Accounts Payable, you will not be able to import the
   vendor balances" without resetting AP to zero.
-- **Enforced equality (Xero).** You enter the control balance *and* the
+- **Enforced equality (Xero).** You enter the control balance _and_ the
   individual invoices, bills and credit notes. "If the totals of the
   transactions and the accounts receivable and accounts payable balances don't
   exactly match, Xero won't save your conversion balances."
@@ -110,7 +110,7 @@ Three distinct models, all first-party:
   Creation Tool, which posts real invoices flagged `is_opening = "Yes"` with the
   line account set to Temporary Opening
   (`opening_invoice_creation_tool.py:177-236`; expected GL confirmed in
-  `test_sales_invoice.py:4539`). An opening Journal Entry may *also* hit
+  `test_sales_invoice.py:4539`). An opening Journal Entry may _also_ hit
   receivables, with party then mandatory (`journal_entry.py:494-502`). Nothing
   reconciles the two paths. The only signal is Temporary Opening failing to net
   to zero.
@@ -126,23 +126,23 @@ Three distinct models, all first-party:
 
 ### General books lock
 
-| System | Mechanism | Bypass | Reason required |
-| --- | --- | --- | --- |
-| ERPNext | `acc_frozen_upto` (`<=`, inclusive); plus Accounting Period ranges; plus Period Closing Voucher | one global Role; Administrator explicitly blocked; Accounting Period and PCV have **no** bypass | no |
-| Frappe Books | **none at all** | n/a | n/a |
-| Zoho Books | Four independent module lock dates: Sales, Purchases, Banking, Accounts | per-user and per-account exemption lists (API only) | **yes, on lock and on unlock** |
-| QBO | one global closing date | warning only, or warning plus shared password; admins bypass without it | no, but an Exceptions to Closing Date report exists |
-| Xero | two tiers: stop all users, or stop non-advisers only | the Adviser/Administrator role | no |
-| TallyPrime | `Cut-off date for Back Dated vouchers` plus a rolling `Days allowed` window, on the Security Level | security level only | no |
+| System       | Mechanism                                                                                          | Bypass                                                                                          | Reason required                                     |
+| ------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| ERPNext      | `acc_frozen_upto` (`<=`, inclusive); plus Accounting Period ranges; plus Period Closing Voucher    | one global Role; Administrator explicitly blocked; Accounting Period and PCV have **no** bypass | no                                                  |
+| Frappe Books | **none at all**                                                                                    | n/a                                                                                             | n/a                                                 |
+| Zoho Books   | Four independent module lock dates: Sales, Purchases, Banking, Accounts                            | per-user and per-account exemption lists (API only)                                             | **yes, on lock and on unlock**                      |
+| QBO          | one global closing date                                                                            | warning only, or warning plus shared password; admins bypass without it                         | no, but an Exceptions to Closing Date report exists |
+| Xero         | two tiers: stop all users, or stop non-advisers only                                               | the Adviser/Administrator role                                                                  | no                                                  |
+| TallyPrime   | `Cut-off date for Back Dated vouchers` plus a rolling `Days allowed` window, on the Security Level | security level only                                                                             | no                                                  |
 
 Detail worth carrying:
 
-- **Inclusive comparison is standard.** ERPNext throws when
-  `getdate(posting_date) <= getdate(acc_frozen_upto)`,
-  `general_ledger.py:783-804`. Zoho documents the same off-by-one as a user
-  warning: "If you do not want transactions to be created on the date specified
-  as the lock date, set the next date from the intended date as the lock date."
-  Our spec's "on or before the general lock" matches.
+- **ERPNext's freeze comparison is inclusive.** It throws when
+  `getdate(posting_date) <= getdate(acc_frozen_upto)`. Our spec uses the same
+  “on or before” boundary. Zoho's current [UI help](https://www.zoho.com/us/books/help/accountant/transaction-lock.html)
+  says “before,” while its [API overview](https://www.zoho.com/books/api/v3/transaction-locking/)
+  says “on or before.” These are not equivalent; Zoho does not independently
+  establish our chosen boundary.
 - **ERPNext explicitly blocks Administrator**, with the reason in the docstring:
   "Administrator has all the roles so this check will be bypassed if any role is
   allowed to post. Hence stop admin to bypass." The bypass must be an explicit
@@ -153,7 +153,7 @@ Detail worth carrying:
   are consumed solely by `reports/AccountReport.ts:454-458`. Worse, a submitted
   document from any past year can be cancelled and then hard-deleted, and
   `Transactional.afterDelete()` deletes its ledger rows outright.
-- **Zoho's partial unlock** opens a bounded *transaction date range* with a
+- **Zoho's partial unlock** opens a bounded _transaction date range_ with a
   mandatory reason, and is refused entirely for organizations with
   inventory-tracked items.
 
@@ -161,22 +161,25 @@ Detail worth carrying:
 
 This is the one place the sources answer a question our spec gets wrong.
 
-ERPNext checks the freeze on cancellation from `make_reverse_gl_entries`
-(`general_ledger.py:708`). Which date it checks depends on a setting:
+In the pinned ERPNext v15.121.3 source, `make_reverse_gl_entries` selects the
+date passed to the freeze check according to a setting:
 
-- Default: the **original posting date** is validated, so an old document cannot
-  be cancelled once its period is frozen.
-- With `Accounts Settings.enable_immutable_ledger` on: the reversal is **dated
-  today** and today is what gets validated (`general_ledger.py:678, 704-708`).
+- With `Accounts Settings.enable_immutable_ledger` off: the original posting
+  date is used unless an explicit posting date is supplied.
+- With it on: an explicit argument or request posting date is used, falling
+  back to today. Ordinary Journal Entry cancellation supplies no explicit date.
 
-We already behave like the second mode. `reverseDocument` computes
-`entryDate = businessDate(cancelledAt, timeZone)`
-(`packages/api/src/core/documents.ts:403`), so a cancellation never alters the
-original period's journal lines. Under that design, validating the original
-document date as well would block cancelling any old document forever while
-protecting nothing extra, because the locked period's trial balance cannot move.
+Our default reversal date matches the second mode's fallback:
+`entryDate = businessDate(cancelledAt, timeZone)` in `reverseDocument`.
+That forward-dated reversal alone does not move an earlier trial balance.
+This is a date-policy comparison, not complete ERPNext equivalence: its
+cancellation flags and opening-report predicates differ from our ledger.
 
-Neither ERPNext mode checks both dates. No other system checks two dates either.
+**22 September clarification:** ERPNext also validates Accounting Period against
+the original posting date before selecting the reversal date, and checks Period
+Closing Vouchers. The previous claim that neither mode checks both dates was
+too broad. This freeze comparison did not establish an Opening Balance
+replacement policy; see the [correction-workflow follow-up](./opening-balance-correction-policy-2026-09-22.md).
 
 ### Tax-period lock
 
@@ -191,7 +194,7 @@ Unanimous, and separate from the books close in all four commercial products:
   an Intuit community thread **(community)**, not a help article.
 - **Xero**: a finalised VAT return cannot be amended in place **(community)** —
   forum threads only, for the rendering reason below.
-- **TallyPrime**: uniquely a *soft* lock, with a design idea none of the others
+- **TallyPrime**: uniquely a _soft_ lock, with a design idea none of the others
   have. A voucher dated into a signed return period still saves; it is excluded
   from the return and surfaces under Uncertain Transactions. `Alt+F10` undoes
   the filing, or `Alt+L` **sets an effective date: the voucher keeps its book
@@ -214,7 +217,7 @@ Unanimous, and separate from the books close in all four commercial products:
 - **QBO**: a shared password, which gates non-admins only, since an admin can
   reset it without knowing the old one.
 - **Xero, Tally, ERPNext**: a role.
-- Closest near-misses: Zoho's partial unlock bounds which *transaction dates*
+- Closest near-misses: Zoho's partial unlock bounds which _transaction dates_
   become editable, not how long the grant lives, and someone must re-lock by
   hand. Tally's `Days allowed for Back Dated vouchers` slides forward as
   vouchers are entered, so it lapses relative to data entry, and it is a
@@ -248,15 +251,16 @@ layer, so treat their prose as weaker than their code.
 Confirmed, build as specified:
 
 - One Opening Balance per Organization, partial unique index on posted
-  `openingBalance`, fixed `OB` prefix, balanced to `openingEquity` (already
-  seeded at code 3000, `packages/api/src/core/chart-templates.ts:153`).
+  `openingBalance`, fixed `OB` prefix, explicitly balanced. Use `openingEquity`
+  (seeded at code 3000) when needed; a complete balanced trial balance needs no
+  additional equity line.
   `documents.type` and `documents.source` already carry `openingBalance` and
   `opening` (`packages/db/src/schema/documents.ts:31,38`).
 - `controls: false` on the Opening Balance, party balances only from slice 7
   opening items. This is Zoho's mutual-exclusion model and needs no
   reconciliation code.
-- A lock table with its own procedure, not `settings.update`. Required anyway
-  once exceptions carry rows.
+- Current lock dates on settings, with lock history and exceptions behind their
+  own procedures, not `settings.update`.
 - General lock inclusive of the lock date, and a tax lock keyed to the stored
   `affectsTax`.
 
@@ -264,7 +268,7 @@ Decided (2026-09-20):
 
 - **A cancellation is checked on its reversal date only**, matching ERPNext's
   `enable_immutable_ledger` mode. The spec line "Cancellation checks both dates"
-  is amended accordingly. Accepted consequence: a closed period's *numbers* are
+  is amended accordingly. Accepted consequence: a closed period's _numbers_ are
   frozen, but a document inside it can still change state.
 
 Adopt from the field (both now written into the spec):

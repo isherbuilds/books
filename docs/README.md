@@ -22,23 +22,25 @@ prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
 - **[Accounting core](./specs/accounting-core.md)**: Active. Slices 4b-ii,
-  the slice 5 Opening Balance and locks, 6–7, 8 (user-created income and
-  expense accounts) and 9 (party lines on Journals, Journal credits and
-  debits as allocation sources and targets), plus CA acceptance and the
-  native PostgreSQL posting baseline for slices 1–3. Slice 8 precedes 9: a
-  discount or write-off needs an expense leaf no template ships. Slices 4a,
-  4b-i and the slice 5 Journal are implemented and runtime verified in the
-  app; CA acceptance is open.
+  6–7, 8 (user-created income and expense accounts) and 9 (party lines on
+  Journals, Journal credits and debits as allocation sources and targets), plus
+  CA acceptance and the native PostgreSQL posting baseline for slices 1–3.
+  Slice 8 precedes 9: a discount or write-off needs an expense leaf no
+  template ships. Slices 4a, 4b-i and 5 are implemented and runtime verified in
+  the app; CA acceptance is open.
 - **Released credits versus advances**: Active. Decide whether a credit
-  released by reversing an allocation is classified explicitly or recorded as a
-  released credit distinct from an advance, before any tax workflow reads
+  released by reversing an allocation is classified explicitly or recorded as
+  a released credit distinct from an advance, before any tax workflow reads
   `advanceSupply` ([decision](./specs/accounting-core.md#slices)).
-- **Settlement reads at volume**: Verification. Invoice open and overdue filters
-  and `receipt.unapplied` join one grouped active-allocation total. Measure them
-  on 100,000 Invoices with allocations before adding any stored balance.
+- **Settlement reads at volume**: Verification. Invoice open and overdue
+  filters and `receipt.unapplied` join one grouped active-allocation total.
+  Measure them on 100,000 Invoices with allocations before adding any stored
+  balance.
 - **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
-  sort measurement, the H4 runs, and slice 5. Slice 4 is implemented and runtime
-  verified with accounting-core slices 4a and 4b-i.
+  sort measurement, the H4 runs, and the remaining slice 5 forms. Slice 4 is
+  implemented and runtime verified with accounting-core slices 4a and 4b-i;
+  slice 5's Journal, Opening Balance and lock forms are implemented; remaining
+  forms per client-patterns slice 5 stay open.
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.

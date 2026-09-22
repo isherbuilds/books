@@ -94,6 +94,7 @@ const receiptSchema = z
 type ReceiptFormValues = z.input<typeof receiptSchema>;
 
 const SERVER_FIELDS = {
+  LOCKED: "documentDate",
   PARTY_INVALID: "partyId",
   PAYMENT_METHOD_INVALID: "paymentMethodId",
   INCOME_ACCOUNT_INVALID: "incomeAccountId",

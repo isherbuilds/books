@@ -68,16 +68,21 @@ export async function expectAuthStatus(
   }
 }
 
-export async function eventually<T>(probe: () => Promise<T | undefined>): Promise<T> {
-  for (let attempt = 0; attempt < 50; attempt++) {
+export async function eventually<T>(
+  probe: () => Promise<T | undefined>,
+  timeoutMs = 1_000,
+): Promise<T> {
+  const deadline = performance.now() + timeoutMs;
+
+  while (performance.now() < deadline) {
     const result = await probe();
 
     if (result !== undefined) {
       return result;
     }
 
-    await Bun.sleep(20);
+    await Bun.sleep(Math.min(20, Math.max(0, deadline - performance.now())));
   }
 
-  throw new Error("condition not reached within 1s");
+  throw new Error(`condition not reached within ${timeoutMs}ms`);
 }

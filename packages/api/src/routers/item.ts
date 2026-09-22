@@ -49,7 +49,7 @@ async function itemValues(orgId: string, fields: ItemFields) {
   const today = businessDate(new Date(), await orgTimeZone(orgId));
 
   const [incomeAccount, taxRate] = await Promise.all([
-    postableAccount(orgId, fields.incomeAccountId, ["income"]),
+    postableAccount(db, orgId, fields.incomeAccountId, ["income"]),
     fields.taxCode
       ? db
           .select({ id: taxRates.id })

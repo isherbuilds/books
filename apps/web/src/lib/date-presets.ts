@@ -9,7 +9,7 @@
 // A list URL carries the two dates and nothing else. The preset is a label the range is
 // matched back to, never a stored value: `?from=2026-04-01&to=2027-03-31` reads the same
 // to the server, a bookmark and the operator, and no page has to agree on a vocabulary.
-import { formatBusinessDate } from "./business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 
 /** A fully specified range produced by a preset or the calendar. */
 export type DateRange = { from: string; to: string };

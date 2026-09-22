@@ -3,12 +3,13 @@ import { z } from "zod";
 
 import { audit } from "../audit";
 import { applyAllocations, reverseAllocation } from "../core/allocations";
+import { assertPeriodOpen } from "../core/locks";
 import { formatDecimal } from "../core/money";
 import { recordEntry } from "../core/posting";
 import { businessDate } from "../lib/business-date";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { positiveMoney, reason } from "../lib/schemas";
-import { orgTimeZone } from "../lib/settlements";
+import { orgSettings } from "../lib/settlements";
 
 export const allocationRouter = {
   apply: orgProcedure(
@@ -16,9 +17,12 @@ export const allocationRouter = {
     orgInput.extend({ receiptId: z.uuid(), invoiceId: z.uuid(), amount: positiveMoney }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
-    const entryDate = businessDate(new Date(), await orgTimeZone(scope.orgId));
 
     const rows = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+      const entryDate = businessDate(new Date(), settings.timeZone);
+      await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
+
       const applied = await applyAllocations(tx, scope, {
         sourceDocumentId: input.receiptId,
         sourceState: "posted",
@@ -66,11 +70,14 @@ export const allocationRouter = {
     orgInput.extend({ allocationId: z.uuid(), reason }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
-    const entryDate = businessDate(new Date(), await orgTimeZone(scope.orgId));
 
-    const reversed = await db.transaction((tx) =>
-      reverseAllocation(tx, scope, input.allocationId, entryDate, input.reason),
-    );
+    const reversed = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+      const entryDate = businessDate(new Date(), settings.timeZone);
+      await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
+
+      return reverseAllocation(tx, scope, input.allocationId, entryDate, input.reason);
+    });
 
     audit({
       action: "allocation.reverse",

@@ -117,7 +117,7 @@ function RootDocument() {
           {/* App chrome belongs to the org shell (`AppShell`); public pages own
               their own layout. */}
           <Outlet />
-          <Toaster richColors />
+          <Toaster richColors position="top-center" closeButton />
         </ThemeProvider>
         {import.meta.env.DEV && (
           <>

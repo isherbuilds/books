@@ -216,6 +216,8 @@ CREATE TABLE "organization_settings" (
 	"credit_note_prefix" text NOT NULL,
 	"journal_prefix" text NOT NULL,
 	"time_zone" text DEFAULT 'Asia/Kolkata' NOT NULL,
+	"locked_through" date,
+	"tax_locked_through" date,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "organization_settings_financial_year_start_check" CHECK ("organization_settings"."financial_year_start" between 1 and 12)
@@ -255,6 +257,31 @@ CREATE TABLE "journal_entries" (
 	"created_by" text NOT NULL,
 	CONSTRAINT "journal_entries_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "journal_entries_kind_check" CHECK ("journal_entries"."kind" in ('post', 'reverse'))
+);
+--> statement-breakpoint
+CREATE TABLE "lock_exceptions" (
+	"id" text PRIMARY KEY NOT NULL,
+	"org_id" text NOT NULL,
+	"user_id" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"reason" text NOT NULL,
+	"granted_by" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"revoked_at" timestamp with time zone,
+	"revoked_by" text,
+	"revoke_reason" text,
+	CONSTRAINT "lock_exceptions_revoked_check" CHECK (("lock_exceptions"."revoked_at" is null) = ("lock_exceptions"."revoked_by" is null) and ("lock_exceptions"."revoked_at" is null) = ("lock_exceptions"."revoke_reason" is null))
+);
+--> statement-breakpoint
+CREATE TABLE "period_locks" (
+	"id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "period_locks_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1),
+	"org_id" text NOT NULL,
+	"kind" text NOT NULL,
+	"locked_through" date,
+	"reason" text NOT NULL,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "period_locks_kind_check" CHECK ("period_locks"."kind" in ('general', 'tax'))
 );
 --> statement-breakpoint
 CREATE TABLE "journal_lines" (
@@ -391,6 +418,12 @@ ALTER TABLE "parties" ADD CONSTRAINT "parties_org_id_organization_id_fk" FOREIGN
 ALTER TABLE "journal_entries" ADD CONSTRAINT "journal_entries_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_entries" ADD CONSTRAINT "journal_entries_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_entries" ADD CONSTRAINT "journal_entries_org_id_reverses_entry_id_journal_entries_org_id_id_fk" FOREIGN KEY ("org_id","reverses_entry_id") REFERENCES "public"."journal_entries"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lock_exceptions" ADD CONSTRAINT "lock_exceptions_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lock_exceptions" ADD CONSTRAINT "lock_exceptions_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lock_exceptions" ADD CONSTRAINT "lock_exceptions_granted_by_user_id_fk" FOREIGN KEY ("granted_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lock_exceptions" ADD CONSTRAINT "lock_exceptions_revoked_by_user_id_fk" FOREIGN KEY ("revoked_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "period_locks" ADD CONSTRAINT "period_locks_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "period_locks" ADD CONSTRAINT "period_locks_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_lines" ADD CONSTRAINT "journal_lines_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_lines" ADD CONSTRAINT "journal_lines_org_id_entry_id_journal_entries_org_id_id_fk" FOREIGN KEY ("org_id","entry_id") REFERENCES "public"."journal_entries"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_lines" ADD CONSTRAINT "journal_lines_org_id_account_id_accounts_org_id_id_fk" FOREIGN KEY ("org_id","account_id") REFERENCES "public"."accounts"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -425,6 +458,7 @@ CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> state
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
 CREATE INDEX "document_lines_org_document_idx" ON "document_lines" USING btree ("org_id","document_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_number_idx" ON "documents" USING btree ("org_id","type","financial_year","number") WHERE "documents"."number" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "documents_org_opening_balance_idx" ON "documents" USING btree ("org_id") WHERE "documents"."type" = 'openingBalance' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_type_date_idx" ON "documents" USING btree ("org_id","type","document_date");--> statement-breakpoint
 CREATE INDEX "documents_org_type_id_idx" ON "documents" USING btree ("org_id","type","id");--> statement-breakpoint
 CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id");--> statement-breakpoint
@@ -436,6 +470,8 @@ CREATE INDEX "parties_org_gstin_idx" ON "parties" USING btree ("org_id","gstin")
 CREATE UNIQUE INDEX "journal_entries_org_document_kind_idx" ON "journal_entries" USING btree ("org_id","document_type","document_id","kind");--> statement-breakpoint
 CREATE UNIQUE INDEX "journal_entries_org_reverses_entry_idx" ON "journal_entries" USING btree ("org_id","reverses_entry_id") WHERE "journal_entries"."reverses_entry_id" is not null;--> statement-breakpoint
 CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("org_id","entry_date");--> statement-breakpoint
+CREATE INDEX "lock_exceptions_org_user_expires_idx" ON "lock_exceptions" USING btree ("org_id","user_id","expires_at");--> statement-breakpoint
+CREATE INDEX "period_locks_org_kind_id_idx" ON "period_locks" USING btree ("org_id","kind","id");--> statement-breakpoint
 CREATE INDEX "journal_lines_org_account_idx" ON "journal_lines" USING btree ("org_id","account_id");--> statement-breakpoint
 CREATE INDEX "journal_lines_org_entry_idx" ON "journal_lines" USING btree ("org_id","entry_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id","name");--> statement-breakpoint

@@ -1,4 +1,4 @@
-import { check, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { check, date, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 import { organization } from "./auth";
@@ -52,6 +52,8 @@ export const organizationSettings = pgTable(
     journalPrefix: text("journal_prefix").notNull(),
     // SETTINGS_DEFAULTS is the application source for new rows.
     timeZone: text("time_zone").notNull().default("Asia/Kolkata"),
+    lockedThrough: date("locked_through", { mode: "string" }),
+    taxLockedThrough: date("tax_locked_through", { mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

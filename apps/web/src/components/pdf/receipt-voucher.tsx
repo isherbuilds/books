@@ -3,7 +3,7 @@ import { formatMoney } from "@accly/api/core/money";
 import type { ReceiptDetail } from "@accly/api/routers/receipt";
 import type { CSSProperties, ReactNode } from "react";
 
-import { formatBusinessDate } from "@/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 
 const colors = {
   ink: "#18181b",

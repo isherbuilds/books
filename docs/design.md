@@ -176,6 +176,8 @@ bundled fonts and aligned numerals.
   muted `h3` labels, never an accordion.
 - A Sheet moves only by its 150 ms opacity and slide transition; list and
   keyboard actions stay static.
+- Transient notifications sit at the top center with an explicit close button,
+  away from form footers. They never disable pointer events on toast actions.
 
 ## 11. Motion
 

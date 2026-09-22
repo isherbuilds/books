@@ -1,4 +1,5 @@
 import { db } from "@accly/db";
+import { accounts } from "@accly/db/schema/accounts";
 import { allocations } from "@accly/db/schema/allocations";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import { parties } from "@accly/db/schema/parties";
@@ -17,7 +18,7 @@ import {
   type PostDocumentInput,
 } from "../core/documents";
 import { formatDecimal } from "../core/money";
-import { postableAccount } from "../lib/accounts";
+import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -89,122 +90,121 @@ export const receiptRouter = {
       );
     }
 
-    // Independent lookups; validation order below still reports the first missing input.
-    // postDocument checks the Payment Method under a lock inside the transaction.
-    const [party, incomeAccount, settings] = await Promise.all([
-      input.partyId
-        ? db
+    const posted = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+
+      const [party] = input.partyId
+        ? await tx
             .select()
             .from(parties)
-            .where(and(eq(parties.orgId, scope.orgId), eq(parties.id, input.partyId)))
+            .where(
+              and(
+                eq(parties.orgId, scope.orgId),
+                eq(parties.id, input.partyId),
+                eq(parties.active, true),
+              ),
+            )
             .limit(1)
-            .then(([row]) => row)
-        : undefined,
-      settlementKind === "direct"
-        ? postableAccount(scope.orgId, input.incomeAccountId, ["income"])
-        : undefined,
-      orgSettings(scope.orgId),
-    ]);
+            .for("share")
+        : [];
 
-    if (input.partyId && !party) {
-      throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
-    }
+      const [incomeAccount] =
+        settlementKind === "direct"
+          ? await postableAccounts(tx, scope.orgId, [input.incomeAccountId], ["income"]).for(
+              "share",
+              { of: accounts },
+            )
+          : [];
 
-    const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
-    let lineDescription: string;
-    let affectsTax: boolean;
-    let posting: PostDocumentInput["posting"];
-
-    if (settlementKind === "advance") {
-      lineDescription = input.narration ?? "Advance received";
-      affectsTax = false;
-      posting = {
-        paymentMethodId: input.paymentMethodId,
-        type: "receipt",
-        settlementKind,
-        advanceSupply: input.advanceSupply,
-        // A receipt's advance is always money the party paid ahead of its bills.
-        exposureSide: "receivable",
-        // The batch above proved this id resolves to a party in this organization.
-        partyId: input.partyId,
-        accountId: null,
-        amountPaise: input.amount,
-      };
-    } else if (settlementKind === "against") {
-      lineDescription = "Receipt against invoices";
-      affectsTax = false;
-      posting = {
-        paymentMethodId: input.paymentMethodId,
-        type: "receipt",
-        settlementKind,
-        exposureSide: "receivable",
-        partyId: input.partyId,
-        accountId: null,
-        amountPaise: input.amount,
-        allocations: input.allocations.map((allocation) => ({
-          documentId: allocation.invoiceId,
-          amountPaise: allocation.amount,
-        })),
-        advanceSupply: remainderSupply,
-      };
-    } else {
-      if (!incomeAccount) {
-        throw badRequest(
-          "INCOME_ACCOUNT_INVALID",
-          "Choose an active income account that is not a group or system account.",
-        );
+      if (input.partyId && !party) {
+        throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
       }
 
-      const tax = receiptTax(settings.gstin, incomeAccount.supplyClass);
+      const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
+      let lineDescription: string;
+      let affectsTax: boolean;
+      let posting: PostDocumentInput["posting"];
 
-      if (tax.refused) {
-        throw badRequest(
-          "TAXABLE_DIRECT_RECEIPT",
-          "Taxable income must be invoiced before it is received.",
-        );
+      if (settlementKind === "advance") {
+        lineDescription = input.narration ?? "Advance received";
+        affectsTax = false;
+        posting = {
+          paymentMethodId: input.paymentMethodId,
+          type: "receipt",
+          settlementKind,
+          advanceSupply: input.advanceSupply,
+          // A receipt's advance is always money the party paid ahead of its bills.
+          exposureSide: "receivable",
+          partyId: input.partyId,
+          accountId: null,
+          amountPaise: input.amount,
+        };
+      } else if (settlementKind === "against") {
+        lineDescription = "Receipt against invoices";
+        affectsTax = false;
+        posting = {
+          paymentMethodId: input.paymentMethodId,
+          type: "receipt",
+          settlementKind,
+          exposureSide: "receivable",
+          partyId: input.partyId,
+          accountId: null,
+          amountPaise: input.amount,
+          allocations: input.allocations.map((allocation) => ({
+            documentId: allocation.invoiceId,
+            amountPaise: allocation.amount,
+          })),
+          advanceSupply: remainderSupply,
+        };
+      } else {
+        if (!incomeAccount) {
+          throw badRequest(
+            "INCOME_ACCOUNT_INVALID",
+            "Choose an active income account that is not a group or system account.",
+          );
+        }
+
+        const tax = receiptTax(settings.gstin, incomeAccount.supplyClass);
+
+        if (tax.refused) {
+          throw badRequest(
+            "TAXABLE_DIRECT_RECEIPT",
+            "Taxable income must be invoiced before it is received.",
+          );
+        }
+
+        lineDescription = input.narration ?? incomeAccount.name;
+        affectsTax = tax.affectsTax;
+        posting = {
+          paymentMethodId: input.paymentMethodId,
+          type: "receipt",
+          settlementKind,
+          exposureSide: null,
+          partyId: party?.id ?? null,
+          accountId: incomeAccount.id,
+          amountPaise: input.amount,
+        };
       }
 
-      lineDescription = input.narration ?? incomeAccount.name;
-      affectsTax = tax.affectsTax;
-      posting = {
-        paymentMethodId: input.paymentMethodId,
-        type: "receipt",
-        settlementKind,
-        exposureSide: null,
-        partyId: party?.id ?? null,
-        accountId: incomeAccount.id,
-        amountPaise: input.amount,
+      const printSnapshot = {
+        organization: organizationSnapshot(settings),
+        party: partySnapshot(party),
+        lines: [{ description: lineDescription }],
       };
-    }
 
-    const printSnapshot = {
-      organization: organizationSnapshot(settings),
-      party: partySnapshot(party),
-      lines: [{ description: lineDescription }],
-    };
-
-    const posted = await db.transaction((tx) =>
-      postDocument(
-        tx,
-        scope,
-        {
-          prefix: settings.receiptPrefix,
-          fiscalYearStartMonth: settings.financialYearStart,
-        },
-        {
-          documentDate,
-          dueDate: null,
-          placeOfSupplyStateCode: null,
-          reference: input.reference ?? null,
-          narration: input.narration ?? null,
-          affectsTax,
-          printSnapshot,
-          lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
-          posting,
-          draft: null,
-        },
-      ),
-    );
+      return postDocument(tx, scope, settings, settings.receiptPrefix, {
+        documentDate,
+        dueDate: null,
+        placeOfSupplyStateCode: null,
+        reference: input.reference ?? null,
+        narration: input.narration ?? null,
+        affectsTax,
+        printSnapshot,
+        lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
+        posting,
+        draft: null,
+      });
+    });
 
     audit({
       action: "receipt.post",

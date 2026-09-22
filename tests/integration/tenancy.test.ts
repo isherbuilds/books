@@ -718,6 +718,44 @@ const GUARDED_CALLS = {
   "journal.accounts": (api, claim) => api.journal.accounts({ ...claim }),
   "journal.cancel": (api, claim) =>
     api.journal.cancel({ ...claim, journalId: crypto.randomUUID(), reason: "Intrusion" }),
+  "lock.get": (api, claim) => api.lock.get({ ...claim }),
+  "lock.set": (api, claim) =>
+    api.lock.set({
+      ...claim,
+      kind: "general",
+      lockedThrough: "2026-03-31",
+      expectedLockedThrough: null,
+      reason: "Intrusion",
+    }),
+  "lock.grantException": (api, claim) =>
+    api.lock.grantException({
+      ...claim,
+      userId: crypto.randomUUID(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      reason: "Intrusion",
+    }),
+  "lock.revokeException": (api, claim) =>
+    api.lock.revokeException({
+      ...claim,
+      exceptionId: crypto.randomUUID(),
+      reason: "Intrusion",
+    }),
+  "openingBalance.post": (api, claim) =>
+    api.openingBalance.post({
+      ...claim,
+      documentDate: "2026-04-01",
+      lines: [
+        { accountId: crypto.randomUUID(), side: "debit", amount: "1.00" },
+        { accountId: crypto.randomUUID(), side: "credit", amount: "1.00" },
+      ],
+    }),
+  "openingBalance.get": (api, claim) => api.openingBalance.get({ ...claim }),
+  "openingBalance.cancel": (api, claim) =>
+    api.openingBalance.cancel({
+      ...claim,
+      openingBalanceId: crypto.randomUUID(),
+      reason: "Intrusion",
+    }),
   "allocation.apply": (api, claim) =>
     api.allocation.apply({
       ...claim,
@@ -776,6 +814,7 @@ const GUARDED_CALLS = {
   "file.delete": (api, claim) => api.file.delete({ ...claim, key: "k" }),
   "member.me": (api, claim) => api.member.me({ ...claim }),
   "member.list": (api, claim) => api.member.list({ ...claim }),
+  "member.options": (api, claim) => api.member.options({ ...claim }),
   "member.invite": (api, claim) =>
     api.member.invite({ ...claim, email: "x@example.com", role: "operator" }),
   "member.revokeInvitation": (api, claim) =>

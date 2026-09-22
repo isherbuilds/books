@@ -38,16 +38,16 @@ export function isLeaf(orgId: string) {
 /**
  * Active, non-system leaves of one of `types` that are not money accounts: money
  * moves between money accounts only by the slice 5 Journal. Unresolved ids are
- * omitted from the result.
+ * omitted from the result. Posting callers may extend this query with a row lock
+ * when they already own a surrounding transaction.
  */
-export async function postableAccounts(
+export function postableAccounts(
+  executor: typeof db | DbTransaction,
   orgId: string,
   ids: readonly string[],
   types: readonly AccountType[],
-): Promise<Array<typeof accounts.$inferSelect>> {
-  if (ids.length === 0) return [];
-
-  return db
+) {
+  return executor
     .select(getTableColumns(accounts))
     .from(accounts)
     .leftJoin(moneyGroup, underMoneyGroup(orgId))
@@ -65,11 +65,12 @@ export async function postableAccounts(
 }
 
 export async function postableAccount(
+  executor: typeof db | DbTransaction,
   orgId: string,
   id: string,
   types: readonly AccountType[],
 ): Promise<typeof accounts.$inferSelect | undefined> {
-  const [row] = await postableAccounts(orgId, [id], types);
+  const [row] = await postableAccounts(executor, orgId, [id], types);
 
   return row;
 }
