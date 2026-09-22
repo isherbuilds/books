@@ -1,4 +1,5 @@
 import { db } from "@accly/db";
+import { accounts } from "@accly/db/schema/accounts";
 import { parties } from "@accly/db/schema/parties";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
@@ -15,7 +16,7 @@ import {
 } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import { computeTds } from "../core/posting";
-import { postableAccount } from "../lib/accounts";
+import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -76,10 +77,15 @@ export const paymentRouter = {
             .for("share")
         : [];
 
-      const expenseAccount =
+      const [expenseAccount] =
         settlementKind === "direct"
-          ? await postableAccount(tx, scope.orgId, input.expenseAccountId, ["expense", "asset"])
-          : undefined;
+          ? await postableAccounts(
+              tx,
+              scope.orgId,
+              [input.expenseAccountId],
+              ["expense", "asset"],
+            ).for("share", { of: accounts })
+          : [];
 
       const [section] = input.tdsSectionId
         ? await tx

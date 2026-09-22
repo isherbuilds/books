@@ -67,8 +67,8 @@ For the approved policy:
 
 ## Decision and evidence limits
 
-After reviewing these references, the owner selected **Correct original cutover**. `reverseDocument` now derives an Opening Balance reversal date from the scoped persisted document; other types retain the current business date. The replacement cutoff and its UI error mapping are removed. The existing integration lifecycle now proves locked-cutover refusal and rollback, an authorized exception, and a same-cutover replacement that changes historical cash from 60 to 80. The new refusal assertion failed on the previous implementation; the corrected opening/lock selection passed 6 tests.
+The owner selected **Correct original cutover**. `reverseDocument` derives an Opening Balance reversal date from the scoped persisted document; other types retain the current business date. The integration lifecycle in `tests/integration/opening-balance.test.ts` covers locked-cutover refusal and rollback, an authorized exception, and a same-cutover replacement that changes historical balances.
 
 Evidence is first-party documentation inspected on 22 September 2026 plus ERPNext source pinned to v15.121.3. Current documentation and a pinned release are distinguished above. Zoho sources are current IN-EN/US-EN help and API v3 pages without a public product revision. Neither vendor was run, and no claim is made about all report variants or private Zoho ledger storage.
 
-This narrows the earlier [opening-and-locks research](./opening-balance-and-locks-2026-09-20.md): its cancellation-date comparison did not establish an opening-replacement correction policy. The active disposition remains in the [PR #4 review](./pr4-review-2026-09-22.md#pr4-p1-opening-lifecycle).
+This narrows the earlier [opening-and-locks research](./opening-balance-and-locks-2026-09-20.md): its cancellation-date comparison did not establish an opening-replacement correction policy. The [accounting contract](../specs/accounting-core.md#journal-opening-balance-and-locks-slice-5) owns the current rule.

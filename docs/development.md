@@ -163,4 +163,11 @@ codes, invariants and state, not copy. Use `eventually` and
 `GUARDED_CALLS` in `tests/integration/tenancy.test.ts` and proves its rows are
 invisible to other tenants.
 
+The lock-form identity regression uses the existing browser tooling:
+`bun scripts/check-lock-form.ts <fixture Locks URL>`. Select a signed-in browser
+page through `chrome-devtools-axi` in `CHROME_DEVTOOLS_AXI_SESSION` first.
+Run once with both lock dates equal (both unlocked is sufficient) and once with
+different dates. It switches the mounted Sheet from Books to Tax, checks fresh
+drafts and the outgoing CAS snapshot, and intercepts submission without saving.
+
 When a mistake repeats, promote the fix: doc, test, type, lint, script.

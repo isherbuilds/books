@@ -199,17 +199,21 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   transaction before document locks, using that same row for tax, numbering
   and dates. `assertPeriodOpen` (`core/locks.ts`) checks the held dates and reads
   `lock_exceptions` only when the general lock needs a bypass.
-  `lock.set` compares the submitted `expectedLockedThrough` with the current date,
-  then updates it and appends history atomically. A stale comparison is `CONFLICT`;
-  the client refreshes and closes the stale form. The UPDATE waits for in-flight
-  postings. Revocation reads settings `FOR UPDATE` before
-  changing the exception, so it also waits for passed checks. Posting never
+  `lock.set` reads settings `FOR UPDATE`, compares `expectedLockedThrough` with
+  the current date, then updates it and appends history atomically. Missing
+  settings is an integrity failure; a stale date is `CONFLICT`, so the client
+  refreshes and closes the stale form. Lock changes and revocation wait for
+  in-flight postings before changing the held settings or exception. Posting never
   scans lock history. Expiry uses `statement_timestamp()`. Spec
   [call 7](./specs/accounting-core.md#architecture-calls).
-- Receipt and Payment resolve every posting-critical mutable Party, Account,
-  Payment Method and TDS Section inside the posting transaction, after settings,
-  and hold each resolved row `FOR SHARE` until commit. See
-  [PR #4 correction review](./research/pr4-review-2026-09-22.md).
+- Receipt and Payment validate posting-critical masters after locking settings,
+  holding the resolved rows `FOR SHARE` until commit: the active Party supplies
+  the snapshot and exposure; the direct income/expense Account supplies posting
+  eligibility and supply class; the TDS Section supplies effective dates and rate;
+  the Payment Method supplies its active state and account mapping. Updates or
+  deactivation wait until the posting commits. The stored posting and snapshot
+  retain those validated values. Locks belong to these transaction paths, not
+  to all master reads; Item and Invoice draft validation use unlocked reads.
 - One `post` entry and at most one `reverse` entry exist per document:
   `journal_entries` has a unique index on
   `(orgId, documentType, documentId, kind)` and a partial unique index on

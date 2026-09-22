@@ -1,4 +1,5 @@
 import { db } from "@accly/db";
+import { accounts } from "@accly/db/schema/accounts";
 import { allocations } from "@accly/db/schema/allocations";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import { parties } from "@accly/db/schema/parties";
@@ -17,7 +18,7 @@ import {
   type PostDocumentInput,
 } from "../core/documents";
 import { formatDecimal } from "../core/money";
-import { postableAccount } from "../lib/accounts";
+import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -107,10 +108,13 @@ export const receiptRouter = {
             .for("share")
         : [];
 
-      const incomeAccount =
+      const [incomeAccount] =
         settlementKind === "direct"
-          ? await postableAccount(tx, scope.orgId, input.incomeAccountId, ["income"])
-          : undefined;
+          ? await postableAccounts(tx, scope.orgId, [input.incomeAccountId], ["income"]).for(
+              "share",
+              { of: accounts },
+            )
+          : [];
 
       if (input.partyId && !party) {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");

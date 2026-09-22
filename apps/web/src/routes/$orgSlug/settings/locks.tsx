@@ -92,7 +92,7 @@ function LocksRoute() {
     <>
       <PageHeader
         title="Locks"
-        description="Close periods to posting. A cancellation is checked on the day it is made, not the document's date."
+        description="Close periods to posting. Ordinary cancellations use the cancellation date; Opening Balance corrections use the original cutover date."
       />
       <SettingsTabs orgSlug={orgSlug} />
       <PageBody>

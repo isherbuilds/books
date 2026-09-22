@@ -106,7 +106,12 @@ async function resolveInvoice(
             and(eq(items.orgId, scope.orgId), eq(items.active, true), inArray(items.id, itemIds)),
           );
 
-  const storedAccounts = await postableAccounts(executor, scope.orgId, accountIds, ["income"]);
+  const accountQuery = postableAccounts(executor, scope.orgId, accountIds, ["income"]);
+
+  const storedAccounts =
+    accountIds.length === 0
+      ? []
+      : await (executor === db ? accountQuery : accountQuery.for("share", { of: accounts }));
 
   const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 

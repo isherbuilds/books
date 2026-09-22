@@ -28,11 +28,6 @@ Check UI items in the running app on desktop and mobile, in both themes.
   Slice 8 precedes 9: a discount or write-off needs an expense leaf no
   template ships. Slices 4a, 4b-i and 5 are implemented and runtime verified in
   the app; CA acceptance is open.
-- **[PR #4 corrections](./research/pr4-review-2026-09-22.md)**: Verification.
-  Original-cutover correction, stale-lock recovery, and exception revocation are
-  verified in the running app; the corrected tree passes the full suite and
-  production build. Remaining hosted checks and required-check enforcement are
-  outside the current correction scope and await an owner decision.
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as
   a released credit distinct from an advance, before any tax workflow reads

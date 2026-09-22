@@ -494,7 +494,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 
 ## Journal, Opening Balance and locks (slice 5)
 
-Implemented and runtime verified, including the [original-cutover correction and lock boundary](../research/pr4-review-2026-09-22.md#pr4-p1-opening-lifecycle).
+Implemented and runtime verified. The [original-cutover correction policy](../research/opening-balance-correction-policy-2026-09-22.md) explains the Opening Balance exception.
 CA acceptance is open; party lines are slice 9.
 
 - **Document.** Type `journal`, a Billing document like Receipt, posted in full
@@ -571,18 +571,18 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   locks; there is no separate replacement-after-reversal cutoff.
   `openingBalance.get` returns the posted document or null.
 - **Locks.** `organization_settings.lockedThrough` and `taxLockedThrough` own
-  the current dates; null means unlocked. `lock.set` requires
-  `expectedLockedThrough`; a stale value is `CONFLICT`, while a fresh value
-  deliberately permits reopening with an earlier date or null. The update
-  appends its `period_locks` history row
+  the current dates; null means unlocked. `lock.set` reads settings `FOR UPDATE`
+  and compares `expectedLockedThrough`; missing settings is an integrity failure,
+  while a stale date is `CONFLICT`. A fresh value deliberately permits reopening
+  with an earlier date or null. The update appends its `period_locks` history row
   `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
   History's highest identity id per kind supplies the latest reason and setter
   to the settings screen, not a posting-time lookup. `lock_exceptions` stores
   `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy/revokeReason }`;
   active means not revoked and not expired on the database clock.
   Every posting, cancellation and allocation reads settings once `FOR SHARE` (or stronger)
-  inside its transaction, before document locks. `lock.set`'s UPDATE and
-  `lock.revokeException`'s `FOR UPDATE` wait for those readers to commit.
+  inside its transaction, before document locks. `lock.set` and
+  `lock.revokeException` take `FOR UPDATE` and wait for those readers to commit.
   `assertPeriodOpen` checks those already-held dates and queries exceptions only
   for a general-lock bypass. It runs in `postDocument` (document date),
   `reverseDocument` (reversal date) and allocations (entry date):
@@ -596,8 +596,10 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   (form when none is posted, record with Cancel when one is) and Settings >
   Locks (both locks with Change, exceptions with Grant and Revoke); forms show
   `LOCKED` on the date field. Change and Grant are URL-backed Sheets; Change
-  requires a loaded lock state. The exception list states that it reflects the
-  last fetch and offers Refresh, rather than polling settings.
+  requires a loaded lock state. Switching Organization or lock kind starts a
+  fresh form; a refetch preserves the original expected lock date for CAS.
+  The exception list states that it reflects the last fetch and offers Refresh,
+  rather than polling settings.
   Expiry retains time-of-day precision in the Organization zone and rejects
   nonexistent DST times instead of shifting them. Exceptions are
   user-scoped until revoked or expired: removing membership denies all access,

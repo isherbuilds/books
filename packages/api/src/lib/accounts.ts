@@ -38,37 +38,30 @@ export function isLeaf(orgId: string) {
 /**
  * Active, non-system leaves of one of `types` that are not money accounts: money
  * moves between money accounts only by the slice 5 Journal. Unresolved ids are
- * omitted from the result. A transaction executor holds the resolved account rows
- * through commit so a concurrent archive cannot invalidate a posting.
+ * omitted from the result. Posting callers may extend this query with a row lock
+ * when they already own a surrounding transaction.
  */
-export async function postableAccounts(
+export function postableAccounts(
   executor: typeof db | DbTransaction,
   orgId: string,
   ids: readonly string[],
   types: readonly AccountType[],
-): Promise<Array<typeof accounts.$inferSelect>> {
-  if (ids.length === 0) return [];
-
-  return (
-    executor
-      .select(getTableColumns(accounts))
-      .from(accounts)
-      .leftJoin(moneyGroup, underMoneyGroup(orgId))
-      .where(
-        and(
-          eq(accounts.orgId, orgId),
-          inArray(accounts.id, [...ids]),
-          eq(accounts.active, true),
-          inArray(accounts.type, [...types]),
-          isNull(accounts.systemKey),
-          isNull(moneyGroup.id),
-          isLeaf(orgId),
-        ),
-      )
-      // Lock only the owned account row: PostgreSQL cannot lock the nullable side of
-      // the outer join. A concurrent archive then waits for the posting transaction.
-      .for("share", { of: accounts })
-  );
+) {
+  return executor
+    .select(getTableColumns(accounts))
+    .from(accounts)
+    .leftJoin(moneyGroup, underMoneyGroup(orgId))
+    .where(
+      and(
+        eq(accounts.orgId, orgId),
+        inArray(accounts.id, [...ids]),
+        eq(accounts.active, true),
+        inArray(accounts.type, [...types]),
+        isNull(accounts.systemKey),
+        isNull(moneyGroup.id),
+        isLeaf(orgId),
+      ),
+    );
 }
 
 export async function postableAccount(

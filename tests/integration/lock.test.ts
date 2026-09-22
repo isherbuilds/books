@@ -8,6 +8,7 @@ import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { auditLog } from "@accly/db/schema/audit";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { periodLocks } from "@accly/db/schema/period-locks";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -362,6 +363,32 @@ test("a stale lock change cannot reopen a newer close", async () => {
     reason: "Deliberate reopen",
   });
   expect((await caApi.lock.get(claim)).general?.lockedThrough).toBeNull();
+});
+
+test("missing organization settings is an integrity failure, not a stale lock conflict", async () => {
+  const fixture = await createAccountingFixture(founder, "missing-lock-settings", {
+    timeZone: "UTC",
+  });
+
+  const ca = await createTestUser("missing-lock-settings-ca");
+  await joinOrganization(ca, fixture.organization.id, "ca");
+  const caApi = clientFor(ca);
+
+  await db
+    .delete(organizationSettings)
+    .where(eq(organizationSettings.orgId, fixture.organization.id));
+
+  await expectORPCCode(
+    caApi.lock.set({
+      orgSlug: fixture.organization.slug,
+      kind: "general",
+      lockedThrough: today,
+      expectedLockedThrough: null,
+      reason: "Cannot close corrupt organization",
+    }),
+    "INTERNAL_SERVER_ERROR",
+  );
+  expect(await lockChangeCounts(fixture.organization.id)).toEqual({ history: 0, audits: 0 });
 });
 
 test("the tax lock follows affectsTax while cancellations use the reversal date", async () => {

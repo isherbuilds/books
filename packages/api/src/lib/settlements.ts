@@ -10,6 +10,7 @@ import { audit } from "../audit";
 import { reverseDocument } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import type { DocumentPosting } from "../core/posting";
+import { impossible } from "./conflict";
 import type { Scope } from "./procedures/factory";
 import { likePattern, type documentListFields, type settlementListFields } from "./schemas";
 
@@ -90,7 +91,7 @@ export async function orgSettings(
   // serialize Opening Balance posts and exception revocation against those writers.
   const [settings] = lock ? await query.for(mode) : await query;
 
-  if (!settings) throw new Error(`Organization ${orgId} is missing its settings`);
+  if (!settings) throw impossible(`organization ${orgId} is missing its settings`);
 
   return settings;
 }

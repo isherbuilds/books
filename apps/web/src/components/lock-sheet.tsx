@@ -159,7 +159,13 @@ export function LockSheet({
       title={`Lock ${label}`}
       description="Posting on or before this date is refused. Clear the date to unlock."
     >
-      <LockForm orgSlug={orgSlug} kind={kind} current={current} onClose={onClose} />
+      <LockForm
+        key={`${orgSlug}:${kind}`}
+        orgSlug={orgSlug}
+        kind={kind}
+        current={current}
+        onClose={onClose}
+      />
     </FormSheet>
   );
 }

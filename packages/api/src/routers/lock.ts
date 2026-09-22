@@ -76,32 +76,28 @@ export const lockRouter = {
     const { scope } = context;
 
     const row = await db.transaction(async (tx) => {
-      const lockedThroughColumn =
-        input.kind === "general"
-          ? organizationSettings.lockedThrough
-          : organizationSettings.taxLockedThrough;
+      const settings = await orgSettings(scope.orgId, tx, "update");
 
-      // UPDATE itself waits for in-flight postings holding settings FOR SHARE.
-      const [settings] = await tx
+      const currentLockedThrough =
+        input.kind === "general" ? settings.lockedThrough : settings.taxLockedThrough;
+
+      if (currentLockedThrough !== input.expectedLockedThrough) {
+        throw new ORPCError("CONFLICT", {
+          message: "This lock changed after you opened it.",
+        });
+      }
+
+      const [updated] = await tx
         .update(organizationSettings)
         .set(
           input.kind === "general"
             ? { lockedThrough: input.lockedThrough }
             : { taxLockedThrough: input.lockedThrough },
         )
-        .where(
-          and(
-            eq(organizationSettings.orgId, scope.orgId),
-            sql`${lockedThroughColumn} is not distinct from ${input.expectedLockedThrough}`,
-          ),
-        )
+        .where(eq(organizationSettings.orgId, scope.orgId))
         .returning({ orgId: organizationSettings.orgId });
 
-      if (!settings) {
-        throw new ORPCError("CONFLICT", {
-          message: "This lock changed after you opened it.",
-        });
-      }
+      if (!updated) throw impossible("locked organization settings disappeared");
 
       const [inserted] = await tx
         .insert(periodLocks)
