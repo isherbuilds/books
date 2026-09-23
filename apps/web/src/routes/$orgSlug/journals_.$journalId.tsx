@@ -1,3 +1,4 @@
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
@@ -15,7 +16,7 @@ import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PostedLines } from "@/components/posted-lines";
 import { invalidateJournalState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
-import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
+import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { loadRouteQuery, reportStaleWrite } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
@@ -85,7 +86,7 @@ function JournalPage() {
     <>
       <PageHeader
         title="Journal"
-        description={`${journal.number} · ${formatDay(journal.documentDate)}`}
+        description={`${journal.number} · ${formatBusinessDate(journal.documentDate)}`}
         action={
           canCancel ? (
             <Button variant="destructive" onClick={() => setCancelOpen(true)}>

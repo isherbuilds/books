@@ -1,9 +1,9 @@
+import { businessDate } from "@accly/api/lib/business-date";
 import { ClientOnly, Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app-shell";
 import { Palette } from "@/components/palette/palette";
 import { membershipOptions } from "@/lib/membership";
-import { orgToday } from "@/lib/org-datetime";
 import { hasErrorCode } from "@/lib/orpc-error";
 
 export const Route = createFileRoute("/$orgSlug")({
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/$orgSlug")({
 
     return {
       timeZone: membership.timeZone,
-      today: orgToday(membership.timeZone),
+      today: businessDate(new Date(), membership.timeZone),
       financialYearStart: membership.financialYearStart,
     };
   },

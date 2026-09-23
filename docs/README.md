@@ -57,7 +57,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   both themes, including read-only chart and Items rows (no edit link) and the
   mobile GST supply class; the sidebar active row after its style moved into
   `SidebarMenuButton`; keyboard-only journal entry; a hands-on pass on a real
-  phone.
+  phone. Also open: the Opening balance mobile Total row at 390 px, and typing
+  a debit into a line with a credit (and back) clears the cleared side's error;
+  the Journal, Invoice and Receipt record dates now show the year at 390 px.
 - **Opening balance and locks**: Verification. The relocated entry form and
   both lock Dialogs are checked on desktop and mobile in both themes; the
   exception Dialog rejects nonexistent organization-local DST times.

@@ -10,6 +10,7 @@ import type { EntrySide } from "@accly/db/schema/document-lines";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -222,6 +223,7 @@ function EntryLineFields({
                   aria-invalid={fieldState.invalid}
                 />
               </FormControl>
+              <FormDescription className="sr-only">Shown in the day book only.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -249,7 +251,7 @@ function EntryLineFields({
                         field.onChange(event);
 
                         if (event.target.value) {
-                          form.setValue(`lines.${index}.${other}`, "");
+                          form.setValue(`lines.${index}.${other}`, "", { shouldValidate: true });
                         }
                       }}
                       inputMode="decimal"

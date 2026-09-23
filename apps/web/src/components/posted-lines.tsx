@@ -93,6 +93,10 @@ export function PostedLines({
             ) : null}
           </div>
         ))}
+        <div className="flex items-center justify-between px-3 py-2 font-medium">
+          <span>Total</span>
+          <span className="text-right tabular-nums">{formatMoney(totalPaise)}</span>
+        </div>
       </div>
     </section>
   );

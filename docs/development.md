@@ -114,8 +114,8 @@ stays pinned. Check each Better Auth release for schema changes before an upgrad
 - Comment why the obvious approach is wrong.
 - Never hand-edit or hand-write a migration, and never hand-edit
   `routeTree.gen.ts`. The schema is the only migration source: change it, then
-  run `bun run db:generate`. Before any environment keeps data, regenerate the
-  baseline and reset with `bun run db:seed -- --reset`, with explicit approval
+  run `bun run db:generate`. Before any environment keeps data, delete the
+  baseline, regenerate it and reset with `bun run db:seed -- --reset`, with explicit approval
   to delete local data. Once an environment keeps data, history is append-only:
   retain its recorded baseline and generate incremental migrations.
 - No secret or server-only import reaches client assets.

@@ -13,7 +13,6 @@ import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FieldPath } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
@@ -31,7 +30,7 @@ import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, isRefusal } from "@/lib/orpc-error";
+import { applyOrpcFieldError, isRefusal, reportStaleWrite } from "@/lib/orpc-error";
 
 const journalSchema = z.object({
   documentDate: z.iso.date(),
@@ -75,19 +74,23 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
 
   const post = useMutation(
     orpc.journal.post.mutationOptions({
-      onSuccess: async () => {
-        await invalidateJournalState(queryClient, orgSlug);
-      },
-      onError: async (error) => {
-        if (!isRefusal(error)) {
-          onClose();
-          await invalidateJournalState(queryClient, orgSlug);
-          toast.error("The result is uncertain. Check the journal list before entering it again.");
+      onSuccess: () => invalidateJournalState(queryClient, orgSlug),
+      onError: (error) => {
+        if (isRefusal(error)) {
+          applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
 
           return;
         }
 
-        applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
+        return reportStaleWrite(error, {
+          refresh: () => {
+            onClose();
+
+            return invalidateJournalState(queryClient, orgSlug);
+          },
+          fallback: "Could not post the journal",
+          uncertain: "The result is uncertain. Check the journal list before entering it again.",
+        });
       },
     }),
   );

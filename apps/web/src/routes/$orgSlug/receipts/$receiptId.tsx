@@ -1,5 +1,6 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/invoice-details.tsx and sheets/invoice-details-sheet.tsx.
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
@@ -165,7 +166,7 @@ function ReceiptSheetRoute() {
             <Separator />
 
             <dl className="grid gap-3">
-              <DetailRow label="Date">{formatDay(receipt.documentDate)}</DetailRow>
+              <DetailRow label="Date">{formatBusinessDate(receipt.documentDate)}</DetailRow>
               <DetailRow label="Party">
                 {receipt.partyId && canReadParties ? (
                   <Link

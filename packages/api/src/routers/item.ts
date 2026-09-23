@@ -138,8 +138,8 @@ export const itemRouter = {
       const { orgSlug: _claim, ...fields } = input;
       const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
-      try {
-        return await db.transaction(async (tx) => {
+      return db
+        .transaction(async (tx) => {
           const values = await itemValues(tx, context.scope.orgId, fields, today);
 
           const [created] = await tx
@@ -150,10 +150,8 @@ export const itemRouter = {
           if (!created) throw impossible("Item insert returned no row");
 
           return created;
-        });
-      } catch (error) {
-        itemNameTaken(error);
-      }
+        })
+        .catch(itemNameTaken);
     },
   ),
 
@@ -168,8 +166,8 @@ export const itemRouter = {
     const { orgSlug: _claim, itemId, updatedAt, ...fields } = input;
     const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
-    try {
-      return await db.transaction(async (tx) => {
+    return db
+      .transaction(async (tx) => {
         const values = await itemValues(tx, context.scope.orgId, fields, today);
 
         const [updated] = await tx
@@ -189,10 +187,8 @@ export const itemRouter = {
         }
 
         return updated;
-      });
-    } catch (error) {
-      itemNameTaken(error);
-    }
+      })
+      .catch(itemNameTaken);
   }),
 
   setActive: orgProcedure(

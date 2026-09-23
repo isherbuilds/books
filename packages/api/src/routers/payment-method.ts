@@ -62,8 +62,8 @@ export const paymentMethodRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    try {
-      return await db.transaction(async (tx) => {
+    return db
+      .transaction(async (tx) => {
         await lockMoneyAccount(tx, orgId, input.accountId);
 
         const [created] = await tx
@@ -74,14 +74,14 @@ export const paymentMethodRouter = {
         if (!created) throw impossible("Payment method insert returned no row");
 
         return created;
-      });
-    } catch (error) {
-      if (uniqueViolationConstraint(error) === "payment_methods_org_name_idx") {
-        throw conflict("DUPLICATE", "A payment method with this name already exists.");
-      }
+      })
+      .catch((error: unknown) => {
+        if (uniqueViolationConstraint(error) === "payment_methods_org_name_idx") {
+          throw conflict("DUPLICATE", "A payment method with this name already exists.");
+        }
 
-      throw error;
-    }
+        throw error;
+      });
   }),
 
   // Retired methods stay on the documents that used them; only new documents skip them.
