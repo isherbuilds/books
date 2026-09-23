@@ -1,4 +1,4 @@
-import { db } from "@accly/db";
+import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
@@ -6,11 +6,33 @@ import { and, asc, eq, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
-import { badRequest, conflict } from "../lib/conflict";
+import { badRequest, conflict, impossible } from "../lib/conflict";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { shortName } from "../lib/schemas";
+
+/** Share-locks an active cash or bank leaf so it cannot be archived before the write commits. */
+async function lockMoneyAccount(tx: DbTransaction, orgId: string, accountId: string) {
+  const [account] = await tx
+    .select({ id: accounts.id })
+    .from(accounts)
+    .innerJoin(moneyGroup, underMoneyGroup(orgId))
+    .where(
+      and(
+        eq(accounts.orgId, orgId),
+        eq(accounts.id, accountId),
+        eq(accounts.active, true),
+        isLeaf(orgId),
+      ),
+    )
+    .limit(1)
+    .for("share", { of: accounts });
+
+  if (!account) {
+    throw badRequest("ACCOUNT_NOT_MONEY", "Choose an active cash or bank account.");
+  }
+}
 
 export const paymentMethodRouter = {
   list: orgProcedure({ paymentMethod: ["read"] }, orgInput).handler(async ({ context }) => {
@@ -40,36 +62,19 @@ export const paymentMethodRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const [account] = await db
-      .select({ id: accounts.id })
-      .from(accounts)
-      .innerJoin(moneyGroup, underMoneyGroup(orgId))
-      .where(
-        and(
-          eq(accounts.orgId, orgId),
-          eq(accounts.id, input.accountId),
-          eq(accounts.active, true),
-          isLeaf(orgId),
-        ),
-      )
-      .limit(1);
-
-    if (!account) {
-      throw badRequest(
-        "ACCOUNT_NOT_MONEY",
-        "Payment methods settle into an active cash or bank account.",
-      );
-    }
-
     try {
-      const [created] = await db
-        .insert(paymentMethods)
-        .values({ id: Bun.randomUUIDv7(), orgId, name: input.name, accountId: account.id })
-        .returning();
+      return await db.transaction(async (tx) => {
+        await lockMoneyAccount(tx, orgId, input.accountId);
 
-      if (!created) throw new Error("Payment method insert returned no row");
+        const [created] = await tx
+          .insert(paymentMethods)
+          .values({ id: Bun.randomUUIDv7(), orgId, name: input.name, accountId: input.accountId })
+          .returning();
 
-      return created;
+        if (!created) throw impossible("Payment method insert returned no row");
+
+        return created;
+      });
     } catch (error) {
       if (uniqueViolationConstraint(error) === "payment_methods_org_name_idx") {
         throw conflict("DUPLICATE", "A payment method with this name already exists.");

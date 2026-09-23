@@ -1,10 +1,8 @@
 import { expect, test } from "bun:test";
 
-import {
-  formatBusinessDate,
-  orgLocalToInstant,
-  orgToday,
-} from "../../apps/web/src/lib/org-datetime";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
+
+import { orgLocalToInstant, orgToday } from "../../apps/web/src/lib/org-datetime";
 
 test("organization dates follow the organization's accounting day", () => {
   const zone = "Asia/Kolkata";

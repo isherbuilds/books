@@ -11,7 +11,8 @@ export type ConflictReason =
   | "STALE_RECORD"
   | "PARTY_NAME_COLLISION"
   | "PARTY_GSTIN_TAKEN"
-  | "ITEM_NAME_TAKEN";
+  | "ITEM_NAME_TAKEN"
+  | "ACCOUNT_NAME_TAKEN";
 
 /** A clash the operator can act on. Expected, so the server does not log it. */
 export function conflict(reason: ConflictReason, message: string) {

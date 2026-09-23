@@ -95,3 +95,17 @@ export function invalidateItems(queryClient: QueryInvalidator, orgSlug: string) 
     queryKey: orpc.item.key({ input: { orgSlug } }),
   });
 }
+
+// Account writes change the chart (every list variant and money balances), the journal
+// pickers, and the account names Items and Payment Methods display.
+export async function invalidateAccountState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: orpc.account.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.paymentMethod.key({ input: { orgSlug } }) }),
+    invalidateItems(queryClient, orgSlug),
+  ]);
+}

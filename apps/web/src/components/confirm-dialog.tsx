@@ -104,7 +104,7 @@ function ReasonBody({
 
   return (
     <>
-      <label className="grid gap-1.5 text-xs">
+      <label className="grid gap-2 text-xs">
         <span>Reason</span>
         <Textarea
           required

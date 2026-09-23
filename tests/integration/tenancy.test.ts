@@ -646,7 +646,16 @@ const GUARDED_CALLS = {
   "paymentMethod.setActive": (api, claim) =>
     api.paymentMethod.setActive({ ...claim, paymentMethodId: crypto.randomUUID(), active: false }),
   "account.create": (api, claim) =>
-    api.account.create({ ...claim, kind: "bank", name: "Intrusion" }),
+    api.account.create({ ...claim, parent: { type: "asset" }, name: "Intrusion" }),
+  "account.update": (api, claim) =>
+    api.account.update({
+      ...claim,
+      accountId: crypto.randomUUID(),
+      name: "Intrusion",
+      updatedAt: new Date().toISOString(),
+    }),
+  "account.setActive": (api, claim) =>
+    api.account.setActive({ ...claim, accountId: crypto.randomUUID(), active: false }),
   "account.moneyBalances": (api, claim) => api.account.moneyBalances({ ...claim }),
   "item.list": (api, claim) => api.item.list({ ...claim }),
   "item.create": (api, claim) =>

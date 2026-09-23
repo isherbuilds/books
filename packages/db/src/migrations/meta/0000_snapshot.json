@@ -1,5 +1,5 @@
 {
-  "id": "47bc28a3-e8e0-4537-9ade-e7d06680d581",
+  "id": "aa0a2c9a-ebab-47f7-a4c6-222b288aea05",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -72,7 +72,7 @@
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -118,6 +118,28 @@
           ],
           "isUnique": true,
           "where": "\"accounts\".\"system_key\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "accounts_org_active_name_idx": {
+          "name": "accounts_org_active_name_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"accounts\".\"active\"",
           "concurrently": false,
           "method": "btree",
           "with": {}

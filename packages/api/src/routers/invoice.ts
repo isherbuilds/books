@@ -87,24 +87,25 @@ async function resolveInvoice(
     )
     .limit(1);
 
+  const itemQuery = executor
+    .select({ item: items, account: accounts })
+    .from(items)
+    .innerJoin(
+      accounts,
+      and(
+        eq(accounts.orgId, scope.orgId),
+        eq(accounts.id, items.incomeAccountId),
+        eq(accounts.active, true),
+        eq(accounts.type, "income"),
+      ),
+    )
+    .where(and(eq(items.orgId, scope.orgId), eq(items.active, true), inArray(items.id, itemIds)));
+
+  // A posting share-locks every income account it credits, so none is archived under it.
   const storedItems =
     itemIds.length === 0
       ? []
-      : await executor
-          .select({ item: items, account: accounts })
-          .from(items)
-          .innerJoin(
-            accounts,
-            and(
-              eq(accounts.orgId, scope.orgId),
-              eq(accounts.id, items.incomeAccountId),
-              eq(accounts.active, true),
-              eq(accounts.type, "income"),
-            ),
-          )
-          .where(
-            and(eq(items.orgId, scope.orgId), eq(items.active, true), inArray(items.id, itemIds)),
-          );
+      : await (executor === db ? itemQuery : itemQuery.for("share", { of: accounts }));
 
   const accountQuery = postableAccounts(executor, scope.orgId, accountIds, ["income"]);
 

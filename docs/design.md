@@ -11,6 +11,8 @@ must stay visibly distinct. If a shell disappears, fix `--muted` in
 
 - Accounting-core lists use `DataTable`: one flat `rounded-lg border bg-card`
   box, with no shell and no label row.
+- A page with several short lists (Banking, Locks) uses `ListSection`: a muted
+  label row over one `rounded-lg border bg-card` box.
 - A settings or files list gets one tray: `rounded-xl bg-muted p-1`, an `h-9`
   muted label row and a `rounded-lg border bg-card p-4` body.
 - Everything else is flat sections with type and hairlines. Never nest a shell
@@ -92,10 +94,12 @@ button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
 
 ## 7. Sidebar
 
+- `lib/navigation.ts` owns the groups; Settings is the footer link.
 - The rail is flat on the canvas (`--sidebar` equals `--background`); the
   content panel is the raised card.
-- Hover is `bg-sidebar-accent/60`. The active row is the full accent plus
-  `font-medium`. Nav icons stay muted until active.
+- Hover changes only the background to `bg-sidebar-accent/60`. The active row
+  uses the full accent and a foreground icon; label weight and width stay
+  fixed, and colours never transition on this frequent action.
 - Below `lg` the rail is a Sheet, and `PageHeader` owns its trigger.
 - The second header row is the palette trigger: "Find anything…" with its Mod+K
   `Kbd`.
@@ -136,10 +140,12 @@ the primitive. Record tabs share one title; Settings tabs keep their own.
 Section labels are muted `text-xs`, and flat label rows are `min-h-6`.
 
 **List grammar.** Search, filters, sort and columns are URL state. A record
-opens in a right Sheet over the mounted list (a child route or `?party=`),
-never in a side pane, and closing refocuses its row. Operational tables never
-scroll sideways: below `md` rows become compact cards (`px-3 py-2 border-b`,
-identifier, name and status first). Report and print tables may scroll.
+opens in a right Sheet over the mounted list unless it carries a line grid. A
+record with a line grid is a page (`journals_.$journalId`), like a Party that
+outgrows a Sheet. Closing a Sheet refocuses its row. Records never open in a
+side pane. Operational tables never scroll sideways: below `md` rows become
+compact cards (`px-3 py-2 border-b`, identifier, name and status first). Report
+and print tables may scroll.
 Scrollbars are 6 px; the rail hides its own. `DataTable` rows stay single-line:
 truncate with a `title`, keep identifiers whole, and hide optional columns below
 a breakpoint. Elsewhere long text wraps (`break-words`) or truncates with a
@@ -163,17 +169,29 @@ bundled fonts and aligned numerals.
 ## 10. Task overlays
 
 - One inset Sheet serves every width: large radius, `border-8 border-muted`.
-- Accounting create and edit open a right Sheet; a quick-create stacks a
-  same-width Sheet. Dialogs are for confirmations and short prompts.
+- A Dialog holds up to about four fields and one decision: a lock, lock
+  exception, invite or cancellation with a reason.
+- A Sheet holds one vertical record: a party, item, money account, payment
+  method or receipt.
+- A Page holds a line grid: a journal or opening balance.
 - A record Sheet uses flat sections split by `Separator`, never a `Panel`.
   Editing is `?edit=true` on the same Sheet. A record that outgrows a Sheet (a
   Party) gets a quick look plus a tabbed page. A Document Sheet leads with its
   amount at `text-2xl tabular-nums`, struck through when cancelled.
 - Forms share header, scrolling body and footer across Dialog and Sheet, cap at
   `max-w-lg`, and use the `p-4` header and footer parts.
+- `DocumentForm`, `PostBar` and `PostedView` render the same `SheetBody` and
+  `SheetFooter` layout in a Sheet or on a page; the host does not change the
+  form.
+- Document footers render the Mod+Enter hint with `Kbd`.
+- Entry lines are a Debit/Credit grid with a header row at `md`, per-cell labels
+  below `md` and a totals row under the amount columns.
 - Forms compose `Form`, `FormItem`, `RegisteredFormField` and `FormField`. Two
   to five choices use `ToggleGroup`. A long form splits into flat sections under
   muted `h3` labels, never an accordion.
+- Chart creation picks the parent with a `NativeSelect` grouped by account type
+  (a type's top level or an existing group), then the name; codes are generated,
+  not another input to complete.
 - A Sheet moves only by its 150 ms opacity and slide transition; list and
   keyboard actions stay static.
 - Transient notifications sit at the top center with an explicit close button,

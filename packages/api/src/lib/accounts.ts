@@ -64,17 +64,6 @@ export function postableAccounts(
     );
 }
 
-export async function postableAccount(
-  executor: typeof db | DbTransaction,
-  orgId: string,
-  id: string,
-  types: readonly AccountType[],
-): Promise<typeof accounts.$inferSelect | undefined> {
-  const [row] = await postableAccounts(executor, orgId, [id], types);
-
-  return row;
-}
-
 /**
  * Journal lines may name active leaves of any account type, including money
  * leaves. Non-system leaves and the TDS payable/receivable, round-off and opening
@@ -109,5 +98,5 @@ export async function journalAccounts(
     )
     .orderBy(asc(accounts.code), asc(accounts.id));
 
-  return options.ids ? query : query.limit(MASTER_LIST_LIMIT + 1);
+  return options.ids ? query.for("share") : query.limit(MASTER_LIST_LIMIT + 1);
 }

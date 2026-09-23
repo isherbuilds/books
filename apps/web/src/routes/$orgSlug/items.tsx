@@ -17,8 +17,6 @@ import { useCan } from "@/lib/membership";
 import { focusRowLink } from "@/lib/row-focus";
 import { requireOrgPermission } from "@/lib/route-permission";
 
-import { SettingsTabs } from "./route";
-
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, ItemListRow>();
 
 const ITEM_COLUMNS = [
@@ -100,7 +98,7 @@ function ItemCard({ item }: { item: ItemListRow }) {
   );
 }
 
-export const Route = createFileRoute("/$orgSlug/settings/items")({
+export const Route = createFileRoute("/$orgSlug/items")({
   head: () => ({ meta: [{ title: "Items · Accly Books" }] }),
   validateSearch: z.object({
     create: z.boolean().optional().catch(undefined),
@@ -151,21 +149,20 @@ function ItemsRoute() {
           ) : undefined
         }
       />
-      <SettingsTabs orgSlug={orgSlug} />
       <PageBody>
         <DataTable
           columns={ITEM_COLUMNS}
           data={rows}
           getRowId={(item) => item.id}
           meta={{ orgSlug }}
-          rowLink={(item) =>
+          rowLink={
             canUpdate
-              ? {
-                  to: "/$orgSlug/settings/items",
+              ? (item) => ({
+                  to: "/$orgSlug/items",
                   params: { orgSlug },
                   search: { edit: item.id },
-                }
-              : { to: "/$orgSlug/settings/items", params: { orgSlug } }
+                })
+              : undefined
           }
           renderCard={(item) => <ItemCard item={item} />}
           query={items}
@@ -183,7 +180,7 @@ function ItemsRoute() {
               }
             />
           }
-          activeRowId={canUpdate ? edit : undefined}
+          activeRowId={edit}
         />
       </PageBody>
 

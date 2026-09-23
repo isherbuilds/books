@@ -18,7 +18,7 @@ import { z } from "zod";
 
 import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
-import { groupMoneyAccounts } from "@/lib/money-accounts";
+import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError } from "@/lib/orpc-error";
 
@@ -33,7 +33,7 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
 
   // The Banks page's cache entry; only an active money account takes a new method.
   const groups = useQuery({
-    ...orpc.account.moneyBalances.queryOptions({ input: { orgSlug } }),
+    ...moneyBalanceOptions(orgSlug),
     select: (rows) =>
       groupMoneyAccounts(rows).flatMap((group) => {
         const leaves = group.leaves.filter((account) => account.active);

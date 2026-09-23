@@ -80,7 +80,7 @@ export function DataTable<T extends RowData>({
   data: T[];
   getRowId: (row: T) => string;
   meta: { orgSlug: string };
-  rowLink: RowLink<T>;
+  rowLink?: RowLink<T>;
   renderCard: (row: T) => ReactNode;
   query: { isPending: boolean; isError: boolean; error: unknown; refetch: () => void };
   errorTitle: string;
@@ -178,15 +178,19 @@ export function DataTable<T extends RowData>({
       {hasRows ? (
         <ul onKeyDown={moveRowFocus} className="md:hidden">
           {rows.map((row) => (
-            <li key={row.id} data-row-id={row.id} className="[&:last-child>a]:border-b-0">
-              <Link
-                {...rowLink(row.original)}
-                data-row-link
-                data-active={row.id === activeRowId || undefined}
-                className="block min-h-10 scroll-mt-2 border-b border-border/60 px-3 py-2 text-xs data-active:bg-muted"
-              >
-                {renderCard(row.original)}
-              </Link>
+            <li key={row.id} data-row-id={row.id} className="[&:last-child>*]:border-b-0">
+              {rowLink ? (
+                <Link
+                  {...rowLink(row.original)}
+                  data-row-link
+                  data-active={row.id === activeRowId || undefined}
+                  className={cn(CARD_CLASS, "block scroll-mt-2 data-active:bg-muted")}
+                >
+                  {renderCard(row.original)}
+                </Link>
+              ) : (
+                <div className={CARD_CLASS}>{renderCard(row.original)}</div>
+              )}
             </li>
           ))}
         </ul>
@@ -197,6 +201,8 @@ export function DataTable<T extends RowData>({
     </div>
   );
 }
+
+const CARD_CLASS = "min-h-10 border-b border-border/60 px-3 py-2 text-xs";
 
 // A compiled child: it receives plain values only, never the table or row objects,
 // so a memoized row cannot render stale after a sort or a visibility change.
@@ -211,7 +217,7 @@ function DataTableRow<T extends RowData>({
   original: T;
   cells: Cell<typeof DATA_TABLE_FEATURES, T, unknown>[];
   active: boolean;
-  rowLink: RowLink<T>;
+  rowLink?: RowLink<T>;
 }) {
   const navigate = useNavigate();
 
@@ -220,6 +226,8 @@ function DataTableRow<T extends RowData>({
       data-row-id={id}
       data-active={active || undefined}
       onClick={(event) => {
+        if (!rowLink) return;
+
         const target = event.target;
 
         // React bubbles clicks from the portaled row menu through this row.
@@ -233,7 +241,10 @@ function DataTableRow<T extends RowData>({
 
         void navigate(rowLink(original));
       }}
-      className="group h-10 cursor-pointer data-active:bg-muted has-[a[data-row-link]:focus-visible]:bg-muted/60 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/40"
+      className={cn(
+        "group h-10 data-active:bg-muted has-[a[data-row-link]:focus-visible]:bg-muted/60 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/40",
+        rowLink && "cursor-pointer",
+      )}
     >
       {cells.map((cell, index) => {
         const columnMeta = cell.column.columnDef.meta;
@@ -248,7 +259,7 @@ function DataTableRow<T extends RowData>({
               columnMeta?.className,
             )}
           >
-            {index === 0 ? (
+            {index === 0 && rowLink ? (
               <Link
                 {...rowLink(original)}
                 data-row-link

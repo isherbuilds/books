@@ -244,8 +244,8 @@ follows [call 5](./specs/accounting-core.md#architecture-calls).
 The chart has a Cash group (1000, `systemKey` `cash`) and a Bank Accounts group
 (1100, `bank`). Money sits in their leaves: 1001 Cash in Hand, 1101 Bank
 Account, and cash or bank leaves that `account.create` adds.
-`account.moneyBalances` returns each leaf with its group and balance; it is the
-only read Settings > Banks needs for accounts. A Payment Method names one active money
+`account.moneyBalances` returns each leaf with its group and balance on Banking.
+The complete chart supplies parent groups for account creation. A Payment Method names one active money
 leaf, so the method decides where money lands, as in ERPNext; there is no
 per-receipt deposit account. `paymentMethod.setActive` archives a method, and
 old documents keep it. New Organizations get Cash → Cash in Hand, and UPI, Bank
@@ -256,8 +256,9 @@ Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
 Payment to it, from the bank statement. Record actual fees; never model per-bank
 fee rules or settlement days.
 
-Settings > Banks lists money accounts, balances and methods to anyone with
+Banking lists money accounts, balances and methods to anyone with
 `account` `read`, `paymentMethod` `read` and `report` `readFinancial`, the CA
-included. Adding an account needs `account` `create`; adding or archiving a
-method needs `paymentMethod` `create` and `update`. Both forms open in a right
-Sheet ([Design](./design.md#10-task-overlays)).
+included. Adding an account needs `account` `create` and opens the Chart of
+accounts Add account Sheet; adding or archiving a method needs
+`paymentMethod` `create` and `update` and opens a right Sheet
+([Design](./design.md#10-task-overlays)).

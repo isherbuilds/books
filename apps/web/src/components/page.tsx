@@ -253,6 +253,27 @@ export function Panel({
   );
 }
 
+/** A flat labelled list on an org page; `Panel` is the settings/files tray. */
+export function ListSection({
+  label,
+  action,
+  children,
+}: {
+  label: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex min-h-6 items-center justify-between gap-2 text-muted-foreground">
+        <h3>{label}</h3>
+        {action}
+      </div>
+      <div className="overflow-clip rounded-lg border bg-card">{children}</div>
+    </section>
+  );
+}
+
 export function ListState({
   query,
   errorTitle,

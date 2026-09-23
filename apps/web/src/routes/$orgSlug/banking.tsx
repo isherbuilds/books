@@ -14,47 +14,41 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { MoneyAccountSheet } from "@/components/money-account-sheet";
-import { ListState, PageBody, PageHeader, Panel } from "@/components/page";
+import { ListSection, ListState, PageBody, PageHeader } from "@/components/page";
 import { PaymentMethodSheet } from "@/components/payment-method-sheet";
 import { useCan } from "@/lib/membership";
-import { groupMoneyAccounts } from "@/lib/money-accounts";
+import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { BANKS_MANAGE_PERMISSION, BANKS_PERMISSION } from "@/lib/navigation";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { paymentMethodListOptions } from "@/lib/receipts";
 import { requireOrgPermission } from "@/lib/route-permission";
 
-import { SettingsTabs } from "./route";
-
-export const Route = createFileRoute("/$orgSlug/settings/banks")({
-  head: () => ({ meta: [{ title: "Banks · Accly Books" }] }),
-  validateSearch: z.object({ create: z.enum(["account", "method"]).optional().catch(undefined) }),
+export const Route = createFileRoute("/$orgSlug/banking")({
+  head: () => ({ meta: [{ title: "Banking · Accly Books" }] }),
+  validateSearch: z.object({ create: z.boolean().optional().catch(undefined) }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, BANKS_PERMISSION);
     await Promise.all([
-      queryClient
-        .query(orpc.account.moneyBalances.queryOptions({ input: { orgSlug } }))
-        .catch(() => {}),
+      queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {}),
       queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
     ]);
   },
-  component: BanksRoute,
+  component: BankingRoute,
 });
 
-function BanksRoute() {
+function BankingRoute() {
   const { orgSlug } = Route.useParams();
   const { create } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  // Readers such as the CA see balances and methods; only managers add or archive.
   const canManage = useCan(orgSlug, BANKS_MANAGE_PERMISSION);
 
   const closeCreate = () =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, create: undefined }) });
 
   const groups = useQuery({
-    ...orpc.account.moneyBalances.queryOptions({ input: { orgSlug } }),
+    ...moneyBalanceOptions(orgSlug),
     select: groupMoneyAccounts,
   });
 
@@ -76,25 +70,31 @@ function BanksRoute() {
   return (
     <>
       <PageHeader
-        title="Banks"
+        title="Banking"
         description="Cash boxes, bank accounts, and the payment methods that land in them"
-      />
-      <SettingsTabs orgSlug={orgSlug} />
-      <PageBody>
-        <Panel
-          label="Accounts"
-          action={
-            canManage ? (
+        action={
+          canManage ? (
+            <>
               <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => void navigate({ search: { create: "account" } })}
+                onClick={() =>
+                  void navigate({
+                    to: "/$orgSlug/accounts",
+                    params: { orgSlug },
+                    search: { create: true },
+                  })
+                }
               >
                 Add account
               </Button>
-            ) : null
-          }
-        >
+              <Button variant="outline" onClick={() => void navigate({ search: { create: true } })}>
+                Add method
+              </Button>
+            </>
+          ) : null
+        }
+      />
+      <PageBody>
+        <ListSection label="Accounts">
           <ListState
             query={groups}
             errorTitle="Could not load accounts"
@@ -120,10 +120,10 @@ function BanksRoute() {
                     <TableRow key={account.id}>
                       <TableCell className="font-mono">{account.code}</TableCell>
                       <TableCell>
-                        {account.name}
-                        {account.active ? null : (
-                          <span className="text-muted-foreground"> (inactive)</span>
-                        )}
+                        <span className="inline-flex items-center gap-1">
+                          {account.name}
+                          {account.active ? null : <Badge variant="muted">Archived</Badge>}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatMoney(account.balancePaise)}
@@ -134,22 +134,9 @@ function BanksRoute() {
               ))}
             </Table>
           </ListState>
-        </Panel>
+        </ListSection>
 
-        <Panel
-          label="Payment methods"
-          action={
-            canManage ? (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => void navigate({ search: { create: "method" } })}
-              >
-                Add method
-              </Button>
-            ) : null
-          }
-        >
+        <ListSection label="Payment methods">
           <ListState
             query={methods}
             errorTitle="Could not load payment methods"
@@ -162,7 +149,11 @@ function BanksRoute() {
                   <TableHead>Name</TableHead>
                   <TableHead>Lands in</TableHead>
                   <TableHead>Status</TableHead>
-                  {canManage ? <TableHead className="text-right">Action</TableHead> : null}
+                  {canManage ? (
+                    <TableHead className="w-10">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -201,11 +192,10 @@ function BanksRoute() {
               </TableBody>
             </Table>
           </ListState>
-        </Panel>
+        </ListSection>
       </PageBody>
 
-      <MoneyAccountSheet orgSlug={orgSlug} open={create === "account"} onClose={closeCreate} />
-      <PaymentMethodSheet orgSlug={orgSlug} open={create === "method"} onClose={closeCreate} />
+      <PaymentMethodSheet orgSlug={orgSlug} open={create === true} onClose={closeCreate} />
     </>
   );
 }

@@ -9,7 +9,7 @@ CREATE TABLE "accounts" (
 	"supply_class" text,
 	"active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "accounts_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "accounts_type_check" CHECK ("accounts"."type" in ('asset', 'liability', 'equity', 'income', 'expense'))
 );
@@ -443,6 +443,7 @@ ALTER TABLE "party_ledger_lines" ADD CONSTRAINT "party_ledger_lines_org_id_docum
 ALTER TABLE "number_series" ADD CONSTRAINT "number_series_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "accounts_org_code_idx" ON "accounts" USING btree ("org_id","code");--> statement-breakpoint
 CREATE UNIQUE INDEX "accounts_org_system_key_idx" ON "accounts" USING btree ("org_id","system_key") WHERE "accounts"."system_key" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "accounts_org_active_name_idx" ON "accounts" USING btree ("org_id",lower("name")) WHERE "accounts"."active";--> statement-breakpoint
 CREATE INDEX "allocations_org_source_document_idx" ON "allocations" USING btree ("org_id","source_document_id");--> statement-breakpoint
 CREATE INDEX "allocations_org_target_document_idx" ON "allocations" USING btree ("org_id","target_document_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "allocations_org_reverses_idx" ON "allocations" USING btree ("org_id","reverses_allocation_id") WHERE "allocations"."reverses_allocation_id" is not null;--> statement-breakpoint

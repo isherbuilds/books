@@ -3,7 +3,8 @@
 Status: slices 1–2 implemented, slice 3 partly, slice 4 implemented, and slice
 5 partly implemented. Authority: the founder's direction: a command palette and
 conventional fast forms, no shortcut grammar before measurement, Midday's
-components on Base UI, cmdk and TanStack, records in Sheets, no side panes.
+components on Base UI, cmdk and TanStack, records in Sheets or, with a line
+grid, pages, and no side panes.
 
 ## Speed gate (H4)
 
@@ -48,12 +49,13 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    `receipt.list({ q })` debounced 200 ms. `rankCommands` ranks groups by best
    match and caps Parties and Receipts at eight rows. Cancel opens the reason
    dialog. Query keys carry `orgSlug`.
-8. **Overlays by URL.** List routes take `create` and record routes take
-   `edit`; every overlay is a right Sheet. The list is a layout route with an
-   `Outlet`, and the record is its child (`receipts/$receiptId.tsx`). There is no
-   index route, because it would unmount the list. Closing clears the param and
-   refocuses the row. Parties open a quick look (`?party=`), and
-   `parties_.$partyId` owns editing.
+8. **Overlays by URL.** List routes take `create` only for Sheet-hosted forms,
+   and record Sheets take `edit`. For record Sheets, the list is a layout route
+   with an `Outlet`, and the record is its child (`receipts/$receiptId.tsx`).
+   There is no index route, because it would unmount the list. Closing clears
+   the param and refocuses the row. Parties open a quick look (`?party=`), and
+   `parties_.$partyId` owns editing. Journals link to `/journals/new`, and a
+   journal record is a page at `/journals/$journalId`.
 9. **Link Field**: a `Combobox` over the cached master, with rows from
    `linkRows` (prefix, then substring, on label and code). "Create <text>" comes
    last, hides on an exact match, and needs a complete list and the create
@@ -68,6 +70,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
     Receipt also the method, and focuses the first Link Field. Tab moves
     between fields natively; plain Enter never submits, Mod+Enter posts.
+    `DocumentForm`, `PostBar` and `PostedView` use one layout in a Sheet or on
+    a page.
 
 ## Midday adaptation
 
@@ -133,9 +137,13 @@ financial rollback are not adopted.
        window reads every match before `LIMIT`; measure at pilot volume.
 5. **Remaining forms.** Partly implemented.
    - Acceptance: Journal, Opening Balance and lock/Lock Exception forms are
-     implemented (`components/entry-lines.tsx` is shared by the Journal and
-     Opening Balance forms; `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
-     `components/{opening-balance-form,lock-sheet,lock-exception-sheet}.tsx`).
+     implemented. `components/entry-lines.tsx` is shared by the Journal and
+     Opening Balance forms. The routes are
+     `routes/$orgSlug/{opening-balance,locks}.tsx`,
+     `routes/$orgSlug/journals.tsx`,
+     `routes/$orgSlug/journals_.new.tsx` and
+     `routes/$orgSlug/journals_.$journalId.tsx`. The form components are
+     `components/{opening-balance-form,lock-dialog,lock-exception-dialog}.tsx`.
      An exception expiry is typed as wall-clock time in the Organization zone
      and converted with `orgLocalToInstant`; the server judges "in the future".
      Conversion uses `@date-fns/tz` only for offsets, retaining round-trip gap
@@ -146,15 +154,18 @@ financial rollback are not adopted.
      (Credit Note and Debit Note against a source Document); and import (template
      download, upload, row errors listed, nothing written on any error) remain
      open.
-     Open document forms use `DocumentForm` with the four posting states and have
-     a list route with the same shell, `DataTable` and record Sheet. Settings
-     forms use the settings form pattern. Forms are reachable from the palette.
+     Open Sheet-hosted document forms use `DocumentForm` with the four posting
+     states and have a list route with the same shell, `DataTable` and record
+     Sheet. A document with a line grid uses the page surface. Settings forms
+     use the settings form pattern. Forms are reachable from the palette.
    - Depends on: slice 4 and accounting-core slices 3, 5 and 7.
-   - Owns: `routes/$orgSlug/{payments,bills,notes,journals}/`,
-     `routes/$orgSlug/settings/{opening-balance,locks,import}.tsx`,
-     `components/entry-lines.tsx`,
-     `components/{opening-balance-form,lock-sheet,lock-exception-sheet}.tsx`,
-     their `*-form.tsx`, `lib/domain-invalidation.ts`.
+   - Owns: `routes/$orgSlug/{payments,bills,notes}/`,
+     `routes/$orgSlug/journals.tsx`, `routes/$orgSlug/journals_.new.tsx`,
+     `routes/$orgSlug/journals_.$journalId.tsx`,
+     `routes/$orgSlug/{opening-balance,locks}.tsx`,
+     `routes/$orgSlug/settings/import.tsx`, `components/entry-lines.tsx`,
+     `components/{opening-balance-form,lock-dialog,lock-exception-dialog}.tsx`,
+     their `*-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: one `invalidate<Type>State` per Document type; the forms
      consume the slice 4 parts unchanged.
 

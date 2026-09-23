@@ -60,6 +60,26 @@ export function isRefusal(error: unknown): boolean {
 }
 
 /**
+ * Toasts a failed write to a record this screen shows. A 5xx or dropped connection
+ * may have committed it, and a CONFLICT means the record changed; either way the
+ * screen's copy is stale, so `refresh` closes the overlay and refetches first.
+ */
+export async function reportStaleWrite(
+  error: unknown,
+  {
+    refresh,
+    fallback,
+    uncertain,
+  }: { refresh: () => Promise<void>; fallback: string; uncertain: string },
+): Promise<void> {
+  const refused = isRefusal(error);
+
+  if (!refused || hasErrorCode(error, "CONFLICT")) await refresh();
+
+  toast.error(refused ? errorMessage(error, fallback) : uncertain);
+}
+
+/**
  * The server's wording when it sent one, the caller's fallback otherwise.
  *
  * Every API throw now carries a message, so the fallback is not dead copy: it is

@@ -18,6 +18,7 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
+import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import {
   Table,
@@ -380,7 +381,7 @@ export function ReceiptForm({
           <PostBar onClose={onClose} closeLabel="Cancel">
             <Button type="submit">
               {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
-              <span className="text-[0.625rem] opacity-70">⌘↵</span>
+              <Kbd>⌘↵</Kbd>
             </Button>
           </PostBar>
         }
