@@ -5,7 +5,7 @@ export function isCreateItem<T>(item: T | CreateItem): item is CreateItem {
 }
 
 /** Prefix matches on the label or code first, then substring matches. */
-function filterLinkItems<T>(
+export function filterLinkItems<T>(
   items: T[],
   query: string,
   getLabel: (item: T) => string,

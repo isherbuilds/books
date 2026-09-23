@@ -4,7 +4,7 @@ import { axi, parseEvalResult } from "./chrome-axi";
 // Uses the existing browser tooling; it never saves a lock or changes fixture data.
 const url = Bun.argv[2];
 
-if (!url || !new URL(url).pathname.endsWith("/settings/locks")) {
+if (!url || !new URL(url).pathname.endsWith("/locks")) {
   throw new Error("Usage: bun scripts/check-lock-form.ts <fixture Locks URL>");
 }
 

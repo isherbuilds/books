@@ -47,6 +47,8 @@ let party: { id: string; updatedAt: Date };
 
 let customerAdvances: Account;
 
+let bankGroup: Account;
+
 let bankAccount: Account;
 
 let cashAccount: Account;
@@ -76,6 +78,10 @@ beforeAll(async () => {
   customerAdvances = required(
     fixture.accounts.find(({ systemKey }) => systemKey === "customerAdvances"),
     "customer advances account",
+  );
+  bankGroup = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "bank"),
+    "bank account group",
   );
   bankAccount = required(
     fixture.accounts.find(({ code }) => code === "1101"),
@@ -435,7 +441,11 @@ test("a second bank account takes its own method, receipts and balance", async (
     "ACCOUNT_NOT_MONEY",
   );
 
-  const icici = await api.account.create({ orgSlug, kind: "bank", name: "ICICI Bank" });
+  const icici = await api.account.create({
+    orgSlug,
+    parent: { accountId: bankGroup.id },
+    name: "ICICI Bank",
+  });
 
   const iciciNeft = await api.paymentMethod.create({
     orgSlug,

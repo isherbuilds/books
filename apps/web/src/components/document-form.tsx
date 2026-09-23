@@ -8,10 +8,11 @@ import { get, useFormState, type Control, type FieldPath, type FieldValues } fro
 const ownEvent = (event: SyntheticEvent<HTMLFormElement>) =>
   event.target instanceof Node && event.currentTarget.contains(event.target);
 
-const FOCUSABLE = 'input, select, textarea, button, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-// Spec §5: Enter moves to the next field. A Link Field with its popup open owns the
-// key (it commits the highlighted match), so only a closed control moves focus.
+// Spec §5: Enter moves to the next field, never to a button (Tab still reaches them). A
+// Link Field with its popup open owns the key (it commits the highlighted match), so
+// only a closed control moves focus.
 function focusNext(form: HTMLFormElement, current: HTMLElement) {
   const controls = [...form.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
     (element) =>
@@ -60,7 +61,7 @@ export function DocumentForm({
       className="flex min-h-0 flex-1 flex-col"
     >
       <fieldset disabled={pending} className="contents">
-        <SheetBody className="gap-3">{children}</SheetBody>
+        <SheetBody className="gap-3 text-xs">{children}</SheetBody>
         {footer}
       </fieldset>
     </form>
@@ -100,11 +101,11 @@ export function PostedView({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid flex-1 place-content-center gap-3 overflow-y-auto p-4 text-center">
+      <SheetBody className="grid place-content-center gap-3 text-center text-xs">
         <p className="text-muted-foreground">Posted</p>
         <p className="font-mono text-sm font-medium">{number}</p>
         {children}
-      </div>
+      </SheetBody>
       <PostBar onClose={onDone} closeLabel="Done">
         <Button type="button" onClick={onNext}>
           Post and next

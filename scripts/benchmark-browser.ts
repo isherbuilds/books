@@ -15,7 +15,7 @@ const BROWSER_LABEL = process.env.PERF_BROWSER_LABEL ?? "Headless Chrome via chr
 const defaultRoutes = [
   "/meridian-traders/receipts",
   "/meridian-traders/parties",
-  "/meridian-traders/settings/banks",
+  "/meridian-traders/banking",
   "/meridian-traders/settings/members",
 ] as const;
 
@@ -24,7 +24,7 @@ const routes = process.env.PERF_ROUTES?.split(",").filter(Boolean) ?? defaultRou
 const expectedHeadings: Record<string, string> = {
   "/meridian-traders/receipts": "Receipts",
   "/meridian-traders/parties": "Parties",
-  "/meridian-traders/settings/banks": "Banks",
+  "/meridian-traders/banking": "Banking",
   "/meridian-traders/settings/members": "Members",
 };
 

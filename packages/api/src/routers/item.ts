@@ -1,4 +1,4 @@
-import { db } from "@accly/db";
+import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { items } from "@accly/db/schema/items";
 import { taxRates } from "@accly/db/schema/tax-rates";
@@ -7,9 +7,9 @@ import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { taxRateEffectiveOn } from "../core/tax-schedule";
-import { postableAccount } from "../lib/accounts";
+import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
-import { badRequest, conflict, nextEditToken } from "../lib/conflict";
+import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
@@ -43,28 +43,30 @@ const itemFields = {
 
 type ItemFields = z.output<z.ZodObject<typeof itemFields>>;
 
-async function itemValues(orgId: string, fields: ItemFields) {
+async function itemValues(tx: DbTransaction, orgId: string, fields: ItemFields, today: string) {
   // The rate must be effective today, exactly as `item.taxRates` offers it: a code whose
   // range has ended cannot be resolved by a new invoice either.
-  const today = businessDate(new Date(), await orgTimeZone(orgId));
+  const taxRate = fields.taxCode
+    ? await tx
+        .select({ id: taxRates.id })
+        .from(taxRates)
+        .where(
+          and(
+            eq(taxRates.orgId, orgId),
+            eq(taxRates.code, fields.taxCode),
+            taxRateEffectiveOn(today),
+          ),
+        )
+        .limit(1)
+        .then(([row]) => row)
+    : undefined;
 
-  const [incomeAccount, taxRate] = await Promise.all([
-    postableAccount(db, orgId, fields.incomeAccountId, ["income"]),
-    fields.taxCode
-      ? db
-          .select({ id: taxRates.id })
-          .from(taxRates)
-          .where(
-            and(
-              eq(taxRates.orgId, orgId),
-              eq(taxRates.code, fields.taxCode),
-              taxRateEffectiveOn(today),
-            ),
-          )
-          .limit(1)
-          .then(([row]) => row)
-      : undefined,
-  ]);
+  const [incomeAccount] = await postableAccounts(
+    tx,
+    orgId,
+    [fields.incomeAccountId],
+    ["income"],
+  ).for("share", { of: accounts });
 
   if (!incomeAccount) {
     throw badRequest(
@@ -134,20 +136,22 @@ export const itemRouter = {
   create: orgProcedure({ item: ["create"] }, orgInput.extend(itemFields)).handler(
     async ({ context, input }) => {
       const { orgSlug: _claim, ...fields } = input;
-      const values = await itemValues(context.scope.orgId, fields);
+      const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
-      try {
-        const [created] = await db
-          .insert(items)
-          .values({ id: Bun.randomUUIDv7(), orgId: context.scope.orgId, ...values })
-          .returning();
+      return db
+        .transaction(async (tx) => {
+          const values = await itemValues(tx, context.scope.orgId, fields, today);
 
-        if (!created) throw new Error("Item insert returned no row");
+          const [created] = await tx
+            .insert(items)
+            .values({ id: Bun.randomUUIDv7(), orgId: context.scope.orgId, ...values })
+            .returning();
 
-        return created;
-      } catch (error) {
-        itemNameTaken(error);
-      }
+          if (!created) throw impossible("Item insert returned no row");
+
+          return created;
+        })
+        .catch(itemNameTaken);
     },
   ),
 
@@ -160,29 +164,31 @@ export const itemRouter = {
     }),
   ).handler(async ({ context, input }) => {
     const { orgSlug: _claim, itemId, updatedAt, ...fields } = input;
-    const values = await itemValues(context.scope.orgId, fields);
+    const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
-    try {
-      const [updated] = await db
-        .update(items)
-        .set({ ...values, updatedAt: nextEditToken(items.updatedAt) })
-        .where(
-          and(
-            eq(items.orgId, context.scope.orgId),
-            eq(items.id, itemId),
-            eq(items.updatedAt, new Date(updatedAt)),
-          ),
-        )
-        .returning();
+    return db
+      .transaction(async (tx) => {
+        const values = await itemValues(tx, context.scope.orgId, fields, today);
 
-      if (!updated) {
-        throw new ORPCError("CONFLICT", { message: "This item changed after you opened it." });
-      }
+        const [updated] = await tx
+          .update(items)
+          .set({ ...values, updatedAt: nextEditToken(items.updatedAt) })
+          .where(
+            and(
+              eq(items.orgId, context.scope.orgId),
+              eq(items.id, itemId),
+              eq(items.updatedAt, new Date(updatedAt)),
+            ),
+          )
+          .returning();
 
-      return updated;
-    } catch (error) {
-      itemNameTaken(error);
-    }
+        if (!updated) {
+          throw new ORPCError("CONFLICT", { message: "This item changed after you opened it." });
+        }
+
+        return updated;
+      })
+      .catch(itemNameTaken);
   }),
 
   setActive: orgProcedure(

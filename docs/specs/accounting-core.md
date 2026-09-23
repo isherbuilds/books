@@ -1,8 +1,8 @@
 # Spec: Accounting core
 
-Status: slices 1–3, 4a, 4b-i and 5 are implemented in full (Journal, Opening
-Balance, locks); slices 4b-ii, 6–7, 8 (chart of accounts) and 9 (party
-Journals) are open.
+Status: slices 1–3, 4a, 4b-i, 5 (Journal, Opening Balance, locks) and 8
+(chart of accounts) are implemented. Slices 4b-ii, 6–7 and 9 (party Journals)
+are open; remaining runtime and CA acceptance work is in the work registry.
 Authority: the founder's decisions. Git keeps the research behind them.
 
 ## Outcome
@@ -26,9 +26,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
   Interest is `exempt`; `notASupply` covers donations, grants, dividends,
   capital receipts and insurance claims. Templates seed the chart;
-  `account.create` adds money leaves and, from slice 8, income and expense
-  leaves with generated codes. A user never creates, retypes or archives a
-  system account.
+  `account.create` adds posting leaves at a type root or under an existing
+  group, with generated codes. A user never creates, retypes or archives a
+  system account, or converts a posting account into a group.
 - **Item**: an Organization-unique `name` through `normalizedName`, optional
   `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
   `active` flag. `taxCode` is required exactly when the income Account is
@@ -307,7 +307,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 5. **Journal, Opening Balance, locks.** Implemented: `journal.*`,
    `openingBalance.{post,get,cancel}`,
    `lock.{get,set,grantException,revokeException}`, the `/$orgSlug/journals`
-   routes and Settings > Opening balance and Settings > Locks. Open: CA
+   routes and Accounting > Opening balance and Accounting > Locks. Open: CA
    acceptance.
    - Legacy reference (a716b6c):
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
@@ -340,51 +340,64 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    opening items (open documents with `source` `opening`, original due dates,
    no journal lines of their own, summing to each Party's balance), all or
    nothing.
-8. **Chart of accounts.** Open. Owner and accountant add income and expense
-   leaves; the rest of the chart stays template-seeded. Prerequisite for slice
-   9: a discount or write-off needs an expense leaf to debit, and no template
-   ships one today.
-   - `account.create` takes `kind` (`cash`, `bank`, `income`, `expense`) and
-     `name`, plus `supplyClass`, required for `income` and refused otherwise
-     (`BAD_REQUEST`). Money kinds keep their rule. An income or expense leaf
-     has no parent, the type of its kind and a generated code: the next
-     integer after the highest code of that type, inside 5000–5999 or
-     6000–6999, `ACCOUNT_CODES_FULL` when spent. A case-insensitive duplicate
-     of an active account name is `ACCOUNT_NAME_TAKEN` (an application check,
-     like `PARTY_GSTIN_TAKEN`).
-   - `account.update({ id, name, updatedAt })` renames any account; the loaded
-     `updatedAt` is the token (`CONFLICT` when stale), as `party.update`.
-   - `account.setActive({ id, active })` archives or restores a leaf without a
+8. **Chart of accounts.** Implemented. Owner and accountant manage posting leaves across
+   Assets, Liabilities, Equity, Income and Expenses. Templates establish the
+   groups and protected control accounts.
+   - `account.create` takes `name`, `parent` and optional `supplyClass`.
+     `parent: { type }` places a leaf at that type's root;
+     `parent: { accountId }` selects an active, same-organization group and
+     derives the type from it. A group already has children; posting leaves
+     cannot become parents. A foreign parent is `NOT_FOUND`.
+   - Income requires `supplyClass`; other types refuse it (`BAD_REQUEST`).
+     Codes are generated after the highest existing code in the applicable
+     range: assets 1200–1999, liabilities 2000–2999, equity 3001–3999, income
+     5000–5999 and expenses 6000–6799. Templates reserve 3000 and 6800–6999.
+     Cash and bank children retain their group's 99-code range. Exhaustion is
+     `ACCOUNT_CODES_FULL`; a concurrent code collision is `CONFLICT`.
+   - A case-insensitive duplicate active account name is
+     `ACCOUNT_NAME_TAKEN`, enforced by a partial unique index on active names
+     like `ITEM_NAME_TAKEN`; restoring an archived account whose name is now
+     taken is refused the same way.
+   - `account.update({ accountId, name, updatedAt })` renames an account;
+     `updatedAt` is a millisecond-precision edit token (`CONFLICT` when stale).
+   - `account.setActive({ accountId, active })` archives or restores a leaf without a
      `systemKey`. Refused: a group or system account (`ACCOUNT_SYSTEM`), an
      income leaf held by an active Item, and a money leaf held by an active
      Payment Method (`ACCOUNT_IN_USE`, naming them). An archived account keeps
      its lines and balance and leaves every picker: `postableAccounts`,
      `journalAccounts` and `incomeAccountOptions` already filter `active`.
+     Archiving locks the account row through the dependent checks and update.
+     Item and Payment Method creation and every posting hold a shared lock on
+     each referenced account until their writes commit. Restoring an Item or
+     Payment Method does not check its account, as in ERPNext and Zoho Books:
+     posting to an archived account is refused.
    - `supplyClass` never changes after creation: posted lines took their tax
      treatment from it. A wrong class is archived and recreated.
-   - The core template gains two expense leaves every legal type needs for
-     slice 9: `6810 Discount Allowed` and `6820 Bad Debts Written Off`. No
-     environment keeps data, so the seed changes in place.
-   - Web: Settings > Accounts (`account: ["read"]`) lists the chart grouped by
-     type in code order (code, name, supply class, Active/Archived), with Add
-     account (Type, Name, GST supply class for income), row rename, and
-     Archive/Restore, following Settings > Items. Banks keeps money leaves.
+   - Every new organization's core template includes `6810 Discount Allowed`
+     and `6820 Bad Debts Written Off` for slice 9.
+   - Web: Accounting > Chart of accounts lists code, name, type, parent ledger,
+     supply class and status. New account picks its parent from a
+     `NativeSelect` grouped by type (a type's top level or an existing group),
+     then Name, and GST supply class for income. For editors, each row opens its
+     Rename Sheet (`?edit=`); Archive/Restore is a button in that Sheet for posting
+     leaves, as Items. Read-only rows have no edit link. Banking's Add account
+     opens that same Sheet.
    - Acceptance: an accountant creates `Tuition Fees` (income, `exempt`) and
      `Sibling Discount` (expense); the first appears in the Item income
      picker and the second in the Journal account picker; a rename shows on
      the next list; archiving `Sibling Discount` removes it from the Journal
      picker and keeps its balance; archiving `Tuition Fees` is refused once an
      Item uses it; an operator's create is `FORBIDDEN`.
-   - Verify: integration coverage beside `account.create` in
-     `tests/integration/receipt.test.ts` and the guarded-call table in
+   - Verify: `tests/integration/account.test.ts`, the money-account workflow
+     in `tests/integration/receipt.test.ts`, and the guarded-call table in
      `tests/integration/tenancy.test.ts`; `bun run check-types`; the Sheet
-     exercised in the app on desktop and mobile, both themes.
+     exercised in the app on desktop and mobile, both themes. Parent validation
+     rejects foreign and posting-leaf parents; control accounts are not offered.
    - Depends on: none. Owns: `packages/api/src/routers/account.ts`,
      `packages/api/src/core/chart-templates.ts`,
-     `apps/web/src/routes/$orgSlug/settings/accounts.tsx`,
-     `apps/web/src/components/account-sheet.tsx`, the settings tabs in
-     `apps/web/src/lib/navigation.ts`. Touches: `apps/web/src/routeTree.gen.ts`,
-     `tests/integration/tenancy.test.ts`.
+     `apps/web/src/routes/$orgSlug/accounts.tsx`,
+     `apps/web/src/components/account-sheet.tsx` and
+     `apps/web/src/components/account-columns.tsx`.
    - Interfaces: `account.create` returns the inserted row as today;
      `account.list` is unchanged. Slice 9's picker reads `journal.accounts`.
 9. **Party Journals.** Open, in two parts, after slice 8. A Journal line on a
@@ -463,7 +476,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
      `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
      `apply-advance-sheet.tsx`,
-     `apps/web/src/routes/$orgSlug/journals/$journalId.tsx`. Touches:
+     `apps/web/src/routes/$orgSlug/journals_.$journalId.tsx`. Touches:
      `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
      and query), `apps/web/src/lib/domain-invalidation.ts`,
      `tests/integration/tenancy.test.ts`.
@@ -592,15 +605,13 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
   ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
-  `CONFLICT`); all three mutations audited. Web: Settings > Opening balance
-  (form when none is posted, record with Cancel when one is) and Settings >
+  `CONFLICT`); all three mutations audited. Web: Accounting > Opening balance
+  (form when none is posted, record with Cancel when one is) and Accounting >
   Locks (both locks with Change, exceptions with Grant and Revoke); forms show
-  `LOCKED` on the date field. Change and Grant are URL-backed Sheets; Change
+  `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
   requires a loaded lock state. Switching Organization or lock kind starts a
   fresh form; a refetch preserves the original expected lock date for CAS.
-  The exception list states that it reflects the last fetch and offers Refresh,
-  rather than polling settings.
-  Expiry retains time-of-day precision in the Organization zone and rejects
+  Expiry retains minute-precision local time in the Organization zone and rejects
   nonexistent DST times instead of shifting them. Exceptions are
   user-scoped until revoked or expired: removing membership denies all access,
   but re-admitting the same user does not revoke a still-live grant.

@@ -1,3 +1,4 @@
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
@@ -214,9 +215,9 @@ function InvoiceSheetRoute() {
               <DetailRow label="Class">
                 {invoice.printClass === "taxInvoice" ? "Tax Invoice" : "Bill of Supply"}
               </DetailRow>
-              <DetailRow label="Invoice date">{formatDay(invoice.documentDate)}</DetailRow>
+              <DetailRow label="Invoice date">{formatBusinessDate(invoice.documentDate)}</DetailRow>
               <DetailRow label="Due date">
-                {invoice.dueDate ? formatDay(invoice.dueDate) : null}
+                {invoice.dueDate ? formatBusinessDate(invoice.dueDate) : null}
               </DetailRow>
               <DetailRow label="Party">{partyName}</DetailRow>
               <DetailRow label="Place of supply" mono>

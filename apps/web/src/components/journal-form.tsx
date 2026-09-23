@@ -8,23 +8,29 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
+import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FieldPath } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
-import { blankEntryLine, EntryLines, entryLinesSchema } from "@/components/entry-lines";
+import {
+  blankEntryLine,
+  EntryLines,
+  entryLinesInput,
+  entryLinesSchema,
+} from "@/components/entry-lines";
 import { PartySheet } from "@/components/party-form";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateJournalState } from "@/lib/domain-invalidation";
 import { journalAccountOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
+import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, isRefusal } from "@/lib/orpc-error";
+import { applyOrpcFieldError, isRefusal, reportStaleWrite } from "@/lib/orpc-error";
 
 const journalSchema = z.object({
   documentDate: z.iso.date(),
@@ -47,20 +53,13 @@ function defaults(documentDate: string): JournalFormValues {
     documentDate,
     narration: "",
     reference: "",
-    lines: [blankEntryLine("debit"), blankEntryLine("credit")],
+    lines: [blankEntryLine(), blankEntryLine()],
   };
 }
 
-export function JournalForm({
-  orgSlug,
-  today,
-  onClose,
-}: {
-  orgSlug: string;
-  today: string;
-  onClose: () => void;
-}) {
+export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const { today } = useOrgDateTime();
 
   const form = useZodForm(journalSchema, { defaultValues: defaults(today) });
 
@@ -69,25 +68,29 @@ export function JournalForm({
   const canCreateParty = useCan(orgSlug, { party: ["create"] });
   const [createParty, setCreateParty] = useState<{ index: number; seed: string } | null>(null);
 
-  // A voucher entered after Post and next lands on its first line; the first open keeps
-  // the Sheet's default (the date). `reset` keeps the count, so the remount can tell.
+  // Only Post and next jumps into the first line; initial navigation keeps the
+  // router's focus flow intact. `reset` keeps the count, so the remount can tell.
   const entered = form.formState.submitCount > 0;
 
   const post = useMutation(
     orpc.journal.post.mutationOptions({
-      onSuccess: async () => {
-        await invalidateJournalState(queryClient, orgSlug);
-      },
-      onError: async (error) => {
-        if (!isRefusal(error)) {
-          onClose();
-          await invalidateJournalState(queryClient, orgSlug);
-          toast.error("The result is uncertain. Check the journal list before entering it again.");
+      onSuccess: () => invalidateJournalState(queryClient, orgSlug),
+      onError: (error) => {
+        if (isRefusal(error)) {
+          applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
 
           return;
         }
 
-        applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
+        return reportStaleWrite(error, {
+          refresh: () => {
+            onClose();
+
+            return invalidateJournalState(queryClient, orgSlug);
+          },
+          fallback: "Could not post the journal",
+          uncertain: "The result is uncertain. Check the journal list before entering it again.",
+        });
       },
     }),
   );
@@ -98,13 +101,7 @@ export function JournalForm({
       documentDate: values.documentDate,
       narration: values.narration,
       reference: values.reference || undefined,
-      lines: values.lines.map((line) => ({
-        accountId: line.accountId,
-        side: line.side,
-        amount: line.amount,
-        partyId: line.partyId ?? undefined,
-        description: line.description || undefined,
-      })),
+      lines: entryLinesInput(values.lines),
     });
   });
 
@@ -130,52 +127,54 @@ export function JournalForm({
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
         footer={
-          <PostBar onClose={onClose} closeLabel="Close">
+          <PostBar onClose={onClose} closeLabel="Back to journals">
             <Button type="submit">
               {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post journal"}
-              <span className="text-[0.625rem] opacity-70">⌘↵</span>
+              <Kbd>⌘↵</Kbd>
             </Button>
           </PostBar>
         }
       >
-        <RegisteredFormField
-          name="documentDate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Journal date</FormLabel>
-              <FormControl>
-                <Input {...field} required type="date" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid gap-3 md:grid-cols-[12rem_16rem]">
+          <RegisteredFormField
+            name="documentDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Journal date</FormLabel>
+                <FormControl>
+                  <Input {...field} required type="date" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} required maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <RegisteredFormField
+            name="reference"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Reference (optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} maxLength={120} autoComplete="off" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference (optional)</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <RegisteredFormField
+            name="narration"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Narration</FormLabel>
+                <FormControl>
+                  <Textarea {...field} required maxLength={500} rows={2} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <EntryLines
           title="Lines"

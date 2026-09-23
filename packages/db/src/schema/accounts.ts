@@ -35,7 +35,8 @@ export const accounts = pgTable(
     supplyClass: text("supply_class", { enum: SUPPLY_CLASSES }),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // Millisecond precision: the value round-trips through JSON as the edit token.
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
   },
   (table) => [
     foreignKey({
@@ -48,6 +49,9 @@ export const accounts = pgTable(
     uniqueIndex("accounts_org_system_key_idx")
       .on(table.orgId, table.systemKey)
       .where(sql`${table.systemKey} is not null`),
+    uniqueIndex("accounts_org_active_name_idx")
+      .on(table.orgId, sql`lower(${table.name})`)
+      .where(sql`${table.active}`),
     // Supply classes follow GST law and are validated in the application.
     check(
       "accounts_type_check",

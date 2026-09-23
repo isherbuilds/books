@@ -153,6 +153,8 @@ const coreAccounts = (equityName: string): TemplateAccount[] => [
   { code: "3000", name: equityName, type: "equity", systemKey: "openingEquity" },
   // Card MDR and bank fees with their GST, paid as a Payment from the bank statement.
   { code: "6800", name: "Bank Charges", type: "expense" },
+  { code: "6810", name: "Discount Allowed", type: "expense" },
+  { code: "6820", name: "Bad Debts Written Off", type: "expense" },
   { code: "6900", name: "Round Off", type: "expense", systemKey: "roundOff" },
 ];
 

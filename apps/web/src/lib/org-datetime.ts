@@ -1,8 +1,6 @@
 import { tzOffset } from "@date-fns/tz";
 import { getRouteApi } from "@tanstack/react-router";
 
-export { formatBusinessDate } from "@accly/api/lib/business-date";
-
 const orgRoute = getRouteApi("/$orgSlug");
 
 // An *instant* (`createdAt`) is a point in time, formatted in the org zone. A
@@ -44,8 +42,10 @@ export function formatDate(value: string | Date, timeZone: string): string {
 }
 
 /**
- * Pinned to UTC: the input names a day, not a moment, so formatting it in the org
- * zone would shift a midnight anchor onto the neighbouring date.
+ * The compact day for list rows and nested tables. A record's own date uses
+ * `formatBusinessDate`, which keeps the year. Pinned to UTC: the input names a
+ * day, not a moment, so formatting it in the org zone would shift a midnight
+ * anchor onto the neighbouring date.
  */
 export function formatDay(day: string): string {
   return formatter("day|UTC", "en-IN", {
@@ -53,16 +53,6 @@ export function formatDay(day: string): string {
     month: "short",
     timeZone: "UTC",
   }).format(new Date(`${day}T00:00:00Z`));
-}
-
-// `en-CA` is the shortest way to get `YYYY-MM-DD` out of Intl.
-export function orgToday(timeZone: string, now = new Date()): string {
-  return formatter(`isoDate|${timeZone}`, "en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
 }
 
 /**
