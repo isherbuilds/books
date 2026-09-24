@@ -299,7 +299,7 @@ function PartiesRoute() {
         />
         <LoadMore
           query={{
-            isError: parties.isError,
+            isFetchNextPageError: false,
             hasNextPage: hasMore,
             isFetchingNextPage: false,
             fetchNextPage: showMore,

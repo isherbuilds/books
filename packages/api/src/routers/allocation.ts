@@ -54,7 +54,7 @@ export const allocationRouter = {
       action: "allocation.apply",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: input.receiptId,
+      target: `receipt:${input.receiptId}`,
       meta: {
         allocationIds: rows.map((row) => row.id),
         invoiceId: input.invoiceId,
@@ -83,7 +83,7 @@ export const allocationRouter = {
       action: "allocation.reverse",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: input.allocationId,
+      target: `allocation:${input.allocationId}`,
       meta: {
         reversalId: reversed.id,
         amount: formatDecimal(reversed.amountPaise),

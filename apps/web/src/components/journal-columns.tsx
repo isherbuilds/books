@@ -1,3 +1,4 @@
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
 import { cn } from "@accly/ui/lib/utils";
@@ -7,11 +8,8 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { CancelledBadge, struck } from "@/components/document-columns";
-import { formatDay } from "@/lib/org-datetime";
 
-export type JournalRow = Awaited<
-  ReturnType<RouterClient<AppRouter>["journal"]["list"]>
->["rows"][number];
+type JournalRow = Awaited<ReturnType<RouterClient<AppRouter>["journal"]["list"]>>["rows"][number];
 
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, JournalRow>();
 
@@ -29,7 +27,7 @@ export const JOURNAL_COLUMNS = [
   col.accessor("documentDate", {
     header: "Date",
     meta: { className: "w-24" },
-    cell: ({ getValue }) => <span className="tabular-nums">{formatDay(getValue())}</span>,
+    cell: ({ getValue }) => <span className="tabular-nums">{formatBusinessDay(getValue())}</span>,
   }),
   col.accessor("narration", {
     header: "Narration",
@@ -80,7 +78,7 @@ export function JournalCard({ journal }: { journal: JournalRow }) {
         </span>
       </div>
       <p className="mt-1 truncate text-muted-foreground">
-        {journal.narration ?? "No narration"} · {formatDay(journal.documentDate)}
+        {journal.narration ?? "No narration"} · {formatBusinessDay(journal.documentDate)}
         {journal.reference ? ` · ${journal.reference}` : null}
       </p>
     </>

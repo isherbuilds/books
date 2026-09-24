@@ -46,7 +46,7 @@ const ITEM_CLASS =
   "group/combobox-item relative flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-xs outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-highlighted:inset-ring data-highlighted:inset-ring-foreground/10 data-highlighted:shadow-xs data-disabled:pointer-events-none data-disabled:opacity-50";
 
 const TRAILING_BUTTON =
-  "flex size-6 items-center justify-center rounded-md text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground";
+  "flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground";
 
 // Consumers own filtering and selection; this supplies the accessible input, popup
 // and keyboard behaviour only. Object values are intentional: both current callers

@@ -66,11 +66,11 @@ const GROUP_LABELS: Record<PaletteGroup, string> = {
   receipt: "Receipts",
 };
 
-// Each list page opens its create form from `?create=true`.
+// A record form opens from its list's `?create=true`; a line grid has its own page.
 const CREATE_ACTIONS: readonly {
   id: string;
   label: string;
-  to: "/$orgSlug/receipts" | "/$orgSlug/invoices" | "/$orgSlug/parties";
+  to: "/$orgSlug/receipts" | "/$orgSlug/invoices/new" | "/$orgSlug/parties";
   permission: AppPermission;
 }[] = [
   {
@@ -82,8 +82,8 @@ const CREATE_ACTIONS: readonly {
   {
     id: "invoice:new",
     label: "New invoice",
-    to: "/$orgSlug/invoices",
-    permission: { invoice: ["post"] },
+    to: "/$orgSlug/invoices/new",
+    permission: { invoice: ["create"] },
   },
   {
     id: "party:new",
@@ -192,7 +192,9 @@ function PaletteBody({
             label: create.label,
             group: "action",
             run: () =>
-              void navigate({ to: create.to, params: { orgSlug }, search: { create: true } }),
+              void (create.to === "/$orgSlug/invoices/new"
+                ? navigate({ to: create.to, params: { orgSlug } })
+                : navigate({ to: create.to, params: { orgSlug }, search: { create: true } })),
           },
         ]
       : [],

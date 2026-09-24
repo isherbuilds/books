@@ -143,7 +143,7 @@ export function FilterChips({
               type="button"
               title={filter.label}
               aria-label={`Remove ${filter.name} filter: ${filter.label}`}
-              className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md bg-muted px-2 text-xs text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground"
+              className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md bg-muted px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={(event) => {
                 // The chip unmounts: keep keyboard focus on the next chip, else the field.
                 const next = event.currentTarget

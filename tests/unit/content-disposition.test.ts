@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { pdfContentDisposition } from "../../apps/web/src/lib/content-disposition";
+import { contentDisposition } from "@accly/storage/content-disposition";
 
 test("builds a valid content disposition for hostile and Unicode file names", () => {
-  const header = pdfContentDisposition('RCT-\r\n"कविता.pdf', true);
+  const header = contentDisposition("attachment", 'RCT-\r\n"कविता.pdf', "document.pdf");
 
   expect(() => new Headers({ "Content-Disposition": header })).not.toThrow();
   expect(header).toBe(

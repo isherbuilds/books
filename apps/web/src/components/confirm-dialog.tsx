@@ -19,7 +19,7 @@ type Question = {
 
 // Reach for this first; `useConfirm` only adds state for callers that have none
 // of their own.
-export function ConfirmDialog({
+function ConfirmDialog({
   open,
   title,
   description,

@@ -133,7 +133,7 @@ export const PageTab = createLink(function PageTabAnchor({
     <a
       ref={ref}
       className={cn(
-        "flex shrink-0 items-center border-b-2 border-transparent px-2 text-xs text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground data-[status=active]:border-foreground data-[status=active]:font-medium data-[status=active]:text-foreground",
+        "flex shrink-0 items-center border-b-2 border-transparent px-2 text-xs text-muted-foreground hover:text-foreground data-[status=active]:border-foreground data-[status=active]:font-medium data-[status=active]:text-foreground",
         className,
       )}
       {...props}
@@ -283,7 +283,10 @@ export function ListState({
 }: {
   query: {
     isPending: boolean;
-    isError: boolean;
+    /** Nothing loaded yet: the error takes the rows' place. */
+    isLoadingError: boolean;
+    /** A later refetch failed: TanStack Query keeps the rows, so they stay on screen. */
+    isRefetchError: boolean;
     error: unknown;
     refetch: () => void;
   };
@@ -295,26 +298,46 @@ export function ListState({
 }) {
   if (query.isPending) return null;
 
-  if (query.isError) {
+  const retry = (
+    <Button variant="outline" size="xs" onClick={() => void query.refetch()}>
+      Try again
+    </Button>
+  );
+
+  if (query.isLoadingError) {
     return (
       <div className="flex flex-1 flex-col items-start justify-center gap-3 p-4">
         <ErrorNote title={errorTitle} error={query.error} />
-        <Button variant="outline" size="xs" onClick={() => void query.refetch()}>
-          Try again
-        </Button>
+        {retry}
       </div>
     );
   }
+
+  // A live list polls, so one dropped request must not blank what the operator reads.
+  const stale = query.isRefetchError ? (
+    <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+      <ErrorNote title="Could not refresh. Showing the last loaded rows." error={query.error} />
+      {retry}
+    </div>
+  ) : null;
 
   if (isEmpty) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
-        {empty}
-      </div>
+      <>
+        {stale}
+        <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
+          {empty}
+        </div>
+      </>
     );
   }
 
-  return children;
+  return (
+    <>
+      {stale}
+      {children}
+    </>
+  );
 }
 
 export function LoadMore({
@@ -322,19 +345,23 @@ export function LoadMore({
   shown,
 }: {
   query: {
-    isError: boolean;
+    isFetchNextPageError: boolean;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
     fetchNextPage: () => void;
   };
   shown: number;
 }) {
-  if (shown === 0 || query.isError) return null;
+  if (shown === 0) return null;
 
   return (
     <div className="flex h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
       <span className="tabular-nums">
-        {query.hasNextPage ? `${shown} shown` : `All ${shown} shown`}
+        {query.isFetchNextPageError
+          ? `${shown} shown · could not load more`
+          : query.hasNextPage
+            ? `${shown} shown`
+            : `All ${shown} shown`}
       </span>
       {query.hasNextPage ? (
         <Button
@@ -343,7 +370,11 @@ export function LoadMore({
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          {query.isFetchingNextPage ? "Loading…" : "Load more"}
+          {query.isFetchingNextPage
+            ? "Loading…"
+            : query.isFetchNextPageError
+              ? "Try again"
+              : "Load more"}
         </Button>
       ) : null}
     </div>

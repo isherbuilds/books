@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { ListSection, ListState, PageBody, PageHeader } from "@/components/page";
 import { PaymentMethodSheet } from "@/components/payment-method-sheet";
+import { invalidatePaymentMethods } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { BANKS_MANAGE_PERMISSION, BANKS_PERMISSION } from "@/lib/navigation";
@@ -56,10 +57,7 @@ function BankingRoute() {
 
   const setActive = useMutation(
     orpc.paymentMethod.setActive.mutationOptions({
-      onSuccess: () =>
-        queryClient.invalidateQueries({
-          queryKey: orpc.paymentMethod.list.key({ input: { orgSlug } }),
-        }),
+      onSuccess: () => invalidatePaymentMethods(queryClient, orgSlug),
       onError: (error) => toast.error(errorMessage(error, "Could not update the payment method")),
     }),
   );
@@ -162,8 +160,16 @@ function BankingRoute() {
                     <TableCell className="font-medium">{method.name}</TableCell>
                     <TableCell>{method.accountName}</TableCell>
                     <TableCell>
-                      <Badge variant={method.active ? "secondary" : "muted"}>
-                        {method.active ? "Active" : "Archived"}
+                      {/* Restoring a method does not restore its account, and posting
+                          refuses an archived account, so say which one blocks it. */}
+                      <Badge
+                        variant={method.active && method.accountActive ? "secondary" : "muted"}
+                      >
+                        {method.active
+                          ? method.accountActive
+                            ? "Active"
+                            : "Account archived"
+                          : "Archived"}
                       </Badge>
                     </TableCell>
                     {canManage ? (

@@ -229,7 +229,7 @@ test("advance payment deducts TDS and posts payable exposure", async () => {
       .from(auditLog)
       .where(and(eq(auditLog.orgId, organization.id), eq(auditLog.action, "payment.post")));
 
-    return rows.find(({ target }) => target === primaryPayment.id);
+    return rows.find(({ target }) => target === `payment:${primaryPayment.id}`);
   });
 
   expect(auditEntry.meta).toMatchObject({

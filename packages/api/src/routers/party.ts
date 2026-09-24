@@ -49,7 +49,7 @@ function partyValues(fields: PartyFields) {
   return {
     ...fields,
     normalizedName: normalizedName(fields.name),
-    gstin: fields.gstin?.toUpperCase() ?? null,
+    gstin: fields.gstin ?? null,
     pan: fields.pan ?? null,
     addressLine1: fields.addressLine1 ?? null,
     addressLine2: fields.addressLine2 ?? null,

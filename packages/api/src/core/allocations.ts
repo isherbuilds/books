@@ -44,38 +44,6 @@ export function allocationReversed(orgId: string) {
 }
 
 /**
- * Active allocation totals grouped once for a document query to left-join, and the
- * document's total less them: an Invoice's outstanding, a Receipt's unapplied.
- */
-export function activeAllocationSums(
-  orgId: string,
-  side: "source" | "target",
-  documentIds?: readonly string[],
-) {
-  const documentId =
-    side === "source" ? allocations.sourceDocumentId : allocations.targetDocumentId;
-
-  const sums = db
-    .select({
-      documentId,
-      allocatedPaise: sql<bigint>`sum(${allocations.amountPaise})::bigint`
-        .mapWith(BigInt)
-        .as("allocated_paise"),
-    })
-    .from(allocations)
-    .where(and(activeApply(orgId), documentIds ? inArray(documentId, [...documentIds]) : undefined))
-    .groupBy(documentId)
-    .as(`active_${side}_allocation_sums`);
-
-  const remainingPaise =
-    sql<bigint>`${documents.totalPaise} - coalesce(${sums.allocatedPaise}, 0)::bigint`.mapWith(
-      BigInt,
-    );
-
-  return { sums, remainingPaise };
-}
-
-/**
  * The document's total less its active allocations, looked up per row of the enclosing
  * query through `allocations (org_id, source/target_document_id)`. A register or picker
  * aggregates only the allocations of the documents it considers, never the

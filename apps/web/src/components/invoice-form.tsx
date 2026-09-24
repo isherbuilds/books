@@ -16,13 +16,7 @@ import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { Textarea } from "@accly/ui/components/textarea";
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useFieldArray, useWatch, type FieldPath, type UseFormReturn } from "react-hook-form";
@@ -36,12 +30,10 @@ import {
   PostBar,
   PostedView,
 } from "@/components/document-form";
-import { FormSheet } from "@/components/form-sheet";
 import { InvoiceTotals } from "@/components/invoice-summary";
 import { ItemSheet, type SavedItem } from "@/components/item-sheet";
 import { LinkField } from "@/components/link-field";
-import { PartySheet } from "@/components/party-form";
-import { PartyLinkField } from "@/components/party-link-field";
+import { DocumentPartyField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
@@ -49,8 +41,9 @@ import type { InvoiceDetail } from "@/lib/invoices";
 import { itemListOptions, type ItemListRow } from "@/lib/items";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, hasErrorCode, isRefusal } from "@/lib/orpc-error";
-import { partyPickerOptions, type PartyOption } from "@/lib/parties";
+import { applyOrpcFieldError, errorMessage, handleWriteError } from "@/lib/orpc-error";
+import type { PartyOption } from "@/lib/parties";
+import { positiveAmount } from "@/lib/form-schema";
 
 /** The active item master, with the id lookup every line needs, built once. */
 type ItemMaster = {
@@ -114,7 +107,7 @@ const lineSchema = z
         context.addIssue({ code: "custom", path: ["description"], message: "Enter a description" });
       }
 
-      if (!NON_NEGATIVE_MONEY_PATTERN.test(line.amount) || Number(line.amount) <= 0) {
+      if (!positiveAmount.safeParse(line.amount).success) {
         context.addIssue({
           code: "custom",
           path: ["amount"],
@@ -394,7 +387,15 @@ function AccountLineFields({
   );
 }
 
-function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: InvoiceSheetProps) {
+/** Design §10: a line grid is a Page, so the new-invoice and draft pages host this. */
+export function InvoiceForm({
+  orgSlug,
+  today,
+  draft,
+  onClose,
+  onSaved,
+  onPosted,
+}: InvoiceFormProps) {
   const queryClient = useQueryClient();
   const dueDateEdited = useRef(Boolean(draft?.dueDate));
   // The edit token moves only with this editor's own saves, so a refetch that
@@ -403,9 +404,6 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
   const canSave = useCan(orgSlug, { invoice: ["create"] });
   const canPost = useCan(orgSlug, { invoice: ["post"] });
   const form = useZodForm(invoiceSchema, { defaultValues: defaults(today, draft) });
-  const parties = useQuery(partyPickerOptions(orgSlug));
-  const canCreateParty = useCan(orgSlug, { party: ["create"] });
-  const [createParty, setCreateParty] = useState<string | null>(null);
   const linesField = useFieldArray({ control: form.control, name: "lines" });
   const documentDate = useWatch({ control: form.control, name: "documentDate" });
   // One subscription per editor: every line reads these results through props.
@@ -431,14 +429,7 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
       (error) => toast.error(errorMessage(error, "Could not load the party's state")),
     );
 
-  const selectParty = (party: PartyOption | null) => {
-    const changed = party?.id !== form.getValues("partyId");
-
-    form.setValue("partyId", party?.id ?? null, { shouldDirty: true, shouldValidate: true });
-    form.setValue("partyName", party?.name ?? "");
-
-    if (!changed) return;
-
+  const partyChanged = (party: PartyOption | null) => {
     form.setValue("placeOfSupplyStateCode", "");
 
     if (party) void defaultPlaceOfSupply(party.id);
@@ -491,22 +482,26 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
 
   // A CONFLICT means the loaded draft moved on, so the editor closes and the record
   // shows the current state; every other refusal goes to its field. `invalidate` is
-  // the set of the write that failed, never a broader one.
-  const onMutationError = async (
+  // the set of the write that failed, never a broader one. Only a write without a
+  // version token can land twice, so only it treats a lost response as uncertain.
+  const onMutationError = (
     error: unknown,
     fallback: string,
     invalidate: () => Promise<void>,
-  ) => {
-    if (hasErrorCode(error, "CONFLICT")) {
-      onClose();
-      await invalidate();
-      toast.error(errorMessage(error, fallback));
+    versioned: boolean,
+  ) =>
+    handleWriteError(error, {
+      settle: () => {
+        onClose();
 
-      return;
-    }
-
-    applyOrpcFieldError(form, error, SERVER_FIELDS, fallback);
-  };
+        return invalidate();
+      },
+      fallback,
+      uncertain: versioned
+        ? null
+        : "The result is uncertain. Check the invoice list before entering it again.",
+      refuse: () => applyOrpcFieldError(form, error, SERVER_FIELDS, fallback),
+    });
 
   // A draft save moves invoice reads alone; posting moves settlement as well.
   const invalidateDrafts = () => invalidateInvoiceDrafts(queryClient, orgSlug);
@@ -520,19 +515,10 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         toast.success("Draft saved");
         onSaved?.(saved.id);
       },
-      onError: async (error) => {
-        // A first save that lost its response may have inserted the draft; retrying
-        // would insert a second one. An existing draft's retry is refused by its version.
-        if (!draftToken && !isRefusal(error)) {
-          onClose();
-          await invalidateDrafts();
-          toast.error("The result is uncertain. Check the invoice list before entering it again.");
-
-          return;
-        }
-
-        await onMutationError(error, "Could not save the invoice draft", invalidateDrafts);
-      },
+      // A first save that lost its response may have inserted the draft; an existing
+      // draft's retry is refused by its version.
+      onError: (error) =>
+        onMutationError(error, "Could not save the invoice draft", invalidateDrafts, !!draftToken),
     }),
   );
 
@@ -545,18 +531,9 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
         // A posted draft goes on to its record; a new invoice stays for Post and next.
         if (draft) onPosted(id);
       },
-      onError: async (error) => {
-        // Retrying a new invoice could post it twice; a draft's retry is refused by its version.
-        if (!draft && !isRefusal(error)) {
-          onClose();
-          await invalidateSettlement();
-          toast.error("The result is uncertain. Check the invoice list before entering it again.");
-
-          return;
-        }
-
-        await onMutationError(error, "Could not post the invoice", invalidateSettlement);
-      },
+      // Retrying a new invoice could post it twice; a draft's retry is refused by its version.
+      onError: (error) =>
+        onMutationError(error, "Could not post the invoice", invalidateSettlement, !!draft),
     }),
   );
 
@@ -613,29 +590,7 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
           </PostBar>
         }
       >
-        <FormField
-          control={form.control}
-          name="partyId"
-          render={({ field, fieldState }) => (
-            <FormItem>
-              <FormLabel>Party</FormLabel>
-              <FormControl>
-                <PartyLinkField
-                  parties={parties}
-                  value={
-                    field.value ? { id: field.value, name: form.getValues("partyName") } : null
-                  }
-                  onSelect={selectParty}
-                  onCreate={canCreateParty ? setCreateParty : undefined}
-                  inputRef={field.ref}
-                  autoFocus={form.formState.submitCount > 0}
-                  aria-invalid={fieldState.invalid}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <DocumentPartyField orgSlug={orgSlug} label="Party" onPartyChange={partyChanged} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <RegisteredFormField
@@ -808,21 +763,11 @@ function InvoiceForm({ orgSlug, today, draft, onClose, onSaved, onPosted }: Invo
           )}
         />
       </DocumentForm>
-      <PartySheet
-        orgSlug={orgSlug}
-        open={createParty !== null}
-        seedName={createParty ?? ""}
-        onClose={() => setCreateParty(null)}
-        onSaved={(party) => {
-          selectParty(party);
-          setCreateParty(null);
-        }}
-      />
     </Form>
   );
 }
 
-type InvoiceSheetProps = {
+type InvoiceFormProps = {
   orgSlug: string;
   today: string;
   /** The draft being edited. Its totals stay live; its fields and token are read once. */
@@ -832,27 +777,3 @@ type InvoiceSheetProps = {
   onSaved?: (draftId: string) => void;
   onPosted: (invoiceId: string) => void;
 };
-
-/** The new-invoice and draft editor; it stays open while a save or post runs. */
-export function InvoiceSheet(props: InvoiceSheetProps) {
-  const saving =
-    useIsMutating({ mutationKey: orpc.invoice.saveDraft.mutationKey() }) +
-      useIsMutating({ mutationKey: orpc.invoice.post.mutationKey() }) >
-    0;
-
-  return (
-    <FormSheet
-      open
-      onClose={props.onClose}
-      saving={saving}
-      title={props.draft ? "Edit draft" : "New invoice"}
-      description={
-        props.draft
-          ? "Review the draft, save changes, or post it."
-          : "Create a draft or post this invoice."
-      }
-    >
-      <InvoiceForm {...props} />
-    </FormSheet>
-  );
-}

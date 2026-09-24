@@ -6,7 +6,7 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { taxRateEffectiveOn } from "../core/tax-schedule";
+import { effectiveOn } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
@@ -54,7 +54,7 @@ async function itemValues(tx: DbTransaction, orgId: string, fields: ItemFields, 
           and(
             eq(taxRates.orgId, orgId),
             eq(taxRates.code, fields.taxCode),
-            taxRateEffectiveOn(today),
+            effectiveOn(taxRates, today),
           ),
         )
         .limit(1)
@@ -214,7 +214,7 @@ export const itemRouter = {
     return db
       .select({ id: taxRates.id, code: taxRates.code, name: taxRates.name })
       .from(taxRates)
-      .where(and(eq(taxRates.orgId, orgId), taxRateEffectiveOn(today)))
+      .where(and(eq(taxRates.orgId, orgId), effectiveOn(taxRates, today)))
       .orderBy(asc(taxRates.rateBasisPoints), asc(taxRates.code));
   }),
 };

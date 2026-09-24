@@ -1,18 +1,14 @@
 import { db } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
-import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
-import { parties } from "@accly/db/schema/parties";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
 import { postedNumber } from "../core/documents";
-import { postEntryLines } from "../core/entry-lines";
+import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
 import { journalAccounts } from "../lib/accounts";
-import { impossible } from "../lib/conflict";
 import { capMasterList } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
@@ -62,7 +58,7 @@ export const journalRouter = {
       action: "journal.post",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: posted.id,
+      target: `journal:${posted.id}`,
       meta: {
         number: posted.number,
         amount: formatDecimal(posted.amountPaise),
@@ -77,7 +73,7 @@ export const journalRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const [header, rows] = await Promise.all([
+      const [header, lines] = await Promise.all([
         db
           .select({
             id: documents.id,
@@ -101,37 +97,10 @@ export const journalRouter = {
           )
           .limit(1)
           .then(([row]) => row),
-        db
-          .select({
-            id: documentLines.id,
-            accountId: accounts.id,
-            accountName: accounts.name,
-            accountCode: accounts.code,
-            side: documentLines.entrySide,
-            partyId: documentLines.partyId,
-            partyName: parties.name,
-            description: documentLines.description,
-            amountPaise: documentLines.amountPaise,
-          })
-          .from(documentLines)
-          .innerJoin(
-            accounts,
-            and(eq(accounts.orgId, orgId), eq(accounts.id, documentLines.accountId)),
-          )
-          .leftJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, documentLines.partyId)))
-          .where(and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, input.journalId)))
-          .orderBy(asc(documentLines.position)),
+        entryLinesOf(orgId, input.journalId),
       ]);
 
       if (!header) throw new ORPCError("NOT_FOUND", { message: "Journal not found." });
-
-      const lines = rows.map((line) => {
-        if (line.side === null) {
-          throw impossible(`journal line ${line.id} has no entry side`);
-        }
-
-        return { ...line, side: line.side };
-      });
 
       return {
         ...header,

@@ -6,6 +6,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Design §7: hover styles apply only to a precise pointer. Tailwind's own `hover:`
+   checks (hover: hover) alone, which some touch devices report, leaving tapped rows
+   stuck in their hover colour. */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 :root {
   /* The inset shell layers three surfaces: the canvas (--background), the
      rail that sits flat on it (--sidebar, same value), and the raised content

@@ -86,6 +86,16 @@ app.use(
 
 app.use("/*", compress());
 
+// Rejects oversized requests before any session or body parsing.
+function limitBody(maxSize: number) {
+  return bodyLimit({ maxSize, onError: (c) => c.json({ error: "Request too large" }, 413) });
+}
+
+const procedureBodyLimit = limitBody(1024 * 1024);
+
+// Auth bodies are a few credentials; nothing legitimate comes near this.
+app.use("/api/auth/*", limitBody(64 * 1024));
+
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 async function createLoggedRequestContext(
@@ -117,19 +127,28 @@ function logORPCError(error: unknown): void {
   console.error(error);
 }
 
-const procedureBodyLimit = bodyLimit({
-  maxSize: 1024 * 1024,
-  onError: (c) => c.json({ error: "Request too large" }, 413),
-});
+// oRPC sends an ORPCError's message to the client. A 5xx message names an internal
+// state (`impossible()`), so the client gets only the code. Listed before
+// `onError(logORPCError)`, which therefore still logs the original.
+async function redactServerErrors<T>({ next }: { next: () => Promise<T> }): Promise<T> {
+  try {
+    return await next();
+  } catch (error) {
+    if (error instanceof ORPCError && error.status >= 500) {
+      throw new ORPCError(error.code, { status: error.status });
+    }
+
+    throw error;
+  }
+}
 
 // The web client batches calls made together into one request, and every call in it
 // shares one context, so the session and membership resolve once per batch.
 const rpcHandler = new RPCHandler(appRouter, {
   plugins: [new BatchHandlerPlugin()],
-  interceptors: [onError(logORPCError)],
+  interceptors: [redactServerErrors, onError(logORPCError)],
 });
 
-// Reject oversized requests before session resolution.
 app.use("/rpc/*", procedureBodyLimit);
 
 app.use("/rpc/*", async (c) => {
@@ -154,7 +173,7 @@ if (!isProduction) {
         schemaConverters: [new ZodToJsonSchemaConverter()],
       }),
     ],
-    interceptors: [onError(logORPCError)],
+    interceptors: [redactServerErrors, onError(logORPCError)],
   });
 
   app.use("/api-reference/*", procedureBodyLimit);

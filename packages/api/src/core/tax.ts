@@ -1,6 +1,6 @@
 import { divideHalfUp } from "./money";
 
-export type TaxLineInput = { taxablePaise: bigint; rateBasisPoints: number | null };
+type TaxLineInput = { taxablePaise: bigint; rateBasisPoints: number | null };
 
 /**
  * GST for each line and the document. Each line takes the growth of the running

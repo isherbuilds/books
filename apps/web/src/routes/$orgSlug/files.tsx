@@ -23,6 +23,7 @@ import {
   SearchInput,
 } from "@/components/page";
 import { useConfirm } from "@/components/confirm-dialog";
+import { invalidateFiles } from "@/lib/domain-invalidation";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { formatFileSize, openOrgFile, uploadOrgFile } from "@/lib/org-files";
 import { orpc } from "@/lib/orpc";
@@ -62,8 +63,7 @@ function FilesRoute() {
 
   const files = useInfiniteQuery(filesQuery(orgSlug, query));
 
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: orpc.file.list.key({ input: { orgSlug } }) });
+  const refresh = () => invalidateFiles(queryClient, orgSlug);
 
   const upload = async (file: File) => {
     setUploading(file.name);

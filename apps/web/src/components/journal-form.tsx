@@ -30,7 +30,7 @@ import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, isRefusal, reportStaleWrite } from "@/lib/orpc-error";
+import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
 
 const journalSchema = z.object({
   documentDate: z.iso.date(),
@@ -75,23 +75,18 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
   const post = useMutation(
     orpc.journal.post.mutationOptions({
       onSuccess: () => invalidateJournalState(queryClient, orgSlug),
-      onError: (error) => {
-        if (isRefusal(error)) {
-          applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
-
-          return;
-        }
-
-        return reportStaleWrite(error, {
-          refresh: () => {
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
             onClose();
 
             return invalidateJournalState(queryClient, orgSlug);
           },
           fallback: "Could not post the journal",
           uncertain: "The result is uncertain. Check the journal list before entering it again.",
-        });
-      },
+          refuse: () =>
+            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal"),
+        }),
     }),
   );
 

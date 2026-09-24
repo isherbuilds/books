@@ -63,8 +63,9 @@ export async function createOrganization(
 
   const id = Bun.randomUUIDv7();
   const createdAt = new Date();
-  const pan = input.pan.toUpperCase();
-  const gstin = input.gstin?.toUpperCase() ?? null;
+  // The schema already upper-cases both identifiers.
+  const { pan } = input;
+  const gstin = input.gstin ?? null;
 
   try {
     await db.transaction(async (tx) => {

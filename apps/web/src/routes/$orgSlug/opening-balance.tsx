@@ -16,7 +16,7 @@ import { useCan } from "@/lib/membership";
 import { openingBalanceOptions } from "@/lib/opening-balance";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { reportStaleWrite } from "@/lib/orpc-error";
+import { handleWriteError } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/opening-balance")({
@@ -45,8 +45,8 @@ function OpeningBalanceRoute() {
         toast.success("Opening balance cancelled");
       },
       onError: (error) =>
-        reportStaleWrite(error, {
-          refresh: () => {
+        handleWriteError(error, {
+          settle: () => {
             setCancelOpen(false);
 
             return invalidateOpeningBalanceState(queryClient, orgSlug);

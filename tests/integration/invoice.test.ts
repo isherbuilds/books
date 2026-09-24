@@ -469,6 +469,43 @@ test("a draft uses optimistic versions and posts into the same document", async 
   );
 });
 
+test("a draft is discarded only with its current version", async () => {
+  const draft = await api.invoice.saveDraft({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  });
+
+  const claim = { orgSlug: organization.slug, draft: { id: draft.id, version: 2 } };
+
+  await expectORPCCode(api.invoice.discardDraft(claim), "CONFLICT");
+  await api.invoice.discardDraft({ ...claim, draft });
+  await expectORPCCode(
+    api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id }),
+    "NOT_FOUND",
+  );
+});
+
+test("an invoice that totals nothing is refused", async () => {
+  const free = await api.item.create({
+    orgSlug: organization.slug,
+    name: "Free sample",
+    unitPrice: "0.00",
+    incomeAccountId: exemptIncome.id,
+  });
+
+  await expectReason(
+    api.invoice.post({
+      orgSlug: organization.slug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: free.id, quantity: 3 }],
+    }),
+    "INVOICE_ZERO_TOTAL",
+  );
+});
+
 test("an operator may post but not cancel while a CA cannot post", async () => {
   const operator = await createTestUser(`invoice-operator-${uniqueSuffix()}`);
   const ca = await createTestUser(`invoice-ca-${uniqueSuffix()}`);

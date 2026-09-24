@@ -2,7 +2,6 @@ import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { allocations } from "@accly/db/schema/allocations";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
-import { parties } from "@accly/db/schema/parties";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -21,6 +20,7 @@ import { formatDecimal } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
+import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   orderedPeriod,
@@ -93,20 +93,7 @@ export const receiptRouter = {
     const posted = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
 
-      const [party] = input.partyId
-        ? await tx
-            .select()
-            .from(parties)
-            .where(
-              and(
-                eq(parties.orgId, scope.orgId),
-                eq(parties.id, input.partyId),
-                eq(parties.active, true),
-              ),
-            )
-            .limit(1)
-            .for("share")
-        : [];
+      const party = input.partyId ? await activeParty(tx, scope.orgId, input.partyId) : null;
 
       const [incomeAccount] =
         settlementKind === "direct"
@@ -210,7 +197,7 @@ export const receiptRouter = {
       action: "receipt.post",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: posted.id,
+      target: `receipt:${posted.id}`,
       meta: {
         number: posted.number,
         amount: formatDecimal(input.amount),

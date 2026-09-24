@@ -8,6 +8,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { contentDisposition } from "./content-disposition";
+
 // Every object is private and reachable only through a short-lived presigned URL.
 // There is deliberately no public path: a bucket policy broad enough to serve
 // public files also exposes every tenant's private ones (hard rule 7).
@@ -72,12 +74,39 @@ export function createUploadUrl(
   );
 }
 
-export function createReadUrl(key: string): Promise<string> {
-  const { bucket, client } = storage();
+// The uploader names the stored type, so a read never trusts it: only these render
+// inline. HTML, SVG and anything else would run as a page on the storage origin, so
+// they download as opaque bytes.
+const INLINE_TYPES = new Set([
+  "application/pdf",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/plain",
+]);
 
-  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
-    expiresIn: DEFAULT_EXPIRES_IN,
-  });
+export function createReadUrl(
+  key: string,
+  file: { name: string; mimeType: string | null },
+): Promise<string> {
+  const { bucket, client } = storage();
+  const inline = file.mimeType !== null && INLINE_TYPES.has(file.mimeType);
+
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ResponseContentType: inline ? file.mimeType! : "application/octet-stream",
+      ResponseContentDisposition: contentDisposition(
+        inline ? "inline" : "attachment",
+        file.name,
+        "file",
+      ),
+    }),
+    { expiresIn: DEFAULT_EXPIRES_IN },
+  );
 }
 
 export async function* listObjects(

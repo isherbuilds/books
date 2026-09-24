@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 
 import type { PaletteItem } from "@/lib/palette";
 
@@ -15,8 +15,9 @@ function publishRegistry(): void {
 }
 
 export function usePaletteActions(actions: PaletteItem[]): void {
-  const actionsRef = useRef(actions);
-  actionsRef.current = actions;
+  // Registered once per identity below; each run reads this render's handlers.
+  const run = useEffectEvent((index: number) => actions[index]?.run());
+  const current = useEffectEvent(() => actions);
 
   const identity = actions
     .map(
@@ -26,13 +27,13 @@ export function usePaletteActions(actions: PaletteItem[]): void {
     .join("\u0001");
 
   useEffect(() => {
-    const currentActions = actionsRef.current;
+    const currentActions = current();
 
     if (currentActions.length === 0) return;
 
     const registrations = currentActions.map((action, index) => ({
       ...action,
-      run: () => actionsRef.current[index]?.run(),
+      run: () => run(index),
     }));
 
     registry.push(...registrations);

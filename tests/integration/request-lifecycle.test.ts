@@ -3,6 +3,7 @@ import { beforeAll, expect, spyOn, test } from "bun:test";
 import { app } from "../../apps/server/src/index";
 import { auth } from "@accly/auth";
 import { db } from "@accly/db";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { member } from "@accly/db/schema/auth";
 import { and, eq } from "drizzle-orm";
 
@@ -52,6 +53,39 @@ test("procedure endpoints reject an oversized body before resolving authenticati
     expect(getSession).toHaveBeenCalledTimes(0);
   } finally {
     getSession.mockRestore();
+  }
+});
+
+test("a server fault reaches the browser as a bare code, never its internal detail", async () => {
+  const owner = await createTestUser("redacted-fault");
+  const organization = await createOrganization(owner, "redacted-fault");
+  // Lock changes treat missing settings as an integrity failure (`impossible()`).
+  await db.delete(organizationSettings).where(eq(organizationSettings.orgId, organization.id));
+  const errors = spyOn(console, "error").mockImplementation(() => {});
+
+  try {
+    const response = await app.request("http://localhost/rpc/lock/set", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: owner.cookie },
+      body: JSON.stringify({
+        json: {
+          orgSlug: organization.slug,
+          kind: "general",
+          lockedThrough: null,
+          expectedLockedThrough: null,
+          reason: "Probe",
+        },
+      }),
+    });
+
+    expect(response.status).toBe(500);
+    // SAFETY: oRPC's RPC protocol wraps every error body as `{ json: ORPCError JSON }`.
+    const { json } = (await response.json()) as { json: { code: string; message: string } };
+    expect(json.code).toBe("INTERNAL_SERVER_ERROR");
+    expect(json.message).not.toContain("Invariant");
+    expect(String(errors.mock.calls[0]?.[0])).toContain("Invariant violated");
+  } finally {
+    errors.mockRestore();
   }
 });
 

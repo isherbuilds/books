@@ -13,7 +13,7 @@ import { errorReason } from "@/lib/orpc-error";
 
 type LinkStatus = "pending" | "error" | "overflow" | "ready";
 
-export type LinkFieldProps<T> = {
+type LinkFieldProps<T> = {
   items: T[] | undefined;
   /** The master-list query behind `items`; its state picks the empty-row copy. */
   query: { isPending: boolean; isError: boolean; error: unknown };

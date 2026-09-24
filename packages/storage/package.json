@@ -4,6 +4,9 @@
   "exports": {
     ".": {
       "default": "./src/index.ts"
+    },
+    "./content-disposition": {
+      "default": "./src/content-disposition.ts"
     }
   },
   "scripts": {

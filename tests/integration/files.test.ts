@@ -67,6 +67,8 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   const fetched = await fetch(read.url);
   expect(fetched.status).toBe(200);
   expect(await fetched.text()).toBe(body);
+  expect(fetched.headers.get("content-type")).toBe("text/plain");
+  expect(fetched.headers.get("content-disposition")).toStartWith("inline;");
 
   // Unsigned: what a "public files" feature would have handed out. The gateway
   // must refuse it.
@@ -77,6 +79,32 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   await api.file.delete({ orgSlug: org.slug, key: upload.key });
   expect((await api.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
   await expectORPCCode(api.file.getReadUrl({ orgSlug: org.slug, key: upload.key }), "NOT_FOUND");
+});
+
+// The uploader picks the stored type; a page served from the storage origin must
+// never render, whatever it claims to be.
+test("an uploaded page downloads as opaque bytes instead of rendering", async () => {
+  const owner = await createTestUser("owner");
+  const org = await createOrganization(owner, "files-html");
+  const api = clientFor(owner);
+  const body = "<script>alert(1)</script>";
+
+  const upload = await api.file.createUpload({
+    orgSlug: org.slug,
+    name: "invoice.html",
+    mimeType: "text/html",
+    size: body.length,
+  });
+
+  expect((await putBytes(upload.uploadUrl, body, "text/html")).status).toBe(200);
+  await api.file.finalizeUpload({ orgSlug: org.slug, key: upload.key });
+
+  const fetched = await fetch(
+    (await api.file.getReadUrl({ orgSlug: org.slug, key: upload.key })).url,
+  );
+  expect(fetched.status).toBe(200);
+  expect(fetched.headers.get("content-type")).toBe("application/octet-stream");
+  expect(fetched.headers.get("content-disposition")).toStartWith("attachment;");
 });
 
 test("another org's file key is FORBIDDEN, not merely missing", async () => {

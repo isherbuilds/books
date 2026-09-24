@@ -1,10 +1,12 @@
 import { db } from "@accly/db";
+import { documents } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   documentPrefix,
@@ -85,18 +87,49 @@ export const settingsRouter = {
     const { scope } = context;
     const { orgSlug: _claim, ...settings } = input;
 
-    const [saved] = await db
-      .update(organizationSettings)
-      .set({
-        ...settings,
-        gstin: settings.gstin ?? null,
-        addressLine2: settings.addressLine2 ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(organizationSettings.orgId, scope.orgId))
-      .returning();
+    const saved = await db.transaction(async (tx) => {
+      // FOR UPDATE waits out every posting, which reads settings FOR SHARE, so no
+      // document is numbered between this check and the write.
+      const [current] = await tx
+        .select({ financialYearStart: organizationSettings.financialYearStart })
+        .from(organizationSettings)
+        .where(eq(organizationSettings.orgId, scope.orgId))
+        .for("update");
 
-    if (!saved) throw new ORPCError("NOT_FOUND", { message: NOT_FOUND_MESSAGE });
+      if (!current) throw new ORPCError("NOT_FOUND", { message: NOT_FOUND_MESSAGE });
+
+      // The start month names every financial year and its number series, so moving
+      // it after a document is numbered would split one GST year across two series.
+      if (current.financialYearStart !== settings.financialYearStart) {
+        const [numbered] = await tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(and(eq(documents.orgId, scope.orgId), isNotNull(documents.number)))
+          .limit(1);
+
+        if (numbered) {
+          throw badRequest(
+            "FINANCIAL_YEAR_FIXED",
+            "The fiscal year start cannot change after a document is numbered.",
+          );
+        }
+      }
+
+      const [row] = await tx
+        .update(organizationSettings)
+        .set({
+          ...settings,
+          gstin: settings.gstin ?? null,
+          addressLine2: settings.addressLine2 ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationSettings.orgId, scope.orgId))
+        .returning();
+
+      if (!row) throw impossible("locked organization settings disappeared");
+
+      return row;
+    });
 
     audit({
       action: "settings.update",

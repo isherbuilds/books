@@ -16,7 +16,7 @@ export const siteConfig = {
 
 export const OG_IMAGE = { width: 1200, height: 630 } as const;
 
-export type PublicRoute = {
+type PublicRoute = {
   path: string;
   title: string;
   description: string;

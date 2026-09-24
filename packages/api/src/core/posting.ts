@@ -23,7 +23,7 @@ function systemAccount(byKey: SystemAccounts, key: SystemAccountKey): string {
   return id;
 }
 
-export type JournalLineInput = {
+type JournalLineInput = {
   accountId: string;
   partyId: string | null;
   debit: bigint;
@@ -84,7 +84,7 @@ export type PaymentPosting = {
     }
 );
 
-export type InvoiceLinePosting = { accountId: string; amountPaise: bigint };
+type InvoiceLinePosting = { accountId: string; amountPaise: bigint };
 
 export type InvoicePosting = {
   type: "invoice";
@@ -98,7 +98,7 @@ export type InvoicePosting = {
   roundOffPaise: bigint;
 };
 
-export type JournalLinePosting = {
+type JournalLinePosting = {
   accountId: string;
   partyId: string | null;
   side: EntrySide;
@@ -114,9 +114,9 @@ type EntryLinesPosting<Type extends "journal" | "openingBalance"> = {
 
 export type JournalPosting = EntryLinesPosting<"journal">;
 
-export type OpeningBalancePosting = EntryLinesPosting<"openingBalance">;
+type OpeningBalancePosting = EntryLinesPosting<"openingBalance">;
 
-export type AllocationPosting = {
+type AllocationPosting = {
   type: "allocation";
   direction: "advanceToInvoice" | "invoiceToAdvance";
   partyId: string;
@@ -410,9 +410,9 @@ function reversalOf(entryId: string, storedLines: readonly JournalLineInput[]): 
   return lines;
 }
 
-export type EntryDocumentType = DocumentType | "allocation";
+type EntryDocumentType = DocumentType | "allocation";
 
-export type RecordEntryArgs =
+type RecordEntryArgs =
   | {
       kind: "post";
       document: { id: string; posting: DocumentPosting | AllocationPosting };

@@ -282,7 +282,7 @@ export const accountRouter = {
       action: "account.setActive",
       actorId: scope.userId,
       orgId,
-      target: updated.id,
+      target: `account:${updated.id}`,
       meta: { active: input.active },
     });
 

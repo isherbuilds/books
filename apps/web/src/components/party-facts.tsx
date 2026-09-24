@@ -1,6 +1,7 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/customer-details.tsx (fact grid and the
 // invoice list inside the customer sheet).
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { PartyRecord } from "@accly/api/routers/party";
@@ -12,9 +13,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { struck } from "@/components/document-columns";
 import { ErrorNote } from "@/components/page";
 import { Section } from "@/components/party-form";
-import { formatDay } from "@/lib/org-datetime";
+
 import { orpc } from "@/lib/orpc";
 
 function Fact({
@@ -128,23 +130,18 @@ export function RecentReceipts({ orgSlug, partyId }: { orgSlug: string; partyId:
                   to="/$orgSlug/receipts/$receiptId"
                   params={{ orgSlug, receiptId: receipt.id }}
                   search={{ partyId }}
-                  className="grid grid-cols-[auto_1fr_auto] items-baseline gap-3 py-2 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/50"
+                  className="grid grid-cols-[auto_1fr_auto] items-baseline gap-3 py-2 hover:bg-muted/50"
                 >
                   <span className="font-mono">{receipt.number}</span>
                   <span className="min-w-0 text-muted-foreground">
-                    {formatDay(receipt.documentDate)}
+                    {formatBusinessDay(receipt.documentDate)}
                     {cancelled ? (
                       <Badge variant="muted" className="ml-2">
                         Cancelled
                       </Badge>
                     ) : null}
                   </span>
-                  <span
-                    className={cn(
-                      "text-right tabular-nums",
-                      cancelled && "text-muted-foreground line-through",
-                    )}
-                  >
+                  <span className={cn("text-right tabular-nums", struck(receipt.state))}>
                     {formatMoney(receipt.totalPaise)}
                   </span>
                 </Link>

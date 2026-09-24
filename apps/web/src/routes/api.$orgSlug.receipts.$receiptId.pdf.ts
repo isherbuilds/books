@@ -1,10 +1,9 @@
 import { createRequestContext } from "@accly/api/lib/context";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { appRouter } from "@accly/api/routers/index";
+import { contentDisposition } from "@accly/storage/content-disposition";
 import { ORPCError, createRouterClient } from "@orpc/server";
 import { createFileRoute } from "@tanstack/react-router";
-
-import { pdfContentDisposition } from "@/lib/content-disposition";
 
 // The guarded receipt query is the route's sole source of tenant data. The renderer
 // is lazy so its WASM and fonts stay out of browser and route chunks.
@@ -29,12 +28,17 @@ export const Route = createFileRoute("/api/$orgSlug/receipts/$receiptId/pdf")({
           return new Response(new Uint8Array(bytes).buffer, {
             headers: {
               "Cache-Control": "private, no-store",
-              "Content-Disposition": pdfContentDisposition(fileName, download),
+              "Content-Disposition": contentDisposition(
+                download ? "attachment" : "inline",
+                fileName,
+                "document.pdf",
+              ),
               "Content-Type": "application/pdf",
             },
           });
         } catch (error) {
-          if (error instanceof ORPCError) {
+          // A 4xx message is written for the user; a 5xx one names internal state.
+          if (error instanceof ORPCError && error.status < 500) {
             return new Response(error.message, { status: error.status });
           }
 

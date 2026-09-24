@@ -31,7 +31,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { LOCK_KIND_LABELS } from "@/lib/locks";
 import { orpc } from "@/lib/orpc";
-import { reportStaleWrite } from "@/lib/orpc-error";
+import { handleWriteError } from "@/lib/orpc-error";
 
 const lockSchema = z.object({
   lockedThrough: z.union([z.literal(""), dateOnly]),
@@ -70,8 +70,8 @@ export function LockDialog({
         onClose();
       },
       onError: (error) =>
-        reportStaleWrite(error, {
-          refresh: () => {
+        handleWriteError(error, {
+          settle: () => {
             onClose();
 
             return invalidateLockState(queryClient, orgSlug);

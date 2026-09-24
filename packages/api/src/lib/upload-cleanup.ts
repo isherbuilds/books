@@ -82,9 +82,9 @@ export async function cleanupUploads(opts: {
         await deleteObject(key);
         result.deleted++;
         console.info(`[deleted stale] ${key}`);
-      } catch {
+      } catch (error) {
         result.failed++;
-        console.error(`[failed stale object] ${key}`);
+        console.error(`[failed stale object] ${key}`, error);
       }
     }
 
@@ -117,9 +117,9 @@ export async function cleanupUploads(opts: {
         await deleteObject(object.key);
         result.deleted++;
         console.info(`[deleted orphan] ${object.key}`);
-      } catch {
+      } catch (error) {
         result.failed++;
-        console.error(`[failed orphan] ${object.key}`);
+        console.error(`[failed orphan] ${object.key}`, error);
       }
     }
   }

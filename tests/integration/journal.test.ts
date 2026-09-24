@@ -247,3 +247,36 @@ test("registered organizations hide and refuse taxable journal accounts", async 
     "TAXABLE_ACCOUNT_LINE",
   );
 });
+
+// The start month names every financial year and number series, so it is fixed once
+// any document carries a number.
+test("the fiscal year start is fixed once a document is numbered", async () => {
+  const fixture = await createAccountingFixture(founder, "fiscal-year");
+  const { cash, exemptIncome } = journalAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+  const owner = clientFor(founder);
+
+  const january = await owner.settings.update({
+    ...(await owner.settings.get(claim)),
+    ...claim,
+    financialYearStart: 1,
+  });
+
+  expect(january.financialYearStart).toBe(1);
+
+  await fixture.api.journal.post({
+    ...claim,
+    documentDate: "2026-04-01",
+    narration: "First numbered document",
+    lines: [
+      { accountId: cash.id, side: "debit", amount: "1.00" },
+      { accountId: exemptIncome.id, side: "credit", amount: "1.00" },
+    ],
+  });
+
+  await expectReason(
+    owner.settings.update({ ...january, ...claim, financialYearStart: 4 }),
+    "FINANCIAL_YEAR_FIXED",
+  );
+  expect((await owner.settings.update({ ...january, ...claim, city: "Pune" })).city).toBe("Pune");
+});

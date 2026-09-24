@@ -1,3 +1,4 @@
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { NON_NEGATIVE_MONEY_PATTERN, formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
@@ -34,15 +35,13 @@ import { z } from "zod";
 
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
-import { formatDay } from "@/lib/org-datetime";
+
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, errorReason, isRefusal } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorMessage, errorReason, handleWriteError } from "@/lib/orpc-error";
+import { positiveAmount } from "@/lib/form-schema";
 
 const applyAdvanceSchema = z.object({
-  amount: z
-    .string()
-    .regex(NON_NEGATIVE_MONEY_PATTERN, "Enter a valid amount")
-    .refine((value) => Number(value) > 0, "Amount must be greater than zero"),
+  amount: positiveAmount,
 });
 
 /** Mounted only while open, so every open starts with no receipt and an empty amount. */
@@ -70,38 +69,39 @@ export function ApplyAdvanceSheet({
         toast.success("Advance applied");
         onClose();
       },
-      onError: async (error) => {
-        // Retrying could apply it twice; the receipt and the invoice show whether it went through.
-        if (!isRefusal(error)) {
-          onClose();
-          await invalidateSettlementState(queryClient, orgSlug);
-          toast.error(
+      // Retrying could apply it twice; the receipt and the invoice show whether it went through.
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
+            onClose();
+
+            return invalidateSettlementState(queryClient, orgSlug);
+          },
+          fallback: "Could not apply the advance",
+          uncertain:
             "The result is uncertain. Check the receipt and invoice before applying it again.",
-          );
+          refuse: async () => {
+            const reason = errorReason(error);
 
-          return;
-        }
+            // The receipt or the invoice moved on since the sheet opened.
+            if (reason === "ALLOCATION_SOURCE_INVALID" || reason === "ALLOCATION_TARGET_INVALID") {
+              onClose();
+              await invalidateSettlementState(queryClient, orgSlug);
+              toast.error(errorMessage(error, "Could not apply the advance"));
 
-        const reason = errorReason(error);
+              return;
+            }
 
-        // The receipt or the invoice moved on since the sheet opened.
-        if (reason === "ALLOCATION_SOURCE_INVALID" || reason === "ALLOCATION_TARGET_INVALID") {
-          await invalidateSettlementState(queryClient, orgSlug);
-          toast.error(errorMessage(error, "Could not apply the advance"));
-          onClose();
-
-          return;
-        }
-
-        // The server states the amount that still fits; the rows behind the sheet show it too.
-        await invalidateSettlementState(queryClient, orgSlug);
-        applyOrpcFieldError(
-          form,
-          error,
-          { ALLOCATION_EXCEEDS_SOURCE: "amount", ALLOCATION_EXCEEDS_OUTSTANDING: "amount" },
-          "Could not apply the advance",
-        );
-      },
+            // The server states the amount that still fits; the rows behind the sheet show it too.
+            await invalidateSettlementState(queryClient, orgSlug);
+            applyOrpcFieldError(
+              form,
+              error,
+              { ALLOCATION_EXCEEDS_SOURCE: "amount", ALLOCATION_EXCEEDS_OUTSTANDING: "amount" },
+              "Could not apply the advance",
+            );
+          },
+        }),
     }),
   );
 
@@ -162,7 +162,7 @@ export function ApplyAdvanceSheet({
                         <TableRow key={receipt.id}>
                           <TableCell className="font-mono">{receipt.number}</TableCell>
                           <TableCell className="tabular-nums">
-                            {formatDay(receipt.documentDate)}
+                            {formatBusinessDay(receipt.documentDate)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {formatMoney(receipt.unappliedPaise)}

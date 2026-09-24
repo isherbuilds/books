@@ -1,12 +1,12 @@
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { creditOf, debitOf, formatBalance, formatMoney, isZeroMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
 import type { RouterClient } from "@orpc/server";
 import { createColumnHelper } from "@tanstack/react-table";
 
-import { formatDay } from "@/lib/org-datetime";
 import { DATA_TABLE_FEATURES } from "@/components/data-table/data-table";
 
-export type StatementLine = Awaited<
+type StatementLine = Awaited<
   ReturnType<RouterClient<AppRouter>["party"]["statement"]>
 >["lines"][number];
 
@@ -37,7 +37,9 @@ export const LEDGER_COLUMNS = [
   col.accessor("entryDate", {
     header: "Date",
     meta: { className: "w-28" },
-    cell: ({ getValue }) => <span className="whitespace-nowrap">{formatDay(getValue())}</span>,
+    cell: ({ getValue }) => (
+      <span className="whitespace-nowrap">{formatBusinessDay(getValue())}</span>
+    ),
   }),
   col.display({
     id: "particulars",
@@ -77,7 +79,7 @@ export function LedgerCard({ line }: { line: StatementLine }) {
       </div>
       <p className="mt-1 flex items-baseline justify-between gap-3 text-muted-foreground">
         <span className="min-w-0 truncate">
-          {formatDay(line.entryDate)} · {particulars(line)}
+          {formatBusinessDay(line.entryDate)} · {particulars(line)}
         </span>
         <span className="shrink-0 tabular-nums">{formatBalance(line.balancePaise)}</span>
       </p>

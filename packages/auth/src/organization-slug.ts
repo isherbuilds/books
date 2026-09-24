@@ -1,5 +1,8 @@
 export const ORGANIZATION_SLUG_MIN_LENGTH = 4;
 
+// A DNS label, so a slug can later become a subdomain unchanged.
+export const ORGANIZATION_SLUG_MAX_LENGTH = 63;
+
 const RESERVED_ROOT_SLUGS = new Set([
   "about",
   "account",
@@ -80,6 +83,10 @@ const RESERVED_ROOT_SLUGS = new Set([
 export function organizationSlugIssue(slug: string | undefined): string | null {
   if (!slug || slug.length < ORGANIZATION_SLUG_MIN_LENGTH) {
     return `Organization URL must be at least ${ORGANIZATION_SLUG_MIN_LENGTH} characters.`;
+  }
+
+  if (slug.length > ORGANIZATION_SLUG_MAX_LENGTH) {
+    return `Organization URL must be at most ${ORGANIZATION_SLUG_MAX_LENGTH} characters.`;
   }
 
   if (RESERVED_ROOT_SLUGS.has(slug.toLowerCase())) {

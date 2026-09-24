@@ -13,7 +13,46 @@ export function invitationUrl(invitationId: string): string {
   return new URL(`/join?invitation=${invitationId}`, env.CORS_ORIGIN).toString();
 }
 
+// The browser needs only these. Every other organization endpoint answers 404 over
+// HTTP: several list pending invitation ids to any member, and an id plus its email
+// is the sign-up proof. Server code reaches them through `auth.api`, which
+// `disabledPaths` does not gate, behind the oRPC permission guard.
+const BROWSER_ORGANIZATION_PATHS = new Set([
+  "/organization/list",
+  "/organization/list-user-invitations",
+  "/organization/accept-invitation",
+]);
+
 function createAuth() {
+  const organizationPlugin = organization({
+    ac,
+    roles,
+    // No email provider yet, so invited accounts are unverified and the
+    // invitation id is the proof. Explicit: with a custom generateId
+    // Better Auth would otherwise default this to true.
+    requireEmailVerificationOnInvitation: false,
+    // Object storage cannot join the database cascade. Keep this closed until deletion
+    // has an explicit object-cleanup flow.
+    disableOrganizationDeletion: true,
+    organizationHooks: {
+      beforeCreateOrganization: async () => {
+        throw new APIError("FORBIDDEN", {
+          message: "Create organizations through the accounting bootstrap.",
+        });
+      },
+      // The slug is the tenant claim every request carries, so it must be stable, not
+      // merely unique: Better Auth never reserves a vacated slug, so a rename would free
+      // it for another tenant and re-point every existing link.
+      beforeUpdateOrganization: async ({ organization: update }) => {
+        if (update.slug !== undefined) {
+          throw new APIError("BAD_REQUEST", {
+            message: "An organization slug cannot be changed after creation",
+          });
+        }
+      },
+    },
+  });
+
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -21,8 +60,9 @@ function createAuth() {
       schema: schema,
     }),
     trustedOrigins: [env.CORS_ORIGIN],
-    // The accounting bootstrap owns creation. The slug probe would expose organization URLs.
-    disabledPaths: ["/organization/check-slug", "/organization/create"],
+    disabledPaths: Object.values(organizationPlugin.endpoints)
+      .map((endpoint) => endpoint.path)
+      .filter((path) => !BROWSER_ORGANIZATION_PATHS.has(path)),
     emailAndPassword: {
       enabled: true,
       // Sign-up is open only to an invitation id plus its invited email; the
@@ -57,37 +97,7 @@ function createAuth() {
           }
         : undefined,
     },
-    plugins: [
-      organization({
-        ac,
-        roles,
-        // No email provider yet, so invited accounts are unverified and the
-        // invitation id is the proof. Explicit: with a custom generateId
-        // Better Auth would otherwise default this to true.
-        requireEmailVerificationOnInvitation: false,
-        // Object storage cannot join the database cascade. Keep this closed until deletion
-        // has an explicit object-cleanup flow.
-        disableOrganizationDeletion: true,
-        organizationHooks: {
-          beforeCreateOrganization: async () => {
-            throw new APIError("FORBIDDEN", {
-              message: "Create organizations through the accounting bootstrap.",
-            });
-          },
-          // The slug is the tenant claim every request carries, so it must be stable, not
-          // merely unique: Better Auth never reserves a vacated slug, so a rename would free
-          // it for another tenant and re-point every existing link.
-          beforeUpdateOrganization: async ({ organization: update }) => {
-            if (update.slug !== undefined) {
-              throw new APIError("BAD_REQUEST", {
-                message: "An organization slug cannot be changed after creation",
-              });
-            }
-          },
-        },
-      }),
-      invitationClaim(),
-    ],
+    plugins: [organizationPlugin, invitationClaim()],
   });
 }
 

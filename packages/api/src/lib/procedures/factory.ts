@@ -1,4 +1,5 @@
 import { authorize, parseRoles, type AppPermission, type RoleKey } from "@accly/auth/access";
+import { ORGANIZATION_SLUG_MAX_LENGTH } from "@accly/auth/organization-slug";
 import { db } from "@accly/db";
 import { member, organization } from "@accly/db/schema/auth";
 import { ORPCError, os } from "@orpc/server";
@@ -27,8 +28,9 @@ export const sessionProcedure = base.use(async ({ context, next }) => {
 
 // The unverified claim, named by the page URL. Safe to key authorization on only
 // because slug changes are rejected after creation. Handlers scope on
-// `context.scope.orgId` — never on this.
-export const orgInput = z.object({ orgSlug: z.string().min(1) });
+// `context.scope.orgId` — never on this. Capped because it reaches SQL and the
+// denial log before membership is known.
+export const orgInput = z.object({ orgSlug: z.string().min(1).max(ORGANIZATION_SLUG_MAX_LENGTH) });
 
 // The promise is memoized before it settles, so calls fanning out from one page
 // render share a single in-flight join. A `null` result is memoized too.

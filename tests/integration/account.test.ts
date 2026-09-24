@@ -1,10 +1,19 @@
 import { beforeAll, expect, test } from "bun:test";
 
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { db } from "@accly/db";
+import { journalLines } from "@accly/db/schema/journal-lines";
+import { and, eq, sql } from "drizzle-orm";
 
 import { createAccountingFixture } from "../support/accounting";
-import { createFounderSession, type TestUser } from "../support/auth";
-import { expectORPCCode } from "../support/client";
+import { required } from "../support/assert";
+import {
+  createFounderSession,
+  createTestUser,
+  joinOrganization,
+  type TestUser,
+} from "../support/auth";
+import { clientFor, expectORPCCode, expectReason } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 
 let founder: TestUser;
@@ -13,13 +22,27 @@ let organization: { id: string; slug: string };
 
 let accountantApi: AppRouterClient;
 
+let fixture: Awaited<ReturnType<typeof createAccountingFixture>>;
+
 beforeAll(async () => {
   await resetTestDatabase();
   founder = await createFounderSession();
-  const fixture = await createAccountingFixture(founder, "account");
+  fixture = await createAccountingFixture(founder, "account");
   organization = fixture.organization;
   accountantApi = fixture.api;
 });
+
+// No report reads an expense leaf yet, so its balance is summed from journal lines.
+async function balanceOf(accountId: string): Promise<bigint> {
+  const [row] = await db
+    .select({
+      balance: sql<string>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`,
+    })
+    .from(journalLines)
+    .where(and(eq(journalLines.orgId, organization.id), eq(journalLines.accountId, accountId)));
+
+  return BigInt(required(row, "balance").balance);
+}
 
 test("accountants create, rename and archive leaves", async () => {
   const orgSlug = organization.slug;
@@ -43,20 +66,48 @@ test("accountants create, rename and archive leaves", async () => {
   const journalAccounts = await accountantApi.journal.accounts({ orgSlug });
   expect(journalAccounts.some(({ id }) => id === discount.id)).toBe(true);
 
-  await accountantApi.account.update({
+  const rename = {
     orgSlug,
     accountId: tuition.id,
     name: "Tuition Revenue",
     updatedAt: tuition.updatedAt.toISOString(),
-  });
+  };
+
+  await accountantApi.account.update(rename);
 
   const renamed = await accountantApi.account.list({ orgSlug, type: "income" });
   expect(renamed.find(({ id }) => id === tuition.id)?.name).toBe("Tuition Revenue");
+  // The token moved with the rename, so an editor still holding the old one is refused.
+
+  const stale = await expectORPCCode(
+    accountantApi.account.update({ ...rename, name: "Tuition" }),
+    "CONFLICT",
+  );
+
+  expect(stale.data).toMatchObject({ reason: "STALE_RECORD" });
+
+  await accountantApi.journal.post({
+    orgSlug,
+    documentDate: "2026-04-01",
+    narration: "Sibling discount",
+    lines: [
+      { accountId: discount.id, side: "debit", amount: "500.00" },
+      { accountId: tuition.id, side: "credit", amount: "500.00" },
+    ],
+  });
 
   await accountantApi.account.setActive({ orgSlug, accountId: discount.id, active: false });
 
   const afterArchive = await accountantApi.journal.accounts({ orgSlug });
   expect(afterArchive.some(({ id }) => id === discount.id)).toBe(false);
+  expect(await balanceOf(discount.id)).toBe(50_000n);
+
+  const operator = await createTestUser("account-operator");
+  await joinOrganization(operator, organization.id, "operator");
+  await expectORPCCode(
+    clientFor(operator).account.create({ orgSlug, parent: { type: "expense" }, name: "Nope" }),
+    "FORBIDDEN",
+  );
 });
 
 test("account creation and restoration refuse foreign parents and taken names", async () => {
@@ -121,11 +172,42 @@ test("an income account cannot be archived while an active item uses it", async 
     incomeAccountId: income.id,
   });
 
-  await expectORPCCode(
+  await expectReason(
     accountantApi.account.setActive({ orgSlug, accountId: income.id, active: false }),
-    "BAD_REQUEST",
+    "ACCOUNT_IN_USE",
   );
 
   await accountantApi.item.setActive({ orgSlug, itemId: item.id, active: false });
   await accountantApi.account.setActive({ orgSlug, accountId: income.id, active: false });
+});
+
+test("the chart protects system accounts, posting leaves and money leaves in use", async () => {
+  const orgSlug = organization.slug;
+
+  const receivables = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "receivables"),
+    "receivables account",
+  );
+
+  const method = required(fixture.methods[0], "payment method");
+
+  await expectReason(
+    accountantApi.account.setActive({ orgSlug, accountId: receivables.id, active: false }),
+    "ACCOUNT_SYSTEM",
+  );
+  await expectReason(
+    accountantApi.account.setActive({ orgSlug, accountId: method.accountId, active: false }),
+    "ACCOUNT_IN_USE",
+  );
+
+  const leaf = await accountantApi.account.create({
+    orgSlug,
+    parent: { type: "expense" },
+    name: "Stationery",
+  });
+
+  await expectReason(
+    accountantApi.account.create({ orgSlug, parent: { accountId: leaf.id }, name: "Pens" }),
+    "ACCOUNT_PARENT_INVALID",
+  );
 });

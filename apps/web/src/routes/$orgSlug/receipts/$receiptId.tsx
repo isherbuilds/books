@@ -1,6 +1,6 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/invoice-details.tsx and sheets/invoice-details-sheet.tsx.
-import { formatBusinessDate } from "@accly/api/lib/business-date";
+import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
@@ -28,14 +28,15 @@ import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { struck } from "@/components/document-columns";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
-import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
+import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, hasErrorCode, loadRouteQuery } from "@/lib/orpc-error";
+import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
 import { focusRowLink, stepRow } from "@/lib/row-focus";
 
@@ -106,15 +107,17 @@ function ReceiptSheetRoute() {
         setCancelOpen(false);
         toast.success("Receipt cancelled");
       },
-      onError: (error) => {
-        // Someone else cancelled it: refetch, so this Sheet shows the cancelled receipt.
-        if (hasErrorCode(error, "CONFLICT")) {
-          setCancelOpen(false);
-          void invalidateCashState(queryClient, orgSlug);
-        }
+      // Someone else cancelled it: refetch, so this Sheet shows the cancelled receipt.
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
+            setCancelOpen(false);
 
-        toast.error(errorMessage(error, "Could not cancel the receipt"));
-      },
+            return invalidateCashState(queryClient, orgSlug);
+          },
+          fallback: "Could not cancel the receipt",
+          uncertain: "The result is uncertain. Check the receipt before cancelling it again.",
+        }),
     }),
   );
 
@@ -148,12 +151,7 @@ function ReceiptSheetRoute() {
 
           <SheetBody>
             <div className="grid gap-1">
-              <p
-                className={cn(
-                  "text-2xl font-medium tabular-nums",
-                  cancelled && "text-muted-foreground line-through",
-                )}
-              >
+              <p className={cn("text-2xl font-medium tabular-nums", struck(receipt.state))}>
                 {formatMoney(receipt.totalPaise)}
               </p>
               {receipt.cancelledAt ? (
@@ -172,7 +170,7 @@ function ReceiptSheetRoute() {
                   <Link
                     to="/$orgSlug/parties/$partyId"
                     params={{ orgSlug, partyId: receipt.partyId }}
-                    className="underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:hover:underline"
+                    className="underline-offset-4 hover:underline"
                   >
                     {partyName ?? "Party"}
                   </Link>
@@ -213,12 +211,12 @@ function ReceiptSheetRoute() {
                                 orgSlug,
                                 invoiceId: allocation.targetDocumentId,
                               }}
-                              className="font-mono underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:hover:underline"
+                              className="font-mono underline-offset-4 hover:underline"
                             >
                               {allocation.targetNumber}
                             </Link>
                           </TableCell>
-                          <TableCell>{formatDay(allocation.entryDate)}</TableCell>
+                          <TableCell>{formatBusinessDay(allocation.entryDate)}</TableCell>
                           <TableCell className="text-right">
                             {formatMoney(allocation.amountPaise)}
                           </TableCell>

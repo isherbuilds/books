@@ -1,6 +1,7 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/tables/invoices/columns.tsx (struck
 // cancelled documents, right-aligned amount, actions) and invoices/actions-menu.tsx.
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
@@ -11,7 +12,6 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { CancelledBadge, struck } from "@/components/document-columns";
-import { formatDay } from "@/lib/org-datetime";
 
 type ReceiptRow = Awaited<ReturnType<RouterClient<AppRouter>["receipt"]["list"]>>["rows"][number];
 
@@ -32,7 +32,7 @@ export const RECEIPT_COLUMNS = [
   col.accessor("documentDate", {
     header: "Date",
     meta: { className: "w-24" },
-    cell: ({ getValue }) => <span className="tabular-nums">{formatDay(getValue())}</span>,
+    cell: ({ getValue }) => <span className="tabular-nums">{formatBusinessDay(getValue())}</span>,
   }),
   col.accessor("partyName", {
     header: "Party",
@@ -84,7 +84,7 @@ export function ReceiptCard({ receipt }: { receipt: ReceiptRow }) {
         </span>
       </div>
       <p className="mt-1 truncate text-muted-foreground">
-        {receipt.partyName ?? "No party"} · {formatDay(receipt.documentDate)} ·{" "}
+        {receipt.partyName ?? "No party"} · {formatBusinessDay(receipt.documentDate)} ·{" "}
         {receipt.paymentMethodName}
       </p>
     </>
