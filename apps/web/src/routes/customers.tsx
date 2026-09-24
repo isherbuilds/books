@@ -8,26 +8,27 @@ export const Route = createFileRoute("/customers")({
   component: () => (
     <FeaturePage
       shot="customers"
-      eyebrow="Customers"
-      title="Every customer, one keystroke away"
-      lead="Search by name, code or phone. The record carries every document raised against it."
-      windowTitle="Customers · Meridian Traders"
-      captureAlt="The customer registry: code, name, phone and registration date for every customer"
+      eyebrow="Parties"
+      title="Every party, one keystroke away"
+      lead="Customers, vendors, tenants, donors, employees and government, in one list. Each Party carries its GSTIN, its receipts and its ledger."
+      windowTitle="Parties · Meridian Traders"
+      captureAlt="The app's Parties list: name, GSTIN and amount received for each party"
       crops={[
         {
           region: { x: 272, y: 60, w: 720, h: 260 },
-          claim: "One search box. Name, code or phone.",
-          body: "The code is issued once and never reused, so the same number finds the same customer at every desk.",
+          claim: "One search box. Name or GSTIN.",
+          body: "Filter by status, role or GST registration without leaving the list. One GSTIN belongs to one Party, so the same number always finds the same record.",
         },
         {
           region: { x: 272, y: 160, w: 1144, h: 520 },
-          claim: "The registry, as a list you can read.",
-          body: "Code, name, phone and the date they were added, newest first.",
+          claim: "Every counterparty, as a list you can read.",
+          body: "Name, GSTIN and what each has paid you, in name order or sorted by what was received.",
         },
         {
-          region: { x: 700, y: 0, w: 740, h: 400 },
-          claim: "Add one in the same place you search.",
-          body: "A new customer is created from the registry itself, and their record opens with their balance on top.",
+          shot: "partyRecord",
+          region: { x: 900, y: 0, w: 540, h: 620 },
+          claim: "Open one without losing your place.",
+          body: "A quick look opens over the list. The full record has its receipts and a ledger read from posted entries, so the balance is never typed in.",
         },
       ]}
     />

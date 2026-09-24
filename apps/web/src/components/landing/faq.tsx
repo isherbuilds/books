@@ -2,8 +2,8 @@ import { FAQS } from "@/content/faqs";
 
 import type { ShotName } from "./product-window";
 
-/* The FAQ the healthcare references all run and the design-led ones all skip
-   (Practo carries 11, Tebra 6, none of Cursor/Ramp/Slack/Midday carry one).
+/* The FAQ the design-led references skip (none of Cursor/Ramp/Slack/Midday
+   carry one) and this category's buyers look for first.
 
    The answers live in `content/faqs.ts`, which also feeds the homepage's
    FAQPage JSON-LD. One list of answers, two presentations: `/` renders all of

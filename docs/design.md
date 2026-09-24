@@ -105,7 +105,9 @@ button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
   `Kbd`.
 - Links preload on hover or focus with zero delay, never all at mount.
 - Focus comes from the unlayered `:focus-visible` rule in `globals.css`; never
-  replace it. Hover styles are gated to `(hover: hover) and (pointer: fine)`.
+  replace it. Hover styles are gated to `(hover: hover) and (pointer: fine)`:
+  `globals.css` redefines Tailwind's `hover:` variant, so plain `hover:` is
+  correct everywhere.
 - The skip link is the first focusable element and targets `#main`.
 
 ## 8. Layout primitives
@@ -173,7 +175,7 @@ bundled fonts and aligned numerals.
   exception, invite or cancellation with a reason.
 - A Sheet holds one vertical record: a party, item, money account, payment
   method or receipt.
-- A Page holds a line grid: a journal or opening balance.
+- A Page holds a line grid: an invoice, a journal or an opening balance.
 - A record Sheet uses flat sections split by `Separator`, never a `Panel`.
   Editing is `?edit=true` on the same Sheet. A record that outgrows a Sheet (a
   Party) gets a quick look plus a tabbed page. A Document Sheet leads with its
@@ -200,7 +202,8 @@ bundled fonts and aligned numerals.
 ## 11. Motion
 
 Entrances use `ease-out` under 200 ms and animate `transform` and `opacity`
-only. Frequent actions do not animate. `globals.css` handles
+only. Frequent actions do not animate: buttons, toggles, checkboxes and field
+messages change state without a transition. `globals.css` handles
 `prefers-reduced-motion`.
 
 ## 12. Money and numbers

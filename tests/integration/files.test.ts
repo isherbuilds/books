@@ -99,9 +99,9 @@ test("an uploaded page downloads as opaque bytes instead of rendering", async ()
   expect((await putBytes(upload.uploadUrl, body, "text/html")).status).toBe(200);
   await api.file.finalizeUpload({ orgSlug: org.slug, key: upload.key });
 
-  const fetched = await fetch(
-    (await api.file.getReadUrl({ orgSlug: org.slug, key: upload.key })).url,
-  );
+  const read = await api.file.getReadUrl({ orgSlug: org.slug, key: upload.key });
+  const fetched = await fetch(read.url);
+
   expect(fetched.status).toBe(200);
   expect(fetched.headers.get("content-type")).toBe("application/octet-stream");
   expect(fetched.headers.get("content-disposition")).toStartWith("attachment;");

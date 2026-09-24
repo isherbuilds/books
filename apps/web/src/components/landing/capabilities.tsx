@@ -16,10 +16,10 @@ export function LandingCapabilities() {
     <section className="mx-auto flex w-full max-w-[84rem] flex-col gap-8 px-5 pt-16 sm:gap-12 sm:px-6">
       <div className="flex max-w-2xl flex-col gap-3 sm:mx-auto sm:items-center sm:text-center">
         <h2 className="text-3xl font-medium tracking-tight text-balance sm:text-4xl">
-          The whole month, on two screens.
+          Billing and the ledger, in one system.
         </h2>
         <p className="text-lg text-muted-foreground text-pretty">
-          Nothing is re-entered between them.
+          Nothing is re-entered: every ledger line comes from a posted document.
         </p>
       </div>
 

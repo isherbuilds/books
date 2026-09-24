@@ -2,7 +2,8 @@
 
 ## Start locally
 
-You need Bun 1.4.0, Node 24 (for Portless) and Docker.
+You need the Bun version `packageManager` pins in `package.json`, Node 24 (for
+Portless) and Docker.
 
 ```sh
 bun install
@@ -122,9 +123,11 @@ stays pinned. Check each Better Auth release for schema changes before an upgrad
 
 ### React and forms
 
-React Compiler runs through Babel; the Rust `compiler: true` option breaks
-bigint literals. Extract an owner before `memo` or `useMemo`, and cite a
-measurement for any that stay. `DataTable` columns live at module scope.
+React Compiler runs through oxc (`viteReact({ compiler: true })`), whose pass
+rewrites bigint literals inside a component to `undefined`. Amounts therefore go
+through `@accly/api/core/money` helpers, and `oxlint` bans bigint literals in
+`.tsx`. Extract an owner before `memo` or `useMemo`, and cite a measurement for
+any that stay. `DataTable` columns live at module scope.
 
 | Value                              | Owner                           |
 | ---------------------------------- | ------------------------------- |
@@ -136,9 +139,9 @@ measurement for any that stay. `DataTable` columns live at module scope.
 
 Nothing goes to `localStorage` or `sessionStorage`.
 
-- Forms start at `useZodForm(schema)`, and the schema coerces
-  (`lib/form-schema.ts`). Money fields stay rupee text
-  (`NON_NEGATIVE_MONEY_PATTERN`).
+- Forms start at `useZodForm(schema)`. Shared field fragments live in
+  `lib/form-schema.ts`: a money field stays rupee text, and `positiveAmount`
+  judges it in paise, never through `Number()`.
 - Subscribe narrowly: `useFieldArray`, `Watch`, exact field names.
 - A failed submit goes to the field the server named (`applyOrpcFieldError`);
   toast the rest.
@@ -146,10 +149,14 @@ Nothing goes to `localStorage` or `sessionStorage`.
   `useSuspenseQuery`, and fail to the route boundary. Otherwise prefetch with
   `.catch(() => {})`, read with `useQuery`, and show an `ErrorNote` in place.
   Never both for one procedure.
-- Live lists add `OPERATIONAL_REFETCH` or `OPERATIONAL_INFINITE_REFETCH`. The
-  time zone comes from `useMembership`; `settings.get` needs `settings:read`.
-- A failed read renders `ErrorNote`. A failed mutation toasts
-  `errorMessage(error, "Could not …")`. Never print `error.message` raw.
+- Live lists add `OPERATIONAL_INFINITE_REFETCH`. The time zone and today's
+  business date come from `useOrgDateTime`; `settings.get` needs
+  `settings:read`.
+- A failed read renders `ErrorNote`; a list whose refresh fails keeps its rows
+  (`ListState`). A failed write goes through `handleWriteError`: a CONFLICT or
+  a lost response settles the screen (dismiss and refetch), and every other
+  refusal reaches its field or toasts `errorMessage(error, "Could not …")`.
+  Never print `error.message` raw.
 - Writes invalidate through `lib/domain-invalidation.ts`. Remote type-ahead
   debounces before the query key. Filter locally only a complete, bounded list.
 
@@ -168,7 +175,7 @@ The lock-form identity regression uses the existing browser tooling:
 `bun scripts/check-lock-form.ts <fixture Locks URL>`. Select a signed-in browser
 page through `chrome-devtools-axi` in `CHROME_DEVTOOLS_AXI_SESSION` first.
 Run once with both lock dates equal (both unlocked is sufficient) and once with
-different dates. It switches the mounted Sheet from Books to Tax, checks fresh
+different dates. It switches the mounted Dialog from Books to Tax, checks fresh
 drafts and the outgoing CAS snapshot, and intercepts submission without saving.
 Network requests stay blocked in that document, including after a failed check.
 Reload the page afterward to restore normal operation.

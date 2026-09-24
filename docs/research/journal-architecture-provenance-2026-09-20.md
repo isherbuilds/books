@@ -129,7 +129,7 @@ account is enabled.
 ## Sources
 
 - [Accly architecture](../architecture.md#ledger)
-- [Accly accounting-core Journal contract](../specs/accounting-core.md#journal-slice-5)
+- [Accly accounting-core Journal contract](../specs/accounting-core.md#journal-opening-balance-and-locks-slice-5)
 - [ERPNext Journal Entry](https://docs.frappe.io/erpnext/journal-entry)
 - [ERPNext immutable-ledger implementation](https://github.com/frappe/erpnext/blob/df8b7f9648c2ec4da12db8c4022edc8dd1018c6b/erpnext/accounts/general_ledger.py#L679-L778)
 - [Frappe Books Journal Entries](https://docs.frappe.io/books/journal-entries)

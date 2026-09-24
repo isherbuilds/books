@@ -13,19 +13,29 @@ const VIEW_W = 1440;
    height so a recapture at a new ratio can never be served from cache against
    the old frame.
 
-   Each shot carries its own viewport height: the landing captures are 1440×900
-   where the hero's is 1440×830, and a crop's vertical offset is a fraction of
-   the height it was taken from. */
+   Each shot carries its own viewport height, and a crop's vertical offset is a
+   fraction of the height it was taken from. A record Sheet opens over a blurred
+   list, so each module has a list shot and a record shot. */
 const SHOTS = {
   customers: {
     viewH: 900,
     className:
-      "bg-[url('/landing/customers-830-light.webp')] dark:bg-[url('/landing/customers-830-dark.webp')]",
+      "bg-[url('/landing/customers-900-light.webp')] dark:bg-[url('/landing/customers-900-dark.webp')]",
+  },
+  partyRecord: {
+    viewH: 900,
+    className:
+      "bg-[url('/landing/party-record-900-light.webp')] dark:bg-[url('/landing/party-record-900-dark.webp')]",
   },
   billing: {
     viewH: 900,
     className:
-      "bg-[url('/landing/billing-830-light.webp')] dark:bg-[url('/landing/billing-830-dark.webp')]",
+      "bg-[url('/landing/billing-900-light.webp')] dark:bg-[url('/landing/billing-900-dark.webp')]",
+  },
+  invoiceRecord: {
+    viewH: 900,
+    className:
+      "bg-[url('/landing/invoice-record-900-light.webp')] dark:bg-[url('/landing/invoice-record-900-dark.webp')]",
   },
 } as const;
 

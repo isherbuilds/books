@@ -45,10 +45,10 @@ export function ThemeSwitch() {
   );
 }
 
-/* Grouped on the app's own sidebar shelves — Sales, Finance — so the marketing
+/* Grouped on the app's own sidebar shelves — Sales so far — so the marketing
    menu and the product's navigation never use two words for one thing, and a
    new module lands in a shelf that already exists rather than adding a column. */
-const SHELVES = (["Sales", "Finance"] as const).map((name) => ({
+const SHELVES = (["Sales"] as const).map((name) => ({
   name,
   modules: FEATURES.filter((feature) => feature.shelf === name),
 }));
@@ -147,7 +147,7 @@ export function LandingNav() {
                 <div className="border-t border-border">
                   <div className="mx-auto flex w-full max-w-336 items-center justify-between px-5 py-3 text-sm sm:px-6">
                     <p className="text-muted-foreground">
-                      One login and one customer record across all of them.
+                      One login across your Organizations, and one ledger under every document.
                     </p>
                     <Link
                       to="/billing"
