@@ -6,7 +6,7 @@ import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   // The monorepo's single .env, which the SSR half also loads through @accly/env.
   envDir: resolve(import.meta.dirname, "../../packages/env"),
   // Dev ports are one project-owned block (55442-55451) so several checkouts of
@@ -18,6 +18,16 @@ export default defineConfig({
   },
   resolve: {
     tsconfigPaths: true,
+    // Nitro's Bun preset resolves takumi-pdf's `bun` entry, which reads its .wasm as a
+    // file path that the bundled server no longer has, so every receipt PDF was a 500.
+    // Its `unwasm` entry imports the module the way Nitro bundles it. Dev runs on
+    // Node and keeps the `node` entry.
+    alias: command === "build" ? [{ find: /^takumi-pdf$/, replacement: "takumi-pdf/next" }] : [],
+  },
+  build: {
+    // The production CSP allows `font-src 'self'` only, so a font Vite would inline as
+    // a `data:` URI (a small subset under 4 KiB) is refused; fonts always ship as files.
+    assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined),
   },
   environments: {
     ssr: {
@@ -50,4 +60,4 @@ export default defineConfig({
     // `.tsx` so one cannot creep back in.
     viteReact({ compiler: true }),
   ],
-});
+}));
