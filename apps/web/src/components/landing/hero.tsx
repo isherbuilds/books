@@ -60,8 +60,8 @@ export function LandingHero() {
           lift verbatim, and the line that tells a first-time visitor whether
           this page is for them. */}
       <p className="max-w-lg text-lg text-muted-foreground text-pretty sm:text-center">
-        Accounting software for small and mid-sized Indian businesses — customers, items, GST
-        invoices and payments in one system.
+        Accounting software for small and mid-sized Indian businesses — parties, items, GST
+        invoices, receipts and the ledger in one system.
       </p>
 
       <HeroActions />
@@ -83,14 +83,14 @@ export function LandingHero() {
           `100% auto` rather than `cover`: the capture's ratio and the frame's are
           the same, so sizing to width makes a mismatch show as a sliver of gap
           instead of a silent zoom. The filename carries the capture height —
-          830px, where the dashboard's last panel ends — so a recapture at a new
+          830px of the Receipts list, the organization home — so a recapture at a new
           ratio can never be served from cache against the old frame. */}
       <div className="relative mt-8 w-full overflow-hidden rounded-xl p-4 sm:p-5 lg:p-8">
         <Wash />
         <div
           role="img"
-          aria-label="The Accly Books dashboard: this period's totals, collections over 14 days, and the open invoices"
-          className="relative aspect-144/83 w-full rounded-lg border border-border bg-size-[100%_auto] bg-clip-padding bg-top bg-no-repeat shadow-2xl bg-[url('/hero/dashboard-830-light.webp')] dark:bg-[url('/hero/dashboard-830-dark.webp')]"
+          aria-label="The Accly Books Receipts list: number, date, party, payment method, reference and amount for each receipt"
+          className="relative aspect-144/83 w-full rounded-lg border border-border bg-size-[100%_auto] bg-clip-padding bg-top bg-no-repeat shadow-2xl bg-[url('/hero/receipts-830-light.webp')] dark:bg-[url('/hero/receipts-830-dark.webp')]"
         />
       </div>
     </section>

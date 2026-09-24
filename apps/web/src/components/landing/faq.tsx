@@ -2,8 +2,8 @@ import { FAQS } from "@/content/faqs";
 
 import type { ShotName } from "./product-window";
 
-/* The FAQ the healthcare references all run and the design-led ones all skip
-   (Practo carries 11, Tebra 6, none of Cursor/Ramp/Slack/Midday carry one).
+/* The FAQ the design-led references skip (none of Cursor/Ramp/Slack/Midday
+   carry one) and this category's buyers look for first.
 
    The answers live in `content/faqs.ts`, which also feeds the homepage's
    FAQPage JSON-LD. One list of answers, two presentations: `/` renders all of
@@ -32,7 +32,10 @@ export function LandingFaq({ feature }: { feature?: ShotName }) {
       <div className="flex flex-col">
         {items.map((item) => (
           <details key={item.q} className="group border-b border-border py-3 sm:py-5">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-6 text-base font-medium marker:content-none">
+            <summary
+              data-focus-inset
+              className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-6 text-base font-medium marker:content-none"
+            >
               {item.q}
               <span
                 aria-hidden

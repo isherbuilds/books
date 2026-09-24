@@ -15,7 +15,7 @@ import { invalidateLockState } from "@/lib/domain-invalidation";
 import { LOCK_KIND_LABELS, lockStateOptions } from "@/lib/locks";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { reportStaleWrite } from "@/lib/orpc-error";
+import { handleWriteError } from "@/lib/orpc-error";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -53,8 +53,8 @@ function LocksRoute() {
         setRevokeId(null);
       },
       onError: (error) =>
-        reportStaleWrite(error, {
-          refresh: () => {
+        handleWriteError(error, {
+          settle: () => {
             setRevokeId(null);
 
             return invalidateLockState(queryClient, orgSlug);

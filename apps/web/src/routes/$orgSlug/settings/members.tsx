@@ -53,6 +53,7 @@ import {
   SearchInput,
 } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
+import { invalidateMembership, invalidateRoster } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
@@ -117,9 +118,7 @@ function InviteDialog({
         toast.success(`Invitation created for ${result.email}`);
 
         // Returned, so the form stays pending until the list shows the invitation.
-        return queryClient.invalidateQueries({
-          queryKey: orpc.member.list.key({ input: { orgSlug } }),
-        });
+        return invalidateRoster(queryClient, orgSlug);
       },
       onError: (error) => toast.error(errorMessage(error, "Could not create the invitation")),
     }),
@@ -263,9 +262,6 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
     }),
   );
 
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: orpc.member.list.key({ input: { orgSlug } }) });
-
   const onError = (error: Error) => toast.error(errorMessage(error, "Could not update the roster"));
   // The roster is readable org-wide; only its actions need the grant.
   const canManage = useCan(orgSlug, { member: ["update", "delete"] });
@@ -274,12 +270,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
   const updateRole = useMutation(
     orpc.member.updateRole.mutationOptions({
       onSuccess: async () => {
-        await Promise.all([
-          refresh(),
-          queryClient.invalidateQueries({
-            queryKey: orpc.member.me.key({ input: { orgSlug } }),
-          }),
-        ]);
+        await invalidateMembership(queryClient, orgSlug);
         toast.success("Role updated");
       },
       onError,
@@ -289,12 +280,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
   const removeMember = useMutation(
     orpc.member.remove.mutationOptions({
       onSuccess: async () => {
-        await Promise.all([
-          refresh(),
-          queryClient.invalidateQueries({
-            queryKey: orpc.member.me.key({ input: { orgSlug } }),
-          }),
-        ]);
+        await invalidateMembership(queryClient, orgSlug);
         toast.success("Member removed");
       },
       onError,
@@ -304,7 +290,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
   const revoke = useMutation(
     orpc.member.revokeInvitation.mutationOptions({
       onSuccess: async () => {
-        await refresh();
+        await invalidateRoster(queryClient, orgSlug);
         toast.success("Invitation canceled");
       },
       onError,

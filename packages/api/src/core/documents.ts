@@ -1,6 +1,6 @@
 import type { DbTransaction } from "@accly/db";
+import { accounts, type SupplyClass } from "@accly/db/schema/accounts";
 import { allocations } from "@accly/db/schema/allocations";
-import type { SupplyClass } from "@accly/db/schema/accounts";
 import { documentLines, type EntrySide } from "@accly/db/schema/document-lines";
 import { documents, type PrintSnapshot } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
@@ -137,13 +137,10 @@ export function organizationSnapshot(
 }
 
 export function partySnapshot(
-  party:
-    | Pick<
-        typeof parties.$inferSelect,
-        "name" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
-      >
-    | undefined
-    | null,
+  party: Pick<
+    typeof parties.$inferSelect,
+    "name" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
+  > | null,
 ): PrintSnapshot["party"] {
   if (!party) return null;
 
@@ -192,11 +189,20 @@ export async function writeDraft(
   ) {
     posting = input.posting;
   } else {
-    // FOR SHARE: concurrent posts share the row, while an archive waits for them to
-    // commit, so no document posts against a method archived mid-transaction.
+    // FOR SHARE on the method and its money account: concurrent posts share the rows,
+    // while an archive of either waits for them to commit. The account is checked
+    // too because restoring a method never re-checks the account it lands in.
     const [method] = await tx
       .select({ name: paymentMethods.name, accountId: paymentMethods.accountId })
       .from(paymentMethods)
+      .innerJoin(
+        accounts,
+        and(
+          eq(accounts.orgId, scope.orgId),
+          eq(accounts.id, paymentMethods.accountId),
+          eq(accounts.active, true),
+        ),
+      )
       .where(
         and(
           eq(paymentMethods.orgId, scope.orgId),
@@ -207,7 +213,10 @@ export async function writeDraft(
       .for("share");
 
     if (!method) {
-      throw badRequest("PAYMENT_METHOD_INVALID", "Choose an active payment method.");
+      throw badRequest(
+        "PAYMENT_METHOD_INVALID",
+        "Choose an active payment method whose account is active.",
+      );
     }
 
     paymentMethodId = input.posting.paymentMethodId;

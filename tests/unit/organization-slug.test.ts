@@ -10,6 +10,11 @@ test("organization slugs require at least four URL-safe characters", () => {
   expect(organizationSlugIssue("Meridian Traders")).not.toBeNull();
 });
 
+test("organization slugs fit one DNS label", () => {
+  expect(organizationSlugIssue("a".repeat(63))).toBeNull();
+  expect(organizationSlugIssue("a".repeat(64))).not.toBeNull();
+});
+
 test("public and system root routes are reserved case-insensitively", () => {
   for (const slug of [
     "create",

@@ -26,7 +26,7 @@ One session at a time owns a database-wiping test run.
 
 ## Hard rules
 
-If my instructions are ambiguous, ask me to clarify before proceeding.
+If an ambiguity would materially change behaviour, ask before proceeding; otherwise state the assumption and continue.
 
 1. **Every domain row belongs to exactly one org (`orgId NOT NULL`), and every query carries the tenant predicate `eq(orgId, scope.orgId)`.** This includes infrastructure tables (`audit_log`, `file`). `userId` columns are attribution, never scope.
 2. **Org context is explicit procedure input, proven by the permission guard.** Org pages pass their `/:orgSlug` route param as `input.orgSlug` through the single `/rpc` client. `orgProcedure(permission, input)` resolves membership in its internal guard and turns the claim into verified `context.scope`; the permission is a required constructor argument and the raw builder is not exported. Handlers use only scope for authorization and SQL. Membership resolves once per request and never across requests; there is no fallback to `session.activeOrganizationId`.

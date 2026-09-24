@@ -1,3 +1,4 @@
+import { formatBusinessDay } from "@accly/api/lib/business-date";
 import {
   NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
@@ -31,7 +32,7 @@ import {
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Watch, useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -39,26 +40,21 @@ import { z } from "zod";
 import { DocumentForm, LineGrid, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { ErrorNote } from "@/components/page";
-import { PartySheet } from "@/components/party-form";
-import { PartyLinkField } from "@/components/party-link-field";
+import { DocumentPartyField } from "@/components/party-link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState } from "@/lib/domain-invalidation";
-import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { formatDay } from "@/lib/org-datetime";
-import { applyOrpcFieldError, errorReason, isRefusal } from "@/lib/orpc-error";
-import { partyPickerOptions } from "@/lib/parties";
+
+import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { paymentMethodListOptions } from "@/lib/receipts";
+import { positiveAmount } from "@/lib/form-schema";
 
 const receiptSchema = z
   .object({
     partyId: z.string().nullable(),
     partyName: z.string(),
-    amount: z
-      .string()
-      .regex(NON_NEGATIVE_MONEY_PATTERN, "Enter a valid amount")
-      .refine((value) => Number(value) > 0, "Amount must be greater than zero"),
+    amount: positiveAmount,
     paymentMethodId: z.string().min(1, "Choose a payment method"),
     settlementKind: z.enum(["advance", "against", "direct"]),
     advanceSupply: z.enum(["goods", "exempt", "taxableService"]).nullable(),
@@ -135,9 +131,6 @@ export function ReceiptForm({
   const queryClient = useQueryClient();
 
   const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
-  const parties = useQuery(partyPickerOptions(orgSlug));
-  const canCreateParty = useCan(orgSlug, { party: ["create"] });
-  const [createParty, setCreateParty] = useState<string | null>(null);
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
@@ -153,7 +146,7 @@ export function ReceiptForm({
   // The receipts list's cache entry; only an active method can take a new receipt.
   const paymentMethods = useQuery({
     ...paymentMethodListOptions(orgSlug),
-    select: (methods) => methods.filter((method) => method.active),
+    select: (methods) => methods.filter((method) => method.active && method.accountActive),
   });
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
@@ -173,25 +166,30 @@ export function ReceiptForm({
       onSuccess: async () => {
         await invalidateCashState(queryClient, orgSlug);
       },
-      onError: async (error) => {
-        // Retrying could post it twice; the list shows whether it went through.
-        if (!isRefusal(error)) {
-          onClose();
-          await invalidateCashState(queryClient, orgSlug);
-          toast.error("The result is uncertain. Check the receipt list before entering it again.");
+      // Retrying could post it twice; the list shows whether it went through.
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
+            onClose();
 
-          return;
-        }
+            return invalidateCashState(queryClient, orgSlug);
+          },
+          fallback: "Could not post the receipt",
+          uncertain: "The result is uncertain. Check the receipt list before entering it again.",
+          refuse: async () => {
+            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the receipt");
 
-        applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the receipt");
+            const reason = errorReason(error);
 
-        const reason = errorReason(error);
-
-        // The outstanding amounts on screen are stale.
-        if (reason === "ALLOCATION_TARGET_INVALID" || reason === "ALLOCATION_EXCEEDS_OUTSTANDING") {
-          await openInvoices.refetch();
-        }
-      },
+            // The outstanding amounts on screen are stale.
+            if (
+              reason === "ALLOCATION_TARGET_INVALID" ||
+              reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
+            ) {
+              await openInvoices.refetch();
+            }
+          },
+        }),
     }),
   );
 
@@ -386,33 +384,12 @@ export function ReceiptForm({
           </PostBar>
         }
       >
-        <FormField
-          control={form.control}
-          name="partyId"
-          render={({ field, fieldState }) => (
-            <FormItem>
-              <FormLabel>Party{settlementKind === "direct" ? " (optional)" : ""}</FormLabel>
-              <FormControl>
-                <PartyLinkField
-                  parties={parties}
-                  value={
-                    field.value ? { id: field.value, name: form.getValues("partyName") } : null
-                  }
-                  onSelect={(party) => {
-                    if (party?.id !== field.value) form.setValue("allocations", {});
-                    field.onChange(party?.id ?? null);
-                    form.setValue("partyName", party?.name ?? "");
-                  }}
-                  onCreate={canCreateParty ? setCreateParty : undefined}
-                  inputRef={field.ref}
-                  autoFocus={form.formState.submitCount > 0}
-                  clearable={settlementKind === "direct"}
-                  aria-invalid={fieldState.invalid}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        <DocumentPartyField
+          orgSlug={orgSlug}
+          label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
+          clearable={settlementKind === "direct"}
+          // Allocations belong to the party's invoices.
+          onPartyChange={() => form.setValue("allocations", {})}
         />
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -525,12 +502,14 @@ export function ReceiptForm({
                             <TableRow key={invoice.id}>
                               <TableCell className="whitespace-normal">
                                 <p className="font-mono">{invoice.number}</p>
-                                <p className="text-[0.6875rem] text-muted-foreground">
-                                  {formatDay(invoice.documentDate)}
-                                  {invoice.dueDate ? ` · Due ${formatDay(invoice.dueDate)}` : null}
+                                <p className="text-muted-foreground tabular-nums">
+                                  {formatBusinessDay(invoice.documentDate)}
+                                  {invoice.dueDate
+                                    ? ` · Due ${formatBusinessDay(invoice.dueDate)}`
+                                    : null}
                                 </p>
                               </TableCell>
-                              <TableCell className="text-right">
+                              <TableCell className="text-right tabular-nums">
                                 {formatMoney(invoice.outstandingPaise)}
                               </TableCell>
                               <TableCell className="w-28">
@@ -676,18 +655,6 @@ export function ReceiptForm({
           )}
         />
       </DocumentForm>
-      <PartySheet
-        orgSlug={orgSlug}
-        open={createParty !== null}
-        seedName={createParty ?? ""}
-        onClose={() => setCreateParty(null)}
-        onSaved={(party) => {
-          if (party.id !== form.getValues("partyId")) form.setValue("allocations", {});
-          form.setValue("partyId", party.id, { shouldDirty: true, shouldValidate: true });
-          form.setValue("partyName", party.name);
-          setCreateParty(null);
-        }}
-      />
     </Form>
   );
 }

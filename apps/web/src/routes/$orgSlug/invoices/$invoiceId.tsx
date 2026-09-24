@@ -1,4 +1,4 @@
-import { formatBusinessDate } from "@accly/api/lib/business-date";
+import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
@@ -25,24 +25,21 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
+import { struck } from "@/components/document-columns";
 import { ApplyAdvanceSheet } from "@/components/apply-advance-sheet";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
-import { InvoiceSheet } from "@/components/invoice-form";
 import { InvoiceStatus, InvoiceTotals } from "@/components/invoice-summary";
 import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { invoiceDetailOptions, type InvoiceDetail } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
-import { formatDate, formatDay, useOrgDateTime } from "@/lib/org-datetime";
+import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, hasErrorCode, loadRouteQuery } from "@/lib/orpc-error";
+import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import { focusRowLink, stepRow } from "@/lib/row-focus";
 
 export const Route = createFileRoute("/$orgSlug/invoices/$invoiceId")({
-  // Design §10: editing a draft is `?edit=true` on its own Sheet.
-  validateSearch: z.object({ edit: z.boolean().optional().catch(undefined) }),
   remountDeps: ({ params }) => ({ invoiceId: params.invoiceId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, invoiceId } }) => {
     await loadRouteQuery(queryClient.query(invoiceDetailOptions(orgSlug, invoiceId)));
@@ -52,16 +49,14 @@ export const Route = createFileRoute("/$orgSlug/invoices/$invoiceId")({
 
 function InvoiceSheetRoute() {
   const { orgSlug, invoiceId } = Route.useParams();
-  const { edit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  const { timeZone, today } = useOrgDateTime();
+  const { timeZone } = useOrgDateTime();
   const invoice = useSuspenseQuery(invoiceDetailOptions(orgSlug, invoiceId)).data;
   const [cancelOpen, setCancelOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [reversing, setReversing] = useState<InvoiceDetail["allocations"][number] | null>(null);
   const isDraft = invoice.state === "draft";
-  const cancelled = invoice.state === "cancelled";
   const canEdit = useCan(orgSlug, { invoice: ["create"] }) && isDraft;
 
   // The server refuses a cancel while an allocation is active, so reverse them first.
@@ -83,25 +78,23 @@ function InvoiceSheetRoute() {
     void navigate({
       to: "/$orgSlug/invoices",
       params: { orgSlug },
-      search: ({ edit: _edit, ...previous }) => previous,
+      search: (previous) => previous,
       replace: true,
     }).then(() => focusRowLink(invoiceId));
 
-  const closeEdit = () =>
-    void navigate({ search: ({ edit: _edit, ...previous }) => previous, replace: true });
-
-  // Every CONFLICT here means the Sheet is stale: dismiss the overlay, refetch what
-  // the failed write would have moved, and show the server's words.
+  // A CONFLICT or a lost response leaves the Sheet stale: dismiss the overlay and
+  // refetch what the failed write would have moved.
   const refused =
-    (fallback: string, dismiss: () => void, invalidate: () => Promise<void>) =>
-    async (error: unknown) => {
-      if (hasErrorCode(error, "CONFLICT")) {
-        dismiss();
-        await invalidate();
-      }
+    (fallback: string, dismiss: () => void, invalidate: () => Promise<void>) => (error: unknown) =>
+      handleWriteError(error, {
+        settle: () => {
+          dismiss();
 
-      toast.error(errorMessage(error, fallback));
-    };
+          return invalidate();
+        },
+        fallback,
+        uncertain: "The result is uncertain. Check the invoice before trying again.",
+      });
 
   // Cancelling an invoice and reversing an allocation move settlement; discarding a
   // draft moves invoice reads alone.
@@ -149,18 +142,6 @@ function InvoiceSheetRoute() {
     }),
   );
 
-  if (edit && canEdit) {
-    return (
-      <InvoiceSheet
-        orgSlug={orgSlug}
-        today={today}
-        draft={invoice}
-        onClose={closeEdit}
-        onPosted={closeEdit}
-      />
-    );
-  }
-
   return (
     <ClientOnly fallback={null}>
       <Sheet open onOpenChange={(open) => !open && close()}>
@@ -173,7 +154,7 @@ function InvoiceSheetRoute() {
                 void navigate({
                   to: "/$orgSlug/invoices/$invoiceId",
                   params: { orgSlug, invoiceId: next },
-                  search: ({ edit: _edit, ...previous }) => previous,
+                  search: (previous) => previous,
                   replace: true,
                 }),
             )
@@ -191,12 +172,7 @@ function InvoiceSheetRoute() {
 
           <SheetBody>
             <div className="grid gap-1">
-              <p
-                className={cn(
-                  "text-2xl font-medium tabular-nums",
-                  cancelled && "text-muted-foreground line-through",
-                )}
-              >
+              <p className={cn("text-2xl font-medium tabular-nums", struck(invoice.state))}>
                 {formatMoney(invoice.totalPaise)}
               </p>
               {invoice.state === "posted" ? (
@@ -264,13 +240,13 @@ function InvoiceSheetRoute() {
                               to="/$orgSlug/receipts/$receiptId"
                               params={{ orgSlug, receiptId: allocation.sourceDocumentId }}
                               search={{}}
-                              className="underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:hover:underline"
+                              className="underline-offset-4 hover:underline"
                             >
                               {allocation.sourceNumber}
                             </Link>
                           </TableCell>
                           <TableCell className="tabular-nums">
-                            {formatDay(allocation.entryDate)}
+                            {formatBusinessDay(allocation.entryDate)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {formatMoney(allocation.amountPaise)}
@@ -321,7 +297,7 @@ function InvoiceSheetRoute() {
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="tabular-nums">
                     {invoice.lines.map((line) => {
                       const lineTotal =
                         line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise;
@@ -363,7 +339,7 @@ function InvoiceSheetRoute() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="divide-y divide-border md:hidden">
+              <div className="divide-y divide-border tabular-nums md:hidden">
                 {invoice.lines.map((line) => {
                   const taxPaise = line.cgstPaise + line.sgstPaise + line.igstPaise;
                   const lineTotal = line.amountPaise + taxPaise;
@@ -404,7 +380,10 @@ function InvoiceSheetRoute() {
                     type="button"
                     variant="outline"
                     onClick={() =>
-                      void navigate({ search: (previous) => ({ ...previous, edit: true }) })
+                      void navigate({
+                        to: "/$orgSlug/invoices/$invoiceId/edit",
+                        params: { orgSlug, invoiceId },
+                      })
                     }
                   >
                     Edit draft

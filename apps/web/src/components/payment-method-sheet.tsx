@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
+import { invalidatePaymentMethods } from "@/lib/domain-invalidation";
 import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError } from "@/lib/orpc-error";
@@ -45,9 +46,7 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
   const create = useMutation(
     orpc.paymentMethod.create.mutationOptions({
       onSuccess: async () => {
-        await queryClient.invalidateQueries({
-          queryKey: orpc.paymentMethod.list.key({ input: { orgSlug } }),
-        });
+        await invalidatePaymentMethods(queryClient, orgSlug);
         toast.success("Payment method added");
         onClose();
       },

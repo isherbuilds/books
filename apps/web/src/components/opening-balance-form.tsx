@@ -27,7 +27,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateOpeningBalanceState } from "@/lib/domain-invalidation";
 import { journalAccountOptions } from "@/lib/journals";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, hasErrorCode, isRefusal, reportStaleWrite } from "@/lib/orpc-error";
+import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
 import { useOrgDateTime } from "@/lib/org-datetime";
 
 const openingBalanceSchema = z.object({
@@ -59,20 +59,15 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
         await invalidateOpeningBalanceState(queryClient, orgSlug);
         toast.success("Opening balance posted");
       },
-      onError: async (error) => {
-        // A lost response may have posted it; a CONFLICT means one is already posted.
-        if (isRefusal(error) && !hasErrorCode(error, "CONFLICT")) {
-          applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the opening balance");
-
-          return;
-        }
-
-        await reportStaleWrite(error, {
-          refresh: () => invalidateOpeningBalanceState(queryClient, orgSlug),
-          fallback: "An opening balance is already posted.",
+      // A lost response may have posted it; a CONFLICT means one is already posted.
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => invalidateOpeningBalanceState(queryClient, orgSlug),
+          fallback: "Could not post the opening balance",
           uncertain: "The result is uncertain. Reload the page before entering it again.",
-        });
-      },
+          refuse: () =>
+            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the opening balance"),
+        }),
     }),
   );
 

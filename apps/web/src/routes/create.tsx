@@ -401,6 +401,7 @@ function OrganizationNameField({ onNameChange }: { onNameChange: (name: string) 
           <FormControl>
             <Input
               {...field}
+              autoFocus
               required
               maxLength={120}
               placeholder="Meridian Traders"

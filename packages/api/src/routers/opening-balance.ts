@@ -1,14 +1,12 @@
 import { db } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
-import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
 import { postedNumber } from "../core/documents";
-import { postEntryLines } from "../core/entry-lines";
+import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
 import { impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -68,7 +66,7 @@ export const openingBalanceRouter = {
         action: "openingBalance.post",
         actorId: scope.userId,
         orgId: scope.orgId,
-        target: posted.id,
+        target: `openingBalance:${posted.id}`,
         meta: {
           number: posted.number,
           amount: formatDecimal(posted.amountPaise),
@@ -109,28 +107,7 @@ export const openingBalanceRouter = {
       throw impossible(`posted opening balance ${header.id} has no posting instant`);
     }
 
-    const rows = await db
-      .select({
-        id: documentLines.id,
-        accountId: accounts.id,
-        accountName: accounts.name,
-        accountCode: accounts.code,
-        side: documentLines.entrySide,
-        description: documentLines.description,
-        amountPaise: documentLines.amountPaise,
-      })
-      .from(documentLines)
-      .innerJoin(accounts, and(eq(accounts.orgId, orgId), eq(accounts.id, documentLines.accountId)))
-      .where(and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, header.id)))
-      .orderBy(asc(documentLines.position));
-
-    const lines = rows.map((line) => {
-      if (line.side === null) {
-        throw impossible(`opening balance line ${line.id} has no entry side`);
-      }
-
-      return { ...line, side: line.side };
-    });
+    const lines = await entryLinesOf(orgId, header.id);
 
     return {
       id: header.id,

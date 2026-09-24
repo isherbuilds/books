@@ -6,6 +6,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Design §7: hover styles apply only to a precise pointer. Tailwind's own `hover:`
+   checks (hover: hover) alone, which some touch devices report, leaving tapped rows
+   stuck in their hover colour. */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 :root {
   /* The inset shell layers three surfaces: the canvas (--background), the
      rail that sits flat on it (--sidebar, same value), and the raised content
@@ -178,19 +189,18 @@
   }
 
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-(--focus-ring);
   }
 
   /*
-   * The focus outline traces the element's own corners, so a bare link or a
-   * square control gets a hard-cornered box. This softens that default. It sits
-   * in `base` on purpose: any `rounded-*` utility still wins, so a pill button
-   * keeps its pill outline — this only reaches elements that set no radius, and
-   * only while they are focused.
+   * The focus ring traces the element's radius, so an element that sets none
+   * would get a hard-cornered box. In `base` on purpose: any `rounded-*` utility
+   * still wins, and it applies only while the element is focused.
    */
   :focus-visible {
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
   }
+
   body {
     @apply font-sans bg-background text-foreground;
   }
@@ -240,23 +250,50 @@
 }
 
 /*
- * Keyboard focus is a floor, not a per-component decision.
+ * Keyboard focus is one global indicator, not a per-component decision.
  *
- * Components reset the native outline (`outline-none`) and re-add a ring via
- * `focus-visible:ring-*`, which leaves anything that misses those utilities
- * with no visible focus at all. This rule is deliberately *unlayered* so it
- * outranks the `utilities` layer that `outline-none` lives in, and therefore
- * guarantees an indicator on every focusable element. Components that draw a
- * nicer ring still do — this only ever adds a floor beneath them.
+ * Components reset the native outline (`outline-none`) and draw no focus ring
+ * of their own. This rule is deliberately *unlayered* so it outranks the
+ * `utilities` layer that `outline-none` lives in, and therefore draws the one
+ * indicator on every focusable element.
  *
  * A control that draws its *own* complete indicator (an underline field, for
  * example, where a rectangle around the box looks wrong) opts out with
  * `data-focus-floor="off"`. Only do that where the replacement indicator is at
  * least as visible as this one.
+ *
+ * The ring stands 2px off the element, so it never touches the element's
+ * border or fill, and traces its radius. Full-bleed targets that sit flush
+ * against a clipping edge or a neighbouring row (menu items, list options,
+ * anything marked `data-focus-inset`) draw it inside instead. A control whose
+ * box touches other rules (the page tab strip) marks an inner child
+ * `data-focus-ring`, which takes the ring with its own padding and radius.
  */
+:root {
+  --focus-ring: color-mix(in oklch, var(--ring), var(--foreground) 30%);
+}
+
 :focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  outline: 2.5px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:where(
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="menuitemcheckbox"],
+  [role="option"],
+  [data-focus-inset]
+):focus-visible {
+  outline-offset: -2.5px;
+}
+
+:focus-visible:has(> [data-focus-ring]) {
+  outline: none;
+}
+
+:focus-visible > [data-focus-ring] {
+  outline: 2.5px solid var(--focus-ring);
 }
 
 [data-focus-floor="off"]:focus-visible {

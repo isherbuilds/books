@@ -1,8 +1,9 @@
-import type { DbTransaction } from "@accly/db";
-import type { EntrySide } from "@accly/db/schema/document-lines";
+import { db, type DbTransaction } from "@accly/db";
+import { accounts } from "@accly/db/schema/accounts";
+import { documentLines, type EntrySide } from "@accly/db/schema/document-lines";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { journalAccounts } from "../lib/accounts";
 import { badRequest, impossible } from "../lib/conflict";
@@ -116,4 +117,31 @@ export async function postEntryLines(
   });
 
   return { ...posted, amountPaise };
+}
+
+/** A Journal's or Opening Balance's lines in entry order, each with its side. */
+export async function entryLinesOf(orgId: string, documentId: string) {
+  const rows = await db
+    .select({
+      id: documentLines.id,
+      accountId: accounts.id,
+      accountName: accounts.name,
+      accountCode: accounts.code,
+      side: documentLines.entrySide,
+      partyId: documentLines.partyId,
+      partyName: parties.name,
+      description: documentLines.description,
+      amountPaise: documentLines.amountPaise,
+    })
+    .from(documentLines)
+    .innerJoin(accounts, and(eq(accounts.orgId, orgId), eq(accounts.id, documentLines.accountId)))
+    .leftJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, documentLines.partyId)))
+    .where(and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, documentId)))
+    .orderBy(asc(documentLines.position));
+
+  return rows.map((line) => {
+    if (line.side === null) throw impossible(`entry line ${line.id} has no entry side`);
+
+    return { ...line, side: line.side };
+  });
 }

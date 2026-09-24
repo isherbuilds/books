@@ -69,8 +69,8 @@ Changes to `packages/api/src/lib/context.ts` or
 
 - Does a direct `orpc` call, not only queries and mutations, pass the route
   `orgSlug`?
-- Does the layout keep `ssr: true`? The client may reuse a ≤60 s-fresh
-  membership result for the shell; that is accepted. What is never
+- Does the layout keep `ssr: true`? The client may reuse a membership result
+  up to five minutes fresh (`membershipOptions`) for the shell; that is accepted. What is never
   acceptable is a procedure trusting cached membership instead of proving it.
 
 ## 7. Auth surface

@@ -23,8 +23,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
 
 1. **State** follows [Development](../development.md#react-and-forms): no browser
    storage, draft store or zustand.
-2. **Cached masters.** `party.list`, `account.list` and `paymentMethod.list`
-   (and later `item.list`) return complete lists up to 5,000 rows, stale after
+2. **Cached masters.** `party.list`, `account.list`, `paymentMethod.list` and
+   `item.list` return complete lists up to 5,000 rows, stale after
    five minutes. `party.list` carries only what lists show (name, roles, GSTIN,
    active); the quick look and the party page read `party.get`. A save writes
    the returned row into the cache, then invalidates. Link Fields filter in memory. Over the bound,
@@ -55,7 +55,9 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    There is no index route, because it would unmount the list. Closing clears
    the param and refocuses the row. Parties open a quick look (`?party=`), and
    `parties_.$partyId` owns editing. Journals link to `/journals/new`, and a
-   journal record is a page at `/journals/$journalId`.
+   journal record is a page at `/journals/$journalId`. Invoices link to
+   `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
+   Invoice record stays a Sheet.
 9. **Link Field**: a `Combobox` over the cached master, with rows from
    `linkRows` (prefix, then substring, on label and code). "Create <text>" comes
    last, hides on an exact match, and needs a complete list and the create
@@ -90,10 +92,10 @@ financial rollback are not adopted.
    fields. Open: H4 set 1.
 2. **Palette.** Implemented, with `tests/unit/palette.test.ts`.
 3. **Lists and Sheets.** Implemented: Parties and Receipts on `DataTable`, the
-   Party quick look and page (Overview, Receipts, Ledger), Party edit. Open:
-   keyboard row focus, the receipts list on `db:seed:volume` data, and an
+   Party quick look and page (Overview, Receipts, Ledger), Party edit, and
+   keyboard row focus. Open: the receipts list on `db:seed:volume` data, and an
    empty-query Link Field at 5,000 Parties under 200 ms.
-4. **Invoice form.** Implemented and runtime verified. Open: H4 set 2.
+4. **Invoice form.** Implemented. Open: H4 set 2.
    - Acceptance: the Receipt and Invoice forms both use the extracted
      `DocumentForm`, `PostBar` and `LineGrid`. Item is a Link Field with inline
      create. Place of supply defaults from the Party, stays editable and is
@@ -107,15 +109,16 @@ financial rollback are not adopted.
      lists the Party's open Invoices with outstanding, allocates by amount with
      Enter, refuses more than outstanding on the field, and shows the
      remainder as advance before post. The Invoice record Sheet applies an open
-     advance through `allocation.apply` and reverses it there. The list and
-     record Sheet show due date, gross, allocated, outstanding, settlement
-     status and overdue (core call 18); filters include settlement status and
-     overdue. The record Sheet also shows lines, tax split and allocations.
-     The record Sheet offers Cancel only once every allocation is reversed
-     (core call 17); reversing one allocation keeps a shared Receipt and its
-     other allocation. H4 set 2 is still open.
+     advance through `allocation.apply` and reverses it there. The list shows
+     due date, total and settlement status with overdue (core call 18); filters
+     include settlement status and overdue. The record Sheet shows total,
+     outstanding, lines, tax split and each allocation. It offers Cancel only
+     once every allocation is reversed (core call 17); reversing one
+     allocation keeps a shared Receipt and its other allocation.
    - Depends on: slices 1–2 and accounting-core slice 4.
-   - Owns: `routes/$orgSlug/invoices/`, `components/invoice-form.tsx`,
+   - Owns: `routes/$orgSlug/invoices/`, `routes/$orgSlug/invoices_.new.tsx`,
+     `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
+     `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
      `components/apply-advance-sheet.tsx`, adoption in `receipt-form.tsx`, and
      `lib/domain-invalidation.ts`.
@@ -124,9 +127,9 @@ financial rollback are not adopted.
      `invalidateInvoiceDrafts` (draft save or discard),
      `invalidateSettlementState` (invoice post or cancel, allocation apply or
      reverse) and `invalidateCashState` (receipt post or cancel); an uncertain
-     result uses the same set as the success path. A draft opens for editing at
-     `/invoices/$invoiceId?edit=true`; `?create=true` on the list starts a new
-     invoice.
+     result uses the same set as the success path, through `handleWriteError`.
+     `/invoices/new` starts a new invoice and `/invoices/$invoiceId/edit` edits
+     a draft, both on the page surface.
    - Legacy reference (a716b6c). Read it; do not copy it.
      - Allocation remainder: a live "Fill ₹x" or "Over by ₹x" control
        (`a716b6c:apps/web/src/components/payment-lines.tsx:77-108`). Port it

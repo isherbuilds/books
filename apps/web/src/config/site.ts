@@ -8,7 +8,7 @@
 export const siteConfig = {
   name: "Accly Books",
   description:
-    "Accounting software for small and mid-sized Indian businesses — customers, items, GST invoices, payments and a ledger that ties out.",
+    "Accounting software for small and mid-sized Indian businesses — parties, items, GST invoices, receipts and a ledger derived from them.",
   /* The root route's <title>: what an unlisted or non-public route ships with,
      since every public page overrides it via `pageHead`. */
   fallbackTitle: "Accly Books — accounting software for Indian businesses",
@@ -16,7 +16,7 @@ export const siteConfig = {
 
 export const OG_IMAGE = { width: 1200, height: 630 } as const;
 
-export type PublicRoute = {
+type PublicRoute = {
   path: string;
   title: string;
   description: string;
@@ -32,16 +32,16 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
   },
   {
     path: "/customers",
-    title: "Customers and contacts",
+    title: "Parties",
     description:
-      "One customer record with its code, contact details and every document raised against it, found by name, code or phone.",
+      "One record for every customer, vendor and other counterparty, with its GSTIN, receipts and ledger, found by name or GSTIN.",
     ogImage: "/og/customers.png",
   },
   {
     path: "/billing",
-    title: "Invoicing, payments and GST",
+    title: "Invoices, receipts and GST",
     description:
-      "Invoices, credit notes, refunds, cash and bank receipts, and a GST outward register your accountant can work from.",
+      "GST invoices at dated rates, drafts until posted, receipts against invoices or as advances, and open and overdue invoices on one list.",
     ogImage: "/og/billing.png",
   },
   {

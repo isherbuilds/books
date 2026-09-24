@@ -10,10 +10,10 @@
     }
   },
   "scripts": {
-    "check-types": "tsc --noEmit",
-    "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
+    "check-types": "bun --bun tsc --noEmit",
+    "db:push": "bun --bun drizzle-kit push",
+    "db:generate": "bun --bun drizzle-kit generate",
+    "db:studio": "bun --bun drizzle-kit studio",
     "db:migrate": "bun src/migrate-command.ts"
   },
   "dependencies": {
@@ -24,7 +24,7 @@
   "devDependencies": {
     "@accly/config": "workspace:*",
     "@types/pg": "catalog:",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.31.11",
     "typescript": "catalog:"
   }
 }

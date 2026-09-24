@@ -42,20 +42,6 @@ export function formatDate(value: string | Date, timeZone: string): string {
 }
 
 /**
- * The compact day for list rows and nested tables. A record's own date uses
- * `formatBusinessDate`, which keeps the year. Pinned to UTC: the input names a
- * day, not a moment, so formatting it in the org zone would shift a midnight
- * anchor onto the neighbouring date.
- */
-export function formatDay(day: string): string {
-  return formatter("day|UTC", "en-IN", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(`${day}T00:00:00Z`));
-}
-
-/**
  * The instant a wall-clock time typed in the org zone (`YYYY-MM-DDTHH:mm`, as a
  * `datetime-local` input yields) names. The browser's own zone plays no part.
  * The offset is read at the guessed instant and once more at the corrected one,

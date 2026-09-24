@@ -9,7 +9,7 @@ export const env = createEnv({
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_COOKIE_DOMAIN: z.string().min(1).optional(),
     CORS_ORIGIN: z.url(),
-    FOUNDING_EMAIL: z.string().min(1),
+    FOUNDING_EMAIL: z.email(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     SEAWEEDFS_ENDPOINT: z.url().optional(),
     SEAWEEDFS_ACCESS_KEY_ID: z.string().optional(),
@@ -29,6 +29,26 @@ export const env = createEnv({
           path: ["BETTER_AUTH_COOKIE_DOMAIN"],
           message: "Required when the web and API use different hosts",
         });
+      }
+
+      // Storage is optional as a group; a partial group is a typo, not a choice.
+      const storage = [
+        "SEAWEEDFS_ENDPOINT",
+        "SEAWEEDFS_BUCKET",
+        "SEAWEEDFS_ACCESS_KEY_ID",
+        "SEAWEEDFS_SECRET_ACCESS_KEY",
+      ] as const;
+
+      const missing = storage.filter((name) => values[name] === undefined);
+
+      if (missing.length > 0 && missing.length < storage.length) {
+        for (const name of missing) {
+          context.addIssue({
+            code: "custom",
+            path: [name],
+            message: "Set all four SEAWEEDFS_* values or none",
+          });
+        }
       }
     }),
   runtimeEnv: process.env,

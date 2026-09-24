@@ -7,14 +7,14 @@ storage.
 
 ## Start locally
 
-Prerequisites are Bun (the version pinned in `package.json`), Node 24, and
-Docker.
+Prerequisites are Bun (the version pinned in `package.json`) and Docker. Node
+is not used; see [Development](./docs/development.md#start-locally).
 
 ```sh
 bun install
 cp packages/env/.env.example packages/env/.env
 # Once per machine, start the named local HTTPS proxy:
-bunx portless proxy start
+bunx --bun portless proxy start
 # Fill in the environment file, then start the stack:
 bun run dev
 ```

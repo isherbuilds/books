@@ -1,10 +1,8 @@
 import { beforeAll, expect, spyOn, test } from "bun:test";
 
-import { drainAuditWrites } from "@accly/api/audit";
 import { auth, invitationUrl } from "@accly/auth";
 import { createUserWithPassword } from "@accly/auth/manual-user";
 import { db } from "@accly/db";
-import { auditLog } from "@accly/db/schema/audit";
 import { invitation, member, user } from "@accly/db/schema/auth";
 import { file } from "@accly/db/schema/file";
 import { env } from "@accly/env/server";
@@ -139,21 +137,6 @@ test("short and reserved root slugs cannot create organizations", async () => {
   }
 });
 
-test("the unused organization slug-check endpoint is not exposed", async () => {
-  const user = await createTestUser("slug-check-disabled");
-
-  const response = await app.request("http://localhost/api/auth/organization/check-slug", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      cookie: user.cookie,
-    },
-    body: JSON.stringify({ slug: "unclaimed-workspace" }),
-  });
-
-  expect(response.status).toBe(404);
-});
-
 test("organization deletion stays disabled until external objects can be cleaned up", async () => {
   const owner = await createTestUser("delete-org-owner");
   const organization = await createOrganization(owner, "delete-org");
@@ -206,49 +189,55 @@ test("deleting an attributed user preserves organization content", async () => {
   expect(preservedFile?.userId).toBeNull();
 });
 
-// The org-context rule accepts Better Auth's org endpoints mounted whole only while both halves
-// hold: same permissions enforced, and no audit row. Both are asserted here.
-test("the direct Better Auth surface enforces the same permissions and skips the audit trail", async () => {
+// A pending invitation id plus its email is the sign-up proof, so no Better Auth
+// endpoint may hand one to a member without the invite grant.
+test("only the browser's organization endpoints are served over HTTP", async () => {
   const owner = await createTestUser("direct-surface-owner");
   const organization = await createOrganization(owner, "direct-surface");
-  const plainMember = await createTestUser("direct-surface-member");
-  const target = await createTestUser("direct-surface-target");
-  await joinOrganization(plainMember, organization.id);
-  await joinOrganization(target, organization.id);
+  const operator = await createTestUser("direct-surface-operator");
+  await joinOrganization(operator, organization.id);
+  await auth.api.createInvitation({
+    body: {
+      email: `direct-surface-${Bun.randomUUIDv7()}@example.com`,
+      role: "owner",
+      organizationId: organization.id,
+    },
+    headers: owner.headers,
+  });
 
-  const removeDirectly = (cookie: string, memberIdOrEmail: string) =>
-    app.request("http://localhost/api/auth/organization/remove-member", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", cookie },
-      body: JSON.stringify({ organizationId: organization.id, memberIdOrEmail }),
+  const call = (method: "GET" | "POST", path: string, body?: Record<string, string>) =>
+    app.request(`http://localhost/api/auth/organization/${path}`, {
+      method,
+      headers: { "content-type": "application/json", cookie: operator.cookie },
+      body: body && JSON.stringify(body),
     });
 
-  const denied = await removeDirectly(plainMember.cookie, target.user.email);
-  expect(denied.ok).toBe(false);
-  expect(await denied.json()).toHaveProperty("code", "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER");
+  for (const response of await Promise.all([
+    call("GET", `list-invitations?organizationId=${organization.id}`),
+    call("GET", `get-full-organization?organizationId=${organization.id}`),
+    call("GET", `list-members?organizationId=${organization.id}`),
+    call("POST", "check-slug", { slug: "unclaimed-workspace" }),
+    call("POST", "invite-member", {
+      email: "x@example.com",
+      role: "owner",
+      organizationId: organization.id,
+    }),
+    call("POST", "remove-member", {
+      organizationId: organization.id,
+      memberIdOrEmail: owner.user.email,
+    }),
+  ])) {
+    expect(response.status).toBe(404);
+  }
 
-  const stillMember = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(eq(member.userId, target.user.id));
+  // Control: the allowlist still serves the browser.
+  const listed = await call("GET", "list");
+  expect(listed.status).toBe(200);
+  expect(await listed.json()).toEqual([expect.objectContaining({ id: organization.id })]);
 
-  expect(stillMember).toHaveLength(1);
-
-  // Control case: without it the assertion above would pass against an endpoint
-  // that refuses everyone.
-  expect((await removeDirectly(owner.cookie, target.user.email)).status).toBe(200);
-  expect(
-    await db.select({ id: member.id }).from(member).where(eq(member.userId, target.user.id)),
-  ).toHaveLength(0);
-
-  await drainAuditWrites();
-
-  const [audited] = await db
-    .select({ id: auditLog.id })
-    .from(auditLog)
-    .where(eq(auditLog.orgId, organization.id));
-
-  expect(audited).toBeUndefined();
+  const invitations = await call("GET", "list-user-invitations");
+  expect(invitations.status).toBe(200);
+  expect(await invitations.json()).toEqual([]);
 });
 
 test("an invitee creates an account from the invitation id, joins, and signs in with the password", async () => {

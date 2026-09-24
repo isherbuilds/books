@@ -29,8 +29,9 @@ import { z } from "zod";
 
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
+import { invalidateSettings } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
+import { applyOrpcFieldError } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 import { SettingsTabs } from "./route";
@@ -142,24 +143,18 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
       onSuccess: async (saved) => {
         form.reset(toFormValues(saved));
         toast.success("Settings saved");
-        // Awaited: `member.me` carries the time zone every page formats with, and the org
-        // layout loader holds it, so open pages would keep the old zone until staleTime lapses.
-        // `journal.accounts` follows the GSTIN: a registered organization cannot journal
-        // taxable income, so the picker must not keep offering it.
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: orpc.settings.get.key({ input: { orgSlug } }),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: orpc.member.me.key({ input: { orgSlug } }),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: orpc.journal.accounts.key({ input: { orgSlug } }),
-          }),
-        ]);
+        // Awaited: the org layout loader holds `member.me`, so open pages would keep
+        // the old time zone until staleTime lapses.
+        await invalidateSettings(queryClient, orgSlug);
         await router.invalidate();
       },
-      onError: (error) => toast.error(errorMessage(error, "Could not save the settings")),
+      onError: (error) =>
+        applyOrpcFieldError(
+          form,
+          error,
+          { FINANCIAL_YEAR_FIXED: "financialYearStart" },
+          "Could not save the settings",
+        ),
     }),
   );
 

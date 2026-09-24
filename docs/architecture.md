@@ -5,7 +5,8 @@ Bun and Turborepo: TanStack Start (`apps/web`), Hono and oRPC (`apps/server`,
 (`packages/auth`), private S3 storage (`packages/storage`) and Base UI
 components (`packages/ui`). HTTP, web SSR, the receipt PDF route and tests call
 one `appRouter` with the same request context and guard. RPC bodies stop at 1
-MiB. Development reference pages never mount in production.
+MiB and auth bodies at 64 KiB. A 5xx reaches the browser as its code alone; the
+server logs the detail. Development reference pages never mount in production.
 
 ## Tenancy and authorization
 
@@ -17,8 +18,8 @@ MiB. Development reference pages never mount in production.
 
 The slug is untrusted input. It is never session state and never falls back.
 
-- Slugs are immutable, URL-safe, at least four characters, and outside the
-  reserved root names.
+- Slugs are immutable, URL-safe, 4 to 63 characters, and outside the reserved
+  root names.
 - A missing claim fails validation, no session is `UNAUTHORIZED`, and no
   membership or grant is `FORBIDDEN`. A foreign slug looks like an unknown one.
 - Membership is memoized for one request, so revocation applies on the next.
@@ -38,15 +39,16 @@ role, Better Auth's `member` and `admin` included. The roles are `owner`,
 manages members, invitations and settings, and uploads or deletes files. Client
 checks only hide controls.
 
-Better Auth's organization endpoints under `/api/auth/*` enforce their own
-permissions, may read active-organization state, and skip our membership audit.
-Product flows use the guarded `member.*` procedures; tests pin this until that
-surface closes.
+Over HTTP, Better Auth serves only the organization endpoints the browser uses:
+`list`, `list-user-invitations` and `accept-invitation`. Every other one answers
+404, because several hand pending invitation ids to any member. Server code
+reaches them through `auth.api`, behind the guarded `member.*` procedures.
 
 No email is sent. An owner hands an invitation id (UUIDv7) to one person. The
 `invitation-claim` plugin lets `/sign-up/email` create an account only with a
 live invitation for that email, and refuses every other path. Operator scripts
-insert users directly. Accounts stay `emailVerified: false`. `member.list` shows
+insert users directly, verified. Invited accounts stay `emailVerified: false`.
+`member.list` shows
 links only to holders of `invitation: ["create"]` and hides expired rows. The
 public join lookup returns the invited email, the organization, and whether an
 account exists. Better Auth checks the session email when it accepts.
@@ -103,8 +105,9 @@ Query, form and invalidation rules are in
 - Write with scoped `UPDATE ... RETURNING`. Edits compare-and-swap on the loaded
   `updatedAt` (`timestamptz(3)`). Zero rows is a stale-record `CONFLICT`, with
   no retry.
-- Member and short master names are stored lowercase. Legal names, addresses,
-  notes, references and identifiers keep their case.
+- Every name keeps the case it was typed in, because names print on legal
+  documents. Master uniqueness compares `normalizedName` (NFKC, lowercase,
+  letters and digits only), or `lower(name)` for accounts.
 - One `organization_settings` row per Organization holds identity, address,
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.
@@ -115,15 +118,17 @@ Query, form and invalidation rules are in
 ## Audit and files
 
 `audit()` is fire-and-forget. It records role denials and sensitive successes
-(membership and settings changes, file deletion, posts, cancellations, lock
-changes and exceptions), never
-reads or ordinary writes. A foreign claim cannot write another tenant's log.
+(organization creation, invitations, membership and settings changes, file
+deletion, account archiving, posts, cancellations, allocations, lock changes and
+exceptions), never reads or ordinary writes. A target is `type:id`. A foreign claim cannot write another tenant's log.
 URLs, tokens and secrets never enter metadata; an unverified file key is stored
 as a digest. Journal entries differ: they commit with their document, because ledger
 drift must fail the transaction and an audit outage must not.
 
 Objects are private. The browser moves bytes with 15-minute presigned URLs; keys
-are `<orgId>/<uuid>/<sanitized-name>`. An upload stays `pending`, and invisible,
+are `<orgId>/<uuid>/<sanitized-name>`. A read URL names its own response type:
+PDF, common images and plain text open inline, and anything else downloads as
+`application/octet-stream`, so an uploaded page never runs on the storage origin. An upload stays `pending`, and invisible,
 until a scoped update marks it `ready`. Deletion removes the row, then the
 object best-effort, so a failure leaves an orphan, never a dangling row.
 
@@ -194,24 +199,19 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   on its original cutover so a replacement corrects historical balances.
   The reversal date must pass the period lock. A refusal rolls back the state
   change; `cancelledAt` remains the actual cancellation instant.
-- `organization_settings.lockedThrough` and `taxLockedThrough` own the current
-  lock dates. Every ledger writer reads settings `FOR SHARE` (or stronger) inside its
-  transaction before document locks, using that same row for tax, numbering
-  and dates. `assertPeriodOpen` (`core/locks.ts`) checks the held dates and reads
-  `lock_exceptions` only when the general lock needs a bypass.
-  `lock.set` reads settings `FOR UPDATE`, compares `expectedLockedThrough` with
-  the current date, then updates it and appends history atomically. Missing
-  settings is an integrity failure; a stale date is `CONFLICT`, so the client
-  refreshes and closes the stale form. Lock changes and revocation wait for
-  in-flight postings before changing the held settings or exception. Posting never
-  scans lock history. Expiry uses `statement_timestamp()`. Spec
-  [call 7](./specs/accounting-core.md#architecture-calls).
-- Receipt and Payment validate posting-critical masters after locking settings,
-  holding the resolved rows `FOR SHARE` until commit: the active Party supplies
-  the snapshot and exposure; the direct income/expense Account supplies posting
-  eligibility and supply class; the TDS Section supplies effective dates and rate;
-  the Payment Method supplies its active state and account mapping. Updates or
-  deactivation wait until the posting commits. The stored posting and snapshot
+- Every ledger writer reads `organization_settings` `FOR SHARE` (or stronger)
+  inside its transaction before document locks, and uses that same row for tax,
+  numbering and lock dates; `assertPeriodOpen` (`core/locks.ts`) checks them.
+  Writers of settings (`lock.set`, `settings.update`) take `FOR UPDATE` and so
+  wait for in-flight postings. The lock contract is
+  [slice 5](./specs/accounting-core.md#journal-opening-balance-and-locks-slice-5).
+- Receipt, Payment and Invoice validate posting-critical masters after locking
+  settings, holding the resolved rows `FOR SHARE` until commit: the active Party
+  (`activeParty`) supplies the snapshot and exposure; the direct income/expense
+  Account supplies posting eligibility and supply class; the TDS Section
+  supplies effective dates and rate; the Payment Method and its money account
+  supply their active states and the account mapping. Updates or deactivation
+  wait until the posting commits. The stored posting and snapshot
   retain those validated values. Locks belong to these transaction paths, not
   to all master reads; Item and Invoice draft validation use unlocked reads.
 - One `post` entry and at most one `reverse` entry exist per document:
@@ -248,9 +248,11 @@ Account, and cash or bank leaves that `account.create` adds.
 The complete chart supplies parent groups for account creation. A Payment Method names one active money
 leaf, so the method decides where money lands, as in ERPNext; there is no
 per-receipt deposit account. `paymentMethod.setActive` archives a method, and
-old documents keep it. New Organizations get Cash → Cash in Hand, and UPI, Bank
-transfer and Card → Bank Account. Direct receipts and payments cannot name a
-money account, a group or a system account (`postableAccount`).
+old documents keep it. Restoring a method never restores its account: posting
+refuses a method whose account is archived, and Banking shows it as "Account
+archived". New Organizations get Cash → Cash in Hand, and UPI, Bank transfer and
+Card → Bank Account. Direct receipts and payments cannot name a money account, a
+group or a system account (`postableAccounts`).
 
 Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
 Payment to it, from the bank statement. Record actual fees; never model per-bank

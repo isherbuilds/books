@@ -28,13 +28,10 @@ import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { PartyLinkField } from "@/components/party-link-field";
 import type { PartyOption } from "@/lib/parties";
+import { positiveAmount } from "@/lib/form-schema";
 
-const entryAmountSchema = z
-  .string()
-  .refine(
-    (value) => value === "" || (NON_NEGATIVE_MONEY_PATTERN.test(value) && Number(value) > 0),
-    "Enter a valid amount",
-  );
+// Blank is the untouched side of a debit/credit pair.
+const entryAmountSchema = z.literal("").or(positiveAmount);
 
 const entryLineSchema = z
   .object({

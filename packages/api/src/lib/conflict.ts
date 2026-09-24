@@ -6,7 +6,7 @@ import { sql, type AnyColumn } from "drizzle-orm";
  * Every other CONFLICT is a plain `ORPCError("CONFLICT")`: the client refetches
  * and shows the server message.
  */
-export type ConflictReason =
+type ConflictReason =
   | "DUPLICATE"
   | "STALE_RECORD"
   | "PARTY_NAME_COLLISION"
@@ -37,8 +37,8 @@ export function badRequest(reason: string, message: string) {
  *
  * This must stay 5xx. `logORPCError` in apps/server drops everything under 500, so
  * dressing a bug as a CONFLICT hides it from the logs and shows staff "Conflict".
- * The message reaches the log, never the browser: the client shows a generic line
- * for any 5xx.
+ * The message reaches the log, never the browser: apps/server redacts every 5xx
+ * message (`redactServerErrors`) and the client shows a generic line.
  */
 export function impossible(what: string) {
   return new ORPCError("INTERNAL_SERVER_ERROR", { message: `Invariant violated: ${what}` });

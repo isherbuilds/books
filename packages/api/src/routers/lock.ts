@@ -119,7 +119,7 @@ export const lockRouter = {
       action: "lock.set",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: String(row.id),
+      target: `periodLock:${row.id}`,
       meta: {
         kind: input.kind,
         lockedThrough: input.lockedThrough,
@@ -179,7 +179,7 @@ export const lockRouter = {
       action: "lock.grantException",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: id,
+      target: `lockException:${id}`,
       meta: {
         userId: input.userId,
         expiresAt: input.expiresAt,
@@ -227,7 +227,7 @@ export const lockRouter = {
       action: "lock.revokeException",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: input.exceptionId,
+      target: `lockException:${input.exceptionId}`,
       meta: { exceptionId: input.exceptionId, reason: input.reason },
     });
 

@@ -218,6 +218,10 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
   });
 
   expect(posted.number.startsWith("INV")).toBe(true);
+  await expectORPCCode(
+    api.journal.get({ orgSlug: organization.slug, journalId: posted.id }),
+    "NOT_FOUND",
+  );
 
   const detail = await api.invoice.get({
     orgSlug: organization.slug,
@@ -466,6 +470,43 @@ test("a draft uses optimistic versions and posts into the same document", async 
   expect(posted.number.startsWith("INV")).toBe(true);
   expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
     { id: draft.id, state: "posted", number: posted.number },
+  );
+});
+
+test("a draft is discarded only with its current version", async () => {
+  const draft = await api.invoice.saveDraft({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  });
+
+  const claim = { orgSlug: organization.slug, draft: { id: draft.id, version: 2 } };
+
+  await expectORPCCode(api.invoice.discardDraft(claim), "CONFLICT");
+  await api.invoice.discardDraft({ ...claim, draft });
+  await expectORPCCode(
+    api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id }),
+    "NOT_FOUND",
+  );
+});
+
+test("an invoice that totals nothing is refused", async () => {
+  const free = await api.item.create({
+    orgSlug: organization.slug,
+    name: "Free sample",
+    unitPrice: "0.00",
+    incomeAccountId: exemptIncome.id,
+  });
+
+  await expectReason(
+    api.invoice.post({
+      orgSlug: organization.slug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: free.id, quantity: 3 }],
+    }),
+    "INVOICE_ZERO_TOTAL",
   );
 });
 

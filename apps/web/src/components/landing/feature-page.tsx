@@ -17,9 +17,8 @@ import { Wash } from "./wash";
    a text column beside it — lives here now; the landing page indexes these
    pages with cards. */
 
-/* The screen entire, less the bottom strip: every capture carries the router
-   devtools badge in the sidebar's last 60px, and a recapture is out of scope. */
-const CAPTURE: Region = { x: 0, y: 0, w: 1440, h: 840 };
+/* The list screen entire. */
+const CAPTURE: Region = { x: 0, y: 0, w: 1440, h: 900 };
 
 export function FeaturePage({
   shot,
@@ -39,7 +38,8 @@ export function FeaturePage({
   /* The full capture is informative and is described; each crop repeats the
      claim printed beside it and is hidden from assistive technology. */
   captureAlt: string;
-  crops: { region: Region; claim: string; body: string }[];
+  /* A crop zooms the list shot unless it names another, such as the record. */
+  crops: { shot?: ShotName; region: Region; claim: string; body: string }[];
 }) {
   const siblings = FEATURES.filter((feature) => feature.shot !== shot);
 
@@ -106,7 +106,7 @@ export function FeaturePage({
                 <div className="relative grid justify-items-start overflow-hidden rounded-xl p-4 sm:min-h-[24rem] sm:place-items-center sm:p-10 lg:min-h-[32rem] lg:p-14">
                   <Wash />
                   <ProductWindow
-                    name={shot}
+                    name={crop.shot ?? shot}
                     region={crop.region}
                     alt=""
                     title={windowTitle}
@@ -120,8 +120,8 @@ export function FeaturePage({
 
         <LandingFaq feature={shot} />
 
-        {/* The other modules: the buyer reading about billing sees that the
-            queue and the records are the same system, not a point solution. */}
+        {/* The other modules: the buyer reading about invoices sees that the
+            documents and the parties are the same system, not a point solution. */}
         <section
           aria-labelledby="also"
           className="mx-auto flex w-full max-w-[84rem] flex-col gap-6 px-5 pt-20 sm:px-6 sm:pt-28"
@@ -140,7 +140,7 @@ export function FeaturePage({
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">{feature.label}</span>
                   <span className="text-xs text-muted-foreground">{feature.blurb}</span>
-                  <span className="mt-2 text-sm underline-offset-4 group-hover:underline">
+                  <span className="mt-2 text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
                     See it →
                   </span>
                 </span>

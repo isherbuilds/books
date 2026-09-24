@@ -31,7 +31,7 @@ import { LinkField } from "@/components/link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, isRefusal } from "@/lib/orpc-error";
+import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
 import { orgLocalToInstant, useOrgDateTime } from "@/lib/org-datetime";
 
 // Expiry is a wall-clock time in the Organization's zone; the server judges
@@ -92,19 +92,20 @@ export function LockExceptionDialog({
         toast.success("Exception granted");
         onClose();
       },
-      onError: async (error) => {
-        // Retrying could grant a second active exception, and revoking one leaves the
-        // other in force; the list shows whether it went through.
-        if (!isRefusal(error)) {
-          onClose();
-          await invalidateLockState(queryClient, orgSlug);
-          toast.error("The result is uncertain. Check the exceptions before granting it again.");
+      // Retrying could grant a second active exception, and revoking one leaves the
+      // other in force; the list shows whether it went through.
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
+            onClose();
 
-          return;
-        }
-
-        applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not grant the exception");
-      },
+            return invalidateLockState(queryClient, orgSlug);
+          },
+          fallback: "Could not grant the exception",
+          uncertain: "The result is uncertain. Check the exceptions before granting it again.",
+          refuse: () =>
+            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not grant the exception"),
+        }),
     }),
   );
 

@@ -65,7 +65,8 @@ export function LandingClosing() {
               Start with tomorrow morning.
             </h2>
             <p className={`max-w-md text-lg text-pretty ${ON_WASH_MUTED}`}>
-              One business, one afternoon of setup, and the desk is on it the next day.
+              Confirm your Organization, add bank accounts and payment methods, invite the team,
+              then post the first receipt.
             </p>
             <div className="mt-1 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
               {/* Same pairing as the hero: the walkthrough is the primary ask,
@@ -97,7 +98,7 @@ export function LandingClosing() {
         <div className="grid gap-10 border-t border-border pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
           <div className="flex flex-col gap-5">
             <p className="max-w-xs text-sm text-pretty">
-              One system, from the first invoice of the month to the last rupee reconciled.
+              One system, from the first invoice of the month to the period your CA locks.
             </p>
             <div className="flex flex-col gap-2">
               {BADGES.map((badge) => (
@@ -138,7 +139,7 @@ export function LandingClosing() {
 
         <div className="flex items-center justify-between gap-6 pt-12 pb-8 sm:pt-16 sm:pb-10">
           <p className="text-xs text-muted-foreground">
-            © 2026 Accly Books. Accounts are created by your administrator.
+            © 2026 Accly Books. Accounts are by invitation only.
           </p>
           <ThemeSwitch />
         </div>

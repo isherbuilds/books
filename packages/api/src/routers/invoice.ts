@@ -5,19 +5,13 @@ import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents } from "@accly/db/schema/documents";
 import { items } from "@accly/db/schema/items";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
-import { parties } from "@accly/db/schema/parties";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import {
-  activeAllocationSums,
-  allocationReversed,
-  invoiceSettlement,
-  remainingPaiseOf,
-} from "../core/allocations";
+import { allocationReversed, invoiceSettlement, remainingPaiseOf } from "../core/allocations";
 import {
   organizationSnapshot,
   partySnapshot,
@@ -31,11 +25,12 @@ import {
 import { formatDecimal } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
 import { computeTax, roundOff } from "../core/tax";
-import { taxRateEffectiveOn } from "../core/tax-schedule";
+import { effectiveOn } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
+import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { documentListFields, invoiceFields, orderedPeriod, reason } from "../lib/schemas";
 import {
@@ -79,13 +74,7 @@ async function resolveInvoice(
   ];
 
   // A posting resolves through one transaction connection; do not queue concurrent queries.
-  const [party] = await executor
-    .select()
-    .from(parties)
-    .where(
-      and(eq(parties.orgId, scope.orgId), eq(parties.id, input.partyId), eq(parties.active, true)),
-    )
-    .limit(1);
+  const party = await activeParty(executor, scope.orgId, input.partyId);
 
   const itemQuery = executor
     .select({ item: items, account: accounts })
@@ -166,7 +155,7 @@ async function resolveInvoice(
             and(
               eq(taxRates.orgId, scope.orgId),
               inArray(taxRates.code, taxCodes),
-              taxRateEffectiveOn(documentDate),
+              effectiveOn(taxRates, documentDate),
             ),
           );
 
@@ -336,7 +325,7 @@ export const invoiceRouter = {
       action: "invoice.post",
       actorId: context.scope.userId,
       orgId: context.scope.orgId,
-      target: posted.id,
+      target: `invoice:${posted.id}`,
       meta: { number: posted.number, amount: formatDecimal(amountPaise) },
     });
 
@@ -347,9 +336,7 @@ export const invoiceRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const { sums, remainingPaise: outstandingPaise } = activeAllocationSums(orgId, "target", [
-        input.invoiceId,
-      ]);
+      const outstandingPaise = remainingPaiseOf(orgId, "target");
 
       // The version token and the data it protects return from one consistent read:
       // an editor must never receive version 2's token beside version 1's lines.
@@ -375,7 +362,6 @@ export const invoiceRouter = {
                 outstandingPaise,
               })
               .from(documents)
-              .leftJoin(sums, eq(sums.documentId, documents.id))
               .where(
                 and(
                   eq(documents.orgId, orgId),

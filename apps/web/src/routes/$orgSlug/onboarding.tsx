@@ -43,6 +43,7 @@ function OrganizationOnboardingRoute() {
                 key={to}
                 to={to}
                 params={{ orgSlug }}
+                data-focus-inset
                 className="group grid grid-cols-[2rem_1.25rem_minmax(0,1fr)_1rem] items-center gap-3 py-3"
               >
                 <span className="font-mono text-muted-foreground">

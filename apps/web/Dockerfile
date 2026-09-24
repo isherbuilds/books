@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.0-slim AS builder
+FROM oven/bun:1.4.2-slim AS builder
 WORKDIR /app
 
 COPY . .
@@ -16,7 +16,7 @@ ENV SKIP_ENV_VALIDATION=1
 WORKDIR /app/apps/web
 RUN bun run build
 
-FROM oven/bun:1.4.0-slim AS runtime
+FROM oven/bun:1.4.2-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 

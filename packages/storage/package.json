@@ -4,15 +4,18 @@
   "exports": {
     ".": {
       "default": "./src/index.ts"
+    },
+    "./content-disposition": {
+      "default": "./src/content-disposition.ts"
     }
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "bun --bun tsc --noEmit"
   },
   "dependencies": {
     "@accly/env": "workspace:*",
-    "@aws-sdk/client-s3": "^3.1135.0",
-    "@aws-sdk/s3-request-presigner": "^3.1135.0"
+    "@aws-sdk/client-s3": "^3.1139.0",
+    "@aws-sdk/s3-request-presigner": "^3.1139.0"
   },
   "devDependencies": {
     "@accly/config": "workspace:*",

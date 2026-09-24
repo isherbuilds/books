@@ -17,7 +17,8 @@ variables, because web SSR imports auth and database code.
   `VITE_WHATSAPP_NUMBER` and `VITE_CONTACT_EMAIL`: public contacts (E.164
   digits).
 - `SEAWEEDFS_ENDPOINT`, `_BUCKET`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`: all
-  or none. Without them, uploads and read URLs fail with a named error.
+  or none; a partial group fails at startup. Without them, uploads and read URLs
+  fail with a named error.
   `SEAWEEDFS_MAX_UPLOAD_BYTES` defaults to 100 MiB and is checked first.
 - `SKIP_ENV_VALIDATION`: build only.
 
@@ -45,7 +46,9 @@ expand-and-contract.
 - Both hosts send `nosniff`, a referrer policy, and a permissions policy that
   denies camera, microphone, geolocation and payment, plus HSTS in production.
   API CSP: `default-src 'none'; frame-ancestors 'none'`. Web CSP: self, its API
-  and storage origins; only the same origin may frame web pages.
+  and storage origins; only the same origin may frame web pages. Scripts allow
+  `'unsafe-inline'`, because TanStack Start emits an inline hydration script
+  and offers no nonce.
 - CORS is credentialed for `CORS_ORIGIN` only. Cookies are HTTP-only, secure and
   SameSite Lax.
 - Runtime images hold production dependencies only and run as `bun`.

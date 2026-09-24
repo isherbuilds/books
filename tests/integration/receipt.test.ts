@@ -475,6 +475,17 @@ test("a second bank account takes its own method, receipts and balance", async (
 
   await api.paymentMethod.setActive({ orgSlug, paymentMethodId: iciciNeft.id, active: false });
   await expectReason(api.receipt.post(intoIcici), "PAYMENT_METHOD_INVALID");
+
+  // Restoring a method never restores its account; posting refuses the archived one.
+  await api.account.setActive({ orgSlug, accountId: icici.id, active: false });
+  await api.paymentMethod.setActive({ orgSlug, paymentMethodId: iciciNeft.id, active: true });
+  expect(
+    (await api.paymentMethod.list({ orgSlug })).find(({ id }) => id === iciciNeft.id),
+  ).toMatchObject({ active: true, accountActive: false });
+  await expectReason(api.receipt.post(intoIcici), "PAYMENT_METHOD_INVALID");
+  expect(
+    (await api.account.moneyBalances({ orgSlug })).find(({ id }) => id === icici.id),
+  ).toMatchObject({ balancePaise: 50_000n });
 });
 
 test("a new prefix starts its own series, stored in upper case", async () => {

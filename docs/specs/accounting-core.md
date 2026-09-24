@@ -3,7 +3,8 @@
 Status: slices 1–3, 4a, 4b-i, 5 (Journal, Opening Balance, locks) and 8
 (chart of accounts) are implemented. Slices 4b-ii, 6–7 and 9 (party Journals)
 are open; remaining runtime and CA acceptance work is in the work registry.
-Authority: the founder's decisions. Git keeps the research behind them.
+Authority: the founder's decisions. `docs/research` and Git keep the evidence
+behind them.
 
 ## Outcome
 
@@ -18,7 +19,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 
 - **Organization** (`organization_settings`): `legalType` (individual,
   proprietorship, partnership, llp, company, trust, society), `pan`, optional
-  `gstin`, `stateCode` and `financialYearStart`.
+  `gstin`, `stateCode` and `financialYearStart`. The start month names every
+  financial year and number series, so it is fixed once any document is
+  numbered (`FINANCIAL_YEAR_FIXED`).
 - **Party**: role flags (descriptive only), optional `gstin` and `pan`, and an
   address `stateCode`. `party.update` replaces all fields, with the loaded
   `updatedAt` as its token.
@@ -55,8 +58,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   document settles, not the cash direction. A customer refund is a
   `receivable` Payment.
 - **Party Ledger Line**: exposure per document, party and side, positive when
-  the Party owes the Organization. An Invoice and a non-direct Receipt write
-  one; from slice 9 a Journal writes one per party and side it touches.
+  the Party owes the Organization. An Invoice, a non-direct Receipt and an
+  advance Payment write one; from slice 9 a Journal writes one per party and
+  side it touches.
 - **TDS Section**: a Form 140 `code` (Income-tax Act 2025), `rateBasisPoints`,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited. The
   database refuses a duplicate (org, code, start); the writer keeps ranges
@@ -95,9 +99,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    registered Organization cannot put a `taxable` account line on an Invoice
    (`TAXABLE_ACCOUNT_LINE`): taxable supplies are Items, which carry the dated
    rate.
-6. **Print class**: all exempt or nil lines print Bill of Supply, any taxable
-   line prints Tax Invoice, and a Receipt prints Receipt. Printed fields are
-   data that the CA approves.
+6. **Print class**: an Invoice with any line carrying a Tax Rate prints Tax
+   Invoice; otherwise it prints Bill of Supply, which covers exempt and nil
+   lines and every line of an unregistered Organization. A Receipt prints
+   Receipt. Printed fields are data that the CA approves.
 7. **Locks.** From slice 5, posting on or before the general lock needs an
    exception. An exception clears the general lock only; the tax lock is
    reopened by `lock.set` with an earlier date or null and a reason. The tax
@@ -198,15 +203,15 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     writes Dr `customerAdvances` / Cr `receivables` with document type
     `allocation` and the allocation id; reversing it reverses that entry.
     Reversing an allocation made at Receipt post instead posts Dr
-    `receivables` / Cr `customerAdvances`. A source already on `receivables`,
-    a Journal credit, allocates with no entry, and its reverse writes none:
-    the credit was posted once, by the Journal, and a second entry would count
-    it twice. A target with active allocations refuses cancellation
+    `receivables` / Cr `customerAdvances`. From slice 9a, a source already on
+    `receivables`, a Journal credit, allocates with no entry, and its reverse
+    writes none: the credit was posted once, by the Journal, and a second entry
+    would count it twice. A target with active allocations refuses cancellation
     (`CONFLICT`, naming the sources); the record Sheet offers Cancel only once
-    every allocation is reversed. Receipt and Journal cancellation append
-    reverse rows for their active allocations, with no journal entry of their
-    own, and reverse every un-reversed allocation journal entry from the
-    document. `allocation.apply` and `allocation.reverse` check the period lock
+    every allocation is reversed. Receipt cancellation (and Journal
+    cancellation from slice 9a) appends reverse rows for its active
+    allocations, with no journal entry of its own, and reverses every
+    un-reversed allocation journal entry from the document. `allocation.apply` and `allocation.reverse` check the period lock
     on their entry date. Slice 4b-ii copies this model: it keeps ERPNext's
     separate advance account, and rejects Zoho-style gross posting, which sends
     every Receipt through the advance account and doubles journal rows, and the
@@ -247,8 +252,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
    Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
-   otherwise it prints Bill of Supply. Implemented and runtime verified in the
-   app; CA acceptance of the GST seed is open.
+   otherwise it prints Bill of Supply. CA acceptance of the GST seed is open.
 
    `postDocument` takes a lines array and `draft: { id, version } | null`.
    Receipt and Payment pass one `accountLine`. `invoice.saveDraft` and
@@ -259,8 +263,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    `invoicePrefix`. Invoice post and cancel are audited.
 
    Item permissions let owner and accountant create, read and update. Operator
-   and CA read. The web has Invoice list, create, draft, detail and cancel
-   routes under `/$orgSlug/invoices`, plus Settings > Items.
+   and CA read. The web lists Invoices at `/$orgSlug/invoices` with each record
+   in a Sheet (detail, cancel, discard); a new Invoice and a draft are edited on
+   the pages `/$orgSlug/invoices/new` and `/$orgSlug/invoices/$invoiceId/edit`
+   (Design §10: a line grid is a Page). Items live at Settings > Items.
 
    **4b-i. Allocations and Invoice settlement.** Implemented: append-only
    allocations; Receipt `against`; advance-to-Invoice apply and reversal
@@ -269,8 +275,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    `receipt.unapplied`. `invoice.openInvoices` and `receipt.unapplied` return
    the 200 oldest rows and `hasMore`. The web supports Receipt allocation at
    post, allocation detail and reversal, applying an advance, Invoice
-   settlement status, and open or overdue filtering. Implemented and runtime
-   verified in the app; CA acceptance is open.
+   settlement status, and open or overdue filtering. CA acceptance is open.
 
    **4b-ii. Bills, notes and remaining settlement.** Open: Bill, Credit Note
    and Debit Note; Payment `against`; fee and write-off lines; customer TDS;
@@ -355,9 +360,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      Cash and bank children retain their group's 99-code range. Exhaustion is
      `ACCOUNT_CODES_FULL`; a concurrent code collision is `CONFLICT`.
    - A case-insensitive duplicate active account name is
-     `ACCOUNT_NAME_TAKEN`, enforced by a partial unique index on active names
-     like `ITEM_NAME_TAKEN`; restoring an archived account whose name is now
-     taken is refused the same way.
+     `ACCOUNT_NAME_TAKEN`, enforced by a partial unique index on the active
+     rows' `lower(name)`; restoring an archived account whose name is now taken
+     is refused the same way.
    - `account.update({ accountId, name, updatedAt })` renames an account;
      `updatedAt` is a millisecond-precision edit token (`CONFLICT` when stale).
    - `account.setActive({ accountId, active })` archives or restores a leaf without a
@@ -398,8 +403,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `apps/web/src/routes/$orgSlug/accounts.tsx`,
      `apps/web/src/components/account-sheet.tsx` and
      `apps/web/src/components/account-columns.tsx`.
-   - Interfaces: `account.create` returns the inserted row as today;
-     `account.list` is unchanged. Slice 9's picker reads `journal.accounts`.
+   - Interfaces: `account.create` returns the inserted row. Slice 9's picker
+     reads `journal.accounts`.
 9. **Party Journals.** Open, in two parts, after slice 8. A Journal line on a
    party control account carries a required Party and writes the party ledger,
    so the sum of party statements equals the control account by construction.
@@ -507,8 +512,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 
 ## Journal, Opening Balance and locks (slice 5)
 
-Implemented and runtime verified. The [original-cutover correction policy](../research/opening-balance-correction-policy-2026-09-22.md) explains the Opening Balance exception.
-CA acceptance is open; party lines are slice 9.
+Implemented. The [original-cutover correction policy](../research/opening-balance-correction-policy-2026-09-22.md)
+explains the Opening Balance exception. CA acceptance is open; party lines are
+slice 9.
 
 - **Document.** Type `journal`, a Billing document like Receipt, posted in full
   with no draft. Header: `documentDate`, a required `narration` (1–500), an
@@ -530,22 +536,19 @@ CA acceptance is open; party lines are slice 9.
   Journal writes no party ledger lines. The batch predicate `journalAccounts`
   runs inside the posting transaction after a `FOR SHARE` read of
   `organization_settings`, so a concurrent GSTIN change cannot let a taxable
-  line through. It is beside `postableAccount` in `lib/accounts.ts` and reuses
+  line through. It is beside `postableAccounts` in `lib/accounts.ts` and reuses
   `isLeaf`.
 - **Storage.** The baseline migration carries: nullable `entry_side` (`debit`,
   `credit`) and `party_id` (composite key to `parties`) on `document_lines`,
   `journal_prefix`, `locked_through` and `tax_locked_through` on `organization_settings`, `period_locks`,
   `lock_exceptions`, and the partial unique index
   `documents_org_opening_balance_idx` on posted Opening Balance documents.
-  `amount_paise` stays positive. The ledger derives from these lines. This
-  slice regenerates the baseline, which is only correct under the rule that
-  no environment keeps data yet: a
-  database that applied the earlier baseline must be reset
-  (`bun run db:seed -- --reset`), not migrated, or `runMigrations()` replays
-  the DDL and fails on existing tables.
-- **Posting.** `JournalPosting { type: "journal" | "openingBalance", amountPaise,
-lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
-  lines, and `recordEntry` uses a switch.
+  An entry line's `amount_paise` is positive; its side is `entry_side`. The
+  ledger derives from these lines. Baseline regeneration follows
+  [Development](../development.md#code-rules).
+- **Posting.** `JournalPosting` and `OpeningBalancePosting` are
+  `DocumentPosting` variants built from one entry-line shape. A pure
+  `postJournal` checks the lines, and `recordEntry` uses a switch.
 - **Write path and number.** `postEntryLines` shares account validation and line
   preparation between Journal and Opening Balance, then calls `postDocument`.
   Input line fields and the balance refinement live in `lib/schemas.ts`.
@@ -567,14 +570,14 @@ lines }` is a `DocumentPosting` variant. A pure `postJournal` checks the
   A taxable account line
   is refused as `TAXABLE_ACCOUNT_LINE`, an
   unresolvable account as `ACCOUNT_INVALID`, and a foreign party as
-  `PARTY_INVALID`. Grants already exist. The day book and
-  `account.moneyBalances` already read journal entries.
+  `PARTY_INVALID`. The day book and `account.moneyBalances` read journal
+  entries.
 - **Opening Balance.** Type `openingBalance`, one posted per Organization
   (partial unique index `documents_org_opening_balance_idx`; a second post is
   `CONFLICT` until the first is cancelled; the post takes the settings row
   `FOR UPDATE` so concurrent posts serialize), fixed `OB` prefix
   (`OB26-27/1`), `documentDate` is the cutover, narration `Opening balances`,
-  lines as the Journal minus party (`controls: false`). A complete balanced
+  lines as the Journal minus party; the control accounts stay refused. A complete balanced
   trial balance needs no `openingEquity` line; any opening-equity amount is an
   explicit line the user enters, never a silent plug.
   `affectsTax` false, no party ledger lines. Cancellation via `reverseDocument`
@@ -677,7 +680,8 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
 
 1. **CA acceptance**, recorded here with name and date: the call 16 table; the
    13 TDS rows; the GST seed dates (GST28 ends 2026-01-31 and GST40 starts
-   2025-09-22, both from secondary sources); half-up rupee TDS versus exact
+   2025-09-22, both from secondary sources; GST12 has no end date, so confirm
+   whether any supply still takes 12% after the 2025-09-22 rationalization); half-up rupee TDS versus exact
    paise; the chart templates (the trust "Fees" account is `taxable`, the
    professional "Rent Received" is `exempt`); and these worked examples, tax
    excluded: a ₹10,000 advance with ₹4,000 applied to a ₹6,000 Invoice; a

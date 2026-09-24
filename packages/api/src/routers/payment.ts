@@ -1,9 +1,8 @@
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { parties } from "@accly/db/schema/parties";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -19,6 +18,8 @@ import { computeTds } from "../core/posting";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
+import { activeParty } from "../lib/parties";
+import { effectiveOn } from "../core/tax-schedule";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   dateOnly,
@@ -62,20 +63,7 @@ export const paymentRouter = {
       const settings = await orgSettings(scope.orgId, tx);
       const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
-      const [party] = input.partyId
-        ? await tx
-            .select()
-            .from(parties)
-            .where(
-              and(
-                eq(parties.orgId, scope.orgId),
-                eq(parties.id, input.partyId),
-                eq(parties.active, true),
-              ),
-            )
-            .limit(1)
-            .for("share")
-        : [];
+      const party = input.partyId ? await activeParty(tx, scope.orgId, input.partyId) : null;
 
       const [expenseAccount] =
         settlementKind === "direct"
@@ -91,7 +79,13 @@ export const paymentRouter = {
         ? await tx
             .select()
             .from(tdsSections)
-            .where(and(eq(tdsSections.orgId, scope.orgId), eq(tdsSections.id, input.tdsSectionId)))
+            .where(
+              and(
+                eq(tdsSections.orgId, scope.orgId),
+                eq(tdsSections.id, input.tdsSectionId),
+                effectiveOn(tdsSections, documentDate),
+              ),
+            )
             .limit(1)
             .for("share")
         : [];
@@ -100,12 +94,7 @@ export const paymentRouter = {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
       }
 
-      if (
-        input.tdsSectionId &&
-        (!section ||
-          section.effectiveFrom > documentDate ||
-          (section.effectiveTo !== null && documentDate > section.effectiveTo))
-      ) {
+      if (input.tdsSectionId && !section) {
         throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
       }
 
@@ -187,7 +176,7 @@ export const paymentRouter = {
       action: "payment.post",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: posted.id,
+      target: `payment:${posted.id}`,
       meta: {
         number: posted.number,
         amount: formatDecimal(input.amount),
@@ -252,13 +241,7 @@ export const paymentRouter = {
         rateBasisPoints: tdsSections.rateBasisPoints,
       })
       .from(tdsSections)
-      .where(
-        and(
-          eq(tdsSections.orgId, context.scope.orgId),
-          lte(tdsSections.effectiveFrom, date),
-          or(isNull(tdsSections.effectiveTo), gte(tdsSections.effectiveTo, date)),
-        ),
-      )
+      .where(and(eq(tdsSections.orgId, context.scope.orgId), effectiveOn(tdsSections, date)))
       .orderBy(tdsSections.code);
   }),
 };

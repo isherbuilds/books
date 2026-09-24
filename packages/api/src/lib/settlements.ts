@@ -118,7 +118,7 @@ export async function cancelDocument(
     action: `${type}.cancel`,
     actorId: scope.userId,
     orgId: scope.orgId,
-    target: cancelled.id,
+    target: `${type}:${cancelled.id}`,
     meta: { number: cancelled.number, amount: formatDecimal(cancelled.totalPaise), reason },
   });
 

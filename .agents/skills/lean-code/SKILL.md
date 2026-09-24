@@ -99,7 +99,7 @@ proves the session, resolves membership, checks the permission, and exposes
 - **CONFLICT means stale, and it closes the overlay.** The overlay holds a snapshot
   the server will keep rejecting, so `onError` on CONFLICT invalidates, toasts the
   server message, and closes the overlay or dialog. `PartyForm` does all three for
-  `stale_record`, and the Receipt cancel dialog does them for any CONFLICT; a form
+  `STALE_RECORD`, and the Receipt cancel dialog does them for any CONFLICT; a form
   that only toasts is a dual path. Read `data.reason` only to map a refusal to a
   field (`PARTY_GSTIN_TAKEN`, `TAXABLE_DIRECT_RECEIPT`).
 - **A mutation hook is written once.** The Receipt Sheet's Cancel button and its

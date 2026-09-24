@@ -2,7 +2,7 @@ import type { DbTransaction } from "@accly/db";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { and, eq } from "drizzle-orm";
 
-export type PartyLedgerLineInput = Pick<
+type PartyLedgerLineInput = Pick<
   typeof partyLedgerLines.$inferInsert,
   "partyId" | "documentId" | "side" | "kind" | "amountPaise" | "entryDate"
 >;

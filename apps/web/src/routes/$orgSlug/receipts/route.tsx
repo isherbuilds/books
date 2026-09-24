@@ -1,4 +1,5 @@
 import { searchQuery } from "@accly/api/lib/schemas";
+import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
@@ -31,15 +32,16 @@ import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyListOptions } from "@/lib/parties";
 import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
 
-// Mirror receipt.list's enums, kept local so no server schema module reaches the
-// client (hard rule 6). "against" joins once it can be posted.
+// A Receipt posts in full, so it is never a draft.
 const RECEIPT_STATES = ["posted", "cancelled"] as const;
-
-const SETTLEMENT_KINDS = ["advance", "direct"] as const;
 
 const STATE_LABELS = { posted: "Posted", cancelled: "Cancelled" } as const;
 
-const SETTLEMENT_LABELS = { advance: "Advance", direct: "Direct" } as const;
+const SETTLEMENT_LABELS = {
+  against: "Against invoices",
+  advance: "Advance",
+  direct: "Direct",
+} as const satisfies Record<(typeof SETTLEMENT_KINDS)[number], string>;
 
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({

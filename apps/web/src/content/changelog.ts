@@ -12,7 +12,7 @@ export type ChangelogMeta = {
   summary: string;
 };
 
-export type ChangelogEntry = ChangelogMeta & {
+type ChangelogEntry = ChangelogMeta & {
   slug: string;
   Content: ComponentType;
 };

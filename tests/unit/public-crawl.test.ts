@@ -8,7 +8,7 @@ import {
 
 const ORIGIN = "https://accly.example";
 
-const PATHS = ["/", "/billing", "/changelog/opd-desk"];
+const PATHS = ["/", "/billing", "/changelog/billing-documents"];
 
 test("robots.txt disallows only the application prefixes and points at the sitemap", () => {
   const robots = renderRobots(ORIGIN);
@@ -24,13 +24,17 @@ test("robots.txt disallows only the application prefixes and points at the sitem
 
 test("sitemap.xml lists exactly the public paths as absolute URLs", () => {
   const locs = [...renderSitemap(PATHS, ORIGIN).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  expect(locs).toEqual([`${ORIGIN}/`, `${ORIGIN}/billing`, `${ORIGIN}/changelog/opd-desk`]);
+  expect(locs).toEqual([
+    `${ORIGIN}/`,
+    `${ORIGIN}/billing`,
+    `${ORIGIN}/changelog/billing-documents`,
+  ]);
 });
 
 test("indexing is denied for every path outside the public list", () => {
   for (const path of [
     "/meridian-traders",
-    "/meridian-traders/opd",
+    "/meridian-traders/receipts",
     "/login",
     "/changelog/unknown",
   ]) {

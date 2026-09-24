@@ -44,12 +44,12 @@ const result = parseEvalResult(
       const generalDate = date().value;
       fill(date(), generalDate === "2026-07-15" ? "2026-07-16" : "2026-07-15");
       fill(reason(), "Unsaved books-lock draft");
-      const containingSheet = dialog();
+      const containingDialog = dialog();
 
-      // The route handler changes the search param without closing the mounted Sheet.
+      // The route handler changes the search param without closing the mounted Dialog.
       change("Tax period");
       await waitFor(() => dialog()?.textContent.includes("Lock Tax period") && new URLSearchParams(location.search).get("change") === "tax");
-      assert(dialog() === containingSheet, "The regression must keep the containing Sheet mounted");
+      assert(dialog() === containingDialog, "The regression must keep the containing Dialog mounted");
       assert(date().value === taxDate, "Tax inherited the Books date draft");
       assert(reason().value === "", "Tax inherited the Books reason draft");
       let submitted;

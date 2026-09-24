@@ -109,3 +109,42 @@ export async function invalidateAccountState(
     invalidateItems(queryClient, orgSlug),
   ]);
 }
+
+export function invalidatePaymentMethods(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({
+    queryKey: orpc.paymentMethod.key({ input: { orgSlug } }),
+  });
+}
+
+// An invitation changes only the roster.
+export function invalidateRoster(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({ queryKey: orpc.member.list.key({ input: { orgSlug } }) });
+}
+
+// A role change or removal can be the viewer's own, which `member.me` carries.
+export async function invalidateMembership(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    invalidateRoster(queryClient, orgSlug),
+    queryClient.invalidateQueries({ queryKey: orpc.member.me.key({ input: { orgSlug } }) }),
+  ]);
+}
+
+// `member.me` carries the time zone every page formats with, and `journal.accounts`
+// follows the GSTIN: a registered organization cannot journal taxable income.
+export async function invalidateSettings(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: orpc.settings.get.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.member.me.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
+  ]);
+}
+
+export function invalidateFiles(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({ queryKey: orpc.file.list.key({ input: { orgSlug } }) });
+}

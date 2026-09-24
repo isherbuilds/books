@@ -21,7 +21,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
 
 import { ListState } from "@/components/page";
 
@@ -82,7 +82,7 @@ export function DataTable<T extends RowData>({
   meta: { orgSlug: string };
   rowLink?: RowLink<T>;
   renderCard: (row: T) => ReactNode;
-  query: { isPending: boolean; isError: boolean; error: unknown; refetch: () => void };
+  query: ComponentProps<typeof ListState>["query"];
   errorTitle: string;
   empty: ReactNode;
   /** Omit for a list whose order the server fixes: no header is sortable. */
@@ -183,6 +183,7 @@ export function DataTable<T extends RowData>({
                 <Link
                   {...rowLink(row.original)}
                   data-row-link
+                  data-focus-inset
                   data-active={row.id === activeRowId || undefined}
                   className={cn(CARD_CLASS, "block scroll-mt-2 data-active:bg-muted")}
                 >
@@ -242,7 +243,7 @@ function DataTableRow<T extends RowData>({
         void navigate(rowLink(original));
       }}
       className={cn(
-        "group h-10 data-active:bg-muted has-[a[data-row-link]:focus-visible]:bg-muted/60 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/40",
+        "group h-10 data-active:bg-muted has-[a[data-row-link]:focus-visible]:bg-muted/60 hover:bg-muted/40",
         rowLink && "cursor-pointer",
       )}
     >
@@ -292,7 +293,7 @@ function SortButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex max-w-full items-center gap-1 rounded-sm [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground"
+      className="inline-flex max-w-full items-center gap-1 rounded-sm hover:text-foreground"
     >
       <span className="truncate">{label}</span>
       {sorted === "asc" ? <ArrowDownIcon aria-hidden className="size-3.5 shrink-0" /> : null}

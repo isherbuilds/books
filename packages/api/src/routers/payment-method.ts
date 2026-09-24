@@ -42,6 +42,7 @@ export const paymentMethodRouter = {
       .select({
         ...getTableColumns(paymentMethods),
         accountName: accounts.name,
+        accountActive: accounts.active,
       })
       .from(paymentMethods)
       .innerJoin(

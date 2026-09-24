@@ -22,11 +22,14 @@ per entity.
 ## Scope
 
 - **Live**: tenancy, auth, members, files, audit, security headers, upload
-  cleanup; Parties with ledger, Receipts, Payments with TDS (API only), money
-  accounts and payment methods, day book and TDS register XLSX (API only).
-- **Next**: accounting-core slices 4b-ii and 5–7. Slices 4a (Items, GST and
-  Invoices) and 4b-i (allocations) are implemented and runtime verified in the
-  app; CA acceptance is open.
+  cleanup; Parties with ledger, Items with dated GST rates, Invoices with
+  drafts, Receipts with allocations, Payments with TDS (API only), Journals,
+  the Opening Balance, period locks with exceptions, the chart of accounts,
+  money accounts and payment methods, day book and TDS register XLSX (API
+  only).
+- **Next**: the open [accounting-core slices](./specs/accounting-core.md#slices)
+  (4b-ii, 6, 7 and 9). Runtime and CA acceptance status is in the
+  [work registry](./README.md#work-lifecycle).
 - **Evidence-gated**: the table below. This work gets no placeholder route,
   table, permission or navigation entry. It starts only with an observed or paid
   need, a named owner and an accepted vertical-slice spec.

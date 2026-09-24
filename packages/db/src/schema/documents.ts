@@ -33,11 +33,11 @@ export const DOCUMENT_TYPES = [
 
 export const DOCUMENT_STATES = ["draft", "posted", "cancelled"] as const;
 
-export const EXPOSURE_SIDES = ["receivable", "payable"] as const;
+const EXPOSURE_SIDES = ["receivable", "payable"] as const;
 
 export const ADVANCE_SUPPLY_KINDS = ["goods", "exempt", "taxableService"] as const;
 
-export const DOCUMENT_SOURCES = ["user", "opening"] as const;
+const DOCUMENT_SOURCES = ["user", "opening"] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 

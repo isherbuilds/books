@@ -190,7 +190,7 @@ export const fileRouter = {
     assertKeyInScope(input.key, context.scope, "file.read");
 
     const [row] = await db
-      .select({ status: fileTable.status })
+      .select({ status: fileTable.status, name: fileTable.name, mimeType: fileTable.mimeType })
       .from(fileTable)
       .where(and(eq(fileTable.id, input.key), eq(fileTable.orgId, context.scope.orgId)))
       .limit(1);
@@ -199,7 +199,7 @@ export const fileRouter = {
       throw new ORPCError("NOT_FOUND", { message: "File not found" });
     }
 
-    return { url: await createReadUrl(input.key) };
+    return { url: await createReadUrl(input.key, row) };
   }),
 
   // Row first, then the object: the reverse could leave a `ready` row pointing at

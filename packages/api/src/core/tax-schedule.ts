@@ -1,6 +1,6 @@
 import type { DbTransaction } from "@accly/db";
 import { taxRates } from "@accly/db/schema/tax-rates";
-import { and, gte, isNull, lte, or } from "drizzle-orm";
+import { and, gte, isNull, lte, or, type Column } from "drizzle-orm";
 
 // No GST0: nil and exempt supplies carry no rate, because the income Account's supply
 // class already decides them. GST 2.0 added 40% on 2025-09-22 and moved the last 28%
@@ -13,11 +13,14 @@ const GST_SCHEDULE = [
   ["GST40", "GST 40%", 4_000, "2025-09-22", null],
 ] as const;
 
-/** The one rate row per code that applies on `date`; ranges are inclusive at both ends. */
-export function taxRateEffectiveOn(date: string) {
+/**
+ * The dated schedule row (a Tax Rate or TDS Section) that applies on `date`; ranges
+ * are inclusive at both ends.
+ */
+export function effectiveOn(table: { effectiveFrom: Column; effectiveTo: Column }, date: string) {
   return and(
-    lte(taxRates.effectiveFrom, date),
-    or(isNull(taxRates.effectiveTo), gte(taxRates.effectiveTo, date)),
+    lte(table.effectiveFrom, date),
+    or(isNull(table.effectiveTo), gte(table.effectiveTo, date)),
   );
 }
 

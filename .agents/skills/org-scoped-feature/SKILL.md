@@ -107,9 +107,9 @@ back a fire-and-forget `audit()` write, use `eventually`.
 
 ## 7. Gate
 
-```sh
-bun run check-types && bun run check && bun run test
-```
+Run `bun run check-types`, then `bun run test` for the tenancy test. `test` wipes
+`accly_test`, and only one session at a time may run it. Other checks follow
+[Development: Commands](../../../docs/development.md#commands).
 
 ## Self-check before calling it done
 

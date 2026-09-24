@@ -184,7 +184,7 @@ const institutionIncome: TemplateAccount[] = [
   { code: "6020", name: "Staff Costs", type: "expense" },
 ];
 
-export const CHART_TEMPLATES: Record<LegalType, readonly TemplateAccount[]> = {
+const CHART_TEMPLATES: Record<LegalType, readonly TemplateAccount[]> = {
   individual: [...coreAccounts("Capital Account"), ...professionalIncome],
   proprietorship: [...coreAccounts("Capital Account"), ...professionalIncome],
   partnership: [...coreAccounts("Capital Account"), ...businessIncome],

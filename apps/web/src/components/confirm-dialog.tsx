@@ -17,9 +17,8 @@ type Question = {
   confirmLabel: string;
 };
 
-// Reach for this first; `useConfirm` only adds state for callers that have none
-// of their own.
-export function ConfirmDialog({
+// Internal to `useConfirm`; callers use that hook or `ReasonDialog`.
+function ConfirmDialog({
   open,
   title,
   description,

@@ -501,3 +501,20 @@ test("an operator cannot apply an allocation", async () => {
     "FORBIDDEN",
   );
 });
+
+test("an against receipt names what its unallocated remainder is received for", async () => {
+  const invoice = await postInvoice("600.00");
+
+  const receipt = {
+    orgSlug: organization.slug,
+    settlementKind: "against" as const,
+    partyId: party.id,
+    amount: "1000.00",
+    paymentMethodId: bankTransfer.id,
+    allocations: [{ invoiceId: invoice.id, amount: "600.00" }],
+  };
+
+  await expectReason(api.receipt.post(receipt), "ADVANCE_SUPPLY_REQUIRED");
+  // Fully allocated: nothing is held as an advance, so no supply is asked for.
+  await api.receipt.post({ ...receipt, amount: "600.00" });
+});

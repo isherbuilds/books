@@ -9,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { struck } from "@/components/document-columns";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { PageBody, PageHeader } from "@/components/page";
@@ -18,7 +19,7 @@ import { invalidateJournalState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { loadRouteQuery, reportStaleWrite } from "@/lib/orpc-error";
+import { loadRouteQuery, handleWriteError } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
 
 export const Route = createFileRoute("/$orgSlug/journals_/$journalId")({
@@ -70,8 +71,8 @@ function JournalPage() {
         toast.success("Journal cancelled");
       },
       onError: (error) =>
-        reportStaleWrite(error, {
-          refresh: () => {
+        handleWriteError(error, {
+          settle: () => {
             setCancelOpen(false);
 
             return invalidateJournalState(queryClient, orgSlug);
@@ -98,12 +99,7 @@ function JournalPage() {
 
       <PageBody>
         <div className="flex items-center justify-between gap-2">
-          <p
-            className={cn(
-              "text-2xl font-medium tabular-nums",
-              cancelled && "text-muted-foreground line-through",
-            )}
-          >
+          <p className={cn("text-2xl font-medium tabular-nums", struck(journal.state))}>
             {formatMoney(journal.totalPaise)}
           </p>
           <Badge variant={cancelled ? "muted" : "outline"}>

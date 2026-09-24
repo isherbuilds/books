@@ -66,11 +66,11 @@ const GROUP_LABELS: Record<PaletteGroup, string> = {
   receipt: "Receipts",
 };
 
-// Each list page opens its create form from `?create=true`.
+// A record form opens from its list's `?create=true`; a line grid has its own page.
 const CREATE_ACTIONS: readonly {
   id: string;
   label: string;
-  to: "/$orgSlug/receipts" | "/$orgSlug/invoices" | "/$orgSlug/parties";
+  to: "/$orgSlug/receipts" | "/$orgSlug/invoices/new" | "/$orgSlug/parties";
   permission: AppPermission;
 }[] = [
   {
@@ -82,8 +82,8 @@ const CREATE_ACTIONS: readonly {
   {
     id: "invoice:new",
     label: "New invoice",
-    to: "/$orgSlug/invoices",
-    permission: { invoice: ["post"] },
+    to: "/$orgSlug/invoices/new",
+    permission: { invoice: ["create"] },
   },
   {
     id: "party:new",
@@ -192,7 +192,9 @@ function PaletteBody({
             label: create.label,
             group: "action",
             run: () =>
-              void navigate({ to: create.to, params: { orgSlug }, search: { create: true } }),
+              void (create.to === "/$orgSlug/invoices/new"
+                ? navigate({ to: create.to, params: { orgSlug } })
+                : navigate({ to: create.to, params: { orgSlug }, search: { create: true } })),
           },
         ]
       : [],
@@ -355,13 +357,13 @@ export function PaletteTrigger() {
   return (
     <DialogTrigger
       handle={paletteHandle}
-      render={<SidebarMenuButton className="text-muted-foreground" />}
+      render={<SidebarMenuButton className="bg-muted text-muted-foreground" />}
       // On a phone the rail is a Sheet: close it, or it stays open under the palette.
       onClick={() => setOpenMobile(false)}
     >
       <SearchIcon />
       <span className="min-w-0 flex-1 truncate">Find anything…</span>
-      <Kbd className="pointer-coarse:hidden">⌘K</Kbd>
+      <Kbd className="bg-background pointer-coarse:hidden">⌘K</Kbd>
     </DialogTrigger>
   );
 }

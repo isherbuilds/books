@@ -53,30 +53,51 @@ function status(error: unknown): number | undefined {
  * The server answered and wrote nothing. A 5xx or a dropped connection (fetch rejects
  * with a TypeError) may still have committed the write.
  */
-export function isRefusal(error: unknown): boolean {
+function isRefusal(error: unknown): boolean {
   const code = status(error);
 
   return code !== undefined && code < 500;
 }
 
 /**
- * Toasts a failed write to a record this screen shows. A 5xx or dropped connection
- * may have committed it, and a CONFLICT means the record changed; either way the
- * screen's copy is stale, so `refresh` closes the overlay and refetches first.
+ * The one handler for a failed write. Two outcomes leave the screen stale, so
+ * `settle` dismisses the overlay and refetches what the write would have moved:
+ * a CONFLICT (the record changed; the server's words are shown), and a 5xx or
+ * dropped connection that may have committed (`uncertain` says where to check,
+ * because a retry could write twice). A write whose retry a version token refuses
+ * passes `uncertain: null`, so the form stays open with its input. Every other
+ * refusal goes to `refuse`, which toasts `fallback` by default.
  */
-export async function reportStaleWrite(
+export async function handleWriteError(
   error: unknown,
   {
-    refresh,
+    settle,
     fallback,
     uncertain,
-  }: { refresh: () => Promise<void>; fallback: string; uncertain: string },
+    refuse = () => {
+      toast.error(errorMessage(error, fallback));
+    },
+  }: {
+    settle: () => Promise<void>;
+    fallback: string;
+    uncertain: string | null;
+    refuse?: () => void | Promise<void>;
+  },
 ): Promise<void> {
-  const refused = isRefusal(error);
+  const stale = isRefusal(error)
+    ? hasErrorCode(error, "CONFLICT")
+      ? errorMessage(error, fallback)
+      : null
+    : uncertain;
 
-  if (!refused || hasErrorCode(error, "CONFLICT")) await refresh();
+  if (stale === null) {
+    await refuse();
 
-  toast.error(refused ? errorMessage(error, fallback) : uncertain);
+    return;
+  }
+
+  await settle();
+  toast.error(stale);
 }
 
 /**
