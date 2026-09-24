@@ -35,18 +35,18 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "bun run db:up && bun run db:migrate && turbo run dev",
-    "build": "turbo run build",
-    "check-types": "turbo run check-types && tsc --noEmit -p tests/tsconfig.json",
+    "dev": "bun run db:up && bun run db:migrate && bun --bun turbo run dev",
+    "build": "bun --bun turbo run build",
+    "check-types": "bun --bun turbo run check-types && bun --bun tsc --noEmit -p tests/tsconfig.json",
     "test": "bun test --max-concurrency 1 --timeout 15000 tests && bun test --max-concurrency 1 --timeout 15000 ./tests/isolated/files-delete-resilience.isolated.ts",
-    "dev:web": "turbo run dev -F web",
-    "dev:server": "turbo run dev -F server",
+    "dev:web": "bun --bun turbo run dev -F web",
+    "dev:server": "bun --bun turbo run dev -F server",
     "dev:status": "bun scripts/dev-status.ts",
     "db:up": "docker compose -f packages/db/docker-compose.dev.yaml up -d --wait",
-    "db:push": "turbo run db:push -F @accly/db",
-    "db:studio": "turbo run db:studio -F @accly/db",
-    "db:generate": "turbo run db:generate -F @accly/db",
-    "db:migrate": "turbo run db:migrate -F @accly/db",
+    "db:push": "bun --bun turbo run db:push -F @accly/db",
+    "db:studio": "bun --bun turbo run db:studio -F @accly/db",
+    "db:generate": "bun --bun turbo run db:generate -F @accly/db",
+    "db:migrate": "bun --bun turbo run db:migrate -F @accly/db",
     "db:seed": "bun scripts/seed.ts",
     "db:seed:volume": "bun scripts/seed-volume.ts",
     "benchmark:browser": "bun scripts/benchmark-browser.ts",
@@ -56,7 +56,7 @@
     "create-user": "bun scripts/create-user.ts",
     "create-founder": "bun scripts/create-founder.ts",
     "cleanup-uploads": "bun scripts/cleanup-uploads.ts",
-    "check": "oxlint && oxfmt --write"
+    "check": "bun --bun oxlint && bun --bun oxfmt --write"
   },
   "dependencies": {
     "@accly/env": "workspace:*"
@@ -82,5 +82,5 @@
     "turbo": "^2.11.2",
     "typescript": "^7.0.2"
   },
-  "packageManager": "bun@1.4.0"
+  "packageManager": "bun@1.4.2"
 }

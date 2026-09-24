@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "check-types": "tsc --noEmit",
-    "serve": "vite preview",
-    "dev": "portless",
-    "dev:app": "vite dev"
+    "build": "bun --bun vite build",
+    "check-types": "bun --bun tsc --noEmit",
+    "serve": "bun --bun vite preview",
+    "dev": "bun --bun portless",
+    "dev:app": "bun --bun vite dev"
   },
   "dependencies": {
     "@accly/api": "workspace:*",
@@ -58,6 +58,7 @@
   },
   "portless": {
     "name": "accly",
-    "script": "dev:app"
+    "script": "dev:app",
+    "appPort": 55444
   }
 }

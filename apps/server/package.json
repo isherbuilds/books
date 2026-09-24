@@ -3,10 +3,10 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "tsdown",
-    "check-types": "tsc -b",
+    "build": "bun --bun tsdown",
+    "check-types": "bun --bun tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
-    "dev": "portless",
+    "dev": "bun --bun portless",
     "dev:app": "bun run --hot src/index.ts",
     "start": "bun run dist/index.mjs"
   },
@@ -31,6 +31,7 @@
   },
   "portless": {
     "name": "api.accly",
-    "script": "dev:app"
+    "script": "dev:app",
+    "appPort": 55443
   }
 }

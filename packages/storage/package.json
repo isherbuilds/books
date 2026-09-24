@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "bun --bun tsc --noEmit"
   },
   "dependencies": {
     "@accly/env": "workspace:*",

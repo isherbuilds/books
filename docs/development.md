@@ -2,13 +2,15 @@
 
 ## Start locally
 
-You need the Bun version `packageManager` pins in `package.json`, Node 24 (for
-Portless) and Docker.
+You need the Bun version `packageManager` pins in `package.json`, and Docker.
+Node is not used: every tool with a `node` shebang (Vite, tsc, tsdown, Astro,
+drizzle-kit, Portless, Turborepo, oxlint) runs as `bun --bun <tool>` in the
+package scripts. A new script that calls one follows suit.
 
 ```sh
 bun install
 cp packages/env/.env.example packages/env/.env   # then fill it in
-bunx portless proxy start                         # once per machine
+bunx --bun portless proxy start                   # once per machine
 bun run dev
 ```
 
@@ -28,7 +30,8 @@ Web is `https://accly.localhost`, API `https://api.accly.localhost`, docs
 Local ports are 55443 (API), 55444 (web), 55445 (docs), 55446 (PostgreSQL) and
 55447 (SeaweedFS), so another checkout can run alongside. Each app's config,
 `packages/db/docker-compose.dev.yaml` (with `s3.allowedOrigins`) and the
-`PORTLESS=0` fallbacks in `.env.example` declare them. With `PORTLESS=0`, point
+`PORTLESS=0` fallbacks in `.env.example` declare them; each app's `portless`
+`appPort` pins the same port behind the proxy. With `PORTLESS=0`, point
 `BETTER_AUTH_URL`, `CORS_ORIGIN` and `VITE_SERVER_URL` at localhost and remove
 `BETTER_AUTH_COOKIE_DOMAIN`. A linked worktree gets prefixed hosts: set those
 three values and add its web origin to `s3.allowedOrigins`, never a wildcard.
