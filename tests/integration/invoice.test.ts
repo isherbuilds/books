@@ -218,6 +218,10 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
   });
 
   expect(posted.number.startsWith("INV")).toBe(true);
+  await expectORPCCode(
+    api.journal.get({ orgSlug: organization.slug, journalId: posted.id }),
+    "NOT_FOUND",
+  );
 
   const detail = await api.invoice.get({
     orgSlug: organization.slug,

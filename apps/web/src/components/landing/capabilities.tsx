@@ -45,7 +45,7 @@ export function LandingCapabilities() {
             <div className="flex flex-col gap-1 px-4 py-5">
               <span className="text-sm font-medium">{feature.label}</span>
               <span className="text-xs text-muted-foreground">{feature.blurb}</span>
-              <span className="mt-2 text-sm underline-offset-4 group-hover:underline">
+              <span className="mt-2 text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
                 See it in the product →
               </span>
             </div>

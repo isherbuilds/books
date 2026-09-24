@@ -62,7 +62,7 @@ export function EmailField({ readOnly = false }: { readOnly?: boolean }) {
       name="email"
       label="Email"
       type="email"
-      readOnly={readOnly}
+      autoFocus={!readOnly}
       autoComplete="username"
       placeholder="you@company.in"
     />
@@ -86,8 +86,10 @@ export function AuthFormFooter({ children }: { children: ReactNode }) {
 
 export function PasswordField({
   autoComplete,
+  autoFocus,
 }: {
   autoComplete: "current-password" | "new-password";
+  autoFocus?: boolean;
 }) {
   const [reveal, setReveal] = useState(false);
 
@@ -97,6 +99,7 @@ export function PasswordField({
       label="Password"
       type={reveal ? "text" : "password"}
       autoComplete={autoComplete}
+      autoFocus={autoFocus}
       placeholder="••••••••"
       className="pr-9"
     >

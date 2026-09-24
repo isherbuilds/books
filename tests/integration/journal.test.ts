@@ -278,5 +278,7 @@ test("the fiscal year start is fixed once a document is numbered", async () => {
     owner.settings.update({ ...january, ...claim, financialYearStart: 4 }),
     "FINANCIAL_YEAR_FIXED",
   );
-  expect((await owner.settings.update({ ...january, ...claim, city: "Pune" })).city).toBe("Pune");
+  expect((await owner.settings.update({ ...january, ...claim, city: "Pimpri" })).city).toBe(
+    "Pimpri",
+  );
 });

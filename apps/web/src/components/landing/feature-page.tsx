@@ -140,7 +140,7 @@ export function FeaturePage({
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">{feature.label}</span>
                   <span className="text-xs text-muted-foreground">{feature.blurb}</span>
-                  <span className="mt-2 text-sm underline-offset-4 group-hover:underline">
+                  <span className="mt-2 text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
                     See it →
                   </span>
                 </span>

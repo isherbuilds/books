@@ -183,6 +183,7 @@ export function DataTable<T extends RowData>({
                 <Link
                   {...rowLink(row.original)}
                   data-row-link
+                  data-focus-inset
                   data-active={row.id === activeRowId || undefined}
                   className={cn(CARD_CLASS, "block scroll-mt-2 data-active:bg-muted")}
                 >

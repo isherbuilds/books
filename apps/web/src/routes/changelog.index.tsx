@@ -19,7 +19,7 @@ export const Route = createFileRoute("/changelog/")({
               <time dateTime={entry.date} className="text-xs text-muted-foreground">
                 {formatDate(entry.date)}
               </time>
-              <h2 className="text-xl font-medium tracking-tight text-balance group-hover:underline group-hover:underline-offset-4">
+              <h2 className="text-xl font-medium tracking-tight text-balance [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline group-hover:underline-offset-4">
                 {entry.title}
               </h2>
               <p className="text-base text-muted-foreground text-pretty">{entry.summary}</p>

@@ -124,8 +124,11 @@ export function PageTabs({
   );
 }
 
+// The anchor fills the strip and carries the underline, so the focus ring goes on
+// the label inside it: rounded, padded, and clear of both strip rules.
 export const PageTab = createLink(function PageTabAnchor({
   className,
+  children,
   ref,
   ...props
 }: ComponentProps<"a">) {
@@ -137,7 +140,11 @@ export const PageTab = createLink(function PageTabAnchor({
         className,
       )}
       {...props}
-    />
+    >
+      <span data-focus-ring className="rounded-md px-2 py-1">
+        {children}
+      </span>
+    </a>
   );
 });
 
@@ -287,6 +294,7 @@ export function ListState({
     isLoadingError: boolean;
     /** A later refetch failed: TanStack Query keeps the rows, so they stay on screen. */
     isRefetchError: boolean;
+    isFetchNextPageError?: boolean;
     error: unknown;
     refetch: () => void;
   };
@@ -314,12 +322,13 @@ export function ListState({
   }
 
   // A live list polls, so one dropped request must not blank what the operator reads.
-  const stale = query.isRefetchError ? (
-    <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-      <ErrorNote title="Could not refresh. Showing the last loaded rows." error={query.error} />
-      {retry}
-    </div>
-  ) : null;
+  const stale =
+    query.isRefetchError && !query.isFetchNextPageError ? (
+      <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+        <ErrorNote title="Could not refresh. Showing the last loaded rows." error={query.error} />
+        {retry}
+      </div>
+    ) : null;
 
   if (isEmpty) {
     return (

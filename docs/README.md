@@ -35,9 +35,22 @@ Check UI items in the running app on desktop and mobile, in both themes.
   row (`remainingPaiseOf`).
   Measure them on 100,000 Invoices with allocations before adding any stored
   balance.
-- **Client patterns**: Active. Slice 3 volume checks, a 5,000-row sort
-  measurement, the H4 runs, and the remaining slice 5 forms (Payment, Bill,
-  notes, import).
+- **[Keyboard focus](./design.md)**: Verification. One global rounded ring
+  with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
+  the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
+  link, and the muted sidebar palette trigger passed in both themes. Remaining:
+  mobile widths, dark theme, dialogs, menus, comboboxes and compact data-table
+  rows. Cell-level text links sit about 2px from the ring.
+- **Review fixes**: Verification. Run the journal, invoice, auth integrity and
+  settings integration tests when Docker is available. Check the Product menu
+  and group-hover links with mouse and touch at desktop and mobile widths, in
+  both themes. Confirm a failed Load more request shows one retry control and
+  a failed background refresh keeps its rows.
+- **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
+  sort measurement, the H4 runs, and the remaining slice 5 forms. Slice 4 is
+  implemented and runtime verified with accounting-core slices 4a and 4b-i;
+  slice 5's Journal, Opening Balance and lock forms are implemented; remaining
+  forms per client-patterns slice 5 stay open.
 - **Invoice pages**: Verification. On the production build at 1440 and 390 px,
   light and dark: New opens `/invoices/new`, Save Draft moves to
   `/invoices/$invoiceId/edit`, Post opens the record Sheet, and a draft reopens

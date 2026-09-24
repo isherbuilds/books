@@ -234,6 +234,10 @@ test("only the browser's organization endpoints are served over HTTP", async () 
   const listed = await call("GET", "list");
   expect(listed.status).toBe(200);
   expect(await listed.json()).toEqual([expect.objectContaining({ id: organization.id })]);
+
+  const invitations = await call("GET", "list-user-invitations");
+  expect(invitations.status).toBe(200);
+  expect(await invitations.json()).toEqual([]);
 });
 
 test("an invitee creates an account from the invitation id, joins, and signs in with the password", async () => {

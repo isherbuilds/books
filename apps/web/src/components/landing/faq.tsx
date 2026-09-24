@@ -32,7 +32,10 @@ export function LandingFaq({ feature }: { feature?: ShotName }) {
       <div className="flex flex-col">
         {items.map((item) => (
           <details key={item.q} className="group border-b border-border py-3 sm:py-5">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-6 text-base font-medium marker:content-none">
+            <summary
+              data-focus-inset
+              className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-6 text-base font-medium marker:content-none"
+            >
               {item.q}
               <span
                 aria-hidden

@@ -104,10 +104,10 @@ button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
 - The second header row is the palette trigger: "Find anything…" with its Mod+K
   `Kbd`.
 - Links preload on hover or focus with zero delay, never all at mount.
-- Focus comes from the unlayered `:focus-visible` rule in `globals.css`; never
-  replace it. Hover styles are gated to `(hover: hover) and (pointer: fine)`:
-  `globals.css` redefines Tailwind's `hover:` variant, so plain `hover:` is
-  correct everywhere.
+- Focus is one global unlayered `:focus-visible` rule in `globals.css`: a 2.5px
+  rounded ring 2px off the element. Full-bleed targets inset it; components add
+  no rings of their own. Hover styles are gated to `(hover: hover) and (pointer: fine)`:
+  `globals.css` redefines Tailwind's `hover:` variant.
 - The skip link is the first focusable element and targets `#main`.
 
 ## 8. Layout primitives

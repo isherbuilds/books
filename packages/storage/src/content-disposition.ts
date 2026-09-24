@@ -20,5 +20,9 @@ export function contentDisposition(
     return codePoint <= 31 || codePoint === 127 ? "_" : character;
   }).join("");
 
-  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encode5987(safeFileName)}`;
+  const safeFallback = Array.from(asciiFallback, (character) =>
+    /^[\x20-\x21\x23-\x5B\x5D-\x7E]$/.test(character) ? character : "_",
+  ).join("");
+
+  return `${disposition}; filename="${safeFallback}"; filename*=UTF-8''${encode5987(safeFileName)}`;
 }

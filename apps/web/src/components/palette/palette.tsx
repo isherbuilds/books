@@ -357,13 +357,13 @@ export function PaletteTrigger() {
   return (
     <DialogTrigger
       handle={paletteHandle}
-      render={<SidebarMenuButton className="text-muted-foreground" />}
+      render={<SidebarMenuButton className="bg-muted text-muted-foreground" />}
       // On a phone the rail is a Sheet: close it, or it stays open under the palette.
       onClick={() => setOpenMobile(false)}
     >
       <SearchIcon />
       <span className="min-w-0 flex-1 truncate">Find anything…</span>
-      <Kbd className="pointer-coarse:hidden">⌘K</Kbd>
+      <Kbd className="bg-background pointer-coarse:hidden">⌘K</Kbd>
     </DialogTrigger>
   );
 }

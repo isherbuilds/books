@@ -123,7 +123,7 @@ export function LandingNav() {
                surface, no shadow. The bar above stays visible, so the menu
                reads as a continuation of it rather than as a popover. */
               <div className="absolute inset-x-0 top-14 origin-top animate-in border-b border-border bg-background duration-150 ease-out fade-in slide-in-from-top-1 motion-reduce:animate-none">
-                <div className="mx-auto grid w-full max-w-336 grid-cols-2 gap-x-8 px-5 py-6 sm:px-6">
+                <div className="mx-auto grid w-full max-w-336 grid-cols-1 px-5 py-6 sm:px-6">
                   {SHELVES.map((shelf) => (
                     <div key={shelf.name}>
                       <p className="pb-1 text-xs text-muted-foreground">{shelf.name}</p>

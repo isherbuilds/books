@@ -14,11 +14,11 @@ export const Route = createFileRoute("/about")({
       <div className={PROSE}>
         <h2>How it started</h2>
         <p>
-          Accly Books began in August 2026 alongside the founder's own businesses: three
-          Organizations and the chartered accountant who keeps their books. Rather than replace
-          their software all at once, we built the smallest thing that could hold a real month — one
-          record per party, one immutable document, one ledger derived from both — and put it in
-          front of the people who would use it.
+          Accly Books began in August 2026 alongside the founder's three Organizations and the
+          chartered accountant who keeps their books. Rather than replace their software all at
+          once, we built the smallest thing that could hold a real month — one record per party, one
+          immutable document, one ledger derived from both — and put it in front of the people who
+          would use it.
         </p>
         <p>
           Everything since has shipped the same way — a vertical slice, run on real books,

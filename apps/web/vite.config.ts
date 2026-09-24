@@ -20,8 +20,8 @@ export default defineConfig(({ command }) => ({
     tsconfigPaths: true,
     // Nitro's Bun preset resolves takumi-pdf's `bun` entry, which reads its .wasm as a
     // file path that the bundled server no longer has, so every receipt PDF was a 500.
-    // Its `unwasm` entry imports the module the way Nitro bundles it. Dev runs on
-    // Node and keeps the `node` entry.
+    // Its `unwasm` entry imports the module the way Nitro bundles it. Dev leaves
+    // the dependency external, so its .wasm file remains available on disk.
     alias: command === "build" ? [{ find: /^takumi-pdf$/, replacement: "takumi-pdf/next" }] : [],
   },
   build: {

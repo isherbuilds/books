@@ -73,34 +73,32 @@ export const journalRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const [header, lines] = await Promise.all([
-        db
-          .select({
-            id: documents.id,
-            number: documents.number,
-            state: documents.state,
-            documentDate: documents.documentDate,
-            reference: documents.reference,
-            narration: documents.narration,
-            totalPaise: documents.totalPaise,
-            postedAt: documents.postedAt,
-            cancelledAt: documents.cancelledAt,
-            createdAt: documents.createdAt,
-          })
-          .from(documents)
-          .where(
-            and(
-              eq(documents.orgId, orgId),
-              eq(documents.id, input.journalId),
-              eq(documents.type, "journal"),
-            ),
-          )
-          .limit(1)
-          .then(([row]) => row),
-        entryLinesOf(orgId, input.journalId),
-      ]);
+      const header = await db
+        .select({
+          id: documents.id,
+          number: documents.number,
+          state: documents.state,
+          documentDate: documents.documentDate,
+          reference: documents.reference,
+          narration: documents.narration,
+          totalPaise: documents.totalPaise,
+          postedAt: documents.postedAt,
+          cancelledAt: documents.cancelledAt,
+          createdAt: documents.createdAt,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.orgId, orgId),
+            eq(documents.id, input.journalId),
+            eq(documents.type, "journal"),
+          ),
+        )
+        .limit(1)
+        .then(([row]) => row);
 
       if (!header) throw new ORPCError("NOT_FOUND", { message: "Journal not found." });
+      const lines = await entryLinesOf(orgId, header.id);
 
       return {
         ...header,
