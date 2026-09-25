@@ -4,6 +4,67 @@ Accly Books is online, multi-tenant accounting and billing for Indian
 businesses. One Organization is one legal entity with one PAN. An owner and a
 chartered accountant (CA) can belong to several Organizations.
 
+## Ambition
+
+Accly Books aims to become economic infrastructure: books a first-time owner
+keeps on day one and a group of companies runs for decades, so switching is the
+obvious choice. It wins on qualities a competitor cannot copy by adding
+features, and every new capability must strengthen one of them:
+
+- **Trust by construction.** Every figure traces to the document that made it.
+  Posted entries never change, party statements sum to their control accounts,
+  and locks follow filed returns.
+- **No learning curve.** The software asks less and derives more: it fills
+  what it already knows (PAN and state from a GSTIN, the Party and Invoice when
+  recording its Receipt), and every screen works on its defaults. Depth appears
+  only when an Organization's data needs it; there are no modes, and nothing
+  asks to be configured before it is used.
+- **Speed.** Keyboard-first entry against a measured speed gate.
+- **Scale without ceilings.** One login spans many Organizations, and nothing a
+  user owns is unreachable because of a count. Past one screen of records,
+  people type rather than scroll, so search is the primary path: a list page
+  shows 25 rows, a picker shows at most 8 matches, and search reaches every
+  record. Small pages keep every load fast at any volume.
+
+Feature parity is not the goal. A parity feature stays evidence-gated like any
+other increment.
+
+## Bets
+
+Proposed bets toward that ambition, in priority order. Each needs owner
+acceptance and a slice spec before it enters Scope; until then the evidence
+gates below still hold.
+
+1. **Switching costs nothing.** Import Tally and Zoho books in one sitting, with
+   the trial balance, party outstanding and bank balances reconciled before
+   cutover, and export everything at any time in open formats. Most Indian
+   books live in Tally; a no-brainer switch needs a no-risk move in and out.
+2. **Search is the navigation.** One server search across every record by
+   number, Party, GSTIN, amount or reference (target: p95 ≤ 200 ms at ten
+   million journal lines, measured on seeded data). Lists and pickers are thin
+   views over it.
+3. **A verifiable ledger.** Hash-chain each Organization's journal entries so
+   an auditor can prove nothing changed, and ship the proof with the export.
+   Companies in India must keep an audit trail that cannot be disabled
+   (Companies (Accounts) Rules, from 1 April 2023); append-only posting is
+   the base for it, and the proof makes that visible. The edit log for drafts
+   and master changes still needs CA verification.
+4. **The CA network grows the product.** One CA workspace across every client
+   Organization: filing status, locks, exceptions and entries awaiting review.
+   Each CA who adopts it brings their clients.
+5. **Compliance on autopilot.** Prepare GST returns from posted documents,
+   match GSTR-2B against Bills for input credit, and move the tax lock when a
+   return is filed, so the monthly job becomes a review.
+6. **A platform, not only an app.** A public API and webhooks over the same
+   authorized commands the UI uses, so banks, marketplaces and ERPs build on
+   the ledger.
+7. **Reliability is a feature.** Latency budgets per interaction, point-in-time
+   recovery, and database row-level security as a second tenancy wall.
+8. **Identity before scale.** Decide GST registration per document (several
+   GSTINs under one PAN), document currency and an accounting-dimension hook
+   before the first group customer. Each is a nullable column added with its
+   own spec, so no backfill waits on it.
+
 ## Position
 
 TallyPrime and Zoho Books India already file GST, so compliance coverage is
@@ -43,6 +104,7 @@ per entity.
 | E-invoicing         | Turnover above ₹5 crore or a customer need, plus an owner    |
 | Offline mode        | Evidence that network, UPS and a paper fallback fail         |
 | AI assistance       | An owned workflow with consent, provenance, review, failures |
+| Group consolidation | Two live Organizations of one group that need one statement  |
 
 ## Language
 
