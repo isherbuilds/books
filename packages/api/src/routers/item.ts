@@ -173,17 +173,31 @@ export const itemRouter = {
       .catch(itemNameTaken);
   }),
 
+  // Separate from update so marking inactive skips itemValues: restoring must not check
+  // the income account, and an Item on an ended tax code must still be able to leave.
   setActive: orgProcedure(
     { item: ["update"] },
-    orgInput.extend({ itemId: z.uuid(), active: z.boolean() }),
+    orgInput.extend({
+      itemId: z.uuid(),
+      updatedAt: z.iso.datetime({ precision: 3 }),
+      active: z.boolean(),
+    }),
   ).handler(async ({ context, input }) => {
     const [updated] = await db
       .update(items)
       .set({ active: input.active, updatedAt: nextEditToken(items.updatedAt) })
-      .where(and(eq(items.orgId, context.scope.orgId), eq(items.id, input.itemId)))
+      .where(
+        and(
+          eq(items.orgId, context.scope.orgId),
+          eq(items.id, input.itemId),
+          eq(items.updatedAt, new Date(input.updatedAt)),
+        ),
+      )
       .returning();
 
-    if (!updated) throw new ORPCError("NOT_FOUND", { message: "Item not found." });
+    if (!updated) {
+      throw new ORPCError("CONFLICT", { message: "This item changed after you opened it." });
+    }
 
     return updated;
   }),
