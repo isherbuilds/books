@@ -14,7 +14,6 @@ import {
   indianStateCode,
   optionalGstin,
   pan,
-  timeZone,
   validateGstinIdentity,
 } from "../lib/schemas";
 
@@ -33,7 +32,6 @@ const editableSettings = {
   city: z.string().trim().min(1).max(120),
   pinCode: indianPinCode,
   financialYearStart: z.number().int().min(1).max(12),
-  timeZone: timeZone,
   invoicePrefix: documentPrefix,
   billPrefix: documentPrefix,
   receiptPrefix: documentPrefix,
@@ -57,6 +55,8 @@ function settingsDto(settings: typeof organizationSettings.$inferSelect): Settin
     updatedAt: _updatedAt,
     lockedThrough: _lockedThrough,
     taxLockedThrough: _taxLockedThrough,
+    // Set at creation: every Organization is Indian, so the zone is not edited.
+    timeZone: _timeZone,
     ...rest
   } = settings;
 

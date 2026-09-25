@@ -21,7 +21,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   proprietorship, partnership, llp, company, trust, society), `pan`, optional
   `gstin`, `stateCode` and `financialYearStart`. The start month names every
   financial year and number series, so it is fixed once any document is
-  numbered (`FINANCIAL_YEAR_FIXED`).
+  numbered (`FINANCIAL_YEAR_FIXED`). `timeZone` is set at creation
+  (`Asia/Kolkata` by default) and has no settings field: every Organization is
+  Indian.
 - **Party**: role flags (descriptive only), optional `gstin` and `pan`, and an
   address `stateCode`. `party.update` replaces all fields, with the loaded
   `updatedAt` as its token.
@@ -34,7 +36,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   system account, or converts a posting account into a group.
 - **Item**: an Organization-unique `name` through `normalizedName`, optional
   `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
-  `active` flag. `taxCode` is required exactly when the income Account is
+  `active` flag. The form never preselects the income Account: its supply class
+  decides the tax treatment. `taxCode` is required exactly when the income Account is
   `taxable`.
 - **Tax Rate**: `code`, `name`, an integer `rateBasisPoints` from 0 to 10,000,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited, and
@@ -334,7 +337,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `narration`. 1–100 account lines
      `{ accountId, description, amount, taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
      leaf. `taxCode` resolves to the rate effective on the Bill date; an invalid
-     code is `TAX_CODE_INVALID`. `amount` is the taxable value.
+     code is `TAX_CODE_INVALID`. The form ticks `itcEligible` on a new line, as
+     Zoho Books and India Compliance treat input tax as eligible unless marked. `amount` is the taxable value.
      Tax is `computeTax` with intra-state when the Party `stateCode` equals
      the place of supply. `itcEligible` is forced false when the Organization
      has no `gstin`. TDS is `computeTds` on the taxable total at the Bill (the
@@ -425,7 +429,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      lines, never `advanceSupply`. The TDS register includes Bills.
    - **Invoice PDF** at `/api/$orgSlug/invoices/$invoiceId/pdf`, as the
      Receipt PDF: `invoice.get`, the print snapshot and the stored lines. The
-     title is "Invoice" until the CA approves print classes (Product).
+     title is "Invoice" until the CA approves print classes (Product). It ends
+     with "For" the legal name over an Authorised signatory line (CGST rule
+     46(q)). Line HSN/SAC meets rule 46, so there is no HSN summary table; the
+     GSTR-1 register carries that summary. One PDF link opens it inline; the
+     browser viewer prints and saves.
    - **Web.** Bills and Payments under Purchases; Credit and Debit Notes
      under a Notes list; Bill pages as the Invoice (line grid); the Payment
      form a Sheet; a note is a page picked from its source record. The
@@ -496,7 +504,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 7. **Import.** Open. One Excel template imports masters, opening balances and
    opening items (open documents with `source` `opening`, original due dates,
    no journal lines of their own, summing to each Party's balance), all or
-   nothing.
+   nothing. This template is the only path for Party opening balances, as
+   ERPNext's Opening Invoice Creation Tool: no per-Party opening field or form,
+   before or with this slice. Until it ships, a cutover leaves Party balances
+   out.
 8. **Chart of accounts.** Implemented. Owner and accountant manage posting leaves across
    Assets, Liabilities, Equity, Income and Expenses. Templates establish the
    groups and protected control accounts.
@@ -816,6 +827,31 @@ slice 9.
   the worked examples below.
 - **GSTR-1 Table 13.** Gate: a CA asks.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
+- **Revoke without a reason.** Decided: an exception expires by itself, and
+  Zoho Books asks only for confirmation to end a partial unlock. Revoke drops
+  its reason when the baseline is next regenerated; `revoke_reason` and its
+  CHECK go then, not by a hand-written migration.
+- **A filed-return record.** The CA moves the tax lock with `lock.set` when a
+  return is filed; that is how locks follow filed returns. A "mark GSTR-1 or
+  3B filed" action, as in Zoho Books or India Compliance's
+  `restrict_changes_after_gstr_1`, arrives with GST return preparation.
+- **GST treatment on Party** (registered, composition, SEZ, overseas,
+  unregistered, consumer). Today a GSTIN decides B2B. Gate: the first SEZ,
+  export or composition Party, together with the GSTR-1 tables and LUT rules
+  that need it. The backfill is derivable from `gstin`.
+- **Payment mode apart from the money account.** A Payment Method is ERPNext's
+  Mode of Payment with its default account. Gate: the combined picker misses
+  the [speed gate](./client-patterns.md#speed-gate-h4), or a pilot user picks
+  a receipt-only method on a Payment.
+- **An Invoice Write Off action.** A bad debt is a slice 9a Journal: Dr
+  `Bad Debts Written Off`, Cr `receivables` allocated to the Invoice. Gate:
+  the CA writes off Invoices every month after slice 9a.
+- **Identity beyond one registration.** Document currency, a GSTIN per
+  document (several registrations under one PAN) and accounting dimensions
+  are nullable columns added with their own spec, so no backfill waits on
+  them. Gates: multi-currency's spec; a pilot Organization with a second
+  GSTIN; cost centres as in the Journal table.
+- **A time-zone setting.** Gate: the first Organization outside India.
 - **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
 - **Billing without General Accounting.** Gate: a hospital customer keeps

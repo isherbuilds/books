@@ -219,7 +219,7 @@ bundled fonts and aligned numerals.
   (a type's top level or an existing group), then the name; codes are generated,
   not another input to complete.
 - Single-choice pickers use `LinkField`; a fixed list (states, legal types,
-  months, time zones) goes through `OptionField`. `NativeSelect` stays only
+  months) goes through `OptionField`. `NativeSelect` stays only
   where `<optgroup>` grouping carries meaning (chart parent, payment-method
   account), for the Reports period preset, which shows a non-selectable
   Custom state, and for the Receipt's "Advance for" supply, which opens on a

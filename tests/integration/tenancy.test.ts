@@ -864,7 +864,6 @@ const GUARDED_CALLS = {
       city: "Pune",
       pinCode: "411001",
       financialYearStart: 4,
-      timeZone: "Asia/Kolkata",
       invoicePrefix: "INV",
       billPrefix: "BILL",
       receiptPrefix: "RCT",

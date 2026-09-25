@@ -153,6 +153,29 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
         {hasIgst ? <TotalRow label="IGST" amountPaise={igst} /> : null}
         <TotalRow label="Round-off" amountPaise={data.roundOffPaise} />
       </TotalPanel>
+
+      {/* CGST Rules, rule 46(q): the supplier or an authorised representative signs. */}
+      <section
+        style={{
+          breakInside: "avoid",
+          marginLeft: "auto",
+          marginTop: 24,
+          textAlign: "right",
+          width: 300,
+        }}
+      >
+        <div>For {organization.legalName}</div>
+        <div
+          style={{
+            borderTop: `1px solid ${colors.border}`,
+            color: colors.muted,
+            marginTop: 40,
+            paddingTop: 4,
+          }}
+        >
+          Authorised signatory
+        </div>
+      </section>
     </PrintedDocument>
   );
 }

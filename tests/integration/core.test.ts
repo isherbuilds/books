@@ -145,12 +145,6 @@ test("founder organization creation seeds the complete chart and profile", async
   expect(profile.legalType).toBe("company");
   expect(profile.timeZone).toBe("UTC");
   expect((await api.member.me({ orgSlug: organization.slug })).timeZone).toBe("UTC");
-  const settings = await api.settings.get({ orgSlug: organization.slug });
-  await api.settings.update({ ...settings, orgSlug: organization.slug, timeZone: "Europe/London" });
-  expect((await api.organization.getProfile({ orgSlug: organization.slug })).timeZone).toBe(
-    "Europe/London",
-  );
-  expect((await api.member.me({ orgSlug: organization.slug })).timeZone).toBe("Europe/London");
 
   const native = await auth.handler(
     new Request("http://localhost:55443/api/auth/organization/create", {

@@ -7,7 +7,7 @@ import { ORPCError, createRouterClient } from "@orpc/server";
 /**
  * Serves a document PDF. The guarded procedure `render` calls is the route's sole
  * source of tenant data; `render` imports its renderer lazily, so the WASM and fonts
- * stay out of browser and route chunks. `?download=1` asks for an attachment.
+ * stay out of browser and route chunks. It opens inline; the viewer saves it.
  */
 export async function pdfResponse(
   request: Request,
@@ -20,16 +20,11 @@ export async function pdfResponse(
 
   try {
     const { bytes, fileName } = await render(client);
-    const download = new URL(request.url).searchParams.get("download") === "1";
 
     return new Response(new Uint8Array(bytes).buffer, {
       headers: {
         "Cache-Control": "private, no-store",
-        "Content-Disposition": contentDisposition(
-          download ? "attachment" : "inline",
-          fileName,
-          "document.pdf",
-        ),
+        "Content-Disposition": contentDisposition("inline", fileName, "document.pdf"),
         "Content-Type": "application/pdf",
       },
     });

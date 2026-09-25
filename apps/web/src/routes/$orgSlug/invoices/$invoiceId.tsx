@@ -407,22 +407,15 @@ function InvoiceSheetRoute() {
                 </Link>
               ) : null}
               {invoice.state === "posted" ? (
-                <>
-                  <a
-                    href={`/api/${orgSlug}/invoices/${invoice.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={buttonVariants({ variant: "outline" })}
-                  >
-                    PDF
-                  </a>
-                  <a
-                    href={`/api/${orgSlug}/invoices/${invoice.id}/pdf?download=1`}
-                    className={buttonVariants({ variant: "outline" })}
-                  >
-                    Download PDF
-                  </a>
-                </>
+                // The browser's PDF viewer prints and saves, so one link covers both.
+                <a
+                  href={`/api/${orgSlug}/invoices/${invoice.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  PDF
+                </a>
               ) : null}
               {canAmend ? (
                 <Button type="button" variant="outline" onClick={() => setAmendOpen(true)}>

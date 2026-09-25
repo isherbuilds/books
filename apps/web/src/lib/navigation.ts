@@ -196,7 +196,7 @@ export const SETUP_STEPS: readonly SetupStep[] = [
   {
     to: "/$orgSlug/settings/organization",
     label: "Confirm organization details",
-    description: "Set the legal name, timezone, tax identity, and document numbering.",
+    description: "Set the legal name, tax identity, and document numbering.",
     icon: Building2Icon,
     permission: { settings: ["update"] },
   },
