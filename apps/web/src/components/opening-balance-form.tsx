@@ -41,6 +41,7 @@ const SERVER_FIELDS = {
   ACCOUNT_INVALID: "lines",
   TAXABLE_ACCOUNT_LINE: "lines",
   LOCKED: "documentDate",
+  OPENING_BALANCE_DATE_FUTURE: "documentDate",
 } satisfies Record<string, FieldPath<OpeningBalanceFormValues>>;
 
 export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
