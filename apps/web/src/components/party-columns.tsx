@@ -133,7 +133,6 @@ function PartyRowActions({ orgSlug, party }: { orgSlug: string; party: PartyRow 
 // Mounted only while the menu is open, so a long list holds no permission reads.
 function PartyActionItems({ orgSlug, party }: { orgSlug: string; party: PartyRow }) {
   const canUpdate = useCan(orgSlug, { party: ["update"] });
-  const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
 
   return (
     <>
@@ -155,18 +154,16 @@ function PartyActionItems({ orgSlug, party }: { orgSlug: string; party: PartyRow
           Edit party
         </DropdownMenuItem>
       ) : null}
-      {canReadReceipts ? (
-        <DropdownMenuItem
-          render={
-            <Link
-              to="/$orgSlug/parties/$partyId/receipts"
-              params={{ orgSlug, partyId: party.id }}
-            />
-          }
-        >
-          View receipts
-        </DropdownMenuItem>
-      ) : null}
+      <DropdownMenuItem
+        render={
+          <Link
+            to="/$orgSlug/parties/$partyId/transactions"
+            params={{ orgSlug, partyId: party.id }}
+          />
+        }
+      >
+        View transactions
+      </DropdownMenuItem>
       {party.gstin ? (
         <CopyMenuItem text={party.gstin} copied="GSTIN copied">
           Copy GSTIN

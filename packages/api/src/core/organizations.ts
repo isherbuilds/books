@@ -10,10 +10,10 @@ import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import {
+  deriveOrganizationIdentity,
   organizationProfileFields,
   shortName,
   timeZone,
-  validateGstinIdentity,
 } from "../lib/schemas";
 import { seedChartOfAccounts } from "./chart-templates";
 import { seedTaxRates } from "./tax-schedule";
@@ -33,7 +33,7 @@ export const createOrganizationInput = z
       .default(SETTINGS_DEFAULTS.financialYearStart),
     timeZone: timeZone.default(SETTINGS_DEFAULTS.timeZone),
   })
-  .superRefine(validateGstinIdentity);
+  .transform(deriveOrganizationIdentity);
 
 // Internal bootstrap for authenticated routes and trusted seed/test callers.
 export async function createOrganization(

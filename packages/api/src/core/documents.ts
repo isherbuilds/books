@@ -154,6 +154,27 @@ export function accountLine(
   };
 }
 
+/** A saved Invoice's or Bill's taxable value and GST components, from its stored lines. */
+export function taxTotals(
+  lines: readonly {
+    amountPaise: bigint;
+    cgstPaise: bigint;
+    sgstPaise: bigint;
+    igstPaise: bigint;
+  }[],
+) {
+  const totals = { taxablePaise: 0n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n };
+
+  for (const line of lines) {
+    totals.taxablePaise += line.amountPaise;
+    totals.cgstPaise += line.cgstPaise;
+    totals.sgstPaise += line.sgstPaise;
+    totals.igstPaise += line.igstPaise;
+  }
+
+  return totals;
+}
+
 /** A posted document's number; posting assigns it, so a missing one breaks an invariant. */
 export function postedNumber(number: string | null, documentId: string): string {
   if (number === null) throw impossible(`posted document ${documentId} has no number`);

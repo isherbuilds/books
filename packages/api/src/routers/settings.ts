@@ -9,10 +9,10 @@ import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { orgSettings } from "../lib/settlements";
 import {
+  deriveOrganizationIdentity,
   documentPrefix,
   organizationProfileFields,
   timeZone,
-  validateGstinIdentity,
 } from "../lib/schemas";
 
 const editableSettings = {
@@ -28,7 +28,7 @@ const editableSettings = {
   journalPrefix: documentPrefix,
 };
 
-const settingsFields = z.object(editableSettings).superRefine(validateGstinIdentity);
+const settingsFields = z.object(editableSettings).transform(deriveOrganizationIdentity);
 
 export type SettingsFields = z.infer<typeof settingsFields>;
 
@@ -59,7 +59,7 @@ export const settingsRouter = {
 
   update: orgProcedure(
     { settings: ["update"] },
-    orgInput.extend(editableSettings).superRefine(validateGstinIdentity),
+    orgInput.extend(editableSettings).transform(deriveOrganizationIdentity),
   ).handler(async ({ context, input }): Promise<SettingsFields> => {
     const { scope } = context;
     const { orgSlug: _claim, ...settings } = input;

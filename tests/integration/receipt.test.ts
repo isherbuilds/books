@@ -332,14 +332,19 @@ test("receipt post rejects invalid settlements and enforces advance supply polic
 });
 
 test("receipt fee and customer TDS settle the invoice with four journal legs", async () => {
+  const service = await api.item.create({
+    orgSlug: organization.slug,
+    name: "Exempt service",
+    unitPrice: "100.00",
+    incomeAccountId: exemptIncome.id,
+  });
+
   const invoice = await api.invoice.post({
     orgSlug: organization.slug,
     partyId: party.id,
     placeOfSupplyStateCode: "27",
     documentDate: "2026-09-12",
-    lines: [
-      { kind: "account", accountId: exemptIncome.id, description: "Service", amount: "100.00" },
-    ],
+    lines: [{ kind: "item", itemId: service.id, quantity: 1 }],
   });
 
   const against: ReceiptPostInput = {

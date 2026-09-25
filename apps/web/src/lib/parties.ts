@@ -43,13 +43,21 @@ export type PartyOption = { id: string; name: string; gstin?: string | null };
 
 export type PartyPicker = { rows: PartyOption[]; hasMore: boolean };
 
-function activeParties({ rows, hasMore }: PartyList): PartyPicker {
-  return { rows: rows.filter((party) => party.active), hasMore };
+// Roles are descriptive (accounting-core), so a picker ranks the parties holding the
+// document's role first and never hides the rest. Both groups keep name order.
+function pickableParties({ rows, hasMore }: PartyList, role: PartyRole | undefined): PartyPicker {
+  const active = rows.filter((party) => party.active);
+
+  if (!role) return { rows: active, hasMore };
+
+  const holds = (party: PartyListRow) => party.roles.includes(role);
+
+  return { rows: [...active.filter(holds), ...active.filter((party) => !holds(party))], hasMore };
 }
 
-export const partyPickerOptions = (orgSlug: string, q?: string) => ({
+export const partyPickerOptions = (orgSlug: string, role?: PartyRole, q?: string) => ({
   ...partyListOptions(orgSlug, q),
-  select: activeParties,
+  select: (list: PartyList) => pickableParties(list, role),
 });
 
 /**

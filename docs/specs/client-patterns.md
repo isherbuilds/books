@@ -59,7 +59,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    with an `Outlet`, and the record is its child (`receipts/$receiptId.tsx`).
    There is no index route, because it would unmount the list. Closing clears
    the param and refocuses the row. Parties open a quick look (`?party=`), and
-   `parties_.$partyId` owns editing. Journals link to `/journals/new`, and a
+   `parties_.$partyId` owns editing. Its Transactions tab lists every Invoice,
+   Bill, Note, Receipt and Payment naming the party (`party.transactions`, one
+   keyset page of 25 at a time, only the types the member may read), as Zoho's
+   contact page does. Journals link to `/journals/new`, and a
    journal record is a page at `/journals/$journalId`. Invoices link to
    `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
    Invoice record stays a Sheet.
@@ -69,7 +72,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    the typed text goes to `party.list({ q })`, debounced 200 ms. "Create
    <text>" comes last, hides on an exact match, and needs a complete list and
    the create grant. Create stacks the master's own form and returns the saved
-   row.
+   row. A document's Party field lists the parties holding its role first and
+   hides none; a party it creates starts with that role.
 10. **Lists** use `DataTable`. ↑ and ↓ move row focus and Enter opens the
     record; inside a Sheet, ↑ and ↓ step between rows. A page is 25 rows
     (`pageLimit`). Parties sort and filter in memory and mount 25 rows at a

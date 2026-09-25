@@ -208,11 +208,13 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
     lines: [
       { kind: "item", itemId: taxableItem.id, quantity: 2 },
       { kind: "item", itemId: exemptItem.id, quantity: 1 },
+      // A one-off fee is a generic Item with its own description and price.
       {
-        kind: "account",
-        accountId: exemptIncome.id,
+        kind: "item",
+        itemId: exemptItem.id,
+        quantity: 1,
+        unitPrice: "250.00",
         description: "Exempt professional fee",
-        amount: "250.00",
       },
     ],
   });
@@ -239,6 +241,7 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
     placeOfSupplyStateCode: "27",
     partyName: "Maharashtra Customer",
     printClass: "taxInvoice",
+    totals: { taxablePaise: 275_000n, cgstPaise: 18_000n, sgstPaise: 18_000n, igstPaise: 0n },
   });
   expect(await affectsTaxOf(posted.id)).toBe(true);
 
@@ -267,9 +270,10 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
         igstPaise: 0n,
       }),
       expect.objectContaining({
-        kind: "account",
-        itemId: null,
+        kind: "item",
+        itemId: exemptItem.id,
         accountId: exemptIncome.id,
+        description: "Exempt professional fee",
         amountPaise: 25_000n,
         cgstPaise: 0n,
         sgstPaise: 0n,
@@ -364,22 +368,23 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
   );
 });
 
-test("a registered organization cannot invoice a taxable account line without a rate", async () => {
-  await expectReason(
+test("invoice lines are items only", async () => {
+  await expectORPCCode(
     api.invoice.post({
       orgSlug: organization.slug,
       partyId: party.id,
       placeOfSupplyStateCode: "27",
+      // SAFETY: deliberately the removed account-line shape, which the schema must refuse.
       lines: [
         {
           kind: "account",
-          accountId: taxableIncome.id,
-          description: "Untaxed sale",
+          accountId: exemptIncome.id,
+          description: "Exempt professional fee",
           amount: "500.00",
-        },
+        } as never,
       ],
     }),
-    "TAXABLE_ACCOUNT_LINE",
+    "BAD_REQUEST",
   );
 });
 

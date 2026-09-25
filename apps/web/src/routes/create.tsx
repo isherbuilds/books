@@ -1,14 +1,16 @@
 import {
-  pan,
+  deriveOrganizationIdentity,
+  gstinParts,
   optionalGstin,
-  indianStateCode,
+  optionalPan,
+  optionalStateCode,
   indianPinCode,
-  validateGstinIdentity,
 } from "@accly/api/lib/schemas";
 import { ORGANIZATION_SLUG_MIN_LENGTH, organizationSlugIssue } from "@accly/auth/organization-slug";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormFieldset,
   FormItem,
   FormLabel,
@@ -22,10 +24,10 @@ import { useMutation } from "@tanstack/react-query";
 import { Link, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { ArrowRightIcon } from "lucide-react";
 import { useRef } from "react";
-import { Watch, useFormContext, useFormState } from "react-hook-form";
+import { Watch, useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
+import { MONTH_OPTIONS, OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
 import { OrganizationEntryLayout } from "@/components/organization-entry-layout";
 import { ErrorNote } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -106,9 +108,15 @@ const createOrganizationSchema = z
       .trim()
       .min(1, "Enter the legal name")
       .max(200, "Enter no more than 200 characters"),
-    pan,
+    pan: optionalPan,
     gstin: optionalGstin.unwrap(),
-    stateCode: indianStateCode,
+    stateCode: optionalStateCode,
+    // Asked here because it names every number series and locks at the first one.
+    financialYearStart: z
+      .string()
+      .refine((raw) => raw.trim() !== "", "Pick a month")
+      .transform(Number)
+      .pipe(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
     addressLine1: z
       .string()
       .trim()
@@ -118,7 +126,7 @@ const createOrganizationSchema = z
     city: z.string().trim().min(1, "Enter the city").max(120, "Enter no more than 120 characters"),
     pinCode: indianPinCode,
   })
-  .superRefine(validateGstinIdentity);
+  .transform(deriveOrganizationIdentity);
 
 function CreateOrganizationRoute() {
   return (
@@ -154,12 +162,16 @@ function CreateOrganizationForm() {
       pan: "",
       gstin: "",
       stateCode: "",
+      financialYearStart: "4",
       addressLine1: "",
       addressLine2: "",
       city: "",
       pinCode: "",
     },
   });
+
+  // The server derives State and PAN from a GSTIN, so they show only without one.
+  const gstin = useWatch({ control: form.control, name: "gstin" });
 
   const create = useMutation(
     orpc.organization.create.mutationOptions({
@@ -250,21 +262,22 @@ function CreateOrganizationForm() {
                   </FormItem>
                 )}
               />
-              <RegisteredFormField
-                name="pan"
-                render={({ field }) => (
+              <FormField
+                control={form.control}
+                name="financialYearStart"
+                render={({ field, fieldState }) => (
                   <FormItem>
-                    <FormLabel>PAN</FormLabel>
+                    <FormLabel>Fiscal year starts in</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
+                      <OptionField
                         required
-                        className="font-mono uppercase"
-                        maxLength={10}
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        placeholder="ABCDE1234F"
+                        options={MONTH_OPTIONS}
+                        noun="months"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Choose a month"
+                        inputRef={field.ref}
+                        aria-invalid={fieldState.invalid}
                       />
                     </FormControl>
                     <FormMessage />
@@ -272,26 +285,61 @@ function CreateOrganizationForm() {
                 )}
               />
             </div>
-            <RegisteredFormField
-              name="gstin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>GSTIN (optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="font-mono uppercase"
-                      maxLength={15}
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder="22ABCDE1234F1Z5"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <RegisteredFormField
+                name="gstin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GSTIN (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="font-mono uppercase"
+                        maxLength={15}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        placeholder="22ABCDE1234F1Z5"
+                        onChange={(event) => {
+                          void field.onChange(event);
+                          const parts = gstinParts(event.currentTarget.value);
+
+                          if (!parts) return;
+
+                          form.setValue("stateCode", parts.stateCode);
+                          form.setValue("pan", parts.pan);
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {gstin.trim() === "" ? (
+                <RegisteredFormField
+                  name="pan"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>PAN</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          required
+                          className="font-mono uppercase"
+                          maxLength={10}
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          placeholder="ABCDE1234F"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+            </div>
             <OrganizationSlugField
               onSlugEdit={() => {
                 slugEdited.current = true;
@@ -340,29 +388,31 @@ function CreateOrganizationForm() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="stateCode"
-                render={({ field, fieldState }) => (
-                  <FormItem>
-                    <FormLabel>State code</FormLabel>
-                    <FormControl>
-                      <OptionField
-                        required
-                        options={STATE_OPTIONS}
-                        noun="states"
-                        showCode
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Choose state or union territory"
-                        inputRef={field.ref}
-                        aria-invalid={fieldState.invalid}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {gstin.trim() === "" ? (
+                <FormField
+                  control={form.control}
+                  name="stateCode"
+                  render={({ field, fieldState }) => (
+                    <FormItem>
+                      <FormLabel>State code</FormLabel>
+                      <FormControl>
+                        <OptionField
+                          required
+                          options={STATE_OPTIONS}
+                          noun="states"
+                          showCode
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          placeholder="Choose state or union territory"
+                          inputRef={field.ref}
+                          aria-invalid={fieldState.invalid}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
             </div>
             <RegisteredFormField
               name="pinCode"

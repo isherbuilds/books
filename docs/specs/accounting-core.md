@@ -24,7 +24,13 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   numbered (`FINANCIAL_YEAR_FIXED`).
 - **Party**: role flags (descriptive only), optional `gstin` and `pan`, and an
   address `stateCode`. `party.update` replaces all fields, with the loaded
-  `updatedAt` as its token.
+  `updatedAt` as its token. With a GSTIN, the server derives `stateCode` and
+  `pan` from it (characters 1–2 and 3–12); a state or PAN sent beside it must
+  match. Forms show State and PAN only while GSTIN is empty. The
+  Organization's own identity follows the same rule. Roles never gate a
+  document, but pickers rank the document's role first (customer on Invoices
+  and Receipts, vendor on Bills and payable Payments), and a party created
+  inline from one starts with that role.
 - **Account**: `type`, `parentId` and an optional `systemKey`. Income accounts
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
   Interest is `exempt`; `notASupply` covers donations, grants, dividends,
@@ -95,10 +101,16 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    10-paise line at 5% rounds each 2.5% half to zero, while one 5%
    calculation would round to a paise. That is intended. `roundOff` rounds
    gross to the rupee and posts the signed difference to the `roundOff`
-   Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`), and a
-   registered Organization cannot put a `taxable` account line on an Invoice
-   (`TAXABLE_ACCOUNT_LINE`): taxable supplies are Items, which carry the dated
-   rate.
+   Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`). **Invoice
+   lines are Items only**: the Item carries the income Account and the dated
+   rate, and the line may override its description and price. No Items are
+   seeded. A one-off charge uses a generic Item (for example "Professional
+   fees") that the owner or accountant creates once, as in ERPNext and Zoho
+   Books; operators do not gain `item` `create` (call 10).
+   Decided 2026-09-25 (#10): ERPNext's Sales Invoice Item requires an
+   `item_code` and only the Item Manager role creates Items; Zoho Books'
+   invoice API requires `item_id` on every line. `TAXABLE_ACCOUNT_LINE`
+   remains for Journals.
 6. **Print class**: an Invoice with any line carrying a Tax Rate prints Tax
    Invoice; otherwise it prints Bill of Supply, which covers exempt and nil
    lines and every line of an unregistered Organization. A Receipt prints
@@ -253,7 +265,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
    Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
-   otherwise it prints Bill of Supply. CA acceptance of the GST seed is open.
+   otherwise it prints Bill of Supply. `invoice.get` and `bill.get` return
+   `totals` (taxable, CGST, SGST and IGST) summed on the server, which the
+   detail, the draft editor and the PDF show. CA acceptance of the GST seed is
+   open.
 
    `postDocument` takes a lines array and `draft: { id, version } | null`.
    Receipt and Payment pass one `accountLine`. `invoice.saveDraft` and
@@ -539,9 +554,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      supply class and status. New account picks its parent from a
      `NativeSelect` grouped by type (a type's top level or an existing group),
      then Name, and GST supply class for income. For editors, each row opens its
-     Rename Sheet (`?edit=`); Archive/Restore is a button in that Sheet for posting
-     leaves, as Items. Read-only rows have no edit link. Banking's Add account
-     opens that same Sheet.
+     Rename Sheet (`?edit=`); Mark inactive / Mark active is a button in that
+     Sheet for posting leaves, and the status reads Active or Inactive, as for
+     Parties and Items. Read-only rows have no edit link. Banking's Add account
+     opens that same Sheet in Banking under Bank Accounts, then continues to Add
+     payment method with the new account chosen.
    - Acceptance: an accountant creates `Tuition Fees` (income, `exempt`) and
      `Sibling Discount` (expense); the first appears in the Item income
      picker and the second in the Journal account picker; a rename shows on

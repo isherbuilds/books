@@ -430,6 +430,7 @@ export function PaymentForm({
         <DocumentPartyField
           orgSlug={orgSlug}
           label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
+          role={exposureSide === "payable" ? "vendor" : "customer"}
           clearable={settlementKind === "direct"}
           onPartyChange={() => form.setValue("allocations", {})}
         />

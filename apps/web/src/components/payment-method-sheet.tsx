@@ -28,9 +28,17 @@ const methodSchema = z.object({
   accountId: z.string().min(1, "Choose where the money lands"),
 });
 
-function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () => void }) {
+function PaymentMethodForm({
+  orgSlug,
+  accountId,
+  onClose,
+}: {
+  orgSlug: string;
+  accountId: string;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
-  const form = useZodForm(methodSchema, { defaultValues: { name: "", accountId: "" } });
+  const form = useZodForm(methodSchema, { defaultValues: { name: "", accountId } });
 
   // The Banks page's cache entry; only an active money account takes a new method.
   const groups = useQuery({
@@ -118,10 +126,13 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
 export function PaymentMethodSheet({
   orgSlug,
   open,
+  accountId = "",
   onClose,
 }: {
   orgSlug: string;
   open: boolean;
+  /** The account chosen when the Sheet opens, such as one just added. */
+  accountId?: string;
   onClose: () => void;
 }) {
   // Stay open while a save is in flight, so a refusal lands on a mounted form.
@@ -135,7 +146,7 @@ export function PaymentMethodSheet({
       title="Add payment method"
       description="A method names one way money arrives and the account it lands in."
     >
-      <PaymentMethodForm orgSlug={orgSlug} onClose={onClose} />
+      <PaymentMethodForm orgSlug={orgSlug} accountId={accountId} onClose={onClose} />
     </FormSheet>
   );
 }

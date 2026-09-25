@@ -104,11 +104,11 @@ export function RecentReceipts({ orgSlug, partyId }: { orgSlug: string; partyId:
       action={
         rows.length > 0 ? (
           <Link
-            to="/$orgSlug/parties/$partyId/receipts"
+            to="/$orgSlug/parties/$partyId/transactions"
             params={{ orgSlug, partyId }}
             className={buttonVariants({ variant: "ghost", size: "xs" })}
           >
-            All receipts
+            All transactions
           </Link>
         ) : null
       }

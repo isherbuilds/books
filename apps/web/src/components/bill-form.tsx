@@ -308,7 +308,7 @@ export function BillForm({
           </PostBar>
         }
       >
-        <DocumentPartyField orgSlug={orgSlug} label="Supplier" />
+        <DocumentPartyField orgSlug={orgSlug} label="Supplier" role="vendor" />
         <RegisteredFormField
           name="reference"
           render={({ field }) => (
