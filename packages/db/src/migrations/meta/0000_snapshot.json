@@ -1,5 +1,5 @@
 {
-  "id": "da778a90-4d9e-4b2e-8d02-6b16466491cd",
+  "id": "0130f518-1a0a-4cff-8300-ed6eeec16bdc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1606,12 +1606,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "revoke_reason": {
-          "name": "revoke_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1703,7 +1697,7 @@
       "checkConstraints": {
         "lock_exceptions_revoked_check": {
           "name": "lock_exceptions_revoked_check",
-          "value": "(\"lock_exceptions\".\"revoked_at\" is null) = (\"lock_exceptions\".\"revoked_by\" is null) and (\"lock_exceptions\".\"revoked_at\" is null) = (\"lock_exceptions\".\"revoke_reason\" is null)"
+          "value": "(\"lock_exceptions\".\"revoked_at\" is null) = (\"lock_exceptions\".\"revoked_by\" is null)"
         }
       },
       "isRLSEnabled": false

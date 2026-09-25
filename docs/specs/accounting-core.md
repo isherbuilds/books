@@ -759,7 +759,7 @@ slice 9.
   `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
   History's highest identity id per kind supplies the latest reason and setter
   to the settings screen, not a posting-time lookup. `lock_exceptions` stores
-  `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy/revokeReason }`;
+  `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy }`;
   active means not revoked and not expired on the database clock.
   Every posting, cancellation and allocation reads settings once `FOR SHARE` (or stronger)
   inside its transaction, before document locks. `lock.set` and
@@ -773,7 +773,9 @@ slice 9.
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
   ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
-  `CONFLICT`); all three mutations audited. Web: Settings > Opening balance
+  `CONFLICT`); all three mutations audited. Revoke takes no reason, only a
+  confirmation: an exception expires by itself, and Zoho Books asks only for
+  confirmation to end a partial unlock. Web: Settings > Opening balance
   (form when none is posted, record with Cancel when one is) and Settings >
   Locks (both locks with Change, exceptions with Grant and Revoke); forms show
   `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
@@ -827,10 +829,6 @@ slice 9.
   the worked examples below.
 - **GSTR-1 Table 13.** Gate: a CA asks.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
-- **Revoke without a reason.** Decided: an exception expires by itself, and
-  Zoho Books asks only for confirmation to end a partial unlock. Revoke drops
-  its reason when the baseline is next regenerated; `revoke_reason` and its
-  CHECK go then, not by a hand-written migration.
 - **A filed-return record.** The CA moves the tax lock with `lock.set` when a
   return is filed; that is how locks follow filed returns. A "mark GSTR-1 or
   3B filed" action, as in Zoho Books or India Compliance's

@@ -797,11 +797,7 @@ const GUARDED_CALLS = {
       reason: "Intrusion",
     }),
   "lock.revokeException": (api, claim) =>
-    api.lock.revokeException({
-      ...claim,
-      exceptionId: crypto.randomUUID(),
-      reason: "Intrusion",
-    }),
+    api.lock.revokeException({ ...claim, exceptionId: crypto.randomUUID() }),
   "openingBalance.post": (api, claim) =>
     api.openingBalance.post({
       ...claim,

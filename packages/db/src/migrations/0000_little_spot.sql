@@ -152,8 +152,7 @@ CREATE TABLE "lock_exceptions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"revoked_at" timestamp with time zone,
 	"revoked_by" text,
-	"revoke_reason" text,
-	CONSTRAINT "lock_exceptions_revoked_check" CHECK (("lock_exceptions"."revoked_at" is null) = ("lock_exceptions"."revoked_by" is null) and ("lock_exceptions"."revoked_at" is null) = ("lock_exceptions"."revoke_reason" is null))
+	CONSTRAINT "lock_exceptions_revoked_check" CHECK (("lock_exceptions"."revoked_at" is null) = ("lock_exceptions"."revoked_by" is null))
 );
 --> statement-breakpoint
 CREATE TABLE "period_locks" (
