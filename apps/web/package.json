@@ -46,7 +46,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@accly/config": "workspace:*",
     "@tanstack/react-query-devtools": "^5.103.2",
     "@tanstack/react-router-devtools": "^1.167.2",
     "@types/react": "catalog:",

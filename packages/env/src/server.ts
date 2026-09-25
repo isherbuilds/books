@@ -11,6 +11,9 @@ export const env = createEnv({
     CORS_ORIGIN: z.url(),
     FOUNDING_EMAIL: z.email(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+    // Part of this project's dev port block (55442-55451) so parallel checkouts of
+    // other products do not fight over 3000. The container sets PORT explicitly.
+    PORT: z.coerce.number().int().positive().default(55443),
     SEAWEEDFS_ENDPOINT: z.url().optional(),
     SEAWEEDFS_ACCESS_KEY_ID: z.string().optional(),
     SEAWEEDFS_SECRET_ACCESS_KEY: z.string().optional(),

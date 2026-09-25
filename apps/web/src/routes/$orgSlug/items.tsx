@@ -76,7 +76,7 @@ const ITEM_COLUMNS = [
     meta: { className: "w-24" },
     cell: ({ getValue }) => (
       <Badge variant={getValue() ? "secondary" : "muted"}>
-        {getValue() ? "Active" : "Archived"}
+        {getValue() ? "Active" : "Inactive"}
       </Badge>
     ),
   }),
@@ -90,7 +90,7 @@ function ItemCard({ item }: { item: ItemListRow }) {
           <span className={cn("truncate font-medium", !item.active && "text-muted-foreground")}>
             {item.name}
           </span>
-          {item.active ? null : <Badge variant="muted">Archived</Badge>}
+          {item.active ? null : <Badge variant="muted">Inactive</Badge>}
         </span>
         <span className="shrink-0 tabular-nums">{formatMoney(item.unitPricePaise)}</span>
       </div>

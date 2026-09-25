@@ -847,3 +847,20 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
    cutover with open Invoices and an advance for one Party; a TPA settlement
    net of TDS with a disallowance; a dealer receipt net of TDS and a bank
    charge; a school caution deposit; an IPD deposit.
+2. **Payment mode versus money account.** A Payment Method binds one name to
+   one account, and Receipt, Payment and a paid-now Invoice share one active
+   list, so a receipt-only card machine appears on Payment. ERPNext (Mode of
+   Payment plus Paid From/To) and Zoho Books (Payment Mode plus Deposit
+   To/Paid Through) keep the two apart. Candidate: a cash/bank account plus a
+   small mode list, with the likely account preselected. Measure it against
+   the combined picker on the [speed gate](./client-patterns.md#speed-gate-h4)
+   before any schema change.
+
+ERPNext v15 and Zoho Books India reference check, 2026-09-24 (evidence in Git
+history): both use the same document-first sequence and separate sales,
+purchase, money, Journal, opening and settlement flows as the slices above.
+Their reports, cutover import and party Journals match slices 6, 7 and 9, and
+their TDS thresholds, deposit challans, card clearing and bank reconciliation
+match the Deferred gates. The check validates workflow shape only, not pilot
+speed, TDS correctness or a real cutover; the worked examples above remain the
+test.

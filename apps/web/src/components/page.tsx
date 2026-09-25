@@ -39,23 +39,14 @@ export function PageHeader({
   );
 }
 
-// A page should never set its own `p-*`; pass `bleed` for content that must reach
-// the edge.
-export function PageBody({
-  children,
-  bleed = false,
-  className,
-}: {
-  children?: ReactNode;
-  bleed?: boolean;
-  className?: string;
-}) {
+// A page should never set its own `p-*`.
+export function PageBody({ children, className }: { children?: ReactNode; className?: string }) {
   return (
     <div
       data-slot="page-body"
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto text-xs print:overflow-visible",
-        bleed ? "py-4" : "p-4",
+        "p-4",
         className,
       )}
     >
@@ -76,23 +67,15 @@ export function ErrorNote({
   title,
   error,
   detail,
-  inset = false,
 }: {
   title: string;
   error?: unknown;
   detail?: ReactNode;
-  inset?: boolean;
 }) {
   const body = detail ?? (error === undefined ? undefined : errorMessage(error, RETRY_HINT));
 
   return (
-    <div
-      role="alert"
-      className={cn(
-        "flex flex-col gap-1 border-l-2 border-destructive pl-3 text-xs",
-        inset && "m-4",
-      )}
-    >
+    <div role="alert" className="flex flex-col gap-1 border-l-2 border-destructive pl-3 text-xs">
       <p className="font-medium">{title}</p>
       {body && <p className="text-muted-foreground">{body}</p>}
     </div>
@@ -148,14 +131,8 @@ export const PageTab = createLink(function PageTabAnchor({
   );
 });
 
-/** `end` holds table controls such as the column menu; like the table, it shows from `md`. */
-export function ListToolbar({ children, end }: { children: ReactNode; end?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {children}
-      {end ? <div className="ml-auto hidden items-center gap-2 md:flex">{end}</div> : null}
-    </div>
-  );
+export function ListToolbar({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-2">{children}</div>;
 }
 
 export function SearchInput({
@@ -180,8 +157,9 @@ export function SearchInput({
   trailing?: ReactNode;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  // The list re-renders after each pause, not after each keystroke.
-  const apply = useDebouncedCallback((text: string) => onQueryChange(text.trim()), delay);
+  // The list re-renders after each pause, not after each keystroke. The pause reads
+  // the box when it ends, so a Clear during the pause is not undone by older text.
+  const apply = useDebouncedCallback(() => onQueryChange(input.current?.value.trim() ?? ""), delay);
 
   // Clear, Back, or a palette link changes the URL; the box follows, but never
   // while the operator types in it.
@@ -210,13 +188,13 @@ export function SearchInput({
           "pl-8",
           trailing !== undefined && "pr-8 [&::-webkit-search-cancel-button]:appearance-none",
         )}
-        onChange={(event) => apply.schedule(event.currentTarget.value)}
+        onChange={apply.schedule}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing) return;
 
           if (event.key === "Enter") {
             event.preventDefault();
-            apply.now(event.currentTarget.value);
+            apply.now();
           }
 
           // Esc clears the text only; filters never clear on Esc.
@@ -224,7 +202,7 @@ export function SearchInput({
             event.preventDefault();
             event.stopPropagation();
             event.currentTarget.value = "";
-            apply.now("");
+            apply.now();
           }
         }}
       />
