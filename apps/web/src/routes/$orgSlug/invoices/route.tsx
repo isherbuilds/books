@@ -67,7 +67,7 @@ function InvoicesRoute() {
   const range: SearchRange = { from, to };
   const rangeText = rangeLabel(range, today, financialYearStart);
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
-  const canPost = useCan(orgSlug, { invoice: ["post"] });
+  const canCreate = useCan(orgSlug, { invoice: ["create"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
 
   const invoices = useInfiniteQuery({
@@ -141,7 +141,9 @@ function InvoicesRoute() {
   const openCreate = () => void navigate({ to: "/$orgSlug/invoices/new", params: { orgSlug } });
 
   usePaletteActions(
-    canPost ? [{ id: "invoice:new", label: "New invoice", group: "action", run: openCreate }] : [],
+    canCreate
+      ? [{ id: "invoice:new", label: "New invoice", group: "action", run: openCreate }]
+      : [],
   );
 
   const empty =
@@ -160,7 +162,7 @@ function InvoicesRoute() {
         title="No invoices yet"
         description="Draft and posted invoices appear here, newest first."
         action={
-          canPost ? (
+          canCreate ? (
             <Button size="xs" variant="outline" onClick={openCreate}>
               New invoice
             </Button>
@@ -173,7 +175,7 @@ function InvoicesRoute() {
     <>
       <PageHeader
         title="Invoices"
-        action={canPost ? <Button onClick={openCreate}>New</Button> : undefined}
+        action={canCreate ? <Button onClick={openCreate}>New</Button> : undefined}
       />
       <PageBody>
         <ListToolbar>
@@ -209,7 +211,14 @@ function InvoicesRoute() {
                   options={INVOICE_STATES}
                   labels={DOCUMENT_STATE_LABELS}
                   value={state}
-                  onChange={(next) => void setFilters({ state: next })}
+                  // Settlement lists posted documents only, so each filter clears a
+                  // contradicting choice in the other.
+                  onChange={(next) =>
+                    void setFilters({
+                      state: next,
+                      settlement: next && next !== "posted" ? undefined : settlement,
+                    })
+                  }
                 />
                 <OptionFilter
                   icon={CircleDollarSignIcon}
@@ -217,7 +226,12 @@ function InvoicesRoute() {
                   options={SETTLEMENT_FILTERS}
                   labels={SETTLEMENT_FILTER_LABELS}
                   value={settlement}
-                  onChange={(next) => void setFilters({ settlement: next })}
+                  onChange={(next) =>
+                    void setFilters({
+                      settlement: next,
+                      state: next && state !== "posted" ? undefined : state,
+                    })
+                  }
                 />
               </FilterMenu>
             }

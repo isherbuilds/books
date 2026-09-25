@@ -68,7 +68,7 @@ function BillsRoute() {
   const range: SearchRange = { from, to };
   const rangeText = rangeLabel(range, today, financialYearStart);
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
-  const canPost = useCan(orgSlug, { bill: ["post"] });
+  const canCreate = useCan(orgSlug, { bill: ["create"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
 
   const bills = useInfiniteQuery({
@@ -139,7 +139,7 @@ function BillsRoute() {
 
   const openCreate = () => void navigate({ to: "/$orgSlug/bills/new", params: { orgSlug } });
   usePaletteActions(
-    canPost ? [{ id: "bill:new", label: "New bill", group: "action", run: openCreate }] : [],
+    canCreate ? [{ id: "bill:new", label: "New bill", group: "action", run: openCreate }] : [],
   );
 
   const empty =
@@ -158,7 +158,7 @@ function BillsRoute() {
         title="No bills yet"
         description="Draft and posted bills appear here, newest first."
         action={
-          canPost ? (
+          canCreate ? (
             <Button size="xs" variant="outline" onClick={openCreate}>
               New bill
             </Button>
@@ -171,7 +171,7 @@ function BillsRoute() {
     <>
       <PageHeader
         title="Bills"
-        action={canPost ? <Button onClick={openCreate}>New</Button> : undefined}
+        action={canCreate ? <Button onClick={openCreate}>New</Button> : undefined}
       />
       <PageBody>
         <ListToolbar>
@@ -207,7 +207,14 @@ function BillsRoute() {
                   options={BILL_STATES}
                   labels={DOCUMENT_STATE_LABELS}
                   value={state}
-                  onChange={(next) => void setFilters({ state: next })}
+                  // Settlement lists posted documents only, so each filter clears a
+                  // contradicting choice in the other.
+                  onChange={(next) =>
+                    void setFilters({
+                      state: next,
+                      settlement: next && next !== "posted" ? undefined : settlement,
+                    })
+                  }
                 />
                 <OptionFilter
                   icon={CircleDollarSignIcon}
@@ -215,7 +222,12 @@ function BillsRoute() {
                   options={SETTLEMENT_FILTERS}
                   labels={SETTLEMENT_LABELS}
                   value={settlement}
-                  onChange={(next) => void setFilters({ settlement: next })}
+                  onChange={(next) =>
+                    void setFilters({
+                      settlement: next,
+                      state: next && state !== "posted" ? undefined : state,
+                    })
+                  }
                 />
               </FilterMenu>
             }

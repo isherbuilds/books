@@ -25,6 +25,7 @@ import { journalListOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
+import { requireOrgPermission } from "@/lib/route-permission";
 
 const JOURNAL_STATES = ["posted", "cancelled"] as const;
 
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/$orgSlug/journals")({
   validateSearch: journalSearch,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
+    await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
     await queryClient.infiniteQuery(journalListOptions(orgSlug, deps)).catch(() => {});
   },
   component: JournalsRoute,
