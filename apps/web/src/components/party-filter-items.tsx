@@ -15,14 +15,14 @@ export function PartyFilterItems({
 }) {
   const parties = useQuery(partyListOptions(orgSlug));
 
-  if (!parties.data?.length)
+  if (!parties.data?.rows.length)
     return (
       <DropdownMenuItem disabled>
         {parties.isPending ? "Loading…" : parties.isError ? "Could not load parties" : "No parties"}
       </DropdownMenuItem>
     );
 
-  return parties.data.map((party) => (
+  return parties.data.rows.map((party) => (
     <DropdownMenuCheckboxItem
       key={party.id}
       checked={party.id === partyId}

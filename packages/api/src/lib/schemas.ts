@@ -237,6 +237,27 @@ export const indianPinCode = z
   .trim()
   .regex(/^[1-9][0-9]{5}$/, "Use a valid 6-digit PIN code");
 
+/**
+ * The legal identity and address an organization is created with and later edits.
+ * PAN and State are optional here because a GSTIN carries both: parse the object with
+ * `.transform(deriveOrganizationIdentity)`.
+ */
+export const organizationProfileFields = {
+  legalName: z.string().trim().min(1).max(200),
+  pan: optionalPan,
+  gstin: optionalGstin,
+  stateCode: optionalStateCode,
+  addressLine1: z.string().trim().min(1).max(200),
+  addressLine2: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((value) => value || undefined)
+    .optional(),
+  city: z.string().trim().min(1).max(120),
+  pinCode: indianPinCode,
+};
+
 /** The state code and PAN a valid GSTIN carries, or null. */
 export function gstinParts(value: string): { stateCode: string; pan: string } | null {
   const gstin = value.trim().toUpperCase();

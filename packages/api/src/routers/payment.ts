@@ -1,6 +1,5 @@
 import { authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
@@ -18,7 +17,7 @@ import {
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
-import { formatDecimal } from "../core/money";
+import { formatDecimal, sumPaise } from "../core/money";
 import { computeTds } from "../core/posting";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
@@ -103,7 +102,7 @@ export const paymentRouter = {
     if (
       settlementKind === "against" &&
       input.exposureSide === "receivable" &&
-      input.allocations.reduce((sum, allocation) => sum + allocation.amount, 0n) !== input.amount
+      sumPaise(input.allocations.map((allocation) => allocation.amount)) !== input.amount
     ) {
       throw badRequest(
         "REFUND_AMOUNT_MISMATCH",
@@ -127,13 +126,11 @@ export const paymentRouter = {
               ]
             : [];
 
-      const validAccounts =
-        accountIds.length > 0
-          ? await postableAccounts(tx, scope.orgId, accountIds, ["expense", "income", "asset"]).for(
-              "share",
-              { of: accounts },
-            )
-          : [];
+      const validAccounts = await postableAccounts(tx, scope.orgId, accountIds, [
+        "expense",
+        "income",
+        "asset",
+      ]);
 
       const byAccountId = new Map(validAccounts.map((account) => [account.id, account]));
 

@@ -8,6 +8,7 @@ import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { eq } from "drizzle-orm";
 
@@ -141,15 +142,17 @@ test("founder organization creation seeds the complete chart and profile", async
     await db.select().from(tdsSections).where(eq(tdsSections.orgId, organization.id)),
   ).toHaveLength(13);
 
-  const profile = await api.organization.getProfile({ orgSlug: organization.slug });
-  expect(profile.legalType).toBe("company");
-  expect(profile.timeZone).toBe("UTC");
+  const [stored] = await db
+    .select({ legalType: organizationSettings.legalType })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.orgId, organization.id));
+
+  expect(stored?.legalType).toBe("company");
+  expect((await api.settings.get({ orgSlug: organization.slug })).timeZone).toBe("UTC");
   expect((await api.member.me({ orgSlug: organization.slug })).timeZone).toBe("UTC");
   const settings = await api.settings.get({ orgSlug: organization.slug });
   await api.settings.update({ ...settings, orgSlug: organization.slug, timeZone: "Europe/London" });
-  expect((await api.organization.getProfile({ orgSlug: organization.slug })).timeZone).toBe(
-    "Europe/London",
-  );
+  expect((await api.settings.get({ orgSlug: organization.slug })).timeZone).toBe("Europe/London");
   expect((await api.member.me({ orgSlug: organization.slug })).timeZone).toBe("Europe/London");
 
   const native = await auth.handler(
@@ -274,10 +277,15 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   });
 
   const listed = await api.party.list({ orgSlug: organization.slug });
-  expect(listed).toHaveLength(6);
-  expect(listed.map((party) => party.id)).toEqual(
+  expect(listed.hasMore).toBe(false);
+  expect(listed.rows).toHaveLength(6);
+  expect(listed.rows.map((party) => party.id)).toEqual(
     expect.arrayContaining([original.id, derived.id, namesake.id, ram.id, sita.id]),
   );
+
+  // Past the bound the Link Field searches the server on name or GSTIN.
+  const searched = await api.party.list({ orgSlug: organization.slug, q: "सीत" });
+  expect(searched).toEqual({ rows: [expect.objectContaining({ id: sita.id })], hasMore: false });
 });
 
 test("a party edit from a stale copy is refused", async () => {

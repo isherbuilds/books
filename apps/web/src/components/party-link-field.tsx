@@ -5,18 +5,29 @@ import {
   FormLabel,
   FormMessage,
 } from "@accly/ui/components/form";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type Ref } from "react";
 import { useFormContext } from "react-hook-form";
 
 import { LinkField } from "@/components/link-field";
 import { PartySheet } from "@/components/party-form";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useCan } from "@/lib/membership";
 import type { ListState } from "@/lib/list-state";
-import { partyPickerOptions, type PartyOption, type PartyRole } from "@/lib/parties";
+import {
+  partyPickerOptions,
+  type PartyOption,
+  type PartyPicker,
+  type PartyRole,
+} from "@/lib/parties";
 
-/** The owner supplies the party query and quick-create action. */
+/**
+ * The owner supplies the cached master and quick-create action. Past the master's
+ * bound, typed text searches the server, so every party stays reachable.
+ */
 export function PartyLinkField({
+  orgSlug,
+  role,
   parties,
   value,
   onSelect,
@@ -28,7 +39,10 @@ export function PartyLinkField({
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: {
-  parties: ListState<PartyOption[]>;
+  orgSlug: string;
+  /** Ranks server search results as the master is ranked. */
+  role?: PartyRole;
+  parties: ListState<PartyPicker>;
   value: PartyOption | null;
   onSelect: (party: PartyOption | null) => void;
   onCreate?: (seed: string) => void;
@@ -39,11 +53,26 @@ export function PartyLinkField({
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 }) {
+  const [needle, setNeedle] = useState("");
+  const typed = useDebouncedValue(needle, 200);
+  const remote = parties.data?.hasMore === true && needle !== "";
+
+  const search = useQuery({
+    ...partyPickerOptions(orgSlug, role, typed),
+    enabled: remote && typed !== "",
+    placeholderData: keepPreviousData,
+  });
+
+  const source = remote ? search : parties;
+  const settled = !remote || (typed === needle && !search.isPlaceholderData);
+
   return (
     <LinkField<PartyOption>
-      items={parties.data}
-      query={parties}
+      items={source.data?.rows}
+      query={source}
       noun="parties"
+      complete={settled && source.data?.hasMore === false}
+      onSearch={setNeedle}
       getKey={(party) => party.id}
       getLabel={(party) => party.name}
       getCode={(party) => party.gstin ?? undefined}
@@ -106,6 +135,8 @@ export function DocumentPartyField({
             <FormLabel>{label}</FormLabel>
             <FormControl>
               <PartyLinkField
+                orgSlug={orgSlug}
+                role={role}
                 parties={parties}
                 value={field.value ? { id: field.value, name: form.getValues("partyName") } : null}
                 onSelect={select}

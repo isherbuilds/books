@@ -2,36 +2,21 @@ import { db } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
 import { audit } from "../audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { orgSettings } from "../lib/settlements";
 import {
   deriveOrganizationIdentity,
   documentPrefix,
-  indianPinCode,
-  optionalGstin,
-  optionalPan,
-  optionalStateCode,
+  organizationProfileFields,
   timeZone,
 } from "../lib/schemas";
 
 const editableSettings = {
-  legalName: z.string().trim().min(1).max(200),
-  pan: optionalPan,
-  gstin: optionalGstin,
-  stateCode: optionalStateCode,
-  addressLine1: z.string().trim().min(1).max(200),
-  addressLine2: z
-    .string()
-    .trim()
-    .max(200)
-    .transform((value) => value || undefined)
-    .optional(),
-  city: z.string().trim().min(1).max(120),
-  pinCode: indianPinCode,
+  ...organizationProfileFields,
   financialYearStart: z.number().int().min(1).max(12),
   timeZone: timeZone,
   invoicePrefix: documentPrefix,
@@ -46,8 +31,6 @@ const editableSettings = {
 const settingsFields = z.object(editableSettings).transform(deriveOrganizationIdentity);
 
 export type SettingsFields = z.infer<typeof settingsFields>;
-
-const NOT_FOUND_MESSAGE = "Organization settings not found";
 
 function settingsDto(settings: typeof organizationSettings.$inferSelect): SettingsFields {
   const {
@@ -70,15 +53,7 @@ function settingsDto(settings: typeof organizationSettings.$inferSelect): Settin
 export const settingsRouter = {
   get: orgProcedure({ settings: ["read"] }, orgInput).handler(
     async ({ context }): Promise<SettingsFields> => {
-      const [row] = await db
-        .select()
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, context.scope.orgId))
-        .limit(1);
-
-      if (!row) throw new ORPCError("NOT_FOUND", { message: NOT_FOUND_MESSAGE });
-
-      return settingsDto(row);
+      return settingsDto(await orgSettings(context.scope.orgId));
     },
   ),
 
@@ -92,13 +67,7 @@ export const settingsRouter = {
     const saved = await db.transaction(async (tx) => {
       // FOR UPDATE waits out every posting, which reads settings FOR SHARE, so no
       // document is numbered between this check and the write.
-      const [current] = await tx
-        .select({ financialYearStart: organizationSettings.financialYearStart })
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, scope.orgId))
-        .for("update");
-
-      if (!current) throw new ORPCError("NOT_FOUND", { message: NOT_FOUND_MESSAGE });
+      const current = await orgSettings(scope.orgId, tx, "update");
 
       // The start month names every financial year and its number series, so moving
       // it after a document is numbered would split one GST year across two series.

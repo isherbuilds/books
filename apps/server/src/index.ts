@@ -149,41 +149,15 @@ const rpcHandler = new RPCHandler(appRouter, {
   interceptors: [redactServerErrors, onError(logORPCError)],
 });
 
-app.use("/rpc/*", procedureBodyLimit);
-
-app.use("/rpc/*", async (c) => {
-  const context = await createLoggedRequestContext(c);
-
-  const result = await rpcHandler.handle(c.req.raw, {
-    prefix: "/rpc",
-    context,
-  });
-
-  if (!result.matched) {
-    return c.notFound();
-  }
-
-  return c.newResponse(result.response.body, result.response);
-});
-
-if (!isProduction) {
-  const apiHandler = new OpenAPIHandler(appRouter, {
-    plugins: [
-      new OpenAPIReferencePlugin({
-        schemaConverters: [new ZodToJsonSchemaConverter()],
-      }),
-    ],
-    interceptors: [redactServerErrors, onError(logORPCError)],
-  });
-
-  app.use("/api-reference/*", procedureBodyLimit);
-  app.use("/api-reference/*", async (c) => {
+// Both handlers resolve the logged request context and answer under their own prefix.
+function mount(
+  prefix: "/rpc" | "/api-reference",
+  handler: Pick<RPCHandler<ORPCContext>, "handle">,
+): void {
+  app.use(`${prefix}/*`, procedureBodyLimit);
+  app.use(`${prefix}/*`, async (c) => {
     const context = await createLoggedRequestContext(c);
-
-    const result = await apiHandler.handle(c.req.raw, {
-      prefix: "/api-reference",
-      context,
-    });
+    const result = await handler.handle(c.req.raw, { prefix, context });
 
     if (!result.matched) {
       return c.notFound();
@@ -191,6 +165,22 @@ if (!isProduction) {
 
     return c.newResponse(result.response.body, result.response);
   });
+}
+
+mount("/rpc", rpcHandler);
+
+if (!isProduction) {
+  mount(
+    "/api-reference",
+    new OpenAPIHandler(appRouter, {
+      plugins: [
+        new OpenAPIReferencePlugin({
+          schemaConverters: [new ZodToJsonSchemaConverter()],
+        }),
+      ],
+      interceptors: [redactServerErrors, onError(logORPCError)],
+    }),
+  );
 }
 
 // Readiness, not liveness: a process that answers while Postgres is unreachable
@@ -216,6 +206,4 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
   });
 }
 
-// Part of this project's dev port block (55442-55451) so parallel checkouts of
-// other products do not fight over 3000. The container sets PORT explicitly.
-export default { port: Number(process.env.PORT ?? 55443), fetch: app.fetch };
+export default { port: env.PORT, fetch: app.fetch };

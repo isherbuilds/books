@@ -15,21 +15,21 @@ export function useDebouncedValue<T>(value: T, delay: number): T {
 }
 
 // The same pause for a value React never holds: an uncontrolled box keeps its text
-// in the DOM and schedules this once the typing stops. `now` applies at once and
-// drops a pending pause, so an older value cannot land after Enter or Esc.
-export function useDebouncedCallback<T>(callback: (value: T) => void, delay: number) {
+// in the DOM, so the callback reads it when it runs, not when it was scheduled. `now`
+// runs at once and drops a pending pause.
+export function useDebouncedCallback(callback: () => void, delay: number) {
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   return {
-    schedule: (value: T) => {
+    schedule: () => {
       window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => callback(value), delay);
+      timer.current = window.setTimeout(callback, delay);
     },
-    now: (value: T) => {
+    now: () => {
       window.clearTimeout(timer.current);
-      callback(value);
+      callback();
     },
   };
 }

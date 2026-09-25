@@ -14,9 +14,7 @@ import { DATA_TABLE_FEATURES, Dash, TextOrDash } from "@/components/data-table/d
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { Monogram } from "@/components/monogram";
 import { useCan } from "@/lib/membership";
-import { ROLE_LABELS } from "@/lib/parties";
-
-type PartyListRow = Awaited<ReturnType<RouterClient<AppRouter>["party"]["list"]>>[number];
+import { ROLE_LABELS, type PartyListRow } from "@/lib/parties";
 
 type PartyTotals = Awaited<ReturnType<RouterClient<AppRouter>["receipt"]["partyTotals"]>>[number];
 

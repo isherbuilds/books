@@ -241,7 +241,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 1. **Spine, Party, templates, money.** Implemented: the settings row, chart
    templates, Parties with a namesake check and one GSTIN per Organization (an
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
-   rows then `MASTER_LIST_LIMIT`, money accounts and methods.
+   rows then `MASTER_LIST_LIMIT` (parties search the server instead), money
+   accounts and methods.
 2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
    no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
@@ -415,9 +416,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and amend (`CONFLICT`, naming the notes).
    - **Pickers.** `party.openItems({ partyId, side })` returns targets with
      outstanding (`{ id, type, number, documentDate, dueDate, outstandingPaise }`)
-     and `party.openCredits({ partyId, side, type? })` returns sources with unapplied
-     credit (`{ id, type, number, documentDate, unappliedPaise }`); both the
-     200 oldest and `hasMore`. The optional credit `type` filters before the limit;
+     and `party.openCredits({ partyId, side, type?, q? })` returns sources with unapplied
+     credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
+     page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
+     next page passes the last row's id as `cursor`, so no row is out of reach.
+     The optional credit `type` and the number search `q` filter before the page;
      reading credits requires the Note read grant. They replace `invoice.openInvoices` and
      `receipt.unapplied`. `allocation.apply` takes
      `{ sourceDocumentId, targetDocumentId, amount }`.
@@ -650,7 +653,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `packages/api/src/core/allocations.ts`,
      `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
      `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
-     `apply-credit-sheet.tsx`,
+     `apply-credit-dialog.tsx`,
      `apps/web/src/routes/$orgSlug/journals_.$journalId.tsx`. Touches:
      `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
      and query), `apps/web/src/lib/domain-invalidation.ts`,
@@ -666,7 +669,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    debit for a party (the Rahul side of a transfer, a charge with no Invoice)
    is settleable: Receipt `against` and `allocation.apply` may target it.
    `party.openItems({ partyId, side: "receivable" })` already lists Invoices;
-   9b adds Journal debits with outstanding, 200 oldest and `hasMore`, with
+   9b adds Journal debits with outstanding, in the same oldest-first pages, with
    `dueDate` null for a Journal. Invoice list open and overdue filters stay
    Invoice-only. A Journal with active allocations targeting it refuses cancel
    (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's
@@ -864,3 +867,20 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
    cutover with open Invoices and an advance for one Party; a TPA settlement
    net of TDS with a disallowance; a dealer receipt net of TDS and a bank
    charge; a school caution deposit; an IPD deposit.
+2. **Payment mode versus money account.** A Payment Method binds one name to
+   one account, and Receipt, Payment and a paid-now Invoice share one active
+   list, so a receipt-only card machine appears on Payment. ERPNext (Mode of
+   Payment plus Paid From/To) and Zoho Books (Payment Mode plus Deposit
+   To/Paid Through) keep the two apart. Candidate: a cash/bank account plus a
+   small mode list, with the likely account preselected. Measure it against
+   the combined picker on the [speed gate](./client-patterns.md#speed-gate-h4)
+   before any schema change.
+
+ERPNext v15 and Zoho Books India reference check, 2026-09-24 (evidence in Git
+history): both use the same document-first sequence and separate sales,
+purchase, money, Journal, opening and settlement flows as the slices above.
+Their reports, cutover import and party Journals match slices 6, 7 and 9, and
+their TDS thresholds, deposit challans, card clearing and bank reconciliation
+match the Deferred gates. The check validates workflow shape only, not pilot
+speed, TDS correctness or a real cutover; the worked examples above remain the
+test.
