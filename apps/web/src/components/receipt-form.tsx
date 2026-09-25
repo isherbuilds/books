@@ -1,7 +1,9 @@
 import {
   NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
+  enteredPaise,
   formatDecimal,
+  isPositiveMoney,
   parseMoney,
 } from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
@@ -36,7 +38,7 @@ import { PaymentMethodField } from "@/components/payment-method-field";
 import { ReceiptAdjustments } from "@/components/receipt-adjustments";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
-import { invalidateCashState } from "@/lib/domain-invalidation";
+import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
@@ -194,6 +196,7 @@ export function ReceiptForm({
   // complete page without it means it is no longer open.
   const seedMissing =
     invoice !== undefined &&
+    isPositiveMoney(invoice.outstandingPaise) &&
     partyId === invoice.partyId &&
     openItems.data?.hasMore === true &&
     !loadedRows.some((row) => row.id === invoice.id);
@@ -234,12 +237,12 @@ export function ReceiptForm({
 
             const reason = errorReason(error);
 
-            // The outstanding amounts on screen are stale.
+            // The outstanding amounts on screen, and the seeded Invoice's, are stale.
             if (
               reason === "ALLOCATION_TARGET_INVALID" ||
               reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
             ) {
-              await openItems.refetch();
+              await invalidateSettlementState(queryClient, orgSlug);
             }
           },
         }),
@@ -430,14 +433,22 @@ export function ReceiptForm({
                 <FormControl>
                   <Input
                     {...field}
-                    // A partial receipt from an Invoice moves its allocation too, until
-                    // the operator types a different allocation.
+                    // A receipt from an Invoice moves its allocation too, up to the
+                    // outstanding, until the operator types a different allocation. The
+                    // remainder posts as an advance.
                     onChange={(event) => {
-                      if (
-                        invoice &&
-                        form.getValues(`allocations.${invoice.id}`) === form.getValues("amount")
-                      ) {
-                        form.setValue(`allocations.${invoice.id}`, event.target.value);
+                      if (invoice) {
+                        const seeded = (amount: string) =>
+                          enteredPaise(amount) > invoice.outstandingPaise
+                            ? formatDecimal(invoice.outstandingPaise)
+                            : amount;
+
+                        if (
+                          form.getValues(`allocations.${invoice.id}`) ===
+                          seeded(form.getValues("amount"))
+                        ) {
+                          form.setValue(`allocations.${invoice.id}`, seeded(event.target.value));
+                        }
                       }
 
                       void field.onChange(event);
