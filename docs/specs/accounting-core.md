@@ -400,9 +400,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and amend (`CONFLICT`, naming the notes).
    - **Pickers.** `party.openItems({ partyId, side })` returns targets with
      outstanding (`{ id, type, number, documentDate, dueDate, outstandingPaise }`)
-     and `party.openCredits({ partyId, side, type? })` returns sources with unapplied
-     credit (`{ id, type, number, documentDate, unappliedPaise }`); both the
-     200 oldest and `hasMore`. The optional credit `type` filters before the limit;
+     and `party.openCredits({ partyId, side, type?, q? })` returns sources with unapplied
+     credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
+     page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
+     next page passes the last row's id as `cursor`, so no row is out of reach.
+     The optional credit `type` and the number search `q` filter before the page;
      reading credits requires the Note read grant. They replace `invoice.openInvoices` and
      `receipt.unapplied`. `allocation.apply` takes
      `{ sourceDocumentId, targetDocumentId, amount }`.
@@ -649,7 +651,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    debit for a party (the Rahul side of a transfer, a charge with no Invoice)
    is settleable: Receipt `against` and `allocation.apply` may target it.
    `party.openItems({ partyId, side: "receivable" })` already lists Invoices;
-   9b adds Journal debits with outstanding, 200 oldest and `hasMore`, with
+   9b adds Journal debits with outstanding, in the same oldest-first pages, with
    `dueDate` null for a Journal. Invoice list open and overdue filters stay
    Invoice-only. A Journal with active allocations targeting it refuses cancel
    (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's

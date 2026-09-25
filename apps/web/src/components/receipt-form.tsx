@@ -14,7 +14,13 @@ import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 
@@ -33,6 +39,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
+import { openItemsOptions } from "@/lib/pickers";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
@@ -148,21 +155,22 @@ export function ReceiptForm({
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
-  const openItems = useQuery(
-    orpc.party.openItems.queryOptions({
-      input:
-        settlementKind === "against" && partyId
-          ? { orgSlug, partyId, side: "receivable" }
-          : skipToken,
-    }),
+  const openItems = useInfiniteQuery(
+    openItemsOptions(
+      settlementKind === "against" && partyId
+        ? { orgSlug, partyId, side: "receivable" }
+        : skipToken,
+    ),
   );
 
   const openRows: OpenDocument[] =
-    openItems.data?.rows.map((row) => ({
-      ...row,
-      label: row.type === "invoice" ? "Invoice" : "Payment",
-      openPaise: row.outstandingPaise,
-    })) ?? [];
+    openItems.data?.pages
+      .flatMap((page) => page.rows)
+      .map((row) => ({
+        ...row,
+        label: row.type === "invoice" ? "Invoice" : "Payment",
+        openPaise: row.outstandingPaise,
+      })) ?? [];
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
 

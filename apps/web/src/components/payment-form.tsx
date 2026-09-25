@@ -19,7 +19,13 @@ import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
@@ -41,6 +47,7 @@ import { invalidateCashState } from "@/lib/domain-invalidation";
 import { positiveAmount } from "@/lib/form-schema";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
+import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { partyPickerOptions } from "@/lib/parties";
 
@@ -174,39 +181,37 @@ export function PaymentForm({
   const spendAccounts = accounts.data && postableAccounts(accounts.data, ["expense", "asset"]);
   const expenseAccounts = accounts.data && postableAccounts(accounts.data, ["expense"]);
 
-  const items = useQuery(
-    orpc.party.openItems.queryOptions({
-      input:
-        settlementKind === "against" && exposureSide === "payable" && partyId
-          ? { orgSlug, partyId, side: "payable" }
-          : skipToken,
-    }),
+  const items = useInfiniteQuery(
+    openItemsOptions(
+      settlementKind === "against" && exposureSide === "payable" && partyId
+        ? { orgSlug, partyId, side: "payable" }
+        : skipToken,
+    ),
   );
 
-  const credits = useQuery(
-    orpc.party.openCredits.queryOptions({
-      input:
-        settlementKind === "against" && exposureSide === "receivable" && partyId
-          ? { orgSlug, partyId, side: "receivable", type: "creditNote" }
-          : skipToken,
-    }),
+  const credits = useInfiniteQuery(
+    openCreditsOptions(
+      settlementKind === "against" && exposureSide === "receivable" && partyId
+        ? { orgSlug, partyId, side: "receivable", type: "creditNote" }
+        : skipToken,
+    ),
   );
 
   const openQuery = exposureSide === "payable" ? items : credits;
 
   const openRows: OpenDocument[] =
     exposureSide === "payable"
-      ? (items.data?.rows.map((row) => ({
-          ...row,
-          label: "Bill",
-          openPaise: row.outstandingPaise,
-        })) ?? [])
-      : (credits.data?.rows.map((row) => ({
-          ...row,
-          label: "Credit note",
-          dueDate: null,
-          openPaise: row.unappliedPaise,
-        })) ?? []);
+      ? (items.data?.pages
+          .flatMap((page) => page.rows)
+          .map((row) => ({ ...row, label: "Bill", openPaise: row.outstandingPaise })) ?? [])
+      : (credits.data?.pages
+          .flatMap((page) => page.rows)
+          .map((row) => ({
+            ...row,
+            label: "Credit note",
+            dueDate: null,
+            openPaise: row.unappliedPaise,
+          })) ?? []);
 
   const sections = useQuery(
     orpc.payment.tdsSections.queryOptions({

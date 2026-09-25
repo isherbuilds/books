@@ -1,5 +1,6 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { NON_NEGATIVE_MONEY_PATTERN, formatMoney, parseMoney } from "@accly/api/core/money";
+import type { AppRouterClient } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -28,17 +29,21 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { LoadMore, SearchInput } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
 
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
+import { openCreditsOptions } from "@/lib/pickers";
+
+type Credit = Awaited<ReturnType<AppRouterClient["party"]["openCredits"]>>["rows"][number];
 
 const applyCreditSchema = z.object({
   amount: positiveAmount,
@@ -57,16 +62,19 @@ export function ApplyCreditSheet({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [sourceId, setSourceId] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [chosen, setChosen] = useState<Credit | null>(null);
   const form = useZodForm(applyCreditSchema, { defaultValues: { amount: "" } });
 
-  const credits = useQuery(
-    orpc.party.openCredits.queryOptions({
-      input: { orgSlug, partyId: target.partyId, side },
-    }),
+  const credits = useInfiniteQuery(
+    openCreditsOptions({ orgSlug, partyId: target.partyId, side, q: q || undefined }),
   );
 
-  const selected = credits.data?.rows.find((credit) => credit.id === sourceId);
+  const rows = credits.data?.pages.flatMap((page) => page.rows) ?? [];
+
+  // The loaded row carries the latest unapplied amount; the kept one survives a search
+  // that no longer lists it.
+  const selected = rows.find((credit) => credit.id === chosen?.id) ?? chosen;
 
   const apply = useMutation(
     orpc.allocation.apply.mutationOptions({
@@ -142,9 +150,15 @@ export function ApplyCreditSheet({
         <Form {...form}>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
             <SheetBody>
+              <SearchInput
+                label="Search credits by number"
+                placeholder="Search by number"
+                onQueryChange={setQ}
+              />
+
               {credits.isPending ? (
                 <p className="text-muted-foreground">Loading unapplied credits…</p>
-              ) : credits.isError ? (
+              ) : credits.isError && !credits.isFetchNextPageError ? (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-destructive">Could not load unapplied credits.</p>
                   <Button
@@ -156,8 +170,12 @@ export function ApplyCreditSheet({
                     Try again
                   </Button>
                 </div>
-              ) : credits.data.rows.length === 0 ? (
-                <p className="text-muted-foreground">No unapplied credits for this party.</p>
+              ) : rows.length === 0 ? (
+                <p className="text-muted-foreground">
+                  {q
+                    ? `No unapplied credits match “${q}”.`
+                    : "No unapplied credits for this party."}
+                </p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -169,8 +187,8 @@ export function ApplyCreditSheet({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {credits.data.rows.map((credit) => {
-                      const chosen = credit.id === sourceId;
+                    {rows.map((credit) => {
+                      const isSelected = credit.id === selected?.id;
 
                       return (
                         <TableRow key={credit.id}>
@@ -194,7 +212,7 @@ export function ApplyCreditSheet({
                             {formatMoney(credit.unappliedPaise)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {chosen ? (
+                            {isSelected ? (
                               <Badge variant="secondary">Selected</Badge>
                             ) : (
                               <Button
@@ -202,7 +220,7 @@ export function ApplyCreditSheet({
                                 size="xs"
                                 variant="ghost"
                                 onClick={() => {
-                                  setSourceId(credit.id);
+                                  setChosen(credit);
                                   form.clearErrors();
                                   form.setValue("amount", "");
                                 }}
@@ -218,11 +236,7 @@ export function ApplyCreditSheet({
                 </Table>
               )}
 
-              {credits.data?.hasMore ? (
-                <p className="text-muted-foreground">
-                  Showing the 200 oldest unapplied credits. Newer ones appear once these are used.
-                </p>
-              ) : null}
+              <LoadMore query={credits} shown={rows.length} />
 
               {selected ? (
                 <RegisteredFormField
