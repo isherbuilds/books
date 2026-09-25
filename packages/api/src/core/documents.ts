@@ -114,7 +114,6 @@ export function accountLine(
   };
 }
 
-/** A posted document's number; posting assigns it, so a missing one breaks an invariant. */
 /** A saved Invoice's or Bill's taxable value and GST components, from its stored lines. */
 export function taxTotals(
   lines: readonly {
@@ -136,6 +135,7 @@ export function taxTotals(
   return totals;
 }
 
+/** A posted document's number; posting assigns it, so a missing one breaks an invariant. */
 export function postedNumber(number: string | null, documentId: string): string {
   if (number === null) throw impossible(`posted document ${documentId} has no number`);
 

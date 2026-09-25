@@ -107,9 +107,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
   the new account chosen. Open: add a bank account and its method that way,
   then mark the method inactive and active again. Post a receipt
   with it and confirm the balance moves; cancel it and confirm the balance
-  returns. Mark the account behind a reactivated method inactive and confirm
-  Banking shows "Account inactive" and the Receipt form no longer offers the
-  method. Sign in as a CA and confirm accounts, balances and methods are
+  returns. Confirm that marking the account inactive is refused while the
+  method is active. Mark the method inactive, then its account, then the
+  method active again, and confirm Banking shows "Account inactive" and the
+  Receipt form no longer offers the method. Sign in as a CA and confirm accounts, balances and methods are
   visible without add and status actions.
 - **Chart of accounts and journal pages**: Verification. Headless checks cover
   the chart, journal entry and record, Banking, Items, Locks and Opening
