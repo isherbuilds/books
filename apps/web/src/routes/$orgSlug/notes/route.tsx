@@ -165,7 +165,7 @@ function NotesRoute() {
           })}
           // One type per register, so its column would repeat on every row.
           columnVisibility={type ? { type: false } : undefined}
-          renderCard={(note) => <NoteCard note={note} />}
+          renderCard={(note) => <NoteCard note={note} showType={!type} />}
           query={notes}
           errorTitle="Could not load notes"
           empty={

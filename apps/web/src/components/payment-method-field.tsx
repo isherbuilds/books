@@ -80,7 +80,7 @@ export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
                     </button>
                   </>
                 ) : (
-                  "No active payment method. Ask an owner or accountant to add one in Banking."
+                  "No active payment method. Ask a member who manages Banking to add one."
                 )}
               </FormDescription>
             ) : null}
