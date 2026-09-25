@@ -15,7 +15,6 @@
     "@accly/env": "workspace:*",
     "@accly/storage": "workspace:*",
     "@orpc/server": "catalog:",
-    "@types/pg": "catalog:",
     "drizzle-orm": "catalog:",
     "hucre": "^1.1.0",
     "zod": "catalog:"
