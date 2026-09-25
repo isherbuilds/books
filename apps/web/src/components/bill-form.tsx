@@ -14,8 +14,14 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import {
+  skipToken,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { useState } from "react";
 import { useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -78,7 +84,8 @@ const SERVER_FIELDS = {
   BILL_TDS_EXCEEDS_TOTAL: "tdsSectionId",
 } satisfies Record<string, FieldPath<BillFormValues>>;
 
-function defaults(today: string, draft?: BillDetail): BillFormValues {
+// Place of supply starts at the organization's own state.
+function defaults(today: string, stateCode: string, draft?: BillDetail): BillFormValues {
   if (!draft)
     return {
       partyId: null,
@@ -86,7 +93,7 @@ function defaults(today: string, draft?: BillDetail): BillFormValues {
       reference: "",
       documentDate: today,
       dueDate: "",
-      placeOfSupplyStateCode: "",
+      placeOfSupplyStateCode: stateCode,
       tdsSectionId: "",
       narration: "",
       lines: [blankLine()],
@@ -98,7 +105,7 @@ function defaults(today: string, draft?: BillDetail): BillFormValues {
     reference: draft.reference ?? "",
     documentDate: draft.documentDate,
     dueDate: draft.dueDate ?? "",
-    placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? "",
+    placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? stateCode,
     tdsSectionId: draft.tds?.tdsSectionId ?? "",
     narration: draft.narration ?? "",
     lines: draft.lines.map((line) => ({
@@ -146,25 +153,23 @@ export function BillForm({
   const canSave = useCan(orgSlug, { bill: ["create"] });
   const canPost = useCan(orgSlug, { bill: ["post"] });
   const canReadPayment = useCan(orgSlug, { payment: ["read"] });
-  const form = useZodForm(billSchema, { defaultValues: defaults(today, draft) });
+  // The route loader primes settings, so GST registration is known before any save.
+  const settings = useSuspenseQuery(orpc.settings.get.queryOptions({ input: { orgSlug } })).data;
+  const registered = Boolean(settings.gstin);
+
+  const form = useZodForm(billSchema, {
+    defaultValues: defaults(today, settings.stateCode, draft),
+  });
+
   const watchedDate = useWatch({ control: form.control, name: "documentDate" });
   // Date-scoped pickers wait for a complete date rather than query a half-typed one.
   const documentDate = z.iso.date().safeParse(watchedDate).success ? watchedDate : undefined;
-  const settings = useQuery(orpc.settings.get.queryOptions({ input: { orgSlug } }));
 
   const sections = useQuery(
     orpc.payment.tdsSections.queryOptions({
       input: canReadPayment && documentDate ? { orgSlug, date: documentDate } : skipToken,
     }),
   );
-
-  const registered = Boolean(settings.data?.gstin);
-
-  useEffect(() => {
-    if (settings.data && !form.getValues("placeOfSupplyStateCode")) {
-      form.setValue("placeOfSupplyStateCode", settings.data.stateCode, { shouldValidate: true });
-    }
-  }, [settings.data, form]);
 
   const invalidateDrafts = () => invalidateBillDrafts(queryClient, orgSlug);
   const invalidateSettlement = () => invalidateSettlementState(queryClient, orgSlug);
@@ -272,13 +277,9 @@ export function BillForm({
         number={posted.number}
         onDone={() => onPosted(posted.id)}
         onNext={() => {
-          form.reset(
-            {
-              ...defaults(form.getValues("documentDate")),
-              placeOfSupplyStateCode: settings.data?.stateCode ?? "",
-            },
-            { keepSubmitCount: true },
-          );
+          form.reset(defaults(form.getValues("documentDate"), settings.stateCode), {
+            keepSubmitCount: true,
+          });
           post.reset();
         }}
       />
@@ -307,7 +308,7 @@ export function BillForm({
           </PostBar>
         }
       >
-        <DocumentPartyField orgSlug={orgSlug} label="Party" />
+        <DocumentPartyField orgSlug={orgSlug} label="Party" role="vendor" />
         <RegisteredFormField
           name="reference"
           render={({ field }) => (

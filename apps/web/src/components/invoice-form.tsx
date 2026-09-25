@@ -13,7 +13,6 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
-import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -21,6 +20,7 @@ import { useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -86,9 +86,7 @@ const SERVER_FIELDS = {
   PARTY_INVALID: "partyId",
   DUE_DATE_BEFORE_DOCUMENT: "dueDate",
   ITEM_INVALID: "lines",
-  INCOME_ACCOUNT_INVALID: "lines",
   TAX_RATE_MISSING: "lines",
-  TAXABLE_ACCOUNT_LINE: "lines",
   INVOICE_ZERO_TOTAL: "lines",
   DISCOUNT_EXCEEDS_SUBTOTAL: "discount",
   PAYMENT_METHOD_INVALID: "paymentMethodId",
@@ -107,7 +105,7 @@ function defaults(documentDate: string, draft?: InvoiceDetail): InvoiceFormValue
       discount: "",
       paidNow: false,
       paymentMethodId: "",
-      lines: [blankLine("item")],
+      lines: [blankLine()],
     };
   }
 
@@ -123,13 +121,10 @@ function defaults(documentDate: string, draft?: InvoiceDetail): InvoiceFormValue
     paidNow: false,
     paymentMethodId: "",
     lines: draft.lines.map((line) => ({
-      kind: line.kind,
       itemId: line.itemId,
-      accountId: line.accountId,
       quantity: String(line.quantity ?? 1),
       unitPrice: line.unitPricePaise === null ? "" : formatDecimal(line.unitPricePaise),
       description: line.description,
-      amount: line.kind === "account" ? formatDecimal(line.amountPaise + line.discountPaise) : "",
     })),
   };
 }
@@ -183,32 +178,19 @@ export function InvoiceForm({
   const invoiceInput = (values: InvoiceFormValues) => {
     if (!values.partyId) return null;
 
-    const apiLines = values.lines.flatMap((line): InvoiceApiLine[] => {
-      if (line.kind === "item") {
-        return line.itemId
-          ? [
-              {
-                kind: "item" as const,
-                itemId: line.itemId,
-                quantity: Number(line.quantity),
-                unitPrice: line.unitPrice,
-                description: line.description || undefined,
-              },
-            ]
-          : [];
-      }
-
-      return line.accountId
+    const apiLines = values.lines.flatMap((line): InvoiceApiLine[] =>
+      line.itemId
         ? [
             {
-              kind: "account" as const,
-              accountId: line.accountId,
-              description: line.description,
-              amount: line.amount,
+              kind: "item",
+              itemId: line.itemId,
+              quantity: Number(line.quantity),
+              unitPrice: line.unitPrice,
+              description: line.description || undefined,
             },
           ]
-        : [];
-    });
+        : [],
+    );
 
     if (apiLines.length !== values.lines.length) return null;
 
@@ -350,7 +332,12 @@ export function InvoiceForm({
         }
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <DocumentPartyField orgSlug={orgSlug} label="Party" onPartyChange={partyChanged} />
+          <DocumentPartyField
+            orgSlug={orgSlug}
+            label="Party"
+            role="customer"
+            onPartyChange={partyChanged}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <RegisteredFormField
@@ -485,30 +472,7 @@ export function InvoiceForm({
           </section>
         ) : null}
 
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ReferenceNarrationFields />
       </DocumentForm>
     </Form>
   );

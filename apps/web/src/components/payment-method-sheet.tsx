@@ -32,15 +32,17 @@ type CreatedMethod = { id: string };
 
 function PaymentMethodForm({
   orgSlug,
+  accountId,
   onClose,
   onCreated,
 }: {
   orgSlug: string;
+  accountId: string;
   onClose: () => void;
   onCreated?: (method: CreatedMethod) => void;
 }) {
   const queryClient = useQueryClient();
-  const form = useZodForm(methodSchema, { defaultValues: { name: "", accountId: "" } });
+  const form = useZodForm(methodSchema, { defaultValues: { name: "", accountId } });
 
   // The Banks page's cache entry; only an active money account takes a new method.
   const groups = useQuery({
@@ -132,11 +134,14 @@ function PaymentMethodForm({
 export function PaymentMethodSheet({
   orgSlug,
   open,
+  accountId = "",
   onClose,
   onCreated,
 }: {
   orgSlug: string;
   open: boolean;
+  /** The account chosen when the Sheet opens, such as one just added. */
+  accountId?: string;
   onClose: () => void;
   onCreated?: (method: CreatedMethod) => void;
 }) {
@@ -151,7 +156,12 @@ export function PaymentMethodSheet({
       title="Add payment method"
       description="A method names one way money arrives and the account it lands in."
     >
-      <PaymentMethodForm orgSlug={orgSlug} onClose={onClose} onCreated={onCreated} />
+      <PaymentMethodForm
+        orgSlug={orgSlug}
+        accountId={accountId}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
     </FormSheet>
   );
 }

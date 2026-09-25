@@ -1,4 +1,4 @@
-import { ZERO_MONEY, formatMoney, isZeroMoney } from "@accly/api/core/money";
+import { formatMoney, isZeroMoney } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { PrintSnapshot } from "@accly/db/schema/documents";
@@ -24,23 +24,11 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
 
   if (!party) throw new Error("An invoice document requires a buyer in its print snapshot");
 
-  let hasDiscount = false;
-  let hasSplitTax = false;
-  let hasIgst = false;
-  let taxable = ZERO_MONEY;
-  let cgst = ZERO_MONEY;
-  let sgst = ZERO_MONEY;
-  let igst = ZERO_MONEY;
-
-  for (const line of data.lines) {
-    hasDiscount ||= !isZeroMoney(line.discountPaise);
-    hasSplitTax ||= !isZeroMoney(line.cgstPaise) || !isZeroMoney(line.sgstPaise);
-    hasIgst ||= !isZeroMoney(line.igstPaise);
-    taxable += line.amountPaise;
-    cgst += line.cgstPaise;
-    sgst += line.sgstPaise;
-    igst += line.igstPaise;
-  }
+  // The server sums the document; a column shows only when some line carries it.
+  const { taxablePaise, cgstPaise, sgstPaise, igstPaise } = data.totals;
+  const hasDiscount = data.lines.some((line) => !isZeroMoney(line.discountPaise));
+  const hasSplitTax = !isZeroMoney(cgstPaise) || !isZeroMoney(sgstPaise);
+  const hasIgst = !isZeroMoney(igstPaise);
 
   const placeOfSupply = data.placeOfSupplyStateCode
     ? `${INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode} (${data.placeOfSupplyStateCode})`
@@ -134,14 +122,14 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       <TotalPanel label="Total" amountPaise={data.totalPaise}>
         {isZeroMoney(data.discountPaise) ? null : (
           <>
-            <TotalRow label="Subtotal" amountPaise={taxable + data.discountPaise} />
+            <TotalRow label="Subtotal" amountPaise={taxablePaise + data.discountPaise} />
             <TotalRow label="Discount" amountPaise={-data.discountPaise} />
           </>
         )}
-        <TotalRow label="Taxable" amountPaise={taxable} />
-        {hasSplitTax ? <TotalRow label="CGST" amountPaise={cgst} /> : null}
-        {hasSplitTax ? <TotalRow label="SGST" amountPaise={sgst} /> : null}
-        {hasIgst ? <TotalRow label="IGST" amountPaise={igst} /> : null}
+        <TotalRow label="Taxable" amountPaise={taxablePaise} />
+        {hasSplitTax ? <TotalRow label="CGST" amountPaise={cgstPaise} /> : null}
+        {hasSplitTax ? <TotalRow label="SGST" amountPaise={sgstPaise} /> : null}
+        {hasIgst ? <TotalRow label="IGST" amountPaise={igstPaise} /> : null}
         <TotalRow label="Round-off" amountPaise={data.roundOffPaise} />
       </TotalPanel>
     </PrintedDocument>

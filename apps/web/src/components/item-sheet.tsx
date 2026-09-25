@@ -139,15 +139,15 @@ function ItemForm({
     }),
   );
 
-  // The mobile list renders cards without the table's row menu, so archiving lives here.
+  // The mobile list renders cards without the table's row menu, so the toggle lives here.
   const setActive = useMutation(
     orpc.item.setActive.mutationOptions({
       onSuccess: async () => {
         await invalidateItems(queryClient, orgSlug);
-        toast.success(item?.active ? "Item archived" : "Item restored");
+        toast.success(item?.active ? "Item marked inactive" : "Item marked active");
         onClose();
       },
-      onError: (error) => toast.error(errorMessage(error, "Could not update the item")),
+      onError: handleError,
     }),
   );
 
@@ -313,9 +313,19 @@ function ItemForm({
                 type="button"
                 variant="ghost"
                 size="xs"
-                onClick={() => setActive.mutate({ orgSlug, itemId: item.id, active: !item.active })}
+                onClick={() => {
+                  if (editToken === null)
+                    throw new Error("Editing an item without a captured edit token");
+
+                  setActive.mutate({
+                    orgSlug,
+                    itemId: item.id,
+                    updatedAt: editToken,
+                    active: !item.active,
+                  });
+                }}
               >
-                {item.active ? "Archive" : "Restore"}
+                {item.active ? "Mark inactive" : "Mark active"}
               </Button>
             ) : null}
             <div className="flex items-center gap-2">

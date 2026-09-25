@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page";
 import { billDetailOptions } from "@/lib/bills";
 import { loadRouteQuery } from "@/lib/orpc-error";
 import { useOrgDateTime } from "@/lib/org-datetime";
+import { orpc } from "@/lib/orpc";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/bills_/$billId/edit")({
@@ -13,7 +14,10 @@ export const Route = createFileRoute("/$orgSlug/bills_/$billId/edit")({
   remountDeps: ({ params }) => ({ billId: params.billId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, billId } }) => {
     await requireOrgPermission(queryClient, orgSlug, { bill: ["create"] });
-    await loadRouteQuery(queryClient.query(billDetailOptions(orgSlug, billId)));
+    await Promise.all([
+      loadRouteQuery(queryClient.query(billDetailOptions(orgSlug, billId))),
+      queryClient.query(orpc.settings.get.queryOptions({ input: { orgSlug } })),
+    ]);
   },
   component: EditBillRoute,
 });

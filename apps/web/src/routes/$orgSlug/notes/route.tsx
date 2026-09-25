@@ -2,13 +2,13 @@ import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { CalendarIcon, ContactRoundIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { ContactRoundIcon } from "lucide-react";
+import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
@@ -19,12 +19,10 @@ import {
 import { PartyFilterItems } from "@/components/party-filter-items";
 import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyListOptions } from "@/lib/parties";
 
 const noteSearch = z.object({
@@ -54,10 +52,6 @@ function NotesRoute() {
   const { q, partyId, type, from, to } = filters;
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
-  const { today, financialYearStart } = useOrgDateTime();
-  const range: SearchRange = { from, to };
-  const rangeText = rangeLabel(range, today, financialYearStart);
   const canReadParties = useCan(orgSlug, { party: ["read"] });
 
   const notes = useInfiniteQuery({
@@ -78,6 +72,8 @@ function NotesRoute() {
   const setFilters = (patch: Partial<NoteFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
+  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+
   const clear = () => {
     focusSearch(field, { empty: true });
     void setFilters({
@@ -92,7 +88,7 @@ function NotesRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.find((candidate) => candidate.id === partyId);
+    const party = parties.data?.rows.find((candidate) => candidate.id === partyId);
     chips.push({
       id: "partyId",
       name: "Party",
@@ -101,13 +97,7 @@ function NotesRoute() {
     });
   }
 
-  if (from || to)
-    chips.push({
-      id: "date",
-      name: "Date",
-      label: rangeText,
-      remove: () => setFilters({ from: undefined, to: undefined }),
-    });
+  if (date.chip) chips.push(date.chip);
 
   if (type)
     chips.push({
@@ -130,15 +120,7 @@ function NotesRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
-                  <PresetItems
-                    range={range}
-                    today={today}
-                    financialYearStart={financialYearStart}
-                    onSelect={(next) => void setFilters(next)}
-                    onCustom={() => setCustomRangeOpen(true)}
-                  />
-                </FilterSubmenu>
+                {date.submenu}
                 {canReadParties ? (
                   <FilterSubmenu icon={ContactRoundIcon} label="Party">
                     <PartyFilterItems
@@ -191,15 +173,7 @@ function NotesRoute() {
         <LoadMore query={notes} shown={rows.length} />
         <Outlet />
       </PageBody>
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={field}
-        from={from}
-        to={to}
-        today={today}
-        onApply={(next) => void setFilters(next)}
-      />
+      {date.popover}
     </>
   );
 }

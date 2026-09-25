@@ -1,26 +1,30 @@
+import { authorize, type AppPermission } from "@accly/auth/access";
 import { db } from "@accly/db";
 import type { DbTransaction } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { PARTY_ROLES, parties } from "@accly/db/schema/parties";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { conflict, nextEditToken } from "../lib/conflict";
-import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
+import { MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
-import { openCredits, openItems } from "../lib/settlements";
+import { openCredits, openItems, pageOf } from "../lib/settlements";
 import {
+  deriveFromGstin,
   indianPinCode,
-  indianStateCode,
+  likePattern,
   masterName,
   optionalGstin,
   optionalPan,
+  optionalStateCode,
   orderedPeriod,
+  pageLimit,
   period,
-  validateGstinIdentity,
+  searchQuery,
 } from "../lib/schemas";
 
 const partyInputFields = {
@@ -31,7 +35,7 @@ const partyInputFields = {
     .refine((roles) => new Set(roles).size === roles.length, "Party roles must be unique"),
   gstin: optionalGstin,
   pan: optionalPan,
-  stateCode: indianStateCode,
+  stateCode: optionalStateCode,
   addressLine1: z.string().trim().min(1).max(200).optional(),
   addressLine2: z.string().trim().min(1).max(200).optional(),
   city: z.string().trim().min(1).max(120).optional(),
@@ -40,7 +44,7 @@ const partyInputFields = {
   phone: z.string().trim().min(1).max(30).optional(),
 };
 
-type PartyFields = z.infer<z.ZodObject<typeof partyInputFields>>;
+type PartyFields = z.infer<z.ZodObject<typeof partyInputFields>> & { stateCode: string };
 
 export type PartyRecord = typeof parties.$inferSelect;
 
@@ -56,6 +60,28 @@ const STATEMENT_TYPE_LABELS = {
   journal: "Journal",
   openingBalance: "Opening Balance",
 } as const;
+
+// The documents a party's Transactions tab lists, each shown only to a reader of its
+// type: an operator sees invoices, receipts and payments, but no bills or notes.
+const TRANSACTION_TYPES = [
+  "invoice",
+  "bill",
+  "creditNote",
+  "debitNote",
+  "receipt",
+  "payment",
+] as const;
+
+type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+const TRANSACTION_READS: Record<TransactionType, AppPermission> = {
+  invoice: { invoice: ["read"] },
+  bill: { bill: ["read"] },
+  creditNote: { note: ["read"] },
+  debitNote: { note: ["read"] },
+  receipt: { receipt: ["read"] },
+  payment: { payment: ["read"] },
+};
 
 async function requireParty(orgId: string, partyId: string): Promise<void> {
   const [party] = await db
@@ -147,7 +173,7 @@ export const partyRouter = {
     orgInput
       .extend(partyInputFields)
       .extend({ allowNamesake: z.boolean().default(false) })
-      .superRefine(validateGstinIdentity),
+      .transform(deriveFromGstin),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
     const { orgSlug: _claim, allowNamesake, ...partyFieldsInput } = input;
@@ -183,7 +209,7 @@ export const partyRouter = {
         // The `updatedAt` the editor loaded; a newer row means someone saved first.
         updatedAt: z.iso.datetime({ precision: 3 }),
       })
-      .superRefine(validateGstinIdentity),
+      .transform(deriveFromGstin),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
@@ -250,7 +276,12 @@ export const partyRouter = {
   // exposes Bills and Debit Notes, which an operator never reads.
   openItems: orgProcedure(
     { party: ["read"] },
-    orgInput.extend({ partyId: z.uuid(), side: z.enum(["receivable", "payable"]) }),
+    orgInput.extend({
+      partyId: z.uuid(),
+      side: z.enum(["receivable", "payable"]),
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
+    }),
   ).handler(async ({ context, input }) => {
     if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
     await requireParty(context.scope.orgId, input.partyId);
@@ -264,6 +295,9 @@ export const partyRouter = {
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
       type: z.enum(["receipt", "creditNote", "payment", "debitNote"]).optional(),
+      q: searchQuery,
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
     if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
@@ -344,6 +378,50 @@ export const partyRouter = {
     return { openingPaise, lines, closingPaise: balancePaise };
   }),
 
+  // Every document naming the party, newest first, as Zoho's contact Transactions list
+  // shows them: drafts, posted and cancelled, one keyset page at a time.
+  transactions: orgProcedure(
+    { party: ["read"] },
+    orgInput.extend({ partyId: z.uuid(), cursor: z.uuid().optional(), limit: pageLimit }),
+  ).handler(async ({ context, input }) => {
+    const { scope } = context;
+    await requireParty(scope.orgId, input.partyId);
+
+    const types = TRANSACTION_TYPES.filter((type) =>
+      authorize(scope.roles, TRANSACTION_READS[type]),
+    );
+
+    if (types.length === 0) return { rows: [], hasMore: false };
+
+    const rows = await db
+      .select({
+        id: documents.id,
+        type: documents.type,
+        number: documents.number,
+        documentDate: documents.documentDate,
+        state: documents.state,
+        reference: documents.reference,
+        totalPaise: documents.totalPaise,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.orgId, scope.orgId),
+          eq(documents.partyId, input.partyId),
+          inArray(documents.type, types),
+          input.cursor ? lt(documents.id, input.cursor) : undefined,
+        ),
+      )
+      .orderBy(desc(documents.id))
+      .limit(input.limit + 1);
+
+    return pageOf(
+      // SAFETY: the query keeps only rows whose type is in `types`, a TransactionType list.
+      rows.map((row) => ({ ...row, type: row.type as TransactionType })),
+      input.limit,
+    );
+  }),
+
   // Each party's closing balance, the sum the statement ends on. Sparse: a party with
   // no ledger line has no row.
   balances: orgProcedure({ party: ["read"], report: ["read"] }, orgInput).handler(({ context }) =>
@@ -357,23 +435,33 @@ export const partyRouter = {
       .groupBy(partyLedgerLines.partyId),
   ),
 
-  // The complete master; every caller filters `active` in memory from this one entry.
-  // Only what the list, Link Field and palette show: contact and address fields come
-  // from `get` when one party opens.
-  list: orgProcedure({ party: ["read"] }, orgInput).handler(async ({ context }) => {
-    const rows = await db
-      .select({
-        id: parties.id,
-        name: parties.name,
-        roles: parties.roles,
-        gstin: parties.gstin,
-        active: parties.active,
-      })
-      .from(parties)
-      .where(eq(parties.orgId, context.scope.orgId))
-      .orderBy(asc(parties.name), asc(parties.id))
-      .limit(MASTER_LIST_LIMIT + 1);
+  // The master up to MASTER_LIST_LIMIT rows; every caller filters `active` in memory
+  // from this one entry. Past the bound `hasMore` is true, and callers search with `q`
+  // on name or GSTIN, so no party is unreachable. Only what the list, Link Field and
+  // palette show: contact and address fields come from `get` when one party opens.
+  list: orgProcedure({ party: ["read"] }, orgInput.extend({ q: searchQuery })).handler(
+    async ({ context, input }) => {
+      const pattern = input.q ? likePattern(input.q) : undefined;
 
-    return capMasterList(rows);
-  }),
+      const rows = await db
+        .select({
+          id: parties.id,
+          name: parties.name,
+          roles: parties.roles,
+          gstin: parties.gstin,
+          active: parties.active,
+        })
+        .from(parties)
+        .where(
+          and(
+            eq(parties.orgId, context.scope.orgId),
+            pattern ? or(ilike(parties.name, pattern), ilike(parties.gstin, pattern)) : undefined,
+          ),
+        )
+        .orderBy(asc(parties.name), asc(parties.id))
+        .limit(MASTER_LIST_LIMIT + 1);
+
+      return pageOf(rows, MASTER_LIST_LIMIT);
+    },
+  ),
 };

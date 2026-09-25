@@ -1,5 +1,4 @@
 import { db, type DbTransaction } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
@@ -13,16 +12,19 @@ import { z } from "zod";
 import { audit } from "../audit";
 import { settlementPaise } from "../core/allocations";
 import {
+  documentTotals,
   organizationSnapshot,
   partySnapshot,
   postDocument,
+  purchaseLegs,
+  taxTotals,
   writeDraft,
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import { computeTds, type BillPosting } from "../core/posting";
-import { computeTax, roundOff } from "../core/tax";
+import { computeTax } from "../core/tax";
 import { effectiveOn, ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
@@ -99,11 +101,7 @@ async function resolveBill(
     throw badRequest("PARTY_STATE_REQUIRED", "Record the supplier's state before posting a bill.");
 
   const ids = [...new Set(input.lines.map((line) => line.accountId))];
-  const accountQuery = postableAccounts(executor, scope.orgId, ids, ["expense", "asset"]);
-
-  const storedAccounts = await (executor === db
-    ? accountQuery
-    : accountQuery.for("share", { of: accounts }));
+  const storedAccounts = await postableAccounts(executor, scope.orgId, ids, ["expense", "asset"]);
 
   if (storedAccounts.length !== ids.length) {
     throw badRequest(
@@ -177,10 +175,7 @@ async function resolveBill(
     ...tax.lines[index]!,
   }));
 
-  const taxablePaise = lines.reduce((sum, line) => sum + line.amountPaise, 0n);
-  const grossPaise = taxablePaise + tax.cgstPaise + tax.sgstPaise + tax.igstPaise;
-  const roundOffPaise = roundOff(grossPaise);
-  const totalPaise = grossPaise + roundOffPaise;
+  const { taxablePaise, roundOffPaise, totalPaise } = documentTotals(lines);
 
   if (totalPaise <= 0n)
     throw badRequest("BILL_ZERO_TOTAL", "A bill total must be greater than zero.");
@@ -198,16 +193,7 @@ async function resolveBill(
     exposureSide: "payable",
     partyId: party.id,
     amountPaise: totalPaise,
-    lines: lines.flatMap((line) => {
-      const amountPaise =
-        line.amountPaise +
-        (line.itcEligible ? 0n : line.cgstPaise + line.sgstPaise + line.igstPaise);
-
-      return amountPaise > 0n ? [{ accountId: line.accountId!, amountPaise }] : [];
-    }),
-    cgstPaise: lines.reduce((sum, line) => sum + (line.itcEligible ? line.cgstPaise : 0n), 0n),
-    sgstPaise: lines.reduce((sum, line) => sum + (line.itcEligible ? line.sgstPaise : 0n), 0n),
-    igstPaise: lines.reduce((sum, line) => sum + (line.itcEligible ? line.igstPaise : 0n), 0n),
+    ...purchaseLegs(lines),
     roundOffPaise,
     tdsPaise,
   };
@@ -386,6 +372,7 @@ export const billRouter = {
         ...documentSettlement(bill, businessDate(new Date(), timeZone)),
         tds,
         lines,
+        totals: taxTotals(lines),
         allocations,
       };
     },

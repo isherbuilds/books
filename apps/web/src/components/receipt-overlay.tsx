@@ -1,7 +1,7 @@
 import { useIsMutating } from "@tanstack/react-query";
 
 import { FormSheet } from "@/components/form-sheet";
-import { ReceiptForm } from "@/components/receipt-form";
+import { ReceiptForm, type ReceiptInvoice } from "@/components/receipt-form";
 import { orpc } from "@/lib/orpc";
 
 // A right Sheet at every width: a Party created from the form opens a same-width
@@ -9,11 +9,13 @@ import { orpc } from "@/lib/orpc";
 export function ReceiptOverlay({
   orgSlug,
   today,
+  invoice,
   open,
   onClose,
 }: {
   orgSlug: string;
   today: string;
+  invoice?: ReceiptInvoice;
   open: boolean;
   onClose: () => void;
 }) {
@@ -27,7 +29,7 @@ export function ReceiptOverlay({
       title="New receipt"
       description="Record money received by the organization."
     >
-      <ReceiptForm orgSlug={orgSlug} today={today} onClose={onClose} />
+      <ReceiptForm orgSlug={orgSlug} today={today} invoice={invoice} onClose={onClose} />
     </FormSheet>
   );
 }

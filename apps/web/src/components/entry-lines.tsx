@@ -27,7 +27,7 @@ import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { PartyLinkField } from "@/components/party-link-field";
 import { useListState, type ListState } from "@/lib/list-state";
-import type { PartyOption } from "@/lib/parties";
+import type { PartyPicker } from "@/lib/parties";
 import { positiveAmount } from "@/lib/form-schema";
 
 // Blank is the untouched side of a debit/credit pair.
@@ -126,6 +126,7 @@ const ENTRY_GRID_WITH_PARTY =
 const ENTRY_GRID_WITHOUT_PARTY = "md:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_14rem_2rem]";
 
 function EntryLineFields({
+  orgSlug,
   gridTemplate,
   index,
   accounts,
@@ -135,10 +136,11 @@ function EntryLineFields({
   removeDisabled,
   remove,
 }: {
+  orgSlug: string;
   gridTemplate: string;
   index: number;
   accounts: ListState<EntryAccount[]>;
-  parties?: ListState<PartyOption[]>;
+  parties?: ListState<PartyPicker>;
   onCreateParty?: (index: number, seed: string) => void;
   autoFocus: boolean;
   removeDisabled: boolean;
@@ -205,6 +207,7 @@ function EntryLineFields({
               <FormLabel className="md:sr-only">Party (optional)</FormLabel>
               <FormControl>
                 <PartyLinkField
+                  orgSlug={orgSlug}
                   parties={parties}
                   value={
                     field.value
@@ -281,18 +284,20 @@ function EntryLineFields({
   );
 }
 
-const NO_PARTIES: ListState<PartyOption[]> = { isPending: false, isError: false, error: null };
+const NO_PARTIES: ListState<PartyPicker> = { isPending: false, isError: false, error: null };
 
 export function EntryLines({
+  orgSlug,
   title,
   accounts,
   parties,
   onCreateParty,
   autoFocusFirst,
 }: {
+  orgSlug: string;
   title: string;
   accounts: ListState<EntryAccount[]>;
-  parties?: ListState<PartyOption[]>;
+  parties?: ListState<PartyPicker>;
   onCreateParty?: (index: number, seed: string) => void;
   autoFocusFirst: boolean;
 }) {
@@ -339,6 +344,7 @@ export function EntryLines({
         {lineFields.fields.map((line, index) => (
           <EntryLineFields
             key={line.id}
+            orgSlug={orgSlug}
             index={index}
             gridTemplate={gridTemplate}
             accounts={accountState}

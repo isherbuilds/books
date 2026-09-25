@@ -40,10 +40,13 @@ Check UI items in the running app on desktop and mobile, in both themes.
   balances 140–150 → 0.3–0.6 ms; the Invoice list and its open filter 48 →
   0.1 ms; `party.openItems` 47 → 0.1 ms; `party.openCredits` for a party
   with 5,799 open advances 85 → 55 ms, which reads every open credit and
-  sorts in memory before the 200-row limit. Open: the unfiltered Invoice,
-  Bill and Note register pages, the open and overdue filters and both
-  pickers on 100,000 Invoices and Bills with allocations; decide then
-  whether `openCredits` needs a `(org, party, date)` index.
+  sorts in memory before the 200-row limit. Both pickers now return 25-row
+  pages on a `(document date, id)` keyset (#16), but without an index in
+  that order the database still reads and sorts every open credit before
+  the page. Open: the unfiltered Invoice, Bill and Note register pages, the
+  open and overdue filters and both pickers on 100,000 Invoices and Bills
+  with allocations; decide then whether the pickers need an
+  `(org, party, document date, id)` index.
 - **[Keyboard focus](./design.md)**: Verification. One global rounded ring
   with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
   the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
@@ -75,6 +78,14 @@ Check UI items in the running app on desktop and mobile, in both themes.
   shows Clear unavailable, clears the hidden amount and error, and can submit
   a new allocation. The seeded Organizations have no posted Invoices or Bills,
   so the running-app check could not exercise this transition.
+- **Limits rule ([#17](https://github.com/isherbuilds/books/issues/17))**:
+  Verification. Members pages 25 at a time with Load more, keeps `q` in the
+  URL and renders cards on mobile; Link Fields show at most eight matches;
+  past 5,000 parties the Party Link Field, palette and parties page search
+  the server. Remaining: check each in the running app on desktop and mobile
+  in both themes, and the party search on an Organization seeded past 5,000
+  parties. The register party filter menus and chips still read the first
+  5,000 parties.
 - **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
   sort measurement, the H4 runs, and slice 5 import. Slice 4 is implemented
   and runtime verified with accounting-core slices 4a and 4b-i; slice 5's
@@ -102,14 +113,16 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.
-- **Banking**: Verification. Add account opens the Chart of accounts Add account
-  Sheet; pick Cash or Bank Accounts there. Open: add a cash account and a payment method that lands
-  in the new bank account, then archive and restore the method. Post a receipt
+- **Banking**: Verification. Add account opens the Add account Sheet in
+  Banking with Bank Accounts chosen; saving it opens Add payment method with
+  the new account chosen. Open: add a bank account and its method that way,
+  then mark the method inactive and active again. Post a receipt
   with it and confirm the balance moves; cancel it and confirm the balance
-  returns. Archive the account behind a restored method and confirm Banking
-  shows "Account archived" and the Receipt form no longer offers the method.
-  Sign in as a CA and confirm accounts, balances and methods are visible
-  without add and archive actions.
+  returns. Confirm that marking the account inactive is refused while the
+  method is active. Mark the method inactive, then its account, then the
+  method active again, and confirm Banking shows "Account inactive" and the
+  Receipt form no longer offers the method. Sign in as a CA and confirm accounts, balances and methods are
+  visible without add and status actions.
 - **Chart of accounts and journal pages**: Verification. Headless checks cover
   the chart, journal entry and record, Banking, Items, Locks and Opening
   balance at 1440 and 390 px. Open: screenshots at 1440, 1024 and 390 px in

@@ -2,11 +2,9 @@
 // Adapted from apps/dashboard/src/components/tables/customers/columns.tsx (name cell,
 // money column, tags, actions).
 import { ZERO_MONEY, formatBalance } from "@accly/api/core/money";
-import type { AppRouter } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { cn } from "@accly/ui/lib/utils";
-import type { RouterClient } from "@orpc/server";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 
@@ -14,9 +12,7 @@ import { DATA_TABLE_FEATURES, Dash, TextOrDash } from "@/components/data-table/d
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { Monogram } from "@/components/monogram";
 import { useCan } from "@/lib/membership";
-import { ROLE_LABELS } from "@/lib/parties";
-
-type PartyListRow = Awaited<ReturnType<RouterClient<AppRouter>["party"]["list"]>>[number];
+import { ROLE_LABELS, type PartyListRow } from "@/lib/parties";
 
 /** `balancePaise` is undefined while loading or without the report grant, null with no ledger line. */
 export type PartyRow = PartyListRow & { balancePaise: bigint | null | undefined };
@@ -134,7 +130,6 @@ function PartyRowActions({ orgSlug, party }: { orgSlug: string; party: PartyRow 
 // Mounted only while the menu is open, so a long list holds no permission reads.
 function PartyActionItems({ orgSlug, party }: { orgSlug: string; party: PartyRow }) {
   const canUpdate = useCan(orgSlug, { party: ["update"] });
-  const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
 
   return (
     <>
@@ -156,18 +151,16 @@ function PartyActionItems({ orgSlug, party }: { orgSlug: string; party: PartyRow
           Edit party
         </DropdownMenuItem>
       ) : null}
-      {canReadReceipts ? (
-        <DropdownMenuItem
-          render={
-            <Link
-              to="/$orgSlug/parties/$partyId/receipts"
-              params={{ orgSlug, partyId: party.id }}
-            />
-          }
-        >
-          View receipts
-        </DropdownMenuItem>
-      ) : null}
+      <DropdownMenuItem
+        render={
+          <Link
+            to="/$orgSlug/parties/$partyId/transactions"
+            params={{ orgSlug, partyId: party.id }}
+          />
+        }
+      >
+        View transactions
+      </DropdownMenuItem>
       {party.gstin ? (
         <CopyMenuItem text={party.gstin} copied="GSTIN copied">
           Copy GSTIN

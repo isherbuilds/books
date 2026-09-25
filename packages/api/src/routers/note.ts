@@ -11,15 +11,16 @@ import { audit } from "../audit";
 import { settlementPaise } from "../core/allocations";
 import {
   accountLine,
+  documentTotals,
   noteSource,
   organizationSnapshot,
   partySnapshot,
   postDocument,
+  purchaseLegs,
   type PostDocumentLine,
 } from "../core/documents";
 import { computeNoteLines } from "../core/note-lines";
 import type { CreditNotePosting, DebitNotePosting } from "../core/posting";
-import { roundOff } from "../core/tax";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -145,13 +146,8 @@ export const noteRouter = {
         igstPaise: calculated.lines[index]!.igstPaise,
       }));
 
-      const taxablePaise = lines.reduce((sum, line) => sum + line.amountPaise, 0n);
-      const cgstPaise = lines.reduce((sum, line) => sum + line.cgstPaise, 0n);
-      const sgstPaise = lines.reduce((sum, line) => sum + line.sgstPaise, 0n);
-      const igstPaise = lines.reduce((sum, line) => sum + line.igstPaise, 0n);
-      const grossPaise = taxablePaise + cgstPaise + sgstPaise + igstPaise;
-      const roundOffPaise = roundOff(grossPaise);
-      const amountPaise = grossPaise + roundOffPaise;
+      const totals = documentTotals(lines);
+      const amountPaise = totals.totalPaise;
 
       if (amountPaise === 0n)
         throw badRequest("NOTE_ZERO_TOTAL", "A note must have a positive total.");
@@ -160,19 +156,6 @@ export const noteRouter = {
         throw badRequest("NOTE_EXCEEDS_SOURCE", "Note total exceeds the source document total.");
       }
 
-      const postingLines = lines.map((line) => {
-        if (!line.accountId) throw impossible(`source line ${line.sourceLineId} has no account`);
-
-        return {
-          accountId: line.accountId,
-          amountPaise:
-            line.amountPaise +
-            (input.type === "debitNote" && !line.itcEligible
-              ? line.cgstPaise + line.sgstPaise + line.igstPaise
-              : 0n),
-        };
-      });
-
       const posting: CreditNotePosting | DebitNotePosting =
         input.type === "creditNote"
           ? {
@@ -180,31 +163,24 @@ export const noteRouter = {
               exposureSide: "receivable",
               partyId,
               amountPaise,
-              lines: postingLines,
-              cgstPaise,
-              sgstPaise,
-              igstPaise,
-              roundOffPaise,
+              lines: lines.map((line) => {
+                if (!line.accountId)
+                  throw impossible(`source line ${line.sourceLineId} has no account`);
+
+                return { accountId: line.accountId, amountPaise: line.amountPaise };
+              }),
+              cgstPaise: totals.cgstPaise,
+              sgstPaise: totals.sgstPaise,
+              igstPaise: totals.igstPaise,
+              roundOffPaise: totals.roundOffPaise,
             }
           : {
               type: "debitNote",
               exposureSide: "payable",
               partyId,
               amountPaise,
-              lines: postingLines,
-              cgstPaise: lines.reduce(
-                (sum, line) => sum + (line.itcEligible ? line.cgstPaise : 0n),
-                0n,
-              ),
-              sgstPaise: lines.reduce(
-                (sum, line) => sum + (line.itcEligible ? line.sgstPaise : 0n),
-                0n,
-              ),
-              igstPaise: lines.reduce(
-                (sum, line) => sum + (line.itcEligible ? line.igstPaise : 0n),
-                0n,
-              ),
-              roundOffPaise,
+              ...purchaseLegs(lines),
+              roundOffPaise: totals.roundOffPaise,
             };
 
       const [party] = await tx

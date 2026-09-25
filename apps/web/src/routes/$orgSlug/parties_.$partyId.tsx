@@ -17,22 +17,23 @@ import { loadRouteQuery } from "@/lib/orpc-error";
 const PARTY_TABS: readonly {
   to:
     | "/$orgSlug/parties/$partyId"
-    | "/$orgSlug/parties/$partyId/receipts"
+    | "/$orgSlug/parties/$partyId/transactions"
     | "/$orgSlug/parties/$partyId/ledger";
   label: string;
   permission: AppPermission;
 }[] = [
   { to: "/$orgSlug/parties/$partyId", label: "Overview", permission: { party: ["read"] } },
+  // The read lists only the document types the member may read.
   {
-    to: "/$orgSlug/parties/$partyId/receipts",
-    label: "Receipts",
-    permission: { receipt: ["read"] },
+    to: "/$orgSlug/parties/$partyId/transactions",
+    label: "Transactions",
+    permission: { party: ["read"] },
   },
   { to: "/$orgSlug/parties/$partyId/ledger", label: "Ledger", permission: { report: ["read"] } },
 ];
 
 // A full page, not nested under the parties list: a party's history outgrows a Sheet.
-// The list keeps its quick look; this page owns editing, receipts and the ledger.
+// The list keeps its quick look; this page owns editing, transactions and the ledger.
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId")({
   validateSearch: z.object({ edit: z.boolean().optional().catch(undefined) }),
   remountDeps: ({ params }) => ({ partyId: params.partyId }),

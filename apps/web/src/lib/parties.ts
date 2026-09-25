@@ -1,4 +1,5 @@
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { skipToken, useQuery } from "@tanstack/react-query";
 
 import { orpc } from "@/lib/orpc";
 
@@ -24,26 +25,61 @@ export const ROLE_LABELS: Record<PartyRole, string> = {
   government: "Government",
 };
 
-// The complete master list, one cache entry per organization: the parties page,
-// the Party Link Field and the palette share it and filter in memory.
-export const partyListOptions = (orgSlug: string) => ({
-  ...orpc.party.list.queryOptions({ input: { orgSlug } }),
+type PartyList = Awaited<ReturnType<AppRouterClient["party"]["list"]>>;
+
+export type PartyListRow = PartyList["rows"][number];
+
+// The master, one cache entry per organization: the parties page, the Party Link
+// Field and the palette share it and filter in memory. Past 5,000 parties `hasMore`
+// is true and each of them searches the server with `q` instead. The master's key
+// carries no `q`, so invalidating it also reaches every search.
+export const partyListOptions = (orgSlug: string, q?: string) => ({
+  ...orpc.party.list.queryOptions({ input: q ? { orgSlug, q } : { orgSlug } }),
   staleTime: 5 * 60_000,
 });
 
 /** The active rows a Link Field offers: id, name and GSTIN. */
 export type PartyOption = { id: string; name: string; gstin?: string | null };
 
-type PartyListRow = Awaited<ReturnType<AppRouterClient["party"]["list"]>>[number];
+export type PartyPicker = { rows: PartyOption[]; hasMore: boolean };
 
-function activeParties(parties: PartyListRow[]): PartyOption[] {
-  return parties.filter((party) => party.active);
+// Roles are descriptive (accounting-core), so a picker ranks the parties holding the
+// document's role first and never hides the rest. Both groups keep name order.
+function pickableParties({ rows, hasMore }: PartyList, role: PartyRole | undefined): PartyPicker {
+  const active = rows.filter((party) => party.active);
+
+  if (!role) return { rows: active, hasMore };
+
+  const holds = (party: PartyListRow) => party.roles.includes(role);
+
+  return { rows: [...active.filter(holds), ...active.filter((party) => !holds(party))], hasMore };
 }
 
-export const partyPickerOptions = (orgSlug: string) => ({
-  ...partyListOptions(orgSlug),
-  select: activeParties,
+export const partyPickerOptions = (orgSlug: string, role?: PartyRole, q?: string) => ({
+  ...partyListOptions(orgSlug, q),
+  select: (list: PartyList) => pickableParties(list, role),
 });
+
+/**
+ * A linked party's name. Loaded `rows` answer first; a party past the 5,000-row cap
+ * or filtered out of them is read with `party.get`. Pass `rows` only when the viewer
+ * may read parties: without them nothing is fetched.
+ */
+export function usePartyName(
+  orgSlug: string,
+  partyId: string | undefined,
+  rows: PartyOption[] | undefined,
+) {
+  const listed = partyId ? rows?.find((party) => party.id === partyId) : undefined;
+
+  const fetched = useQuery(
+    orpc.party.get.queryOptions({
+      input: partyId && rows && !listed ? { orgSlug, partyId } : skipToken,
+    }),
+  );
+
+  return listed?.name ?? fetched.data?.name;
+}
 
 // Receipt money per party, a separate read so posting a receipt never refetches
 // the master. Sparse: a party with no posted receipt has no row. A party page passes
