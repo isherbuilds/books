@@ -1,7 +1,5 @@
 # Midday timezone patterns and our offset seam
 
-For planned recurring invoices, see the [recurrence comparison](./midday-recurring-invoices-timezones-2026-09-23.md). It extends this note's conclusion for a new use case; the current offset seam remains unchanged.
-
 ## Question
 
 Which timezone patterns from Midday should we adopt, if any, for organization-local dates and wall-clock conversion?

@@ -399,9 +399,26 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     api.party.openItems({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
     "NOT_FOUND",
   );
+  // Beta's own income account passes validation, so only the tenant predicate refuses it.
   await expectORPCCode(
-    api.item.setActive({ orgSlug: beta.slug, itemId: alphaItem.id, active: false }),
-    "NOT_FOUND",
+    api.item.update({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      name: "Shared Service",
+      unitPrice: "5.00",
+      incomeAccountId: betaIncome.id,
+    }),
+    "CONFLICT",
+  );
+  await expectORPCCode(
+    api.item.setActive({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      active: false,
+    }),
+    "CONFLICT",
   );
   await expectORPCCode(
     api.invoice.get({ orgSlug: beta.slug, invoiceId: alphaInvoice.id }),
@@ -630,7 +647,6 @@ test("an unknown slug is FORBIDDEN, not NOT_FOUND — existence never leaks", as
 // Compared against `appRouter` below, so a new procedure that is not listed here
 // fails the suite rather than going uncovered.
 const GUARDED_CALLS = {
-  "organization.getProfile": (api, claim) => api.organization.getProfile({ ...claim }),
   "party.create": (api, claim) =>
     api.party.create({
       ...claim,
@@ -689,7 +705,12 @@ const GUARDED_CALLS = {
       incomeAccountId: crypto.randomUUID(),
     }),
   "item.setActive": (api, claim) =>
-    api.item.setActive({ ...claim, itemId: crypto.randomUUID(), active: false }),
+    api.item.setActive({
+      ...claim,
+      itemId: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      active: false,
+    }),
   "item.taxRates": (api, claim) => api.item.taxRates({ ...claim }),
   "invoice.saveDraft": (api, claim) =>
     api.invoice.saveDraft({

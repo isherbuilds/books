@@ -13,7 +13,6 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
-import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -21,6 +20,7 @@ import { useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -490,30 +490,7 @@ export function InvoiceForm({
           )}
         </section>
 
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ReferenceNarrationFields />
       </DocumentForm>
     </Form>
   );

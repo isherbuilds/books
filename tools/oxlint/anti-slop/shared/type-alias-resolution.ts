@@ -24,7 +24,7 @@ export type TypeAliasEnvironment = {
   readonly visitorKeys: VisitorKeys;
 };
 
-export type ResolvedTypeMatcher = (
+type ResolvedTypeMatcher = (
   type: ESTree.TSType,
   matches: (child: ESTree.TSType) => boolean,
 ) => boolean;
@@ -158,7 +158,7 @@ function nearestTypeBindings(
 }
 
 /** Resolve the nearest visible alias with this name, respecting lexical shadowing. */
-export function visibleTypeAlias(
+function visibleTypeAlias(
   name: string,
   use: ESTree.Node,
   environment: TypeAliasEnvironment,
@@ -166,18 +166,6 @@ export function visibleTypeAlias(
   if (lexicalTypeParameterNames(use, environment.visitorKeys).has(name)) return null;
   const bindings = nearestTypeBindings(name, use, environment);
   return bindings.length === 1 ? (bindings[0]?.alias ?? null) : null;
-}
-
-/** Return whether a local declaration shadows a built-in type at this use. */
-export function hasVisibleTypeBinding(
-  name: string,
-  use: ESTree.Node,
-  environment: TypeAliasEnvironment,
-): boolean {
-  return (
-    lexicalTypeParameterNames(use, environment.visitorKeys).has(name) ||
-    nearestTypeBindings(name, use, environment).length > 0
-  );
 }
 
 function typeReferenceName(type: ESTree.TSTypeReference): string | null {

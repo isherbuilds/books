@@ -10,10 +10,7 @@ import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import {
-  indianPinCode,
-  indianStateCode,
-  optionalGstin,
-  pan,
+  organizationProfileFields,
   shortName,
   timeZone,
   validateGstinIdentity,
@@ -27,10 +24,7 @@ export const createOrganizationInput = z
     name: shortName.max(120),
     slug: z.string().trim(),
     legalType: z.enum(LEGAL_TYPES),
-    legalName: z.string().trim().min(1).max(200),
-    pan,
-    gstin: optionalGstin,
-    stateCode: indianStateCode,
+    ...organizationProfileFields,
     financialYearStart: z
       .number()
       .int()
@@ -38,15 +32,6 @@ export const createOrganizationInput = z
       .max(12)
       .default(SETTINGS_DEFAULTS.financialYearStart),
     timeZone: timeZone.default(SETTINGS_DEFAULTS.timeZone),
-    addressLine1: z.string().trim().min(1).max(200),
-    addressLine2: z
-      .string()
-      .trim()
-      .max(200)
-      .transform((value) => value || undefined)
-      .optional(),
-    city: z.string().trim().min(1).max(120),
-    pinCode: indianPinCode,
   })
   .superRefine(validateGstinIdentity);
 

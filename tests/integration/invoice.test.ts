@@ -660,6 +660,21 @@ test("counter sale posts an allocated receipt in the invoice transaction", async
     settlementKind: "against",
     totalPaise: 50_000n,
   });
+
+  const blankReference = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [{ kind: "item", itemId: exemptItem.id, quantity: 1 }],
+    settle: { paymentMethodId: cash.id, reference: "" },
+  });
+
+  const blankReceipt = required(blankReference.receipt, "blank-reference receipt");
+
+  expect(
+    await api.receipt.get({ orgSlug: organization.slug, receiptId: blankReceipt.id }),
+  ).toMatchObject({ reference: null });
 });
 
 test("amending cancels the invoice and copies its discounted lines to an editable draft", async () => {

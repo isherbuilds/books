@@ -71,4 +71,4 @@ The owner selected **Correct original cutover**. `reverseDocument` derives an Op
 
 Evidence is first-party documentation inspected on 22 September 2026 plus ERPNext source pinned to v15.121.3. Current documentation and a pinned release are distinguished above. Zoho sources are current IN-EN/US-EN help and API v3 pages without a public product revision. Neither vendor was run, and no claim is made about all report variants or private Zoho ledger storage.
 
-This narrows the earlier [opening-and-locks research](./opening-balance-and-locks-2026-09-20.md): its cancellation-date comparison did not establish an opening-replacement correction policy. The [accounting contract](../specs/accounting-core.md#journal-opening-balance-and-locks-slice-5) owns the current rule.
+The [accounting contract](../specs/accounting-core.md#journal-opening-balance-and-locks-slice-5) owns the current rule.

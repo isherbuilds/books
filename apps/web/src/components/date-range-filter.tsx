@@ -10,8 +10,10 @@ import {
 import { Popover, PopoverContent } from "@accly/ui/components/popover";
 import { useIsMobile } from "@accly/ui/hooks/use-mobile";
 import { ClientOnly } from "@tanstack/react-router";
+import { CalendarIcon } from "lucide-react";
 import { useState, type RefObject } from "react";
 
+import { FilterSubmenu, type ActiveFilter } from "@/components/list-filter";
 import {
   PRESETS,
   presetLabel,
@@ -22,6 +24,7 @@ import {
   type DateRange,
   type SearchRange,
 } from "@/lib/date-presets";
+import { useOrgDateTime } from "@/lib/org-datetime";
 
 const ALL_TIME: SearchRange = { from: undefined, to: undefined };
 
@@ -183,4 +186,51 @@ function DateRangeCalendar({
       </div>
     </div>
   );
+}
+
+/**
+ * A list's date filter: its label, its chip while a range applies, the menu's period
+ * submenu and the custom-range popover the submenu opens. Render `popover` outside the
+ * menu so it outlives the menu closing.
+ */
+export function useDateRangeFilter(
+  range: SearchRange,
+  anchor: RefObject<HTMLElement | null>,
+  onChange: (range: SearchRange) => Promise<void>,
+) {
+  const { today, financialYearStart } = useOrgDateTime();
+  const [customOpen, setCustomOpen] = useState(false);
+  const label = rangeLabel(range, today, financialYearStart);
+
+  const chip: ActiveFilter | null =
+    range.from || range.to
+      ? { id: "date", name: "Date", label, remove: () => onChange(ALL_TIME) }
+      : null;
+
+  return {
+    label,
+    chip,
+    submenu: (
+      <FilterSubmenu icon={CalendarIcon} label={label}>
+        <PresetItems
+          range={range}
+          today={today}
+          financialYearStart={financialYearStart}
+          onSelect={(next) => void onChange(next)}
+          onCustom={() => setCustomOpen(true)}
+        />
+      </FilterSubmenu>
+    ),
+    popover: (
+      <DateRangePopover
+        open={customOpen}
+        onOpenChange={setCustomOpen}
+        anchor={anchor}
+        from={range.from}
+        to={range.to}
+        today={today}
+        onApply={(next) => void onChange(next)}
+      />
+    ),
+  };
 }

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { audit } from "../audit";
 import { settlementPaise } from "../core/allocations";
 import {
+  documentTotals,
   organizationSnapshot,
   partySnapshot,
   postDocument,
@@ -23,16 +24,22 @@ import {
   type PostDocumentLine,
 } from "../core/documents";
 import { splitDiscount } from "../core/discount";
-import { formatDecimal } from "../core/money";
+import { formatDecimal, sumPaise } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
-import { computeTax, roundOff } from "../core/tax";
+import { computeTax } from "../core/tax";
 import { ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
-import { draftToken, invoiceFields, orderedPeriod, reason } from "../lib/schemas";
+import {
+  draftToken,
+  invoiceFields,
+  orderedPeriod,
+  reason,
+  settlementPostFields,
+} from "../lib/schemas";
 import {
   allocationsOf,
   amendClaim,
@@ -100,12 +107,7 @@ async function resolveInvoice(
       ? []
       : await (executor === db ? itemQuery : itemQuery.for("share", { of: accounts }));
 
-  const accountQuery = postableAccounts(executor, scope.orgId, accountIds, ["income"]);
-
-  const storedAccounts =
-    accountIds.length === 0
-      ? []
-      : await (executor === db ? accountQuery : accountQuery.for("share", { of: accounts }));
+  const storedAccounts = await postableAccounts(executor, scope.orgId, accountIds, ["income"]);
 
   const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
@@ -211,7 +213,7 @@ async function resolveInvoice(
   });
 
   const discountPaise = input.discount ?? 0n;
-  const subtotalPaise = unresolvedLines.reduce((sum, { line }) => sum + line.amountPaise, 0n);
+  const subtotalPaise = sumPaise(unresolvedLines.map(({ line }) => line.amountPaise));
 
   if (discountPaise > subtotalPaise) {
     throw badRequest("DISCOUNT_EXCEEDS_SUBTOTAL", "Discount cannot exceed the invoice subtotal.");
@@ -246,10 +248,8 @@ async function resolveInvoice(
     ...tax.lines[index]!,
   }));
 
-  const taxablePaise = lines.reduce((sum, line) => sum + line.amountPaise, 0n);
-  const grossPaise = taxablePaise + tax.cgstPaise + tax.sgstPaise + tax.igstPaise;
-  const roundOffPaise = roundOff(grossPaise);
-  const totalPaise = boundedPaise(grossPaise + roundOffPaise);
+  const { roundOffPaise, ...totals } = documentTotals(lines);
+  const totalPaise = boundedPaise(totals.totalPaise);
 
   if (totalPaise <= 0n) {
     throw badRequest("INVOICE_ZERO_TOTAL", "An invoice total must be greater than zero.");
@@ -306,7 +306,7 @@ const postInput = invoiceInput.extend({
   settle: z
     .strictObject({
       paymentMethodId: z.uuid(),
-      reference: z.string().trim().max(120).optional(),
+      reference: settlementPostFields.reference,
     })
     .optional(),
 });
