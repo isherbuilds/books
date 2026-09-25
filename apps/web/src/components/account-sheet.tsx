@@ -85,7 +85,7 @@ function RenameAccountForm({
     orpc.account.setActive.mutationOptions({
       onSuccess: async () => {
         await invalidateAccountState(queryClient, orgSlug);
-        toast.success(account.active ? "Account archived" : "Account restored");
+        toast.success(account.active ? "Account marked inactive" : "Account marked active");
         onClose();
       },
       onError: (error) => toast.error(errorMessage(error, "Could not update the account")),
@@ -127,7 +127,7 @@ function RenameAccountForm({
                   setActive.mutate({ orgSlug, accountId: account.id, active: !account.active })
                 }
               >
-                {account.active ? "Archive" : "Restore"}
+                {account.active ? "Mark inactive" : "Mark active"}
               </Button>
             ) : null}
             <Button type="button" variant="outline" onClick={onClose}>
@@ -144,17 +144,21 @@ function RenameAccountForm({
 function CreateAccountForm({
   orgSlug,
   accounts,
+  defaultParent,
+  onCreated,
   onClose,
 }: {
   orgSlug: string;
   accounts: AccountRow[];
+  defaultParent: string;
+  onCreated: (account: { id: string }) => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const groups = accounts.filter((account) => account.active && account.isGroup);
 
   const form = useZodForm(createSchema, {
-    defaultValues: { parent: "", name: "" },
+    defaultValues: { parent: defaultParent, name: "" },
   });
 
   const parent = useWatch({ control: form.control, name: "parent" });
@@ -164,10 +168,10 @@ function CreateAccountForm({
 
   const create = useMutation(
     orpc.account.create.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (created) => {
         await invalidateAccountState(queryClient, orgSlug);
         toast.success("Account added");
-        onClose();
+        onCreated(created);
       },
       onError: (error) =>
         applyOrpcFieldError(
@@ -288,11 +292,17 @@ export function AccountSheet({
   orgSlug,
   account,
   accounts,
+  defaultParent = "",
+  onCreated,
   onClose,
 }: {
   orgSlug: string;
   account?: AccountRow;
   accounts: AccountRow[];
+  /** The parent a new account starts under: an account type or a group id. */
+  defaultParent?: string;
+  /** Runs after a create instead of `onClose`, for a caller that continues setup. */
+  onCreated?: (account: { id: string }) => void;
   onClose: () => void;
 }) {
   const saving = useIsMutating({ mutationKey: orpc.account.key({ type: "mutation" }) }) > 0;
@@ -312,7 +322,13 @@ export function AccountSheet({
       {account ? (
         <RenameAccountForm orgSlug={orgSlug} account={account} onClose={onClose} />
       ) : (
-        <CreateAccountForm orgSlug={orgSlug} accounts={accounts} onClose={onClose} />
+        <CreateAccountForm
+          orgSlug={orgSlug}
+          accounts={accounts}
+          defaultParent={defaultParent}
+          onCreated={onCreated ?? onClose}
+          onClose={onClose}
+        />
       )}
     </FormSheet>
   );

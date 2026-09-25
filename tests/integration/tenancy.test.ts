@@ -367,6 +367,7 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     betaUnapplied,
     alphaOpenItems,
     betaOpenItems,
+    alphaTransactions,
   ] = await Promise.all([
     api.item.list({ orgSlug: alpha.slug }),
     api.item.list({ orgSlug: beta.slug }),
@@ -378,6 +379,7 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     api.party.openCredits({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
     api.party.openItems({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
     api.party.openItems({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
+    api.party.transactions({ orgSlug: alpha.slug, partyId: alphaParty.id }),
   ]);
 
   expect(alphaItems.map(({ id }) => id)).toEqual([alphaItem.id]);
@@ -390,6 +392,8 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   expect(betaUnapplied.rows.map(({ id }) => id)).toEqual([betaReceipt.id]);
   expect(alphaOpenItems.rows.map(({ id }) => id)).toEqual([alphaInvoice.id]);
   expect(betaOpenItems.rows.map(({ id }) => id)).toEqual([betaInvoice.id]);
+  // Newest first, and the journal naming no party stays out.
+  expect(alphaTransactions.rows.map(({ id }) => id)).toEqual([alphaReceipt.id, alphaInvoice.id]);
 
   await expectORPCCode(
     api.party.openCredits({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
@@ -397,6 +401,10 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   );
   await expectORPCCode(
     api.party.openItems({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.party.transactions({ orgSlug: beta.slug, partyId: alphaParty.id }),
     "NOT_FOUND",
   );
   // Beta's own income account passes validation, so only the tenant predicate refuses it.
@@ -750,6 +758,8 @@ const GUARDED_CALLS = {
     api.party.openItems({ ...claim, partyId: crypto.randomUUID(), side: "receivable" }),
   "party.openCredits": (api, claim) =>
     api.party.openCredits({ ...claim, partyId: crypto.randomUUID(), side: "payable" }),
+  "party.transactions": (api, claim) =>
+    api.party.transactions({ ...claim, partyId: crypto.randomUUID() }),
   "bill.saveDraft": (api, claim) =>
     api.bill.saveDraft({
       ...claim,

@@ -221,7 +221,10 @@ export const accountRouter = {
         if (!account) throw new ORPCError("NOT_FOUND", { message: "Account not found." });
 
         if (!account.isLeaf || account.systemKey) {
-          throw badRequest("ACCOUNT_SYSTEM", "Groups and system accounts cannot be archived.");
+          throw badRequest(
+            "ACCOUNT_SYSTEM",
+            "Groups and system accounts cannot be marked inactive.",
+          );
         }
 
         if (!input.active) {

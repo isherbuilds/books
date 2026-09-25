@@ -205,6 +205,22 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
     gstin: "27ABCDE1234F1Z5",
   });
 
+  // A GSTIN alone is enough: the server derives the state and PAN from it.
+  const derived = await api.party.create({
+    orgSlug: organization.slug,
+    name: "GSTIN Only Traders",
+    roles: ["vendor"],
+    gstin: "29ABCDE1234F2Z4",
+  });
+
+  expect(derived).toMatchObject({ stateCode: "29", pan: "ABCDE1234F" });
+
+  // Without a GSTIN, the state is required.
+  await expectORPCCode(
+    api.party.create({ orgSlug: organization.slug, name: "No State", roles: ["customer"] }),
+    "BAD_REQUEST",
+  );
+
   await expectORPCCode(
     api.party.create({
       ...partyCreateInput(organization.slug, "Repeated role"),
@@ -258,9 +274,9 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   });
 
   const listed = await api.party.list({ orgSlug: organization.slug });
-  expect(listed).toHaveLength(5);
+  expect(listed).toHaveLength(6);
   expect(listed.map((party) => party.id)).toEqual(
-    expect.arrayContaining([original.id, namesake.id, ram.id, sita.id]),
+    expect.arrayContaining([original.id, derived.id, namesake.id, ram.id, sita.id]),
   );
 });
 

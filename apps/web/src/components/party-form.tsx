@@ -1,13 +1,12 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/forms/customer-form.tsx and sheets/customer-edit-sheet.tsx.
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import {
-  GSTIN_PATTERN,
+  deriveFromGstin,
+  gstinParts,
   indianPinCode,
-  indianStateCode,
   optionalGstin,
   optionalPan,
-  validateGstinIdentity,
+  optionalStateCode,
 } from "@accly/api/lib/schemas";
 import type { PartyRecord } from "@accly/api/routers/party";
 import { Button } from "@accly/ui/components/button";
@@ -29,7 +28,7 @@ import { SubmitButton } from "@accly/ui/components/submit-button";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ReactNode, type Ref } from "react";
-import { useFormState } from "react-hook-form";
+import { useFormState, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -39,7 +38,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidatePartyState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, errorReason } from "@/lib/orpc-error";
-import { PARTY_ROLES, ROLE_LABELS, partyListOptions } from "@/lib/parties";
+import { PARTY_ROLES, ROLE_LABELS, partyListOptions, type PartyRole } from "@/lib/parties";
 
 // The server refuses "", so a blank optional field is sent as absent.
 const optionalText = (max: number, message: string) =>
@@ -64,7 +63,7 @@ const partyFormSchema = z
       .refine((value) => value === "" || z.email().safeParse(value).success, "Enter a valid email")
       .transform((value) => value || undefined),
     gstin: optionalGstin,
-    stateCode: indianStateCode,
+    stateCode: optionalStateCode,
     pan: optionalPan,
     addressLine1: optionalText(200, "Keep the address line under 200 characters"),
     addressLine2: optionalText(200, "Keep the address line under 200 characters"),
@@ -72,14 +71,14 @@ const partyFormSchema = z
     pinCode: z.union([z.literal(""), indianPinCode]).transform((value) => value || undefined),
     active: z.boolean(),
   })
-  .superRefine(validateGstinIdentity);
+  .transform(deriveFromGstin);
 
 type SavedParty = { id: string; name: string };
 
-function defaultValues(party: PartyRecord | undefined, seedName: string | undefined) {
+function defaultValues(party: PartyRecord | undefined, seedName: string, seedRole: PartyRole) {
   return {
-    name: party?.name ?? seedName ?? "",
-    roles: party?.roles ?? ["customer" as const],
+    name: party?.name ?? seedName,
+    roles: party?.roles ?? [seedRole],
     phone: party?.phone ?? "",
     email: party?.email ?? "",
     gstin: party?.gstin ?? "",
@@ -151,20 +150,26 @@ function PartyForm({
   orgSlug,
   party,
   seedName,
+  seedRole,
   onSaved,
   onCancel,
 }: {
   ref: Ref<HTMLFormElement>;
   orgSlug: string;
   party?: PartyRecord;
-  seedName?: string;
+  seedName: string;
+  seedRole: PartyRole;
   onSaved: (party: SavedParty) => void;
   /** Also runs when the server refuses a stale edit, so the caller shows the fresh row. */
   onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
   const [nameCollision, setNameCollision] = useState<string | null>(null);
-  const form = useZodForm(partyFormSchema, { defaultValues: defaultValues(party, seedName) });
+
+  const form = useZodForm(partyFormSchema, {
+    defaultValues: defaultValues(party, seedName, seedRole),
+  });
+
   // The copy the form opened from: a background refetch of the record must not swap
   // the token under an unsaved draft, or Save would overwrite a newer row unchecked.
   const [editToken] = useState(() => party?.updatedAt.toISOString() ?? "");
@@ -244,19 +249,17 @@ function PartyForm({
   const onSubmit = form.handleSubmit((values) => submit(values, false));
   const saveAnyway = form.handleSubmit((values) => submit(values, true));
 
-  // A GSTIN carries the state code and the PAN; fill whichever is still empty.
+  // The server derives State and PAN from a GSTIN, so they show only without one. The
+  // hidden fields take the GSTIN's values, which remain if the GSTIN is cleared.
+  const gstin = useWatch({ control: form.control, name: "gstin" });
+
   const fillFromGstin = (value: string) => {
-    const gstin = value.trim().toUpperCase();
+    const parts = gstinParts(value);
 
-    if (!GSTIN_PATTERN.test(gstin)) return;
+    if (!parts) return;
 
-    const stateCode = gstin.slice(0, 2);
-
-    if (!form.getValues("stateCode") && Object.hasOwn(INDIAN_STATES, stateCode)) {
-      form.setValue("stateCode", stateCode, { shouldDirty: true });
-    }
-
-    if (!form.getValues("pan")) form.setValue("pan", gstin.slice(2, 12), { shouldDirty: true });
+    form.setValue("stateCode", parts.stateCode, { shouldDirty: true });
+    form.setValue("pan", parts.pan, { shouldDirty: true });
   };
 
   return (
@@ -356,67 +359,67 @@ function PartyForm({
             <Separator />
 
             <Section title="Tax">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <RegisteredFormField
-                  name="gstin"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>GSTIN</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          className="font-mono uppercase"
-                          maxLength={15}
-                          autoCapitalize="characters"
-                          autoComplete="off"
-                          spellCheck={false}
-                          onChange={(event) => {
-                            void field.onChange(event);
-                            fillFromGstin(event.currentTarget.value);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <RegisteredFormField
+                name="gstin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GSTIN</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="font-mono uppercase"
+                        maxLength={15}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(event) => {
+                          void field.onChange(event);
+                          fillFromGstin(event.currentTarget.value);
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="stateCode"
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <FormControl>
-                        <OptionField
-                          required
-                          options={STATE_OPTIONS}
-                          noun="states"
-                          showCode
-                          value={field.value}
-                          onChange={field.onChange}
-                          placeholder="Choose state"
-                          inputRef={field.ref}
-                          aria-invalid={fieldState.invalid}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TextField
-                  name="pan"
-                  label="PAN"
-                  className="font-mono uppercase"
-                  maxLength={10}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
+              {!gstin?.trim() ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="stateCode"
+                    render={({ field, fieldState }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <OptionField
+                            required
+                            options={STATE_OPTIONS}
+                            noun="states"
+                            showCode
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            placeholder="Choose state"
+                            inputRef={field.ref}
+                            aria-invalid={fieldState.invalid}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <TextField
+                    name="pan"
+                    label="PAN"
+                    className="font-mono uppercase"
+                    maxLength={10}
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              ) : null}
             </Section>
 
             <Separator />
@@ -504,7 +507,8 @@ export function PartySheet({
   orgSlug,
   open,
   party,
-  seedName,
+  seedName = "",
+  seedRole = "customer",
   onClose,
   onSaved,
 }: {
@@ -512,6 +516,8 @@ export function PartySheet({
   open: boolean;
   party?: PartyRecord;
   seedName?: string;
+  /** The role a new party starts with: a purchase document creates a vendor. */
+  seedRole?: PartyRole;
   onClose: () => void;
   onSaved: (party: SavedParty) => void;
 }) {
@@ -545,6 +551,7 @@ export function PartySheet({
         orgSlug={orgSlug}
         party={party}
         seedName={seedName}
+        seedRole={seedRole}
         onSaved={onSaved}
         onCancel={onClose}
       />

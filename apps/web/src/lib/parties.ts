@@ -36,13 +36,21 @@ export type PartyOption = { id: string; name: string; gstin?: string | null };
 
 type PartyListRow = Awaited<ReturnType<AppRouterClient["party"]["list"]>>[number];
 
-function activeParties(parties: PartyListRow[]): PartyOption[] {
-  return parties.filter((party) => party.active);
+// Roles are descriptive (accounting-core), so a picker ranks the parties holding the
+// document's role first and never hides the rest. Both groups keep name order.
+function pickableParties(parties: PartyListRow[], role: PartyRole | undefined): PartyOption[] {
+  const active = parties.filter((party) => party.active);
+
+  if (!role) return active;
+
+  const holds = (party: PartyListRow) => party.roles.includes(role);
+
+  return [...active.filter(holds), ...active.filter((party) => !holds(party))];
 }
 
-export const partyPickerOptions = (orgSlug: string) => ({
+export const partyPickerOptions = (orgSlug: string, role?: PartyRole) => ({
   ...partyListOptions(orgSlug),
-  select: activeParties,
+  select: (parties: PartyListRow[]) => pickableParties(parties, role),
 });
 
 // Receipt money per party, a separate read so posting a receipt never refetches

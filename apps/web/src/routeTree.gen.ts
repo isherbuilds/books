@@ -59,7 +59,7 @@ import { Route as OrgSlugBillsBillIdEditRouteImport } from './routes/$orgSlug/bi
 import { Route as OrgSlugInvoicesInvoiceIdEditRouteImport } from './routes/$orgSlug/invoices_.$invoiceId.edit'
 import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlug/parties_.$partyId.index'
 import { Route as OrgSlugPartiesPartyIdLedgerRouteImport } from './routes/$orgSlug/parties_.$partyId.ledger'
-import { Route as OrgSlugPartiesPartyIdReceiptsRouteImport } from './routes/$orgSlug/parties_.$partyId.receipts'
+import { Route as OrgSlugPartiesPartyIdTransactionsRouteImport } from './routes/$orgSlug/parties_.$partyId.transactions'
 import { Route as ApiOrgSlugInvoicesInvoiceIdPdfRouteImport } from './routes/api.$orgSlug.invoices.$invoiceId.pdf'
 import { Route as ApiOrgSlugReceiptsReceiptIdPdfRouteImport } from './routes/api.$orgSlug.receipts.$receiptId.pdf'
 
@@ -322,10 +322,10 @@ const OrgSlugPartiesPartyIdLedgerRoute =
     path: '/ledger',
     getParentRoute: () => OrgSlugPartiesPartyIdRoute,
   } as any)
-const OrgSlugPartiesPartyIdReceiptsRoute =
-  OrgSlugPartiesPartyIdReceiptsRouteImport.update({
-    id: '/receipts',
-    path: '/receipts',
+const OrgSlugPartiesPartyIdTransactionsRoute =
+  OrgSlugPartiesPartyIdTransactionsRouteImport.update({
+    id: '/transactions',
+    path: '/transactions',
     getParentRoute: () => OrgSlugPartiesPartyIdRoute,
   } as any)
 const ApiOrgSlugInvoicesInvoiceIdPdfRoute =
@@ -391,7 +391,7 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/bills/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
-  '/$orgSlug/parties/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
+  '/$orgSlug/parties/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
@@ -443,7 +443,7 @@ export interface FileRoutesByTo {
   '/$orgSlug/bills/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
-  '/$orgSlug/parties/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
+  '/$orgSlug/parties/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
@@ -499,7 +499,7 @@ export interface FileRoutesById {
   '/$orgSlug/bills_/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices_/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties_/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
-  '/$orgSlug/parties_/$partyId/receipts': typeof OrgSlugPartiesPartyIdReceiptsRoute
+  '/$orgSlug/parties_/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties_/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
@@ -556,7 +556,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/bills/$billId/edit'
     | '/$orgSlug/invoices/$invoiceId/edit'
     | '/$orgSlug/parties/$partyId/ledger'
-    | '/$orgSlug/parties/$partyId/receipts'
+    | '/$orgSlug/parties/$partyId/transactions'
     | '/$orgSlug/parties/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
@@ -608,7 +608,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/bills/$billId/edit'
     | '/$orgSlug/invoices/$invoiceId/edit'
     | '/$orgSlug/parties/$partyId/ledger'
-    | '/$orgSlug/parties/$partyId/receipts'
+    | '/$orgSlug/parties/$partyId/transactions'
     | '/$orgSlug/parties/$partyId'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
@@ -663,7 +663,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/bills_/$billId/edit'
     | '/$orgSlug/invoices_/$invoiceId/edit'
     | '/$orgSlug/parties_/$partyId/ledger'
-    | '/$orgSlug/parties_/$partyId/receipts'
+    | '/$orgSlug/parties_/$partyId/transactions'
     | '/$orgSlug/parties_/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
@@ -1040,11 +1040,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugPartiesPartyIdLedgerRouteImport
       parentRoute: typeof OrgSlugPartiesPartyIdRoute
     }
-    '/$orgSlug/parties_/$partyId/receipts': {
-      id: '/$orgSlug/parties_/$partyId/receipts'
-      path: '/receipts'
-      fullPath: '/$orgSlug/parties/$partyId/receipts'
-      preLoaderRoute: typeof OrgSlugPartiesPartyIdReceiptsRouteImport
+    '/$orgSlug/parties_/$partyId/transactions': {
+      id: '/$orgSlug/parties_/$partyId/transactions'
+      path: '/transactions'
+      fullPath: '/$orgSlug/parties/$partyId/transactions'
+      preLoaderRoute: typeof OrgSlugPartiesPartyIdTransactionsRouteImport
       parentRoute: typeof OrgSlugPartiesPartyIdRoute
     }
     '/api/$orgSlug/invoices/$invoiceId/pdf': {
@@ -1144,13 +1144,13 @@ const OrgSlugSettingsRouteRouteWithChildren =
 
 interface OrgSlugPartiesPartyIdRouteChildren {
   OrgSlugPartiesPartyIdLedgerRoute: typeof OrgSlugPartiesPartyIdLedgerRoute
-  OrgSlugPartiesPartyIdReceiptsRoute: typeof OrgSlugPartiesPartyIdReceiptsRoute
+  OrgSlugPartiesPartyIdTransactionsRoute: typeof OrgSlugPartiesPartyIdTransactionsRoute
   OrgSlugPartiesPartyIdIndexRoute: typeof OrgSlugPartiesPartyIdIndexRoute
 }
 
 const OrgSlugPartiesPartyIdRouteChildren: OrgSlugPartiesPartyIdRouteChildren = {
   OrgSlugPartiesPartyIdLedgerRoute: OrgSlugPartiesPartyIdLedgerRoute,
-  OrgSlugPartiesPartyIdReceiptsRoute: OrgSlugPartiesPartyIdReceiptsRoute,
+  OrgSlugPartiesPartyIdTransactionsRoute: OrgSlugPartiesPartyIdTransactionsRoute,
   OrgSlugPartiesPartyIdIndexRoute: OrgSlugPartiesPartyIdIndexRoute,
 }
 

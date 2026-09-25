@@ -13,7 +13,7 @@ import { LinkField } from "@/components/link-field";
 import { PartySheet } from "@/components/party-form";
 import { useCan } from "@/lib/membership";
 import type { ListState } from "@/lib/list-state";
-import { partyPickerOptions, type PartyOption } from "@/lib/parties";
+import { partyPickerOptions, type PartyOption, type PartyRole } from "@/lib/parties";
 
 /** The owner supplies the party query and quick-create action. */
 export function PartyLinkField({
@@ -66,21 +66,24 @@ type DocumentPartyValues = { partyId: string | null; partyName: string };
 /**
  * A document's Party. The form holds `partyId` and the display-only `partyName`; a
  * party typed but not found is created in a stacked Sheet (DocumentForm ignores its
- * portal events) and selected. `onPartyChange` runs only when the party changes.
+ * portal events) and selected. `role` ranks the parties holding it first and is the
+ * role a created party starts with. `onPartyChange` runs only when the party changes.
  */
 export function DocumentPartyField({
   orgSlug,
   label,
+  role,
   clearable,
   onPartyChange,
 }: {
   orgSlug: string;
   label: string;
+  role: PartyRole;
   clearable?: boolean;
   onPartyChange?: (party: PartyOption | null) => void;
 }) {
   const form = useFormContext<DocumentPartyValues>();
-  const parties = useQuery(partyPickerOptions(orgSlug));
+  const parties = useQuery(partyPickerOptions(orgSlug, role));
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const [createSeed, setCreateSeed] = useState<string | null>(null);
 
@@ -121,6 +124,7 @@ export function DocumentPartyField({
         orgSlug={orgSlug}
         open={createSeed !== null}
         seedName={createSeed ?? ""}
+        seedRole={role}
         onClose={() => setCreateSeed(null)}
         onSaved={(party) => {
           select(party);

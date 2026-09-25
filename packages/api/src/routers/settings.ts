@@ -9,20 +9,20 @@ import { audit } from "../audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
+  deriveOrganizationIdentity,
   documentPrefix,
   indianPinCode,
-  indianStateCode,
   optionalGstin,
-  pan,
+  optionalPan,
+  optionalStateCode,
   timeZone,
-  validateGstinIdentity,
 } from "../lib/schemas";
 
 const editableSettings = {
   legalName: z.string().trim().min(1).max(200),
-  pan,
+  pan: optionalPan,
   gstin: optionalGstin,
-  stateCode: indianStateCode,
+  stateCode: optionalStateCode,
   addressLine1: z.string().trim().min(1).max(200),
   addressLine2: z
     .string()
@@ -43,7 +43,7 @@ const editableSettings = {
   journalPrefix: documentPrefix,
 };
 
-const settingsFields = z.object(editableSettings).superRefine(validateGstinIdentity);
+const settingsFields = z.object(editableSettings).transform(deriveOrganizationIdentity);
 
 export type SettingsFields = z.infer<typeof settingsFields>;
 
@@ -84,7 +84,7 @@ export const settingsRouter = {
 
   update: orgProcedure(
     { settings: ["update"] },
-    orgInput.extend(editableSettings).superRefine(validateGstinIdentity),
+    orgInput.extend(editableSettings).transform(deriveOrganizationIdentity),
   ).handler(async ({ context, input }): Promise<SettingsFields> => {
     const { scope } = context;
     const { orgSlug: _claim, ...settings } = input;

@@ -17,6 +17,7 @@ import {
   partySnapshot,
   postDocument,
   postedNumber,
+  taxTotals,
   writeDraft,
   type DocumentNumbering,
   type PostDocumentInput,
@@ -27,7 +28,6 @@ import { formatDecimal } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
 import { computeTax, roundOff } from "../core/tax";
 import { ratesByCode } from "../core/tax-schedule";
-import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
@@ -69,13 +69,7 @@ async function resolveInvoice(
   input: InvoiceFields,
   settings: typeof organizationSettings.$inferSelect,
 ): Promise<{ numbering: DocumentNumbering; invoice: ResolvedInvoice }> {
-  const itemIds = [
-    ...new Set(input.lines.flatMap((line) => (line.kind === "item" ? [line.itemId] : []))),
-  ];
-
-  const accountIds = [
-    ...new Set(input.lines.flatMap((line) => (line.kind === "account" ? [line.accountId] : []))),
-  ];
+  const itemIds = [...new Set(input.lines.map((line) => line.itemId))];
 
   // A posting resolves through one transaction connection; do not queue concurrent queries.
   const party = await activeParty(executor, scope.orgId, input.partyId);
@@ -95,17 +89,9 @@ async function resolveInvoice(
     .where(and(eq(items.orgId, scope.orgId), eq(items.active, true), inArray(items.id, itemIds)));
 
   // A posting share-locks every income account it credits, so none is archived under it.
-  const storedItems =
-    itemIds.length === 0
-      ? []
-      : await (executor === db ? itemQuery : itemQuery.for("share", { of: accounts }));
-
-  const accountQuery = postableAccounts(executor, scope.orgId, accountIds, ["income"]);
-
-  const storedAccounts =
-    accountIds.length === 0
-      ? []
-      : await (executor === db ? accountQuery : accountQuery.for("share", { of: accounts }));
+  const storedItems = await (executor === db
+    ? itemQuery
+    : itemQuery.for("share", { of: accounts }));
 
   const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
@@ -121,15 +107,7 @@ async function resolveInvoice(
     throw badRequest("ITEM_INVALID", "Choose active items in this organization.");
   }
 
-  if (storedAccounts.length !== accountIds.length) {
-    throw badRequest(
-      "INCOME_ACCOUNT_INVALID",
-      "Choose active income accounts that are not groups or system accounts.",
-    );
-  }
-
   const itemById = new Map(storedItems.map(({ item, account }) => [item.id, { item, account }]));
-  const accountById = new Map(storedAccounts.map((account) => [account.id, account]));
 
   const registered = settings.gstin !== null;
 
@@ -151,39 +129,9 @@ async function resolveInvoice(
     throw badRequest("TAX_RATE_MISSING", "An item has no GST rate effective on the invoice date.");
   }
 
+  // Every line is an Item (accounting-core call 5): the Item carries the income account
+  // and the dated rate, and the line may override its description and price.
   const unresolvedLines = input.lines.map((line) => {
-    if (line.kind === "account") {
-      const account = accountById.get(line.accountId)!;
-
-      // An account line carries no rate, so a registered org must invoice taxable
-      // supplies as Items; the same rule as TAXABLE_DIRECT_RECEIPT (call 16).
-      if (registered && account.supplyClass === "taxable") {
-        throw badRequest(
-          "TAXABLE_ACCOUNT_LINE",
-          "Taxable income needs an Item with a GST rate; account lines cannot carry GST.",
-        );
-      }
-
-      return {
-        account,
-        line: {
-          kind: "account" as const,
-          accountId: account.id,
-          description: line.description,
-          amountPaise: line.amount,
-          entrySide: null,
-          partyId: null,
-          itemId: null,
-          hsnSac: null,
-          unit: null,
-          quantity: null,
-          unitPricePaise: null,
-          taxRateId: null,
-        },
-        rateBasisPoints: null,
-      };
-    }
-
     const stored = itemById.get(line.itemId)!;
     const unitPricePaise = line.unitPrice ?? stored.item.unitPricePaise;
     const amountPaise = boundedPaise(BigInt(line.quantity) * unitPricePaise);
@@ -499,6 +447,7 @@ export const invoiceRouter = {
           ? ("taxInvoice" as const)
           : ("billOfSupply" as const),
         lines: lines.map(({ taxRateId: _taxRateId, ...line }) => line),
+        totals: taxTotals(lines),
         allocations,
       };
     },

@@ -10,13 +10,13 @@ import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import {
+  deriveOrganizationIdentity,
   indianPinCode,
-  indianStateCode,
   optionalGstin,
-  pan,
+  optionalPan,
+  optionalStateCode,
   shortName,
   timeZone,
-  validateGstinIdentity,
 } from "../lib/schemas";
 import { seedChartOfAccounts } from "./chart-templates";
 import { seedTaxRates } from "./tax-schedule";
@@ -28,9 +28,9 @@ export const createOrganizationInput = z
     slug: z.string().trim(),
     legalType: z.enum(LEGAL_TYPES),
     legalName: z.string().trim().min(1).max(200),
-    pan,
+    pan: optionalPan,
     gstin: optionalGstin,
-    stateCode: indianStateCode,
+    stateCode: optionalStateCode,
     financialYearStart: z
       .number()
       .int()
@@ -48,7 +48,7 @@ export const createOrganizationInput = z
     city: z.string().trim().min(1).max(120),
     pinCode: indianPinCode,
   })
-  .superRefine(validateGstinIdentity);
+  .transform(deriveOrganizationIdentity);
 
 // Internal bootstrap for authenticated routes and trusted seed/test callers.
 export async function createOrganization(

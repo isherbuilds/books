@@ -102,14 +102,15 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.
-- **Banking**: Verification. Add account opens the Chart of accounts Add account
-  Sheet; pick Cash or Bank Accounts there. Open: add a cash account and a payment method that lands
-  in the new bank account, then archive and restore the method. Post a receipt
+- **Banking**: Verification. Add account opens the Add account Sheet in
+  Banking with Bank Accounts chosen; saving it opens Add payment method with
+  the new account chosen. Open: add a bank account and its method that way,
+  then mark the method inactive and active again. Post a receipt
   with it and confirm the balance moves; cancel it and confirm the balance
-  returns. Archive the account behind a restored method and confirm Banking
-  shows "Account archived" and the Receipt form no longer offers the method.
-  Sign in as a CA and confirm accounts, balances and methods are visible
-  without add and archive actions.
+  returns. Mark the account behind a reactivated method inactive and confirm
+  Banking shows "Account inactive" and the Receipt form no longer offers the
+  method. Sign in as a CA and confirm accounts, balances and methods are
+  visible without add and status actions.
 - **Chart of accounts and journal pages**: Verification. Headless checks cover
   the chart, journal entry and record, Banking, Items, Locks and Opening
   balance at 1440 and 390 px. Open: screenshots at 1440, 1024 and 390 px in

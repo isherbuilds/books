@@ -368,6 +368,7 @@ export function ReceiptForm({
         <DocumentPartyField
           orgSlug={orgSlug}
           label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
+          role="customer"
           clearable={settlementKind === "direct"}
           // Allocations belong to the party's invoices.
           onPartyChange={() => form.setValue("allocations", {})}

@@ -53,6 +53,16 @@ export const indianStateCode = z
   .string()
   .refine((code) => Object.hasOwn(INDIAN_STATES, code), "Use a valid Indian state code");
 
+// Blank means absent: `deriveFromGstin` requires it only when there is no GSTIN.
+export const optionalStateCode = z
+  .string()
+  .refine(
+    (code) => code === "" || Object.hasOwn(INDIAN_STATES, code),
+    "Use a valid Indian state code",
+  )
+  .transform((code) => code || undefined)
+  .optional();
+
 /** An optional date range; pair with `.superRefine(orderedPeriod)`. */
 export const period = { from: dateOnly.optional(), to: dateOnly.optional() };
 
@@ -129,23 +139,17 @@ export const invoiceFields = {
   reference: settlementPostFields.reference,
   discount: money.optional(),
   narration: settlementPostFields.narration,
+  // Invoice lines are Items only (accounting-core call 5). `kind` stays on the wire,
+  // matching the stored line kind that Bills also use.
   lines: z
     .array(
-      z.discriminatedUnion("kind", [
-        z.object({
-          kind: z.literal("item"),
-          itemId: z.uuid(),
-          quantity: z.number().int().min(1).max(1_000_000),
-          unitPrice: money.optional(),
-          description: z.string().trim().max(200).optional(),
-        }),
-        z.object({
-          kind: z.literal("account"),
-          accountId: z.uuid(),
-          description: z.string().trim().min(1).max(200),
-          amount: positiveMoney,
-        }),
-      ]),
+      z.object({
+        kind: z.literal("item"),
+        itemId: z.uuid(),
+        quantity: z.number().int().min(1).max(1_000_000),
+        unitPrice: money.optional(),
+        description: z.string().trim().max(200).optional(),
+      }),
     )
     .min(1)
     .max(100),
@@ -210,12 +214,6 @@ export const timeZone = z.string().refine(isSupportedTimeZone, {
   message: "Use a valid IANA time zone like Asia/Kolkata",
 });
 
-export const pan = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, "Use a valid 10-character PAN");
-
 export const optionalPan = z
   .string()
   .trim()
@@ -239,25 +237,70 @@ export const indianPinCode = z
   .trim()
   .regex(/^[1-9][0-9]{5}$/, "Use a valid 6-digit PIN code");
 
-export function validateGstinIdentity(
-  value: { gstin?: string; pan?: string; stateCode: string },
+/** The state code and PAN a valid GSTIN carries, or null. */
+export function gstinParts(value: string): { stateCode: string; pan: string } | null {
+  const gstin = value.trim().toUpperCase();
+  const stateCode = gstin.slice(0, 2);
+
+  if (!GSTIN_PATTERN.test(gstin) || !Object.hasOwn(INDIAN_STATES, stateCode)) return null;
+
+  return { stateCode, pan: gstin.slice(2, 12) };
+}
+
+type TaxIdentity = { gstin?: string; pan?: string; stateCode?: string };
+
+/**
+ * A GSTIN carries its state code (characters 1-2) and PAN (3-12), so with one both are
+ * derived here; a state or PAN sent beside it must match. Without one, the state is
+ * required. Use as `.transform(deriveFromGstin)`.
+ */
+export function deriveFromGstin<T extends TaxIdentity>(
+  value: T,
   context: z.RefinementCtx,
-): void {
-  if (!value.gstin) return;
+): T & { stateCode: string } {
+  if (value.gstin) {
+    const parts = gstinParts(value.gstin);
 
-  if (value.gstin.slice(0, 2) !== value.stateCode) {
-    context.addIssue({
-      code: "custom",
-      path: ["gstin"],
-      message: "GSTIN state code must match the registered state",
-    });
+    if (!parts) {
+      context.addIssue({
+        code: "custom",
+        path: ["gstin"],
+        message: "GSTIN must start with a valid Indian state code",
+      });
+    } else if (value.stateCode && value.stateCode !== parts.stateCode) {
+      context.addIssue({
+        code: "custom",
+        path: ["gstin"],
+        message: "GSTIN state code must match the registered state",
+      });
+    } else if (value.pan && value.pan !== parts.pan) {
+      context.addIssue({
+        code: "custom",
+        path: ["gstin"],
+        message: "GSTIN must contain the same PAN",
+      });
+    }
+
+    return { ...value, stateCode: parts?.stateCode ?? "", pan: parts?.pan };
   }
 
-  if (value.pan && value.gstin.slice(2, 12) !== value.pan) {
-    context.addIssue({
-      code: "custom",
-      path: ["gstin"],
-      message: "GSTIN must contain the same PAN",
-    });
+  if (!value.stateCode) {
+    context.addIssue({ code: "custom", path: ["stateCode"], message: "Choose a state" });
   }
+
+  return { ...value, stateCode: value.stateCode ?? "" };
+}
+
+/** `deriveFromGstin` for an Organization, whose PAN is required. */
+export function deriveOrganizationIdentity<T extends TaxIdentity>(
+  value: T,
+  context: z.RefinementCtx,
+): T & { stateCode: string; pan: string } {
+  const derived = deriveFromGstin(value, context);
+
+  if (!derived.pan) {
+    context.addIssue({ code: "custom", path: ["pan"], message: "Enter the PAN" });
+  }
+
+  return { ...derived, pan: derived.pan ?? "" };
 }

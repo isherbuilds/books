@@ -79,7 +79,7 @@ export const ACCOUNT_COLUMNS = [
     meta: { className: "hidden w-24 lg:table-cell" },
     cell: ({ getValue }) => (
       <Badge variant={getValue() ? "secondary" : "muted"}>
-        {getValue() ? "Active" : "Archived"}
+        {getValue() ? "Active" : "Inactive"}
       </Badge>
     ),
   }),
@@ -96,7 +96,7 @@ export function AccountCard({ account }: { account: AccountRow }) {
         <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
         <span className="min-w-0 truncate">{account.parentName ?? "Root ledger"}</span>
         <Badge variant={account.active ? "secondary" : "muted"}>
-          {account.active ? "Active" : "Archived"}
+          {account.active ? "Active" : "Inactive"}
         </Badge>
       </div>
       {account.supplyClass ? (

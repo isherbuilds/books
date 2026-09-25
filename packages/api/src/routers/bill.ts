@@ -16,6 +16,7 @@ import {
   organizationSnapshot,
   partySnapshot,
   postDocument,
+  taxTotals,
   writeDraft,
   type PostDocumentInput,
   type PostDocumentLine,
@@ -386,6 +387,7 @@ export const billRouter = {
         ...documentSettlement(bill, businessDate(new Date(), timeZone)),
         tds,
         lines,
+        totals: taxTotals(lines),
         allocations,
       };
     },
