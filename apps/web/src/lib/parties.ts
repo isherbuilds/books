@@ -38,6 +38,9 @@ export const partyListOptions = (orgSlug: string, q?: string) => ({
   staleTime: 5 * 60_000,
 });
 
+export const partyDetailOptions = (orgSlug: string, partyId: string) =>
+  orpc.party.get.queryOptions({ input: { orgSlug, partyId } });
+
 /** The active rows a Link Field offers: id, name and GSTIN. */
 export type PartyOption = { id: string; name: string; gstin?: string | null };
 

@@ -52,3 +52,11 @@ const getORPCClient = createIsomorphicFn()
 const client = getORPCClient();
 
 export const orpc = createTanstackQueryUtils(client);
+
+// Newest-first keyset paging for every register list: the next cursor is the last
+// row's id while the server reports more.
+export const keysetPaging = {
+  initialPageParam: undefined,
+  getNextPageParam: (last: { hasMore: boolean; rows: { id: string }[] }) =>
+    last.hasMore ? last.rows.at(-1)?.id : undefined,
+};

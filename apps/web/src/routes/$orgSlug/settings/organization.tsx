@@ -33,6 +33,7 @@ import { invalidateSettings } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";
+import { settingsOptions } from "@/lib/settings";
 
 import { SettingsTabs } from "./route";
 
@@ -51,7 +52,7 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     // The page is a save form, so the tab strip gates it on `update` too.
     await requireOrgPermission(queryClient, orgSlug, { settings: ["update"] });
-    await queryClient.query(orpc.settings.get.queryOptions({ input: { orgSlug } })).catch(() => {});
+    await queryClient.query(settingsOptions(orgSlug)).catch(() => {});
   },
   component: SettingsRoute,
 });
@@ -104,7 +105,7 @@ function toFormValues(settings: SettingsFields) {
 
 function SettingsRoute() {
   const { orgSlug } = Route.useParams();
-  const settings = useQuery(orpc.settings.get.queryOptions({ input: { orgSlug } }));
+  const settings = useQuery(settingsOptions(orgSlug));
 
   return (
     <>

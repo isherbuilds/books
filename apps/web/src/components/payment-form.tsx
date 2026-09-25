@@ -216,7 +216,10 @@ export function PaymentForm({
 
   const sections = useQuery(
     orpc.payment.tdsSections.queryOptions({
-      input: settlementKind !== "against" ? { orgSlug, date } : skipToken,
+      input:
+        settlementKind !== "against" && z.iso.date().safeParse(date).success
+          ? { orgSlug, date }
+          : skipToken,
     }),
   );
 

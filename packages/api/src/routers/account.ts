@@ -19,7 +19,7 @@ import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { shortName } from "../lib/schemas";
+import { editToken, shortName } from "../lib/schemas";
 
 // Templates own code 3000 and 6800–6999.
 const ACCOUNT_CODE_RANGES: Record<AccountType, readonly [number, number]> = {
@@ -178,7 +178,7 @@ export const accountRouter = {
     orgInput.extend({
       accountId: z.uuid(),
       name: shortName.max(120),
-      updatedAt: z.iso.datetime({ precision: 3 }),
+      updatedAt: editToken,
     }),
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;

@@ -20,8 +20,7 @@ import { Monogram } from "@/components/monogram";
 import { ErrorNote } from "@/components/page";
 import { PartyFactSections, RecentReceipts } from "@/components/party-facts";
 import { useCan } from "@/lib/membership";
-import { orpc } from "@/lib/orpc";
-import { ROLE_LABELS } from "@/lib/parties";
+import { partyDetailOptions, ROLE_LABELS } from "@/lib/parties";
 import { stepRow } from "@/lib/row-focus";
 
 /**
@@ -43,7 +42,7 @@ export function PartyQuickLook({
 }) {
   const canUpdate = useCan(orgSlug, { party: ["update"] });
   const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
-  const record = useQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId: party.id } }));
+  const record = useQuery(partyDetailOptions(orgSlug, party.id));
 
   return (
     <ClientOnly fallback={null}>

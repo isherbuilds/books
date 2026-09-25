@@ -11,7 +11,7 @@ import { PageBody, PageHeader, PageTab, PageTabs } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PartySheet } from "@/components/party-form";
 import { useMembership } from "@/lib/membership";
-import { orpc } from "@/lib/orpc";
+import { partyDetailOptions } from "@/lib/parties";
 import { loadRouteQuery } from "@/lib/orpc-error";
 
 const PARTY_TABS: readonly {
@@ -38,9 +38,7 @@ export const Route = createFileRoute("/$orgSlug/parties_/$partyId")({
   validateSearch: z.object({ edit: z.boolean().optional().catch(undefined) }),
   remountDeps: ({ params }) => ({ partyId: params.partyId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, partyId } }) => {
-    const party = await loadRouteQuery(
-      queryClient.query(orpc.party.get.queryOptions({ input: { orgSlug, partyId } })),
-    );
+    const party = await loadRouteQuery(queryClient.query(partyDetailOptions(orgSlug, partyId)));
 
     return { name: party.name };
   },
@@ -57,7 +55,7 @@ function PartyPage() {
   const roles = useMembership(orgSlug, (membership) => membership.roles);
   const canUpdate = authorize(roles, { party: ["update"] });
 
-  const party = useSuspenseQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId } })).data;
+  const party = useSuspenseQuery(partyDetailOptions(orgSlug, partyId)).data;
 
   const editButton = useRef<HTMLButtonElement>(null);
 

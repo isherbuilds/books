@@ -14,7 +14,14 @@ import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { dateOnly, masterName, money, optionalHsnSac, optionalTaxCode } from "../lib/schemas";
+import {
+  dateOnly,
+  editToken,
+  masterName,
+  money,
+  optionalHsnSac,
+  optionalTaxCode,
+} from "../lib/schemas";
 import { orgTimeZone } from "../lib/settlements";
 
 const optionalUnit = z.string().trim().min(1).max(20).optional();
@@ -141,7 +148,7 @@ export const itemRouter = {
     { item: ["update"] },
     orgInput.extend({
       itemId: z.uuid(),
-      updatedAt: z.iso.datetime({ precision: 3 }),
+      updatedAt: editToken,
       ...itemFields,
     }),
   ).handler(async ({ context, input }) => {
@@ -179,7 +186,7 @@ export const itemRouter = {
     { item: ["update"] },
     orgInput.extend({
       itemId: z.uuid(),
-      updatedAt: z.iso.datetime({ precision: 3 }),
+      updatedAt: editToken,
       active: z.boolean(),
     }),
   ).handler(async ({ context, input }) => {

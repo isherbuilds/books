@@ -126,6 +126,7 @@ function AdjustmentRow({
           variant="ghost"
           size="xs"
           className="self-end"
+          aria-label={`Remove adjustment ${index + 1}`}
           onClick={() => remove(index)}
         >
           Remove

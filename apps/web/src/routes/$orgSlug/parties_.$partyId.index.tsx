@@ -7,8 +7,7 @@ import type { ReactNode } from "react";
 
 import { PartyFactSections, RecentReceipts } from "@/components/party-facts";
 import { membershipOptions, useCan } from "@/lib/membership";
-import { orpc } from "@/lib/orpc";
-import { partyStatementOptions, partyTotalsOptions } from "@/lib/parties";
+import { partyDetailOptions, partyStatementOptions, partyTotalsOptions } from "@/lib/parties";
 
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/")({
   // The figures start here so they ride `party.get`'s batch; neither blocks the page,
@@ -41,7 +40,7 @@ function PartyOverview() {
   const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
   const canReadLedger = useCan(orgSlug, { report: ["read"] });
 
-  const party = useSuspenseQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId } })).data;
+  const party = useSuspenseQuery(partyDetailOptions(orgSlug, partyId)).data;
   const totals = useQuery({ ...partyTotalsOptions(orgSlug, partyId), enabled: canReadReceipts });
 
   const statement = useQuery({

@@ -82,9 +82,7 @@ export const journalRouter = {
           reference: documents.reference,
           narration: documents.narration,
           totalPaise: documents.totalPaise,
-          postedAt: documents.postedAt,
           cancelledAt: documents.cancelledAt,
-          createdAt: documents.createdAt,
         })
         .from(documents)
         .where(
@@ -98,6 +96,8 @@ export const journalRouter = {
         .then(([row]) => row);
 
       if (!header) throw new ORPCError("NOT_FOUND", { message: "Journal not found." });
+
+      // Only after the type check: a non-journal document's lines carry no entry side.
       const lines = await entryLinesOf(orgId, header.id);
 
       return {

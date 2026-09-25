@@ -1,10 +1,9 @@
 import { authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
-import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -34,6 +33,7 @@ import {
   settlementPostFields,
 } from "../lib/schemas";
 import {
+  adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
   listSettlements,
@@ -342,22 +342,7 @@ export const paymentRouter = {
         settles && canReadRelated
           ? allocationsOf(db, orgId, input.paymentId, isRefund ? "target" : "source")
           : Promise.resolve([]),
-        db
-          .select({
-            id: documentLines.id,
-            accountId: documentLines.accountId,
-            adjustmentKind: documentLines.adjustmentKind,
-            amountPaise: documentLines.amountPaise,
-          })
-          .from(documentLines)
-          .where(
-            and(
-              eq(documentLines.orgId, orgId),
-              eq(documentLines.documentId, input.paymentId),
-              isNotNull(documentLines.adjustmentKind),
-            ),
-          )
-          .orderBy(asc(documentLines.position)),
+        adjustmentLinesOf(orgId, input.paymentId),
         db
           .select({
             code: tdsSections.code,

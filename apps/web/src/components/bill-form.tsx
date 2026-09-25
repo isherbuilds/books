@@ -38,6 +38,7 @@ import type { BillDetail } from "@/lib/bills";
 import { invalidateBillDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
+import { settingsOptions } from "@/lib/settings";
 import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
 
 type BillApiLine = Parameters<AppRouterClient["bill"]["saveDraft"]>[0]["lines"][number];
@@ -154,7 +155,7 @@ export function BillForm({
   const canPost = useCan(orgSlug, { bill: ["post"] });
   const canReadPayment = useCan(orgSlug, { payment: ["read"] });
   // The route loader primes settings, so GST registration is known before any save.
-  const settings = useSuspenseQuery(orpc.settings.get.queryOptions({ input: { orgSlug } })).data;
+  const settings = useSuspenseQuery(settingsOptions(orgSlug)).data;
   const registered = Boolean(settings.gstin);
 
   const form = useZodForm(billSchema, {

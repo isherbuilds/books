@@ -3,6 +3,7 @@ import {
   formatDecimal,
   formatMoney,
   isPositiveMoney,
+  NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
 } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
@@ -221,7 +222,8 @@ export function NoteForm({
                           {...field}
                           inputMode="decimal"
                           placeholder="0.00"
-                          aria-label={`Note amount for ${line.description}`}
+                          pattern={NON_NEGATIVE_MONEY_PATTERN.source}
+                          className="text-right tabular-nums"
                         />
                       </FormControl>
                       <Button

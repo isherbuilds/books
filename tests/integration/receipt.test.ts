@@ -364,8 +364,8 @@ test("receipt fee and customer TDS settle the invoice with four journal legs", a
   const receipt = await api.receipt.post(against);
   const detail = await api.receipt.get({ orgSlug: organization.slug, receiptId: receipt.id });
   expect(detail.adjustments).toEqual([
-    { adjustmentKind: "fee", accountId: expenseAccount.id, amountPaise: 200n },
-    { adjustmentKind: "tds", accountId: null, amountPaise: 300n },
+    { id: expect.any(String), adjustmentKind: "fee", amountPaise: 200n },
+    { id: expect.any(String), adjustmentKind: "tds", amountPaise: 300n },
   ]);
   expect((await postingOf(organization.id, receipt.id, "post")).lines).toEqual(
     expect.arrayContaining([

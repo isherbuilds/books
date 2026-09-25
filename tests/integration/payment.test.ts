@@ -408,12 +408,10 @@ test("against payment settles a bill with write-off and fee, and reversal reopen
     adjustments: expect.arrayContaining([
       expect.objectContaining({
         adjustmentKind: "writeOff",
-        accountId: incomeAccount.id,
         amountPaise: 500n,
       }),
       expect.objectContaining({
         adjustmentKind: "fee",
-        accountId: expenseAccount.id,
         amountPaise: 200n,
       }),
     ]),

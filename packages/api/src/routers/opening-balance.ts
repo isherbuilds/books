@@ -96,7 +96,6 @@ export const openingBalanceRouter = {
         documentDate: documents.documentDate,
         totalPaise: documents.totalPaise,
         postedAt: documents.postedAt,
-        createdAt: documents.createdAt,
       })
       .from(documents)
       .where(
@@ -123,7 +122,6 @@ export const openingBalanceRouter = {
       documentDate: header.documentDate,
       totalPaise: header.totalPaise,
       postedAt: header.postedAt,
-      createdAt: header.createdAt,
       lines,
     };
   }),

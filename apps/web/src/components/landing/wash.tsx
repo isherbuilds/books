@@ -17,7 +17,7 @@ const LIGHT_INFO = "oklch(0.962 0.025 253)";
 
 const LIGHT_CLEAR = "oklch(0.958 0.03 155)";
 
-export const WASH_BACKGROUND = [
+const WASH_BACKGROUND = [
   `radial-gradient(90% 70% at 12% 8%, ${LIGHT_NOTE}, transparent 62%)`,
   `radial-gradient(80% 65% at 88% 92%, ${LIGHT_INFO}, transparent 60%)`,
   `radial-gradient(70% 60% at 55% 45%, ${LIGHT_CLEAR}, transparent 70%)`,

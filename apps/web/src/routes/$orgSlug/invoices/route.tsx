@@ -21,7 +21,6 @@ import {
 } from "@/components/list-filter";
 import { PartyFilterItems } from "@/components/party-filter-items";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
-import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { invoiceListOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
@@ -128,12 +127,6 @@ function InvoicesRoute() {
     });
 
   const openCreate = () => void navigate({ to: "/$orgSlug/invoices/new", params: { orgSlug } });
-
-  usePaletteActions(
-    canCreate
-      ? [{ id: "invoice:new", label: "New invoice", group: "action", run: openCreate }]
-      : [],
-  );
 
   const empty =
     q !== undefined || chips.length > 0 ? (

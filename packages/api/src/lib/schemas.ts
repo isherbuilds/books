@@ -79,6 +79,9 @@ export function orderedPeriod(
   }
 }
 
+// The `updatedAt` a master editor loaded; a newer row means someone saved first.
+export const editToken = z.iso.datetime({ precision: 3 });
+
 // Case is kept: names appear on legal documents. Matching is case-insensitive at the database.
 export const shortName = z
   .string()

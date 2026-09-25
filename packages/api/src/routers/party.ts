@@ -14,6 +14,7 @@ import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import { openCredits, openItems, pageOf } from "../lib/settlements";
 import {
+  editToken,
   deriveFromGstin,
   indianPinCode,
   likePattern,
@@ -206,8 +207,7 @@ export const partyRouter = {
       .extend({
         active: z.boolean(),
         allowNamesake: z.boolean().default(false),
-        // The `updatedAt` the editor loaded; a newer row means someone saved first.
-        updatedAt: z.iso.datetime({ precision: 3 }),
+        updatedAt: editToken,
       })
       .transform(deriveFromGstin),
   ).handler(async ({ context, input }) => {
