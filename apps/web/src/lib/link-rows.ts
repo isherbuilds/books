@@ -35,26 +35,39 @@ export function filterLinkItems<T>(
 
 /**
  * The rows a Link Field shows: the best `LINK_ROW_LIMIT` matches. Untouched text
- * equals the committed label, so the list opens unfiltered, as Midday's pickers do.
- * A typed name that already exists gets no Create row; Create is otherwise always last.
+ * equals the committed label, so the list opens unfiltered, as Midday's pickers do,
+ * with the committed value first: a keyboard commit then keeps it, even when it lies
+ * past the limit. A typed name that already exists gets no Create row; Create is
+ * otherwise always last.
  */
 export function linkRows<T>({
   items,
   query,
+  selected,
   selectedLabel,
   canCreate,
+  getKey,
   getLabel,
   getCode,
 }: {
   items: T[];
   query: string;
+  selected: T | null;
   selectedLabel: string;
   canCreate: boolean;
+  getKey: (item: T) => string;
   getLabel: (item: T) => string;
   getCode?: (item: T) => string | undefined;
 }): Array<T | CreateItem> {
   const needle = query === selectedLabel ? "" : query.trim();
   const all = filterLinkItems(items, needle, getLabel, getCode);
+
+  if (needle === "" && selected !== null) {
+    const key = getKey(selected);
+
+    return [selected, ...all.filter((item) => getKey(item) !== key)].slice(0, LINK_ROW_LIMIT);
+  }
+
   const matches = all.slice(0, LINK_ROW_LIMIT);
 
   if (!canCreate || needle === "") return matches;

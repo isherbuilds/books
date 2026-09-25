@@ -454,15 +454,16 @@ function MemberDirectory({ orgSlug, q }: { orgSlug: string; q: string | undefine
   const roster = useInfiniteQuery(memberListOptions(orgSlug, q));
   const pages = roster.data?.pages ?? [];
 
-  // Invitations ride the first page only.
+  // Invitations ride the first page only. They lead, so Load more appends members
+  // below them and the pending invitations never move.
   const rows: RosterRow[] = [
-    ...pages.flatMap((page) =>
-      page.members.map((person): RosterRow => ({ kind: "member", ...person })),
-    ),
     ...(pages[0]?.invitations ?? []).map((invite): RosterRow => ({
       kind: "invitation",
       ...invite,
     })),
+    ...pages.flatMap((page) =>
+      page.members.map((person): RosterRow => ({ kind: "member", ...person })),
+    ),
   ];
 
   const setQuery = (next: string | undefined) =>
