@@ -22,7 +22,7 @@ function NewBillRoute() {
 
   return (
     <>
-      <PageHeader title="New bill" description="Create a draft or post this supplier bill." />
+      <PageHeader title="New bill" />
       <BillForm
         orgSlug={orgSlug}
         today={today}

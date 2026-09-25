@@ -146,7 +146,7 @@ function BillSheetRoute() {
       rowId={billId}
       title={bill.number ?? "Draft"}
       status={<ClaimStatus claim={bill} />}
-      description={bill.partyName ?? "No supplier"}
+      description={bill.partyName ?? "No party"}
       onClose={close}
       onStep={(next) =>
         void navigate({
@@ -182,7 +182,6 @@ function BillSheetRoute() {
           <DetailRow label="Due date">
             {bill.dueDate ? formatBusinessDate(bill.dueDate) : null}
           </DetailRow>
-          <DetailRow label="Supplier">{bill.partyName}</DetailRow>
           <DetailRow label="Place of supply" mono>
             {bill.placeOfSupplyStateCode}
           </DetailRow>

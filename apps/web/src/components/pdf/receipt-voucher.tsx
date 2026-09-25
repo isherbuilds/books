@@ -21,19 +21,21 @@ export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
         <SectionHeading>Receipt details</SectionHeading>
         <div>
           <DetailRow label="Date">{formatBusinessDate(data.documentDate)}</DetailRow>
-          <DetailRow label="Received from">{party?.name ?? "—"}</DetailRow>
-          <DetailRow label="Payment method">{paymentMethod ?? "—"}</DetailRow>
+          {party ? <DetailRow label="Received from">{party.name}</DetailRow> : null}
+          {paymentMethod ? <DetailRow label="Payment method">{paymentMethod}</DetailRow> : null}
           <DetailRow label="Towards">{lines.map((line) => line.description).join("; ")}</DetailRow>
-          <DetailRow label="Reference">{data.reference ?? "—"}</DetailRow>
+          {data.reference ? <DetailRow label="Reference">{data.reference}</DetailRow> : null}
         </div>
       </section>
 
       <TotalPanel label="Amount received" amountPaise={data.totalPaise} />
 
-      <section style={{ marginTop: 22 }}>
-        <SectionHeading>Narration</SectionHeading>
-        <p style={{ margin: 0 }}>{data.narration ?? "—"}</p>
-      </section>
+      {data.narration ? (
+        <section style={{ marginTop: 22 }}>
+          <SectionHeading>Narration</SectionHeading>
+          <p style={{ margin: 0 }}>{data.narration}</p>
+        </section>
+      ) : null}
     </PrintedDocument>
   );
 }

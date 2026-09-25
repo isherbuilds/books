@@ -57,7 +57,7 @@ const schema = z
     partyName: z.string(),
     amount: positiveAmount,
     paymentMethodId: z.string().min(1, "Choose a payment method"),
-    settlementKind: z.enum(["direct", "advance", "against"]),
+    settlementKind: z.enum(["advance", "against", "direct"]),
     exposureSide: z.enum(["payable", "receivable"]),
     allocations: z.record(z.string(), z.string()),
     expenseAccountId: z.string().nullable(),
@@ -134,7 +134,8 @@ const defaults = (today: string, partyId: string | null, paymentMethodId = ""): 
   partyName: "",
   amount: "",
   paymentMethodId,
-  settlementKind: "direct",
+  // The receipt's default and order, so both money screens open the same way.
+  settlementKind: "advance",
   exposureSide: "payable",
   allocations: {},
   expenseAccountId: null,
@@ -419,7 +420,7 @@ export function PaymentForm({
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
         footer={
-          <PostBar onClose={onClose} closeLabel="Cancel">
+          <PostBar onClose={onClose} closeLabel="Close">
             <Button type="submit">
               {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
               <Kbd>⌘↵</Kbd>
@@ -476,9 +477,11 @@ export function PaymentForm({
                   variant="outline"
                   aria-label="Settlement kind"
                 >
-                  <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
                   <ToggleGroupItem value="advance">Advance</ToggleGroupItem>
-                  {canSettle ? <ToggleGroupItem value="against">Against</ToggleGroupItem> : null}
+                  {canSettle ? (
+                    <ToggleGroupItem value="against">Against open items</ToggleGroupItem>
+                  ) : null}
+                  <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
                 </ToggleGroup>
               </FormControl>
               <FormMessage />

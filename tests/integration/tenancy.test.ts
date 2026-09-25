@@ -675,6 +675,7 @@ const GUARDED_CALLS = {
     }),
   "party.get": (api, claim) => api.party.get({ ...claim, partyId: crypto.randomUUID() }),
   "party.list": (api, claim) => api.party.list({ ...claim }),
+  "party.balances": (api, claim) => api.party.balances({ ...claim }),
   "party.statement": (api, claim) =>
     api.party.statement({ ...claim, partyId: crypto.randomUUID() }),
   "account.list": (api, claim) => api.account.list({ ...claim }),
@@ -926,9 +927,10 @@ const GUARDED_CALLS = {
 // SAFETY: Deliberately omit the required tenant claim to exercise runtime validation.
 const NO_CLAIM = {} as Parameters<AppRouterClient["member"]["me"]>[0];
 
-// Bootstrap creation is guarded by sessionProcedure and deliberately has no
-// organization claim yet; every other procedure must appear in GUARDED_CALLS.
-const SESSION_ONLY_PROCEDURES = new Set(["organization.create"]);
+// Bootstrap creation and its founder check are guarded by sessionProcedure and
+// deliberately have no organization claim yet; every other procedure must appear in
+// GUARDED_CALLS.
+const SESSION_ONLY_PROCEDURES = new Set(["organization.canCreate", "organization.create"]);
 
 test("the guarded-call table covers every organization-scoped procedure in the router", () => {
   const procedures = Object.entries(appRouter)

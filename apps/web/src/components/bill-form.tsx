@@ -58,7 +58,7 @@ const billSchema = z
   })
   .superRefine((bill, context) => {
     if (!bill.partyId)
-      context.addIssue({ code: "custom", path: ["partyId"], message: "Choose a supplier" });
+      context.addIssue({ code: "custom", path: ["partyId"], message: "Choose a party" });
 
     if (bill.dueDate && bill.dueDate < bill.documentDate) {
       context.addIssue({
@@ -308,7 +308,7 @@ export function BillForm({
           </PostBar>
         }
       >
-        <DocumentPartyField orgSlug={orgSlug} label="Supplier" role="vendor" />
+        <DocumentPartyField orgSlug={orgSlug} label="Party" role="vendor" />
         <RegisteredFormField
           name="reference"
           render={({ field }) => (
@@ -410,19 +410,14 @@ export function BillForm({
           )}
         />
         <BillLines orgSlug={orgSlug} registered={registered} documentDate={documentDate} />
-        <section className="grid gap-2 border-y border-border py-3">
-          <h3 className="text-muted-foreground">Saved totals</h3>
-          {draft ? (
+        {draft ? (
+          <section className="grid gap-2 border-y border-border py-3">
+            <h3 className="text-muted-foreground">Saved totals</h3>
             <DocumentTotals document={draft}>
               <BillTdsRows bill={draft} />
             </DocumentTotals>
-          ) : (
-            <p className="text-muted-foreground">
-              Tax, TDS, round-off and the total are calculated when the draft is saved or the bill
-              is posted.
-            </p>
-          )}
-        </section>
+          </section>
+        ) : null}
       </DocumentForm>
     </Form>
   );

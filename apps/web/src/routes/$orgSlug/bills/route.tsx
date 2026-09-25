@@ -103,8 +103,8 @@ function BillsRoute() {
     const party = parties.data?.rows.find((candidate) => candidate.id === partyId);
     chips.push({
       id: "partyId",
-      name: "Supplier",
-      label: party ? `Supplier: ${party.name}` : "One supplier",
+      name: "Party",
+      label: party ? `Party: ${party.name}` : "One party",
       remove: () => setFilters({ partyId: undefined }),
     });
   }
@@ -147,13 +147,6 @@ function BillsRoute() {
       <TableEmpty
         title="No bills yet"
         description="Draft and posted bills appear here, newest first."
-        action={
-          canCreate ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New bill
-            </Button>
-          ) : undefined
-        }
       />
     );
 
@@ -167,7 +160,7 @@ function BillsRoute() {
         <ListToolbar>
           <SearchInput
             label="Search bills"
-            placeholder="Bill, supplier, or reference"
+            placeholder="Number, party, or reference"
             value={q}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
@@ -175,7 +168,7 @@ function BillsRoute() {
               <FilterMenu anchor={field} active={chips.length > 0}>
                 {date.submenu}
                 {canReadParties ? (
-                  <FilterSubmenu icon={ContactRoundIcon} label="Supplier">
+                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
                     <PartyFilterItems
                       orgSlug={orgSlug}
                       partyId={partyId}

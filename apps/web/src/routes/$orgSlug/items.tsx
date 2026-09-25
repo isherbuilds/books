@@ -28,11 +28,14 @@ const ITEM_COLUMNS = [
     enableSorting: false,
     enableHiding: false,
     cell: ({ row: { original: item } }) => (
-      <span
-        className={cn("truncate font-medium", !item.active && "text-muted-foreground")}
-        title={item.name}
-      >
-        {item.name}
+      <span className="flex min-w-0 items-center gap-2">
+        <span
+          className={cn("truncate font-medium", !item.active && "text-muted-foreground")}
+          title={item.name}
+        >
+          {item.name}
+        </span>
+        {item.active ? null : <Badge variant="muted">Inactive</Badge>}
       </span>
     ),
   }),
@@ -65,20 +68,10 @@ const ITEM_COLUMNS = [
     ),
   }),
   col.accessor("taxCode", {
-    header: "Tax code",
+    header: "GST rate",
     enableSorting: false,
     meta: { className: "hidden w-28 lg:table-cell" },
     cell: ({ getValue }) => <TextOrDash value={getValue()} mono />,
-  }),
-  col.accessor("active", {
-    header: "State",
-    enableSorting: false,
-    meta: { className: "w-24" },
-    cell: ({ getValue }) => (
-      <Badge variant={getValue() ? "secondary" : "muted"}>
-        {getValue() ? "Active" : "Inactive"}
-      </Badge>
-    ),
   }),
 ];
 
@@ -213,13 +206,6 @@ function ItemsRoute() {
               <TableEmpty
                 title="No items yet"
                 description="Items you add appear here for use on invoices."
-                action={
-                  canCreate ? (
-                    <Button size="xs" variant="outline" onClick={openCreate}>
-                      Add item
-                    </Button>
-                  ) : undefined
-                }
               />
             )
           }

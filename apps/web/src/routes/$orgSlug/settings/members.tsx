@@ -215,9 +215,6 @@ function InviteDialog({
               )}
 
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => change(false)}>
-                  Done
-                </Button>
                 <Button type="submit" disabled={invite.isPending}>
                   {invite.isPending ? "Creating…" : "Create invitation"}
                 </Button>
@@ -230,7 +227,7 @@ function InviteDialog({
   );
 }
 
-function InviteAction({ orgSlug, compact = false }: { orgSlug: string; compact?: boolean }) {
+function InviteAction({ orgSlug }: { orgSlug: string }) {
   const canInvite = useCan(orgSlug, { invitation: ["create"] });
   const [open, setOpen] = useState(false);
 
@@ -238,9 +235,7 @@ function InviteAction({ orgSlug, compact = false }: { orgSlug: string; compact?:
 
   return (
     <>
-      <Button size={compact ? "xs" : undefined} onClick={() => setOpen(true)}>
-        {compact ? "Invite someone" : "Invite"}
-      </Button>
+      <Button onClick={() => setOpen(true)}>Invite</Button>
       <InviteDialog open={open} onOpenChange={setOpen} orgSlug={orgSlug} />
     </>
   );
@@ -266,7 +261,7 @@ const ROSTER_COLUMNS = [
           <div className="truncate text-muted-foreground">{row.email}</div>
         </div>
       ) : (
-        <span className="truncate text-muted-foreground">{row.email}</span>
+        <PendingInvitation email={row.email} expiresAt={row.expiresAt} />
       ),
   }),
   col.display({
@@ -274,12 +269,6 @@ const ROSTER_COLUMNS = [
     header: "Role",
     meta: { className: "w-48" },
     cell: ({ row: { original: row } }) => <RosterRole row={row} />,
-  }),
-  col.display({
-    id: "status",
-    header: "Status",
-    meta: { className: "w-56" },
-    cell: ({ row: { original: row } }) => <RosterStatus row={row} />,
   }),
   col.display({
     id: "actions",
@@ -297,16 +286,18 @@ function RosterRole({ row }: { row: RosterRow }) {
   return row.role ? <RoleBadge role={row.role} /> : <span>Unassigned</span>;
 }
 
-function RosterStatus({ row }: { row: RosterRow }) {
+// Every member is active, so only a pending invitation carries a status, inline.
+function PendingInvitation({ email, expiresAt }: { email: string; expiresAt: Date }) {
   const { timeZone } = useOrgDateTime();
 
-  if (row.kind === "member") return <span className="text-muted-foreground">active</span>;
-
   return (
-    <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-      <Badge variant="outline">invited</Badge>
-      expires {formatDate(row.expiresAt, timeZone)}
-    </span>
+    <div className="min-w-0 text-muted-foreground">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate">{email}</span>
+        <Badge variant="outline">Invited</Badge>
+      </span>
+      <div className="truncate">Expires {formatDate(expiresAt, timeZone)}</div>
+    </div>
   );
 }
 
@@ -320,12 +311,9 @@ function RosterCard({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
             <span className="truncate text-muted-foreground">{row.email}</span>
           </>
         ) : (
-          <span className="truncate text-muted-foreground">{row.email}</span>
+          <PendingInvitation email={row.email} expiresAt={row.expiresAt} />
         )}
-        <span className="flex flex-wrap items-center gap-2">
-          <RosterRole row={row} />
-          <RosterStatus row={row} />
-        </span>
+        <RosterRole row={row} />
       </div>
       <RosterActions orgSlug={orgSlug} row={row} />
     </div>
@@ -365,7 +353,7 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
     orpc.member.revokeInvitation.mutationOptions({
       onSuccess: async () => {
         await invalidateRoster(queryClient, orgSlug);
-        toast.success("Invitation canceled");
+        toast.success("Invitation cancelled");
       },
       onError,
     }),

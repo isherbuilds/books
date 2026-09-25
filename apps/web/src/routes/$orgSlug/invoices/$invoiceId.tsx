@@ -196,7 +196,6 @@ function InvoiceSheetRoute() {
           <DetailRow label="Due date">
             {invoice.dueDate ? formatBusinessDate(invoice.dueDate) : null}
           </DetailRow>
-          <DetailRow label="Party">{partyName}</DetailRow>
           <DetailRow label="Place of supply" mono>
             {invoice.placeOfSupplyStateCode}
           </DetailRow>

@@ -127,7 +127,6 @@ function NoteSheetRoute() {
         </div>
         <Separator />
         <dl className="grid gap-3">
-          <DetailRow label="Type">{NOTE_TYPE_LABELS[note.type]}</DetailRow>
           <DetailRow label="Date">{formatBusinessDate(note.documentDate)}</DetailRow>
           <DetailRow label="Against">
             {note.against ? (
@@ -202,7 +201,6 @@ function NoteSheetRoute() {
         <Separator />
         <dl className="grid gap-2">
           <DetailRow label="Round-off">{formatMoney(note.roundOffPaise)}</DetailRow>
-          <DetailRow label="Total">{formatMoney(note.totalPaise)}</DetailRow>
         </dl>
       </SheetBody>
       {canRefund || canCancel ? (

@@ -1,9 +1,8 @@
 import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
-import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ContactRoundIcon, FilesIcon } from "lucide-react";
+import { ContactRoundIcon } from "lucide-react";
 import { useRef } from "react";
 import { z } from "zod";
 
@@ -131,25 +130,6 @@ function NotesRoute() {
                     />
                   </FilterSubmenu>
                 ) : null}
-                <FilterSubmenu icon={FilesIcon} label={type ? NOTE_TYPE_LABELS[type] : "All notes"}>
-                  <DropdownMenuCheckboxItem
-                    checked={!type}
-                    onCheckedChange={() => void setFilters({ type: undefined })}
-                  >
-                    All
-                  </DropdownMenuCheckboxItem>
-                  {(["creditNote", "debitNote"] as const).map((candidate) => (
-                    <DropdownMenuCheckboxItem
-                      key={candidate}
-                      checked={type === candidate}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ type: checked ? candidate : undefined })
-                      }
-                    >
-                      {candidate === "creditNote" ? "Credit notes" : "Debit notes"}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
               </FilterMenu>
             }
           />
@@ -165,7 +145,9 @@ function NotesRoute() {
             params: { orgSlug, noteId: note.id },
             search: (previous) => previous,
           })}
-          renderCard={(note) => <NoteCard note={note} />}
+          // One type per register, so its column would repeat on every row.
+          columnVisibility={type ? { type: false } : undefined}
+          renderCard={(note) => <NoteCard note={note} showType={!type} />}
           query={notes}
           errorTitle="Could not load notes"
           empty={

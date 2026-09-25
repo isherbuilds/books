@@ -34,8 +34,8 @@ import {
   PARTY_STATUSES,
   ROLE_LABELS,
   filterParties,
+  partyBalancesOptions,
   partyListOptions,
-  partyTotalsOptions,
   type PartyFilters,
 } from "@/lib/parties";
 
@@ -67,8 +67,8 @@ export const Route = createFileRoute("/$orgSlug/parties")({
 
     await Promise.all([
       queryClient.query(partyListOptions(orgSlug)).catch(() => {}),
-      authorize(membership.roles, { receipt: ["read"] })
-        ? queryClient.query(partyTotalsOptions(orgSlug)).catch(() => {})
+      authorize(membership.roles, { report: ["read"] })
+        ? queryClient.query(partyBalancesOptions(orgSlug)).catch(() => {})
         : undefined,
     ]);
   },
@@ -85,9 +85,9 @@ function PartiesRoute() {
   const newTrigger = useRef<HTMLButtonElement>(null);
   const [limit, setLimit] = useState(ROW_STEP);
   const canCreate = useCan(orgSlug, { party: ["create"] });
-  const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
+  const canReadBalances = useCan(orgSlug, { report: ["read"] });
   const partyMaster = useQuery(partyListOptions(orgSlug));
-  const totals = useQuery({ ...partyTotalsOptions(orgSlug), enabled: canReadReceipts });
+  const balances = useQuery({ ...partyBalancesOptions(orgSlug), enabled: canReadBalances });
   // Past the master's bound the search runs on the server; filters and sort stay in memory.
   const serverSearch = partyMaster.data?.hasMore === true && q !== undefined;
   const partySearch = useQuery({ ...partyListOptions(orgSlug, q), enabled: serverSearch });
@@ -106,11 +106,11 @@ function PartiesRoute() {
   );
 
   const openParty = listedParty ?? fetchedParty.data;
-  const totalsById = new Map(totals.data?.map((each) => [each.partyId, each]));
+  const balanceById = new Map(balances.data?.map((each) => [each.partyId, each.balancePaise]));
 
   const rows: PartyRow[] = filterParties(master, { q, status, roles, gst }).map((party) => ({
     ...party,
-    totals: totals.data ? (totalsById.get(party.id) ?? null) : undefined,
+    balancePaise: balances.data ? (balanceById.get(party.id) ?? null) : undefined,
   }));
 
   const setFilters = (patch: PartyFilters) =>
@@ -143,7 +143,7 @@ function PartiesRoute() {
     });
   };
 
-  const columnVisibility = { received: canReadReceipts };
+  const columnVisibility = { balance: canReadBalances };
 
   const chips: ActiveFilter[] = [];
 
@@ -217,13 +217,6 @@ function PartiesRoute() {
       <TableEmpty
         title="No parties yet"
         description="Parties you register appear here with their GSTIN."
-        action={
-          canCreate ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New party
-            </Button>
-          ) : undefined
-        }
       />
     );
 

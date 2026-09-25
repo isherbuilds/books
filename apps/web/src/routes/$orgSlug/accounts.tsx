@@ -100,30 +100,18 @@ function AccountsRoute() {
       ]
     : [];
 
-  const empty =
-    q !== undefined || type !== undefined ? (
-      <TableEmpty
-        title="No accounts match"
-        description="Try another search or clear the filters."
-        action={
-          <Button size="xs" variant="outline" onClick={clearFilters}>
-            Clear filters
-          </Button>
-        }
-      />
-    ) : (
-      <TableEmpty
-        title="No accounts yet"
-        description="Accounts in your chart appear here."
-        action={
-          canCreate ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New account
-            </Button>
-          ) : undefined
-        }
-      />
-    );
+  // Every organization starts with a chart, so only a filter can empty the list.
+  const empty = (
+    <TableEmpty
+      title="No accounts match"
+      description="Try another search or clear the filters."
+      action={
+        <Button size="xs" variant="outline" onClick={clearFilters}>
+          Clear filters
+        </Button>
+      }
+    />
+  );
 
   return (
     <>

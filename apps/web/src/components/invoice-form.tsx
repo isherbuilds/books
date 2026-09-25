@@ -465,17 +465,12 @@ export function InvoiceForm({
 
         <InvoiceLines orgSlug={orgSlug} />
 
-        <section className="grid gap-2 border-y border-border py-3">
-          <h3 className="text-muted-foreground">Saved totals</h3>
-          {draft ? (
+        {draft ? (
+          <section className="grid gap-2 border-y border-border py-3">
+            <h3 className="text-muted-foreground">Saved totals</h3>
             <DocumentTotals document={draft} />
-          ) : (
-            <p className="text-muted-foreground">
-              Tax, round-off and the total are calculated when the draft is saved or the invoice is
-              posted.
-            </p>
-          )}
-        </section>
+          </section>
+        ) : null}
 
         <ReferenceNarrationFields />
       </DocumentForm>

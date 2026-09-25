@@ -59,8 +59,10 @@ A new org-scoped domain follows the
 ## Web data flow
 
 - Org pages server-render. The `/$orgSlug` loader reads `member.me` (identity,
-  roles, organizations, time zone) through the request-local client. Base UI
-  popups stay behind `ClientOnly`.
+  roles, organizations, time zone, and a `founder` flag) through the
+  request-local client. The flag is computed from `FOUNDING_EMAIL` on the server;
+  the email never reaches the client. `/join` has no org, so it asks
+  `organization.canCreate`. Base UI popups stay behind `ClientOnly`.
 - TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
   `operational-query.ts`). Loaders prime it, components subscribe with the same
   `queryOptions`, and loaders never pass data down as props. Membership comes
