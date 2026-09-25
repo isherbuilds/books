@@ -1,4 +1,11 @@
-import { NON_NEGATIVE_MONEY_PATTERN, ZERO_MONEY, parseMoney } from "@accly/api/core/money";
+import {
+  NON_NEGATIVE_MONEY_PATTERN,
+  ZERO_MONEY,
+  enteredPaise,
+  formatDecimal,
+  isPositiveMoney,
+  parseMoney,
+} from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -31,7 +38,7 @@ import { PaymentMethodField } from "@/components/payment-method-field";
 import { ReceiptAdjustments } from "@/components/receipt-adjustments";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
-import { invalidateCashState } from "@/lib/domain-invalidation";
+import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
@@ -114,16 +121,34 @@ const SERVER_FIELDS = {
   ADJUSTMENT_ACCOUNT_INVALID: "adjustments",
 } satisfies Record<string, FieldPath<ReceiptFormValues>>;
 
-function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
+/** A posted Invoice the receipt settles, as its record showed it. */
+export type ReceiptInvoice = {
+  id: string;
+  number: string;
+  documentDate: string;
+  dueDate: string | null;
+  partyId: string;
+  partyName: string;
+  outstandingPaise: bigint;
+};
+
+// From an Invoice, the receipt starts against it for its whole outstanding.
+function defaults(
+  today: string,
+  paymentMethodId = "",
+  invoice?: ReceiptInvoice,
+): ReceiptFormValues {
+  const amount = invoice ? formatDecimal(invoice.outstandingPaise) : "";
+
   return {
-    partyId: null,
-    partyName: "",
-    amount: "",
+    partyId: invoice?.partyId ?? null,
+    partyName: invoice?.partyName ?? "",
+    amount,
     paymentMethodId,
-    settlementKind: "advance",
+    settlementKind: invoice ? "against" : "advance",
     advanceSupply: null,
     incomeAccountId: null,
-    allocations: {},
+    allocations: invoice ? { [invoice.id]: amount } : {},
     adjustments: [],
     reference: "",
     narration: "",
@@ -134,15 +159,17 @@ function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
 export function ReceiptForm({
   orgSlug,
   today,
+  invoice,
   onClose,
 }: {
   orgSlug: string;
   today: string;
+  invoice?: ReceiptInvoice;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
+  const form = useZodForm(receiptSchema, { defaultValues: defaults(today, "", invoice) });
   const adjustmentFields = useFieldArray({ control: form.control, name: "adjustments" });
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
@@ -157,12 +184,36 @@ export function ReceiptForm({
     }),
   );
 
-  const openRows: OpenDocument[] =
+  const loadedRows: OpenDocument[] =
     openItems.data?.rows.map((row) => ({
       ...row,
       label: row.type === "invoice" ? "Invoice" : "Payment",
       openPaise: row.outstandingPaise,
     })) ?? [];
+
+  // The seeded Invoice can sit past the loaded page of open items. Keep it selectable
+  // from its own record; the server still refuses it if it has since been settled. A
+  // complete page without it means it is no longer open.
+  const seedMissing =
+    invoice !== undefined &&
+    isPositiveMoney(invoice.outstandingPaise) &&
+    partyId === invoice.partyId &&
+    openItems.data?.hasMore === true &&
+    !loadedRows.some((row) => row.id === invoice.id);
+
+  const openRows: OpenDocument[] = seedMissing
+    ? [
+        ...loadedRows,
+        {
+          id: invoice.id,
+          label: "Invoice",
+          number: invoice.number,
+          documentDate: invoice.documentDate,
+          dueDate: invoice.dueDate,
+          openPaise: invoice.outstandingPaise,
+        },
+      ]
+    : loadedRows;
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
 
@@ -186,12 +237,12 @@ export function ReceiptForm({
 
             const reason = errorReason(error);
 
-            // The outstanding amounts on screen are stale.
+            // The outstanding amounts on screen, and the seeded Invoice's, are stale.
             if (
               reason === "ALLOCATION_TARGET_INVALID" ||
               reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
             ) {
-              await openItems.refetch();
+              await invalidateSettlementState(queryClient, orgSlug);
             }
           },
         }),
@@ -388,6 +439,26 @@ export function ReceiptForm({
                 <FormControl>
                   <Input
                     {...field}
+                    // A receipt from an Invoice moves its allocation too, up to the
+                    // outstanding, until the operator types a different allocation. The
+                    // remainder posts as an advance.
+                    onChange={(event) => {
+                      if (invoice) {
+                        const seeded = (amount: string) =>
+                          enteredPaise(amount) > invoice.outstandingPaise
+                            ? formatDecimal(invoice.outstandingPaise)
+                            : amount;
+
+                        if (
+                          form.getValues(`allocations.${invoice.id}`) ===
+                          seeded(form.getValues("amount"))
+                        ) {
+                          form.setValue(`allocations.${invoice.id}`, seeded(event.target.value));
+                        }
+                      }
+
+                      void field.onChange(event);
+                    }}
                     required
                     inputMode="decimal"
                     autoComplete="off"
