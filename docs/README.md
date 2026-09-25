@@ -109,7 +109,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   forms, and Payment write-offs; Apply credit on a Bill opening only on
   demand; the Note form's line-level refusal; the Payment method field in
   the Invoice, Receipt and Payment forms; the organization prefix fields;
-  and the Invoice PDF totals (Subtotal and Discount only with a discount).
+  the Invoice PDF totals (Subtotal and Discount only with a discount); the
+  Invoice PDF's Authorised signatory line and its single PDF link; ITC ticked
+  on a new Bill line; and the Organization form without a time-zone field.
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.

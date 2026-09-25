@@ -45,7 +45,8 @@ export const blankLine = (): BillLine => ({
   hsnSac: "",
   amount: "",
   taxCode: "",
-  itcEligible: false,
+  // Eligible unless marked otherwise, as in Zoho Books and India Compliance.
+  itcEligible: true,
 });
 
 // Module scope, so the selection holds while the cached chart is unchanged.

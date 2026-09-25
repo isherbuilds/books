@@ -6,7 +6,6 @@ import {
   optionalPan,
   optionalStateCode,
   indianPinCode,
-  timeZone,
 } from "@accly/api/lib/schemas";
 import type { SettingsFields } from "@accly/api/routers/settings";
 import {
@@ -27,7 +26,7 @@ import { toast } from "sonner";
 import { useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { MONTH_OPTIONS, OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
+import { MONTH_OPTIONS, OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettings } from "@/lib/domain-invalidation";
@@ -57,11 +56,6 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   component: SettingsRoute,
 });
 
-const TIME_ZONE_OPTIONS: Option[] = Intl.supportedValuesOf("timeZone").map((code) => ({
-  code,
-  name: code,
-}));
-
 const formSchema = z
   .object({
     legalName: z
@@ -89,7 +83,6 @@ const formSchema = z
       .refine((raw) => raw.trim() !== "", "Enter a number")
       .transform(Number)
       .pipe(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
-    timeZone,
     invoicePrefix: documentPrefix,
     billPrefix: documentPrefix,
     receiptPrefix: documentPrefix,
@@ -117,7 +110,7 @@ function SettingsRoute() {
     <>
       <PageHeader
         title="Organization"
-        description="Legal identity, time zone, and document numbering for this organization"
+        description="Legal identity and document numbering for this organization"
       />
       <SettingsTabs orgSlug={orgSlug} />
       <PageBody className="max-w-2xl">
@@ -141,19 +134,13 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
   // The server derives State and PAN from a GSTIN, so they show only without one.
   const gstin = useWatch({ control: form.control, name: "gstin" });
 
-  // Keep a stored zone selectable even when this browser's canonical list omits it.
-  const timeZoneOptions =
-    defaults.timeZone && !TIME_ZONE_OPTIONS.some((option) => option.code === defaults.timeZone)
-      ? [{ code: defaults.timeZone, name: defaults.timeZone }, ...TIME_ZONE_OPTIONS]
-      : TIME_ZONE_OPTIONS;
-
   const update = useMutation(
     orpc.settings.update.mutationOptions({
       onSuccess: async (saved) => {
         form.reset(toFormValues(saved));
         toast.success("Settings saved");
         // Awaited: the org layout loader holds `member.me`, so open pages would keep
-        // the old time zone until staleTime lapses.
+        // the old financial year until staleTime lapses.
         await invalidateSettings(queryClient, orgSlug);
         await router.invalidate();
       },
@@ -334,31 +321,6 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="timeZone"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormLabel>Time zone</FormLabel>
-                  <FormControl>
-                    <OptionField
-                      options={timeZoneOptions}
-                      noun="time zones"
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Choose a time zone"
-                      inputRef={field.ref}
-                      aria-invalid={fieldState.invalid}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Sets the local date used for numbering and reports. Changing it applies to new
-                    records; existing ones keep their date.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </section>
 
           <section className="flex flex-col gap-3">

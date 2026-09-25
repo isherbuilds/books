@@ -145,7 +145,7 @@ export async function invalidateMembership(
   ]);
 }
 
-// `member.me` carries the time zone every page formats with, and `journal.accounts`
+// `member.me` carries the financial year the period presets use, and `journal.accounts`
 // follows the GSTIN: a registered organization cannot journal taxable income.
 export async function invalidateSettings(
   queryClient: QueryInvalidator,

@@ -253,21 +253,13 @@ test("a general lock is inclusive and only an active user exception bypasses it"
     expect.objectContaining({ id: exception.id, userId: fixture.accountant.user.id }),
   ]);
 
-  await caApi.lock.revokeException({
-    ...claim,
-    exceptionId: exception.id,
-    reason: "Adjustment complete",
-  });
+  await caApi.lock.revokeException({ ...claim, exceptionId: exception.id });
   await expectReason(
     postJournal(fixture.api, claim.orgSlug, cash, exemptIncome, today, "Blocked after revoke"),
     "LOCKED",
   );
   await expectORPCCode(
-    caApi.lock.revokeException({
-      ...claim,
-      exceptionId: exception.id,
-      reason: "Revoke twice",
-    }),
+    caApi.lock.revokeException({ ...claim, exceptionId: exception.id }),
     "CONFLICT",
   );
   await expectReason(
@@ -546,7 +538,7 @@ test("a lock change waits for a posting that already passed its check", async ()
 
   expect(
     await raceLockChange(scope, () =>
-      caApi.lock.revokeException({ ...claim, exceptionId: exception.id, reason: "Done" }),
+      caApi.lock.revokeException({ ...claim, exceptionId: exception.id }),
     ),
   ).toBe("waiting");
   await expectReason(

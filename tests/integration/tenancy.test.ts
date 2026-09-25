@@ -829,11 +829,7 @@ const GUARDED_CALLS = {
       reason: "Intrusion",
     }),
   "lock.revokeException": (api, claim) =>
-    api.lock.revokeException({
-      ...claim,
-      exceptionId: crypto.randomUUID(),
-      reason: "Intrusion",
-    }),
+    api.lock.revokeException({ ...claim, exceptionId: crypto.randomUUID() }),
   "openingBalance.post": (api, claim) =>
     api.openingBalance.post({
       ...claim,
@@ -896,7 +892,6 @@ const GUARDED_CALLS = {
       city: "Pune",
       pinCode: "411001",
       financialYearStart: 4,
-      timeZone: "Asia/Kolkata",
       invoicePrefix: "INV",
       billPrefix: "BILL",
       receiptPrefix: "RCT",

@@ -48,13 +48,12 @@ export const lockExceptions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     revokedBy: text("revoked_by").references(() => user.id),
-    revokeReason: text("revoke_reason"),
   },
   (table) => [
     index("lock_exceptions_org_user_expires_idx").on(table.orgId, table.userId, table.expiresAt),
     check(
       "lock_exceptions_revoked_check",
-      sql`(${table.revokedAt} is null) = (${table.revokedBy} is null) and (${table.revokedAt} is null) = (${table.revokeReason} is null)`,
+      sql`(${table.revokedAt} is null) = (${table.revokedBy} is null)`,
     ),
   ],
 );
