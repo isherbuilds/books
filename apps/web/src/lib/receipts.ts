@@ -1,6 +1,6 @@
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { orpc } from "@/lib/orpc";
+import { keysetPaging, orpc } from "@/lib/orpc";
 
 type ReceiptListFilters = Omit<
   Parameters<AppRouterClient["receipt"]["list"]>[0],
@@ -12,8 +12,7 @@ type ReceiptListFilters = Omit<
 export const receiptListOptions = (orgSlug: string, filters: ReceiptListFilters) =>
   orpc.receipt.list.infiniteOptions({
     input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => (last.hasMore ? last.rows.at(-1)?.id : undefined),
+    ...keysetPaging,
   });
 
 // A cached master like party.list: every method, active or not, since old receipts
@@ -22,3 +21,6 @@ export const paymentMethodListOptions = (orgSlug: string) => ({
   ...orpc.paymentMethod.list.queryOptions({ input: { orgSlug } }),
   staleTime: 5 * 60_000,
 });
+
+export const receiptDetailOptions = (orgSlug: string, receiptId: string) =>
+  orpc.receipt.get.queryOptions({ input: { orgSlug, receiptId } });

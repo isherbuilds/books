@@ -1,3 +1,4 @@
+import { NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,
@@ -68,7 +69,14 @@ function WriteOffRow({
           <FormItem>
             <FormLabel>Amount</FormLabel>
             <FormControl>
-              <Input {...field} inputMode="decimal" placeholder="0.00" className="tabular-nums" />
+              <Input
+                {...field}
+                required
+                inputMode="decimal"
+                pattern={NON_NEGATIVE_MONEY_PATTERN.source}
+                placeholder="0.00"
+                className="tabular-nums"
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -79,6 +87,7 @@ function WriteOffRow({
         size="xs"
         variant="ghost"
         className="self-end"
+        aria-label={`Remove write-off ${index + 1}`}
         onClick={() => remove(index)}
       >
         Remove

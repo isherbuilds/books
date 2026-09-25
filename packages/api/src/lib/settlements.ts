@@ -1,10 +1,25 @@
 import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
+import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, gt, ilike, inArray, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -471,4 +486,23 @@ export async function openCredits(
     rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
     input.limit,
   );
+}
+
+/** A Receipt's or Payment's fee, write-off and TDS lines, in entry order. */
+export function adjustmentLinesOf(orgId: string, documentId: string) {
+  return db
+    .select({
+      id: documentLines.id,
+      adjustmentKind: documentLines.adjustmentKind,
+      amountPaise: documentLines.amountPaise,
+    })
+    .from(documentLines)
+    .where(
+      and(
+        eq(documentLines.orgId, orgId),
+        eq(documentLines.documentId, documentId),
+        isNotNull(documentLines.adjustmentKind),
+      ),
+    )
+    .orderBy(asc(documentLines.position));
 }

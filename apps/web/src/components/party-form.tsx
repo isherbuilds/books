@@ -38,7 +38,13 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidatePartyState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, errorReason } from "@/lib/orpc-error";
-import { PARTY_ROLES, ROLE_LABELS, partyListOptions, type PartyRole } from "@/lib/parties";
+import {
+  PARTY_ROLES,
+  ROLE_LABELS,
+  partyListOptions,
+  type PartyRole,
+  partyDetailOptions,
+} from "@/lib/parties";
 
 // The server refuses "", so a blank optional field is sent as absent.
 const optionalText = (max: number, message: string) =>
@@ -197,7 +203,7 @@ function PartyForm({
           }
         : list,
     );
-    queryClient.setQueryData(orpc.party.get.queryKey({ input: { orgSlug, partyId: row.id } }), row);
+    queryClient.setQueryData(partyDetailOptions(orgSlug, row.id).queryKey, row);
     void queryClient.invalidateQueries({ queryKey: listKey });
     onSaved({ id: row.id, name: row.name });
   };

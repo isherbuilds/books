@@ -1,6 +1,6 @@
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { orpc } from "@/lib/orpc";
+import { keysetPaging, orpc } from "@/lib/orpc";
 
 type NoteListFilters = Omit<
   Parameters<AppRouterClient["note"]["list"]>[0],
@@ -9,8 +9,6 @@ type NoteListFilters = Omit<
 
 export type NoteListRow = Awaited<ReturnType<AppRouterClient["note"]["list"]>>["rows"][number];
 
-export type NoteDetail = Awaited<ReturnType<AppRouterClient["note"]["get"]>>;
-
 export type NoteSource =
   | Awaited<ReturnType<AppRouterClient["invoice"]["get"]>>
   | Awaited<ReturnType<AppRouterClient["bill"]["get"]>>;
@@ -18,8 +16,7 @@ export type NoteSource =
 export const noteListOptions = (orgSlug: string, filters: NoteListFilters) =>
   orpc.note.list.infiniteOptions({
     input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => (last.hasMore ? last.rows.at(-1)?.id : undefined),
+    ...keysetPaging,
   });
 
 export const noteDetailOptions = (orgSlug: string, noteId: string) =>

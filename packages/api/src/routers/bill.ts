@@ -30,8 +30,7 @@ import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
-import type { Scope } from "../lib/procedures/factory";
-import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import {
   dateOnly,
   draftToken,

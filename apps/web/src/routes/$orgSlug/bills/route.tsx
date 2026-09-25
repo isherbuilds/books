@@ -21,7 +21,6 @@ import {
 } from "@/components/list-filter";
 import { PartyFilterItems } from "@/components/party-filter-items";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
-import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { billListOptions } from "@/lib/bills";
 import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -128,9 +127,6 @@ function BillsRoute() {
     });
 
   const openCreate = () => void navigate({ to: "/$orgSlug/bills/new", params: { orgSlug } });
-  usePaletteActions(
-    canCreate ? [{ id: "bill:new", label: "New bill", group: "action", run: openCreate }] : [],
-  );
 
   const empty =
     q !== undefined || chips.length > 0 ? (

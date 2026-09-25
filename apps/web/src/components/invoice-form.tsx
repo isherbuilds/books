@@ -36,6 +36,7 @@ import {
 import type { InvoiceDetail } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
+import { partyDetailOptions } from "@/lib/parties";
 import { applyOrpcFieldError, errorMessage, handleWriteError } from "@/lib/orpc-error";
 import type { PartyOption } from "@/lib/parties";
 
@@ -154,7 +155,7 @@ export function InvoiceForm({
   // The Party's state is the usual place of supply, and only while the field is
   // still empty: a state the operator picked meanwhile outranks this default.
   const defaultPlaceOfSupply = (partyId: string) =>
-    queryClient.fetchQuery(orpc.party.get.queryOptions({ input: { orgSlug, partyId } })).then(
+    queryClient.fetchQuery(partyDetailOptions(orgSlug, partyId)).then(
       (party) => {
         // A later pick wins over a slower read, and a state chosen meanwhile stays.
         if (form.getValues("partyId") !== partyId) return;

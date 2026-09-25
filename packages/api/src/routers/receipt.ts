@@ -1,8 +1,7 @@
 import { db, type DbTransaction } from "@accly/db";
-import { documentLines } from "@accly/db/schema/document-lines";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -29,6 +28,7 @@ import {
   settlementPostFields,
 } from "../lib/schemas";
 import {
+  adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
   listSettlements,
@@ -300,21 +300,7 @@ export const receiptRouter = {
       const [detail, allocations, adjustments] = await Promise.all([
         settlementDetail(orgId, "receipt", input.receiptId),
         allocationsOf(db, orgId, input.receiptId, "source"),
-        db
-          .select({
-            adjustmentKind: documentLines.adjustmentKind,
-            accountId: documentLines.accountId,
-            amountPaise: documentLines.amountPaise,
-          })
-          .from(documentLines)
-          .where(
-            and(
-              eq(documentLines.orgId, orgId),
-              eq(documentLines.documentId, input.receiptId),
-              isNotNull(documentLines.adjustmentKind),
-            ),
-          )
-          .orderBy(asc(documentLines.position)),
+        adjustmentLinesOf(orgId, input.receiptId),
       ]);
 
       return { ...detail, adjustments, allocations };

@@ -19,15 +19,14 @@ import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
+import { paymentDetailOptions } from "@/lib/payments";
 import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import { focusRowLink } from "@/lib/row-focus";
 
 export const Route = createFileRoute("/$orgSlug/payments/$paymentId")({
   remountDeps: ({ params }) => ({ paymentId: params.paymentId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, paymentId } }) => {
-    await loadRouteQuery(
-      queryClient.query(orpc.payment.get.queryOptions({ input: { orgSlug, paymentId } })),
-    );
+    await loadRouteQuery(queryClient.query(paymentDetailOptions(orgSlug, paymentId)));
   },
   component: PaymentSheetRoute,
 });
@@ -38,9 +37,7 @@ function PaymentSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
 
-  const payment = useSuspenseQuery(
-    orpc.payment.get.queryOptions({ input: { orgSlug, paymentId } }),
-  ).data;
+  const payment = useSuspenseQuery(paymentDetailOptions(orgSlug, paymentId)).data;
 
   const cancelled = payment.state === "cancelled";
   const canCancel = useCan(orgSlug, { payment: ["cancel"] }) && !cancelled;

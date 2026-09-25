@@ -67,20 +67,20 @@
     "@accly/config": "workspace:*",
     "@accly/db": "workspace:*",
     "@accly/storage": "workspace:*",
-    "@orpc/client": "^1.15.4",
-    "@orpc/server": "^1.15.4",
+    "@orpc/client": "catalog:",
+    "@orpc/server": "catalog:",
     "@oxlint/plugins": "^1.85.0",
-    "@types/bun": "^1.4.2",
-    "@types/pg": "^8.23.1",
+    "@types/bun": "catalog:",
+    "@types/pg": "catalog:",
     "chrome-devtools-axi": "^0.1.35",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "catalog:",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "pg": "^8.23.0",
     "portless": "^0.15.6",
     "takumi-js": "^2.14.0",
     "turbo": "^2.11.3",
-    "typescript": "^7.0.2"
+    "typescript": "catalog:"
   },
   "packageManager": "bun@1.4.2"
 }

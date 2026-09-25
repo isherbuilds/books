@@ -25,13 +25,14 @@ import { orpc } from "@/lib/orpc";
 import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
 import { focusRowLink } from "@/lib/row-focus";
+import { receiptDetailOptions } from "@/lib/receipts";
+
+const ADJUSTMENT_LABELS = { fee: "Fee", writeOff: "Write-off", tds: "Customer TDS" } as const;
 
 export const Route = createFileRoute("/$orgSlug/receipts/$receiptId")({
   remountDeps: ({ params }) => ({ receiptId: params.receiptId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, receiptId } }) => {
-    await loadRouteQuery(
-      queryClient.query(orpc.receipt.get.queryOptions({ input: { orgSlug, receiptId } })),
-    );
+    await loadRouteQuery(queryClient.query(receiptDetailOptions(orgSlug, receiptId)));
   },
   component: ReceiptSheetRoute,
 });
@@ -44,9 +45,7 @@ function ReceiptSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
 
-  const receipt = useSuspenseQuery(
-    orpc.receipt.get.queryOptions({ input: { orgSlug, receiptId } }),
-  ).data;
+  const receipt = useSuspenseQuery(receiptDetailOptions(orgSlug, receiptId)).data;
 
   const cancelled = receipt.state === "cancelled";
   const canCancel = useCan(orgSlug, { receipt: ["cancel"] }) && !cancelled;
@@ -166,18 +165,16 @@ function ReceiptSheetRoute() {
             <Separator />
             <section className="grid gap-2">
               <h3 className="text-muted-foreground">Adjustments</h3>
-              {receipt.adjustments.map((adjustment, index) => (
-                <div key={index} className="flex justify-between gap-3">
-                  <span>
-                    {adjustment.adjustmentKind === "tds"
-                      ? "Customer TDS"
-                      : adjustment.adjustmentKind === "writeOff"
-                        ? "Write-off"
-                        : "Fee"}
-                  </span>
-                  <span className="tabular-nums">{formatMoney(adjustment.amountPaise)}</span>
-                </div>
-              ))}
+              <dl className="grid gap-2">
+                {receipt.adjustments.map((adjustment) => (
+                  <DetailRow
+                    key={adjustment.id}
+                    label={ADJUSTMENT_LABELS[adjustment.adjustmentKind!]}
+                  >
+                    {formatMoney(adjustment.amountPaise)}
+                  </DetailRow>
+                ))}
+              </dl>
             </section>
           </>
         ) : null}

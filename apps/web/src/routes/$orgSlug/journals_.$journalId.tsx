@@ -18,6 +18,7 @@ import { PostedLines } from "@/components/posted-lines";
 import { invalidateJournalState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
+import { journalDetailOptions } from "@/lib/journals";
 import { orpc } from "@/lib/orpc";
 import { loadRouteQuery, handleWriteError } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/$orgSlug/journals_/$journalId")({
     await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
 
     const journal = await loadRouteQuery(
-      queryClient.query(orpc.journal.get.queryOptions({ input: { orgSlug, journalId } })),
+      queryClient.query(journalDetailOptions(orgSlug, journalId)),
     );
 
     return { number: journal.number };
@@ -45,9 +46,7 @@ function JournalPage() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
 
-  const journal = useSuspenseQuery(
-    orpc.journal.get.queryOptions({ input: { orgSlug, journalId } }),
-  ).data;
+  const journal = useSuspenseQuery(journalDetailOptions(orgSlug, journalId)).data;
 
   const cancelled = journal.state === "cancelled";
   const canCancel = useCan(orgSlug, { journal: ["cancel"] }) && !cancelled;
