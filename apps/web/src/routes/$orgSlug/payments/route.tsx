@@ -166,7 +166,13 @@ function PaymentsRoute() {
       label: LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
-  const openCreate = () => void navigate({ search: (previous) => ({ ...previous, create: true }) });
+
+  // A party-filtered list seeds that party as the payee; the filter itself stays apart.
+  const openCreate = () =>
+    void navigate({
+      search: (previous) => ({ ...previous, create: true, payeeId: previous.partyId }),
+    });
+
   usePaletteActions(
     canPost ? [{ id: "payment:new", label: "New payment", group: "action", run: openCreate }] : [],
   );
