@@ -141,8 +141,10 @@ export function LinkField<T>({
 
     const item = open ? highlighted.current : undefined;
 
-    // Tab commits an existing match, never Create, so it cannot open a panel.
-    if (event.key === "Tab" && item !== undefined && !isCreateItem(item)) {
+    // Tab commits a match only for a typed search, never Create, so it cannot open a
+    // panel. Untyped, the capped list may not hold the saved value, and the automatic
+    // highlight would silently replace it.
+    if (event.key === "Tab" && needle !== "" && item !== undefined && !isCreateItem(item)) {
       choose(item);
 
       return;
