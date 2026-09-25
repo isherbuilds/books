@@ -3,12 +3,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BillForm } from "@/components/bill-form";
 import { PageHeader } from "@/components/page";
 import { useOrgDateTime } from "@/lib/org-datetime";
+import { orpc } from "@/lib/orpc";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/bills_/new")({
   head: () => ({ meta: [{ title: "New bill · Accly Books" }] }),
-  loader: ({ context: { queryClient }, params: { orgSlug } }) =>
-    requireOrgPermission(queryClient, orgSlug, { bill: ["create"] }),
+  loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
+    await requireOrgPermission(queryClient, orgSlug, { bill: ["create"] });
+    await queryClient.query(orpc.settings.get.queryOptions({ input: { orgSlug } }));
+  },
   component: NewBillRoute,
 });
 

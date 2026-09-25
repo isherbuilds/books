@@ -1,4 +1,11 @@
-import { NON_NEGATIVE_MONEY_PATTERN, ZERO_MONEY, parseMoney } from "@accly/api/core/money";
+import {
+  NON_NEGATIVE_MONEY_PATTERN,
+  ZERO_MONEY,
+  enteredPaise,
+  formatDecimal,
+  isPositiveMoney,
+  parseMoney,
+} from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -12,9 +19,14 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
-import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 
@@ -24,6 +36,7 @@ import {
   reportRowErrors,
   type OpenDocument,
 } from "@/components/allocation-table";
+import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
@@ -31,8 +44,9 @@ import { PaymentMethodField } from "@/components/payment-method-field";
 import { ReceiptAdjustments } from "@/components/receipt-adjustments";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
-import { invalidateCashState } from "@/lib/domain-invalidation";
+import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
+import { openItemsOptions } from "@/lib/pickers";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
@@ -114,16 +128,34 @@ const SERVER_FIELDS = {
   ADJUSTMENT_ACCOUNT_INVALID: "adjustments",
 } satisfies Record<string, FieldPath<ReceiptFormValues>>;
 
-function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
+/** A posted Invoice the receipt settles, as its record showed it. */
+export type ReceiptInvoice = {
+  id: string;
+  number: string;
+  documentDate: string;
+  dueDate: string | null;
+  partyId: string;
+  partyName: string;
+  outstandingPaise: bigint;
+};
+
+// From an Invoice, the receipt starts against it for its whole outstanding.
+function defaults(
+  today: string,
+  paymentMethodId = "",
+  invoice?: ReceiptInvoice,
+): ReceiptFormValues {
+  const amount = invoice ? formatDecimal(invoice.outstandingPaise) : "";
+
   return {
-    partyId: null,
-    partyName: "",
-    amount: "",
+    partyId: invoice?.partyId ?? null,
+    partyName: invoice?.partyName ?? "",
+    amount,
     paymentMethodId,
-    settlementKind: "advance",
+    settlementKind: invoice ? "against" : "advance",
     advanceSupply: null,
     incomeAccountId: null,
-    allocations: {},
+    allocations: invoice ? { [invoice.id]: amount } : {},
     adjustments: [],
     reference: "",
     narration: "",
@@ -134,35 +166,62 @@ function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
 export function ReceiptForm({
   orgSlug,
   today,
+  invoice,
   onClose,
 }: {
   orgSlug: string;
   today: string;
+  invoice?: ReceiptInvoice;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
+  const form = useZodForm(receiptSchema, { defaultValues: defaults(today, "", invoice) });
   const adjustmentFields = useFieldArray({ control: form.control, name: "adjustments" });
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
-  const openItems = useQuery(
-    orpc.party.openItems.queryOptions({
-      input:
-        settlementKind === "against" && partyId
-          ? { orgSlug, partyId, side: "receivable" }
-          : skipToken,
-    }),
+  const openItems = useInfiniteQuery(
+    openItemsOptions(
+      settlementKind === "against" && partyId
+        ? { orgSlug, partyId, side: "receivable" }
+        : skipToken,
+    ),
   );
 
-  const openRows: OpenDocument[] =
-    openItems.data?.rows.map((row) => ({
-      ...row,
-      label: row.type === "invoice" ? "Invoice" : "Payment",
-      openPaise: row.outstandingPaise,
-    })) ?? [];
+  const loadedRows: OpenDocument[] =
+    openItems.data?.pages
+      .flatMap((page) => page.rows)
+      .map((row) => ({
+        ...row,
+        label: row.type === "invoice" ? "Invoice" : "Payment",
+        openPaise: row.outstandingPaise,
+      })) ?? [];
+
+  // The seeded Invoice can sit past the loaded page of open items. Keep it selectable
+  // from its own record; the server still refuses it if it has since been settled. A
+  // complete page without it means it is no longer open.
+  const seedMissing =
+    invoice !== undefined &&
+    isPositiveMoney(invoice.outstandingPaise) &&
+    partyId === invoice.partyId &&
+    openItems.hasNextPage &&
+    !loadedRows.some((row) => row.id === invoice.id);
+
+  const openRows: OpenDocument[] = seedMissing
+    ? [
+        ...loadedRows,
+        {
+          id: invoice.id,
+          label: "Invoice",
+          number: invoice.number,
+          documentDate: invoice.documentDate,
+          dueDate: invoice.dueDate,
+          openPaise: invoice.outstandingPaise,
+        },
+      ]
+    : loadedRows;
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
 
@@ -186,12 +245,12 @@ export function ReceiptForm({
 
             const reason = errorReason(error);
 
-            // The outstanding amounts on screen are stale.
+            // The outstanding amounts on screen, and the seeded Invoice's, are stale.
             if (
               reason === "ALLOCATION_TARGET_INVALID" ||
               reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
             ) {
-              await openItems.refetch();
+              await invalidateSettlementState(queryClient, orgSlug);
             }
           },
         }),
@@ -226,6 +285,12 @@ export function ReceiptForm({
 
     if (values.settlementKind === "against") {
       if (!values.partyId) return;
+
+      if (!openItems.isSuccess || openItems.isFetching) {
+        form.setError("allocations", { message: "Wait for the open documents to load" });
+
+        return;
+      }
 
       const { selected, allocatedPaise, rowErrors, tableError } = checkAllocations(
         values.allocations,
@@ -382,6 +447,26 @@ export function ReceiptForm({
                 <FormControl>
                   <Input
                     {...field}
+                    // A receipt from an Invoice moves its allocation too, up to the
+                    // outstanding, until the operator types a different allocation. The
+                    // remainder posts as an advance.
+                    onChange={(event) => {
+                      if (invoice) {
+                        const seeded = (amount: string) =>
+                          enteredPaise(amount) > invoice.outstandingPaise
+                            ? formatDecimal(invoice.outstandingPaise)
+                            : amount;
+
+                        if (
+                          form.getValues(`allocations.${invoice.id}`) ===
+                          seeded(form.getValues("amount"))
+                        ) {
+                          form.setValue(`allocations.${invoice.id}`, seeded(event.target.value));
+                        }
+                      }
+
+                      void field.onChange(event);
+                    }}
                     required
                     inputMode="decimal"
                     autoComplete="off"
@@ -477,31 +562,7 @@ export function ReceiptForm({
           />
         ) : null}
 
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ReferenceNarrationFields />
 
         <RegisteredFormField
           name="documentDate"

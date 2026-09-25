@@ -20,6 +20,7 @@ import {
   optionalGstin,
   optionalPan,
   orderedPeriod,
+  pageLimit,
   period,
   searchQuery,
   validateGstinIdentity,
@@ -252,7 +253,12 @@ export const partyRouter = {
   // exposes Bills and Debit Notes, which an operator never reads.
   openItems: orgProcedure(
     { party: ["read"] },
-    orgInput.extend({ partyId: z.uuid(), side: z.enum(["receivable", "payable"]) }),
+    orgInput.extend({
+      partyId: z.uuid(),
+      side: z.enum(["receivable", "payable"]),
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
+    }),
   ).handler(async ({ context, input }) => {
     if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
     await requireParty(context.scope.orgId, input.partyId);
@@ -266,6 +272,9 @@ export const partyRouter = {
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
       type: z.enum(["receipt", "creditNote", "payment", "debitNote"]).optional(),
+      q: searchQuery,
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
     if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });

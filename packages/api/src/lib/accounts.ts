@@ -38,16 +38,18 @@ export function isLeaf(orgId: string) {
 /**
  * Active, non-system leaves of one of `types` that are not money accounts: money
  * moves between money accounts only by the slice 5 Journal. Unresolved ids are
- * omitted from the result. Posting callers may extend this query with a row lock
- * when they already own a surrounding transaction.
+ * omitted from the result. Inside a transaction each returned account is
+ * share-locked, so none is archived under the posting that names it.
  */
-export function postableAccounts(
+export async function postableAccounts(
   executor: typeof db | DbTransaction,
   orgId: string,
   ids: readonly string[],
   types: readonly AccountType[],
 ) {
-  return executor
+  if (ids.length === 0) return [];
+
+  const query = executor
     .select(getTableColumns(accounts))
     .from(accounts)
     .leftJoin(moneyGroup, underMoneyGroup(orgId))
@@ -62,6 +64,8 @@ export function postableAccounts(
         isLeaf(orgId),
       ),
     );
+
+  return executor === db ? query : query.for("share", { of: accounts });
 }
 
 /**

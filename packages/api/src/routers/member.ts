@@ -2,7 +2,6 @@ import { auth, invitationUrl } from "@accly/auth";
 import { ORG_ROLES, authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { invitation, member, organization, user } from "@accly/db/schema/auth";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
@@ -11,7 +10,7 @@ import { audit } from "../audit";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
-import { pageOf } from "../lib/settlements";
+import { orgSettings, pageOf } from "../lib/settlements";
 
 const roleInput = z.enum(ORG_ROLES);
 
@@ -35,7 +34,7 @@ export const memberRouter = {
     const { orgId, roles, userId } = context.scope;
     const sessionUser = context.session!.user;
 
-    const [organizations, [settings]] = await Promise.all([
+    const [organizations, settings] = await Promise.all([
       // Predicate on `userId` by design: this lists which orgs the user belongs to, never
       // data inside one.
       db
@@ -48,23 +47,8 @@ export const memberRouter = {
         .innerJoin(organization, eq(organization.id, member.organizationId))
         .where(eq(member.userId, userId))
         .orderBy(asc(organization.name), asc(organization.id)),
-      db
-        .select({
-          timeZone: organizationSettings.timeZone,
-          financialYearStart: organizationSettings.financialYearStart,
-        })
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, orgId))
-        .limit(1),
+      orgSettings(orgId),
     ]);
-
-    // Bootstrap creates the settings row in the same transaction as the organization,
-    // so a missing row is an integrity failure, never a default.
-    if (!settings) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: `Organization ${orgId} has no settings row`,
-      });
-    }
 
     return {
       roles,
