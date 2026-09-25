@@ -338,7 +338,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `{ accountId, description, amount, taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
      leaf. `taxCode` resolves to the rate effective on the Bill date; an invalid
      code is `TAX_CODE_INVALID`. The form ticks `itcEligible` on a new line, as
-     Zoho Books and India Compliance treat input tax as eligible unless marked. `amount` is the taxable value.
+     Zoho Books and India Compliance treat input tax as eligible unless marked
+     (revisit with the CA). `amount` is the taxable value.
      Tax is `computeTax` with intra-state when the Party `stateCode` equals
      the place of supply. `itcEligible` is forced false when the Organization
      has no `gstin`. TDS is `computeTds` on the taxable total at the Bill (the
