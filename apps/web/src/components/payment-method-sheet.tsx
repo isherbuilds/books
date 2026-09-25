@@ -28,7 +28,17 @@ const methodSchema = z.object({
   accountId: z.string().min(1, "Choose where the money lands"),
 });
 
-function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () => void }) {
+type CreatedMethod = { id: string };
+
+function PaymentMethodForm({
+  orgSlug,
+  onClose,
+  onCreated,
+}: {
+  orgSlug: string;
+  onClose: () => void;
+  onCreated?: (method: CreatedMethod) => void;
+}) {
   const queryClient = useQueryClient();
   const form = useZodForm(methodSchema, { defaultValues: { name: "", accountId: "" } });
 
@@ -45,9 +55,10 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
 
   const create = useMutation(
     orpc.paymentMethod.create.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (method) => {
         await invalidatePaymentMethods(queryClient, orgSlug);
         toast.success("Payment method added");
+        onCreated?.(method);
         onClose();
       },
       onError: (error) => {
@@ -114,15 +125,20 @@ function PaymentMethodForm({ orgSlug, onClose }: { orgSlug: string; onClose: () 
   );
 }
 
-/** Adds a Payment Method that lands in one active cash or bank account. */
+/**
+ * Adds a Payment Method that lands in one active cash or bank account: from Banking, or
+ * stacked over a receipt or payment form, which selects it through `onCreated`.
+ */
 export function PaymentMethodSheet({
   orgSlug,
   open,
   onClose,
+  onCreated,
 }: {
   orgSlug: string;
   open: boolean;
   onClose: () => void;
+  onCreated?: (method: CreatedMethod) => void;
 }) {
   // Stay open while a save is in flight, so a refusal lands on a mounted form.
   const saving = useIsMutating({ mutationKey: orpc.paymentMethod.create.mutationKey() }) > 0;
@@ -135,7 +151,7 @@ export function PaymentMethodSheet({
       title="Add payment method"
       description="A method names one way money arrives and the account it lands in."
     >
-      <PaymentMethodForm orgSlug={orgSlug} onClose={onClose} />
+      <PaymentMethodForm orgSlug={orgSlug} onClose={onClose} onCreated={onCreated} />
     </FormSheet>
   );
 }
