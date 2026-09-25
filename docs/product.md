@@ -40,13 +40,15 @@ gates below still hold.
    cutover, and export everything at any time in open formats. Most Indian
    books live in Tally; a no-brainer switch needs a no-risk move in and out.
 2. **Search is the navigation.** One server search across every record by
-   number, Party, GSTIN, amount or reference, answering within 200 ms at ten
-   million journal lines. Lists and pickers are thin views over it.
+   number, Party, GSTIN, amount or reference (target: p95 ≤ 200 ms at ten
+   million journal lines, measured on seeded data). Lists and pickers are thin
+   views over it.
 3. **A verifiable ledger.** Hash-chain each Organization's journal entries so
    an auditor can prove nothing changed, and ship the proof with the export.
    Companies in India must keep an audit trail that cannot be disabled
-   (Companies (Accounts) Rules, from 1 April 2023); append-only posting meets
-   it, and the proof makes that visible.
+   (Companies (Accounts) Rules, from 1 April 2023); append-only posting is
+   the base for it, and the proof makes that visible. The edit log for drafts
+   and master changes still needs CA verification.
 4. **The CA network grows the product.** One CA workspace across every client
    Organization: filing status, locks, exceptions and entries awaiting review.
    Each CA who adopts it brings their clients.
@@ -60,7 +62,8 @@ gates below still hold.
    recovery, and database row-level security as a second tenancy wall.
 8. **Identity before scale.** Decide GST registration per document (several
    GSTINs under one PAN), document currency and an accounting-dimension hook
-   before the first group customer; each is a backfill afterwards.
+   before the first group customer. Each is a nullable column added with its
+   own spec, so no backfill waits on it.
 
 ## Position
 
