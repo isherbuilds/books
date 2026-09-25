@@ -31,7 +31,7 @@ import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
 import { useOrgDateTime } from "@/lib/org-datetime";
 
 const openingBalanceSchema = z.object({
-  documentDate: z.iso.date(),
+  documentDate: z.iso.date("Choose the day before your cutover"),
   lines: entryLinesSchema,
 });
 
@@ -47,8 +47,10 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
   const queryClient = useQueryClient();
   const { today } = useOrgDateTime();
 
+  // No default: a mid-year cutover is neither today nor the financial-year start, so
+  // the operator names it, as Zoho Books asks for its opening balance date.
   const form = useZodForm(openingBalanceSchema, {
-    defaultValues: { documentDate: today, lines: [blankEntryLine(), blankEntryLine()] },
+    defaultValues: { documentDate: "", lines: [blankEntryLine(), blankEntryLine()] },
   });
 
   const accounts = useQuery(journalAccountOptions(orgSlug));
@@ -100,7 +102,7 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
               <FormItem>
                 <FormLabel>As at</FormLabel>
                 <FormControl>
-                  <Input {...field} required type="date" />
+                  <Input {...field} required type="date" max={today} />
                 </FormControl>
                 <FormDescription>
                   The day before your first entry here. Party balances (receivables, payables and
