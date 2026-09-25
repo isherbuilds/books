@@ -1,8 +1,8 @@
-import { divideHalfUp } from "./money";
+import { divideHalfUp, sumPaise } from "./money";
 
 /** Caller rejects discounts above the subtotal with DISCOUNT_EXCEEDS_SUBTOTAL. */
 export function splitDiscount(valuesPaise: readonly bigint[], discountPaise: bigint): bigint[] {
-  const subtotal = valuesPaise.reduce((sum, value) => sum + value, 0n);
+  const subtotal = sumPaise(valuesPaise);
 
   if (valuesPaise.some((value) => value < 0n) || discountPaise < 0n || discountPaise > subtotal) {
     throw new RangeError("Invalid discount or line value");
@@ -11,7 +11,7 @@ export function splitDiscount(valuesPaise: readonly bigint[], discountPaise: big
   if (discountPaise === 0n) return valuesPaise.map(() => 0n);
 
   const shares = valuesPaise.map((value) => divideHalfUp(discountPaise * value, subtotal));
-  const allocated = shares.reduce((sum, share) => sum + share, 0n);
+  const allocated = sumPaise(shares);
   let largest = 0;
 
   for (let index = 1; index < valuesPaise.length; index++) {

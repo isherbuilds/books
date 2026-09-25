@@ -1,6 +1,5 @@
 import type { AppPermission } from "@accly/auth/access";
 import {
-  Building2Icon,
   BookOpenTextIcon,
   ContactRoundIcon,
   FileInputIcon,
@@ -13,6 +12,7 @@ import {
   ListTreeIcon,
   PackageIcon,
   ReceiptIndianRupeeIcon,
+  ScaleIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -188,24 +188,25 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
 ];
 
 type SetupStep = NavEntry<
-  "/$orgSlug/settings/organization" | "/$orgSlug/banking" | "/$orgSlug/settings/members"
+  "/$orgSlug/banking" | "/$orgSlug/settings/opening-balance" | "/$orgSlug/settings/members"
 > & { icon: LucideIcon; description: string };
 
 /** The order a new organization is configured in, not the settings tab order. */
 export const SETUP_STEPS: readonly SetupStep[] = [
-  {
-    to: "/$orgSlug/settings/organization",
-    label: "Confirm organization details",
-    description: "Set the legal name, tax identity, and document numbering.",
-    icon: Building2Icon,
-    permission: { settings: ["update"] },
-  },
+  // `/create` already took the organization details, so setup starts with money.
   {
     to: "/$orgSlug/banking",
     label: "Add bank accounts and payment methods",
     description: "One account per bank and cash box; one method per way money arrives.",
     icon: LandmarkIcon,
     permission: BANKS_MANAGE_PERMISSION,
+  },
+  {
+    to: "/$orgSlug/settings/opening-balance",
+    label: "Enter opening balances",
+    description: "Carry over ledger balances from your previous books on the cutover date.",
+    icon: ScaleIcon,
+    permission: { openingBalance: ["post"] },
   },
   {
     to: "/$orgSlug/settings/members",

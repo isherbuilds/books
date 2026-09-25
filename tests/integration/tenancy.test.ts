@@ -367,6 +367,7 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     betaUnapplied,
     alphaOpenItems,
     betaOpenItems,
+    alphaTransactions,
   ] = await Promise.all([
     api.item.list({ orgSlug: alpha.slug }),
     api.item.list({ orgSlug: beta.slug }),
@@ -378,6 +379,7 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     api.party.openCredits({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
     api.party.openItems({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
     api.party.openItems({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
+    api.party.transactions({ orgSlug: alpha.slug, partyId: alphaParty.id }),
   ]);
 
   expect(alphaItems.map(({ id }) => id)).toEqual([alphaItem.id]);
@@ -390,6 +392,8 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   expect(betaUnapplied.rows.map(({ id }) => id)).toEqual([betaReceipt.id]);
   expect(alphaOpenItems.rows.map(({ id }) => id)).toEqual([alphaInvoice.id]);
   expect(betaOpenItems.rows.map(({ id }) => id)).toEqual([betaInvoice.id]);
+  // Newest first, and the journal naming no party stays out.
+  expect(alphaTransactions.rows.map(({ id }) => id)).toEqual([alphaReceipt.id, alphaInvoice.id]);
 
   await expectORPCCode(
     api.party.openCredits({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
@@ -400,8 +404,29 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     "NOT_FOUND",
   );
   await expectORPCCode(
-    api.item.setActive({ orgSlug: beta.slug, itemId: alphaItem.id, active: false }),
+    api.party.transactions({ orgSlug: beta.slug, partyId: alphaParty.id }),
     "NOT_FOUND",
+  );
+  // Beta's own income account passes validation, so only the tenant predicate refuses it.
+  await expectORPCCode(
+    api.item.update({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      name: "Shared Service",
+      unitPrice: "5.00",
+      incomeAccountId: betaIncome.id,
+    }),
+    "CONFLICT",
+  );
+  await expectORPCCode(
+    api.item.setActive({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      active: false,
+    }),
+    "CONFLICT",
   );
   await expectORPCCode(
     api.invoice.get({ orgSlug: beta.slug, invoiceId: alphaInvoice.id }),
@@ -630,7 +655,6 @@ test("an unknown slug is FORBIDDEN, not NOT_FOUND — existence never leaks", as
 // Compared against `appRouter` below, so a new procedure that is not listed here
 // fails the suite rather than going uncovered.
 const GUARDED_CALLS = {
-  "organization.getProfile": (api, claim) => api.organization.getProfile({ ...claim }),
   "party.create": (api, claim) =>
     api.party.create({
       ...claim,
@@ -651,6 +675,7 @@ const GUARDED_CALLS = {
     }),
   "party.get": (api, claim) => api.party.get({ ...claim, partyId: crypto.randomUUID() }),
   "party.list": (api, claim) => api.party.list({ ...claim }),
+  "party.balances": (api, claim) => api.party.balances({ ...claim }),
   "party.statement": (api, claim) =>
     api.party.statement({ ...claim, partyId: crypto.randomUUID() }),
   "account.list": (api, claim) => api.account.list({ ...claim }),
@@ -689,7 +714,12 @@ const GUARDED_CALLS = {
       incomeAccountId: crypto.randomUUID(),
     }),
   "item.setActive": (api, claim) =>
-    api.item.setActive({ ...claim, itemId: crypto.randomUUID(), active: false }),
+    api.item.setActive({
+      ...claim,
+      itemId: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      active: false,
+    }),
   "item.taxRates": (api, claim) => api.item.taxRates({ ...claim }),
   "invoice.saveDraft": (api, claim) =>
     api.invoice.saveDraft({
@@ -728,6 +758,8 @@ const GUARDED_CALLS = {
     api.party.openItems({ ...claim, partyId: crypto.randomUUID(), side: "receivable" }),
   "party.openCredits": (api, claim) =>
     api.party.openCredits({ ...claim, partyId: crypto.randomUUID(), side: "payable" }),
+  "party.transactions": (api, claim) =>
+    api.party.transactions({ ...claim, partyId: crypto.randomUUID() }),
   "bill.saveDraft": (api, claim) =>
     api.bill.saveDraft({
       ...claim,
@@ -890,9 +922,10 @@ const GUARDED_CALLS = {
 // SAFETY: Deliberately omit the required tenant claim to exercise runtime validation.
 const NO_CLAIM = {} as Parameters<AppRouterClient["member"]["me"]>[0];
 
-// Bootstrap creation is guarded by sessionProcedure and deliberately has no
-// organization claim yet; every other procedure must appear in GUARDED_CALLS.
-const SESSION_ONLY_PROCEDURES = new Set(["organization.create"]);
+// Bootstrap creation and its founder check are guarded by sessionProcedure and
+// deliberately have no organization claim yet; every other procedure must appear in
+// GUARDED_CALLS.
+const SESSION_ONLY_PROCEDURES = new Set(["organization.canCreate", "organization.create"]);
 
 test("the guarded-call table covers every organization-scoped procedure in the router", () => {
   const procedures = Object.entries(appRouter)
@@ -1002,4 +1035,29 @@ test("an invitation id from another tenant cannot be revoked", async () => {
 
   const stillPending = await clientFor(alice).member.list({ orgSlug: alpha.slug });
   expect(stillPending.invitations.map((row) => row.id)).toContain(invited.id);
+});
+
+test("the roster pages members by keyset; invitations ride the first page", async () => {
+  const owner = await createTestUser("roster-page-owner");
+  const organization = await createOrganization(owner, "roster-page");
+  const person = await createTestUser("roster-page-member");
+  await joinOrganization(person, organization.id);
+
+  const api = clientFor(owner);
+
+  const invited = await api.member.invite({
+    orgSlug: organization.slug,
+    email: `roster-${Bun.randomUUIDv7()}@example.com`,
+    role: "operator",
+  });
+
+  const first = await api.member.list({ orgSlug: organization.slug, limit: 1 });
+  expect(first.members.map((row) => row.userId)).toEqual([owner.user.id]);
+  expect(first.hasMore).toBe(true);
+  expect(first.invitations.map((row) => row.id)).toEqual([invited.id]);
+
+  const cursor = required(first.members[0], "first page member").id;
+  const next = await api.member.list({ orgSlug: organization.slug, limit: 1, cursor });
+  expect(next).toMatchObject({ hasMore: false, invitations: [] });
+  expect(next.members.map((row) => row.userId)).toEqual([person.user.id]);
 });

@@ -2,15 +2,16 @@ import { auth, invitationUrl } from "@accly/auth";
 import { ORG_ROLES, authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { invitation, member, organization, user } from "@accly/db/schema/auth";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { isFounder } from "../lib/founder";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { likePattern } from "../lib/schemas";
+import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
+import { orgSettings, pageOf } from "../lib/settlements";
 
 const roleInput = z.enum(ORG_ROLES);
 
@@ -34,7 +35,7 @@ export const memberRouter = {
     const { orgId, roles, userId } = context.scope;
     const sessionUser = context.session!.user;
 
-    const [organizations, [settings]] = await Promise.all([
+    const [organizations, settings] = await Promise.all([
       // Predicate on `userId` by design: this lists which orgs the user belongs to, never
       // data inside one.
       db
@@ -47,27 +48,14 @@ export const memberRouter = {
         .innerJoin(organization, eq(organization.id, member.organizationId))
         .where(eq(member.userId, userId))
         .orderBy(asc(organization.name), asc(organization.id)),
-      db
-        .select({
-          timeZone: organizationSettings.timeZone,
-          financialYearStart: organizationSettings.financialYearStart,
-        })
-        .from(organizationSettings)
-        .where(eq(organizationSettings.orgId, orgId))
-        .limit(1),
+      orgSettings(orgId),
     ]);
-
-    // Bootstrap creates the settings row in the same transaction as the organization,
-    // so a missing row is an integrity failure, never a default.
-    if (!settings) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: `Organization ${orgId} has no settings row`,
-      });
-    }
 
     return {
       roles,
       user: { name: sessionUser.name, email: sessionUser.email },
+      // Only the flag reaches the client, never FOUNDING_EMAIL.
+      founder: isFounder(sessionUser.email),
       organizations,
       timeZone: settings.timeZone,
       // Every org page needs the financial year: the period presets are built from it.
@@ -78,8 +66,9 @@ export const memberRouter = {
   list: orgProcedure(
     { member: ["read"] },
     orgInput.extend({
-      q: z.string().trim().max(200).optional(),
-      limit: z.number().int().min(1).max(200).default(100),
+      q: searchQuery,
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
     const { orgId, roles } = context.scope;
@@ -102,12 +91,15 @@ export const memberRouter = {
         .where(
           and(
             eq(member.organizationId, orgId),
+            // Ids are UUIDv7, so id order is join order and a keyset cursor.
+            input.cursor ? gt(member.id, input.cursor) : undefined,
             search ? or(ilike(user.name, search), ilike(user.email, search)) : undefined,
           ),
         )
-        .orderBy(asc(member.createdAt))
-        .limit(input.limit),
-      canInvite
+        .orderBy(asc(member.id))
+        .limit(input.limit + 1),
+      // Pending invitations expire within days, so the first page carries them all.
+      canInvite && !input.cursor
         ? db
             .select({
               id: invitation.id,
@@ -124,13 +116,17 @@ export const memberRouter = {
                 search ? ilike(invitation.email, search) : undefined,
               ),
             )
-            .orderBy(asc(invitation.expiresAt))
-            .limit(input.limit)
+            .orderBy(asc(invitation.expiresAt), asc(invitation.id))
+            .limit(MASTER_LIST_LIMIT + 1)
+            .then(capMasterList)
         : [],
     ]);
 
+    const page = pageOf(members, input.limit);
+
     return {
-      members,
+      members: page.rows,
+      hasMore: page.hasMore,
       invitations: invited.map((row) => ({ ...row, url: invitationUrl(row.id) })),
     };
   }),

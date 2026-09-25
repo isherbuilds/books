@@ -119,21 +119,23 @@ function LocksRoute() {
                           ? formatBusinessDate(lock.lockedThrough)
                           : "Not locked"}
                       </dd>
-                      <dt className="text-muted-foreground">Reason</dt>
-                      <dd className="min-w-0 break-words">{lock?.reason ?? "—"}</dd>
-                      <dt className="text-muted-foreground">Set by</dt>
-                      <dd className="min-w-0 break-words">
-                        {lock ? (
-                          <>
+                      {lock?.reason ? (
+                        <>
+                          <dt className="text-muted-foreground">Reason</dt>
+                          <dd className="min-w-0 break-words">{lock.reason}</dd>
+                        </>
+                      ) : null}
+                      {lock ? (
+                        <>
+                          <dt className="text-muted-foreground">Set by</dt>
+                          <dd className="min-w-0 break-words">
                             <p>{lock.setBy.name}</p>
                             <p className="text-muted-foreground">
                               {formatDateTime(lock.setAt, timeZone)}
                             </p>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </dd>
+                          </dd>
+                        </>
+                      ) : null}
                     </dl>
                   </div>
                 );

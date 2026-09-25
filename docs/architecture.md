@@ -59,8 +59,10 @@ A new org-scoped domain follows the
 ## Web data flow
 
 - Org pages server-render. The `/$orgSlug` loader reads `member.me` (identity,
-  roles, organizations, time zone) through the request-local client. Base UI
-  popups stay behind `ClientOnly`.
+  roles, organizations, time zone, and a `founder` flag) through the
+  request-local client. The flag is computed from `FOUNDING_EMAIL` on the server;
+  the email never reaches the client. `/join` has no org, so it asks
+  `organization.canCreate`. Base UI popups stay behind `ClientOnly`.
 - TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
   `operational-query.ts`). Loaders prime it, components subscribe with the same
   `queryOptions`, and loaders never pass data down as props. Membership comes
@@ -247,10 +249,10 @@ Account, and cash or bank leaves that `account.create` adds.
 `account.moneyBalances` returns each leaf with its group and balance on Banking.
 The complete chart supplies parent groups for account creation. A Payment Method names one active money
 leaf, so the method decides where money lands, as in ERPNext; there is no
-per-receipt deposit account. `paymentMethod.setActive` archives a method, and
-old documents keep it. Restoring a method never restores its account: posting
-refuses a method whose account is archived, and Banking shows it as "Account
-archived". New Organizations get Cash → Cash in Hand, and UPI, Bank transfer and
+per-receipt deposit account. `paymentMethod.setActive` marks a method
+inactive, and old documents keep it. Reactivating a method never reactivates
+its account: posting refuses a method whose account is inactive, and Banking
+shows it as "Account inactive". New Organizations get Cash → Cash in Hand, and UPI, Bank transfer and
 Card → Bank Account. Direct receipts and payments cannot name a money account, a
 group or a system account (`postableAccounts`).
 
@@ -261,6 +263,7 @@ fee rules or settlement days.
 Banking lists money accounts, balances and methods to anyone with
 `account` `read`, `paymentMethod` `read` and `report` `readFinancial`, the CA
 included. Adding an account needs `account` `create` and opens the Chart of
-accounts Add account Sheet; adding or archiving a method needs
-`paymentMethod` `create` and `update` and opens a right Sheet
+accounts Add account Sheet in Banking, under Bank Accounts; saving it continues
+to Add payment method with the new account chosen. Adding a method or marking
+it inactive needs `paymentMethod` `create` and `update` and opens a right Sheet
 ([Design](./design.md#10-task-overlays)).

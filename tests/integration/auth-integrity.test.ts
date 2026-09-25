@@ -1,11 +1,14 @@
 import { beforeAll, expect, spyOn, test } from "bun:test";
 
+import { createRequestContext } from "@accly/api/lib/context";
+import { appRouter } from "@accly/api/routers/index";
 import { auth, invitationUrl } from "@accly/auth";
 import { createUserWithPassword } from "@accly/auth/manual-user";
 import { db } from "@accly/db";
 import { invitation, member, user } from "@accly/db/schema/auth";
 import { file } from "@accly/db/schema/file";
 import { env } from "@accly/env/server";
+import { createRouterClient } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 
 import { app } from "../../apps/server/src/index";
@@ -15,7 +18,7 @@ import {
   createTestUser,
   joinOrganization,
 } from "../support/auth";
-import { expectAuthStatus, expectORPCCode } from "../support/client";
+import { clientFor, expectAuthStatus, expectORPCCode } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 
 beforeAll(async () => {
@@ -102,6 +105,14 @@ test("only the founding email can create an organization", async () => {
 
   expect(membership?.role).toBe("owner");
 
+  // The client learns only the flag, never the founding email.
+  const founderApi = createRouterClient(appRouter, {
+    context: () => createRequestContext(founder),
+  });
+
+  expect(await founderApi.organization.canCreate()).toBe(true);
+  expect((await founderApi.member.me({ orgSlug: first.slug })).founder).toBe(true);
+
   const second = await createAccountingOrganization(founder, {
     name: "Second Org",
     slug: "second-org",
@@ -110,7 +121,12 @@ test("only the founding email can create an organization", async () => {
   expect(second.id).not.toBe(first.id);
 
   const owner = await createTestUser("gate-owner");
-  await createOrganization(owner, "gate");
+  const gate = await createOrganization(owner, "gate");
+  const ownerApi = clientFor(owner);
+
+  expect(await ownerApi.organization.canCreate()).toBe(false);
+  expect((await ownerApi.member.me({ orgSlug: gate.slug })).founder).toBe(false);
+
   await expectORPCCode(
     createAccountingOrganization(owner.headers, {
       name: "Not Even For Owners",

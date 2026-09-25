@@ -35,7 +35,7 @@ function EditInvoiceRoute() {
 
   return (
     <>
-      <PageHeader title="Edit draft" description="Review the draft, save changes, or post it." />
+      <PageHeader title="Edit draft" />
       <InvoiceForm
         orgSlug={orgSlug}
         today={today}

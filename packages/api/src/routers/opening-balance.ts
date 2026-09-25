@@ -8,7 +8,8 @@ import { audit } from "../audit";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
-import { impossible } from "../lib/conflict";
+import { businessDate } from "../lib/business-date";
+import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { balancedEntryLines, dateOnly, entryLineFields, reason } from "../lib/schemas";
 import { cancelDocument, orgSettings } from "../lib/settlements";
@@ -32,6 +33,13 @@ export const openingBalanceRouter = {
 
       const posted = await db.transaction(async (tx) => {
         const settings = await orgSettings(scope.orgId, tx, "update");
+
+        if (input.documentDate > businessDate(new Date(), settings.timeZone)) {
+          throw badRequest(
+            "OPENING_BALANCE_DATE_FUTURE",
+            "Choose the day before your cutover, not a future date.",
+          );
+        }
 
         const [existing] = await tx
           .select({ id: documents.id, number: documents.number })

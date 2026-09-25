@@ -144,20 +144,6 @@ export function LandingNav() {
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-border">
-                  <div className="mx-auto flex w-full max-w-336 items-center justify-between px-4 py-3 text-sm sm:px-6">
-                    <p className="text-muted-foreground">
-                      One login across your Organizations, and one ledger under every document.
-                    </p>
-                    <Link
-                      to="/billing"
-                      onClick={() => setOpen(false)}
-                      className="text-foreground transition-colors duration-100 ease-out hover:text-muted-foreground"
-                    >
-                      See them in the product →
-                    </Link>
-                  </div>
-                </div>
               </div>
             ) : null}
           </div>

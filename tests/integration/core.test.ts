@@ -8,6 +8,7 @@ import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
+import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { eq } from "drizzle-orm";
 
@@ -141,9 +142,12 @@ test("founder organization creation seeds the complete chart and profile", async
     await db.select().from(tdsSections).where(eq(tdsSections.orgId, organization.id)),
   ).toHaveLength(13);
 
-  const profile = await api.organization.getProfile({ orgSlug: organization.slug });
-  expect(profile.legalType).toBe("company");
-  expect(profile.timeZone).toBe("UTC");
+  const [stored] = await db
+    .select({ legalType: organizationSettings.legalType })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.orgId, organization.id));
+
+  expect(stored?.legalType).toBe("company");
   expect((await api.member.me({ orgSlug: organization.slug })).timeZone).toBe("UTC");
 
   const native = await auth.handler(
@@ -199,6 +203,22 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
     gstin: "27ABCDE1234F1Z5",
   });
 
+  // A GSTIN alone is enough: the server derives the state and PAN from it.
+  const derived = await api.party.create({
+    orgSlug: organization.slug,
+    name: "GSTIN Only Traders",
+    roles: ["vendor"],
+    gstin: "29ABCDE1234F2Z4",
+  });
+
+  expect(derived).toMatchObject({ stateCode: "29", pan: "ABCDE1234F" });
+
+  // Without a GSTIN, the state is required.
+  await expectORPCCode(
+    api.party.create({ orgSlug: organization.slug, name: "No State", roles: ["customer"] }),
+    "BAD_REQUEST",
+  );
+
   await expectORPCCode(
     api.party.create({
       ...partyCreateInput(organization.slug, "Repeated role"),
@@ -252,10 +272,15 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   });
 
   const listed = await api.party.list({ orgSlug: organization.slug });
-  expect(listed).toHaveLength(5);
-  expect(listed.map((party) => party.id)).toEqual(
-    expect.arrayContaining([original.id, namesake.id, ram.id, sita.id]),
+  expect(listed.hasMore).toBe(false);
+  expect(listed.rows).toHaveLength(6);
+  expect(listed.rows.map((party) => party.id)).toEqual(
+    expect.arrayContaining([original.id, derived.id, namesake.id, ram.id, sita.id]),
   );
+
+  // Past the bound the Link Field searches the server on name or GSTIN.
+  const searched = await api.party.list({ orgSlug: organization.slug, q: "सीत" });
+  expect(searched).toEqual({ rows: [expect.objectContaining({ id: sita.id })], hasMore: false });
 });
 
 test("a party edit from a stale copy is refused", async () => {

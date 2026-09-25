@@ -40,9 +40,6 @@ type ClaimListInput = z.output<z.ZodObject<typeof claimListFields>>;
 
 type Claim = "invoice" | "bill";
 
-/** A picker lists the oldest open documents; later ones settle from their own record. */
-export const PICKER_LIMIT = 200;
-
 /** Splits rows fetched with `.limit(limit + 1)` into one page and an overflow flag. */
 export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boolean } {
   return rows.length > limit
@@ -344,10 +341,27 @@ export function documentSettlement(
   };
 }
 
-/** The oldest claims still open for the party and side. */
+type PickerPage = { cursor?: string; limit: number };
+
+/**
+ * Rows after the cursor document in the pickers' oldest-first (date, id) order. A
+ * posted document's date never changes, so a cursor keeps its place between pages.
+ */
+function afterPickerCursor(orgId: string, cursor: string | undefined) {
+  if (!cursor) return undefined;
+
+  const position = db
+    .select({ documentDate: documents.documentDate, id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.orgId, orgId), eq(documents.id, cursor)));
+
+  return sql`(${documents.documentDate}, ${documents.id}) > (${position})`;
+}
+
+/** One page of the claims still open for the party and side, oldest first. */
 export async function openItems(
   orgId: string,
-  input: { partyId: string; side: "receivable" | "payable" },
+  input: PickerPage & { partyId: string; side: "receivable" | "payable" },
 ) {
   const outstandingPaise = settlementPaise(orgId, "target").balancePaise;
 
@@ -380,25 +394,30 @@ export async function openItems(
               ),
             )
           : undefined,
+        afterPickerCursor(orgId, input.cursor),
         gt(outstandingPaise, 0n),
       ),
     )
     .orderBy(asc(documents.documentDate), asc(documents.id))
-    .limit(PICKER_LIMIT + 1);
+    .limit(input.limit + 1);
 
   return pageOf(
     rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
-    PICKER_LIMIT,
+    input.limit,
   );
 }
 
-/** The oldest settling credits still available for the party and side. */
+/**
+ * One page of the settling credits still available for the party and side, oldest
+ * first. `q` narrows by document number, so every credit is one search away.
+ */
 export async function openCredits(
   orgId: string,
-  input: {
+  input: PickerPage & {
     partyId: string;
     side: "receivable" | "payable";
     type?: "receipt" | "creditNote" | "payment" | "debitNote";
+    q?: string;
   },
 ) {
   const unappliedPaise = settlementPaise(orgId, "source").balancePaise;
@@ -440,14 +459,16 @@ export async function openCredits(
                 eq(documents.exposureSide, "payable"),
               ),
             ),
+        input.q ? ilike(documents.number, likePattern(input.q)) : undefined,
+        afterPickerCursor(orgId, input.cursor),
         gt(unappliedPaise, 0n),
       ),
     )
     .orderBy(asc(documents.documentDate), asc(documents.id))
-    .limit(PICKER_LIMIT + 1);
+    .limit(input.limit + 1);
 
   return pageOf(
     rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
-    PICKER_LIMIT,
+    input.limit,
   );
 }

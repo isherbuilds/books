@@ -103,7 +103,8 @@ export const NOTE_COLUMNS = [
   }),
 ];
 
-export function NoteCard({ note }: { note: NoteListRow }) {
+/** `showType` is off in a one-type register, as its Type column is. */
+export function NoteCard({ note, showType }: { note: NoteListRow; showType: boolean }) {
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -113,8 +114,8 @@ export function NoteCard({ note }: { note: NoteListRow }) {
         </span>
       </div>
       <p className="truncate text-muted-foreground">
-        {NOTE_TYPE_LABELS[note.type]} · {note.partyName ?? "No party"} ·{" "}
-        {formatBusinessDay(note.documentDate)}
+        {showType ? `${NOTE_TYPE_LABELS[note.type]} · ` : null}
+        {note.partyName ?? "No party"} · {formatBusinessDay(note.documentDate)}
       </p>
       <p className="flex items-center justify-between gap-2 text-muted-foreground">
         {/* The whole card is a link, so the source is plain text here, never a nested anchor. */}

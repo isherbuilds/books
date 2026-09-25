@@ -10,7 +10,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { badRequest, impossible } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
 import { formatMoney } from "./money";
-import { recordEntry } from "./posting";
+import { recordEntry, reverseEntries } from "./posting";
 
 export type AllocationTarget = { documentId: string; amountPaise: bigint };
 
@@ -305,7 +305,6 @@ export async function applyAllocations(
 
     if (entrySide)
       await recordEntry(tx, scope, {
-        kind: "post",
         document: {
           id: row.id,
           posting: {
@@ -391,18 +390,12 @@ export async function reverseAllocation(
   if (!reversed) throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
 
   if (apply.postEntryId) {
-    await recordEntry(tx, scope, {
-      kind: "reverse",
-      document: { id: allocationId, type: "allocation" },
-      entryDate,
-      narration,
-    });
+    await reverseEntries(tx, scope, [apply.postEntryId], { entryDate, narration });
   } else {
     const side = allocationEntrySide(source);
 
     if (side)
       await recordEntry(tx, scope, {
-        kind: "post",
         document: {
           id: allocationId,
           posting: {

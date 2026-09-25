@@ -5,13 +5,14 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon, WalletIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeftRightIcon, CircleDotIcon, ContactRoundIcon, WalletIcon } from "lucide-react";
+import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
+import { SETTLEMENT_KIND_LABELS } from "@/components/document-columns";
 import { TableEmpty } from "@/components/data-table/table-empty";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
@@ -23,25 +24,19 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
+import { PartyFilterItems } from "@/components/party-filter-items";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
-import { partyListOptions } from "@/lib/parties";
+import { partyListOptions, usePartyName } from "@/lib/parties";
 import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
 
 // A Receipt posts in full, so it is never a draft.
 const RECEIPT_STATES = ["posted", "cancelled"] as const;
 
 const STATE_LABELS = { posted: "Posted", cancelled: "Cancelled" } as const;
-
-const SETTLEMENT_LABELS = {
-  against: "Against invoices",
-  advance: "Advance",
-  direct: "Direct",
-} as const satisfies Record<(typeof SETTLEMENT_KINDS)[number], string>;
 
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
@@ -80,13 +75,10 @@ function ReceiptsRoute() {
   const { orgSlug } = Route.useParams();
   const { create, ...filters } = Route.useSearch();
   const { q, partyId, from, to, paymentMethodIds, state, settlementKind } = filters;
-  const { today, financialYearStart } = useOrgDateTime();
+  const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
-  const range: SearchRange = { from, to };
-  const rangeText = rangeLabel(range, today, financialYearStart);
   const newTrigger = useRef<HTMLButtonElement>(null);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canPost = useCan(orgSlug, { receipt: ["post"] });
   const canReadMethods = useCan(orgSlug, { paymentMethod: ["read"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
@@ -105,6 +97,8 @@ function ReceiptsRoute() {
     enabled: canReadParties && partyId !== undefined,
   });
 
+  const partyName = usePartyName(orgSlug, partyId, parties.data?.rows);
+
   const activeRowId = useMatch({ from: "/$orgSlug/receipts/$receiptId", shouldThrow: false })
     ?.params.receiptId;
 
@@ -112,6 +106,8 @@ function ReceiptsRoute() {
 
   const setFilters = (patch: Partial<ReceiptFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
+
+  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   // Both Clear buttons unmount once the filters go, so focus moves to the box first.
   const clear = () => {
@@ -131,24 +127,15 @@ function ReceiptsRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.find((each) => each.id === partyId);
-
     chips.push({
       id: "partyId",
       name: "Party",
-      label: party ? `Party: ${party.name}` : "One party",
+      label: partyName ? `Party: ${partyName}` : "One party",
       remove: () => setFilters({ partyId: undefined }),
     });
   }
 
-  if (from || to) {
-    chips.push({
-      id: "date",
-      name: "Date",
-      label: rangeText,
-      remove: () => setFilters({ from: undefined, to: undefined }),
-    });
-  }
+  if (date.chip) chips.push(date.chip);
 
   if (paymentMethodIds) {
     const names = paymentMethodIds.map(
@@ -180,7 +167,7 @@ function ReceiptsRoute() {
     chips.push({
       id: "settlementKind",
       name: "Settlement",
-      label: SETTLEMENT_LABELS[settlementKind],
+      label: SETTLEMENT_KIND_LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
   }
@@ -212,13 +199,6 @@ function ReceiptsRoute() {
       <TableEmpty
         title="No receipts yet"
         description="Posted receipts appear here, newest first."
-        action={
-          canPost ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New receipt
-            </Button>
-          ) : undefined
-        }
       />
     );
 
@@ -245,15 +225,16 @@ function ReceiptsRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
-                  <PresetItems
-                    range={range}
-                    today={today}
-                    financialYearStart={financialYearStart}
-                    onSelect={(next) => void setFilters(next)}
-                    onCustom={() => setCustomRangeOpen(true)}
-                  />
-                </FilterSubmenu>
+                {date.submenu}
+                {canReadParties ? (
+                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
+                    <PartyFilterItems
+                      orgSlug={orgSlug}
+                      partyId={partyId}
+                      onChange={(next) => void setFilters({ partyId: next })}
+                    />
+                  </FilterSubmenu>
+                ) : null}
                 {canReadMethods ? (
                   <FilterSubmenu icon={WalletIcon} label="Payment method">
                     {methods.data?.length ? (
@@ -296,7 +277,7 @@ function ReceiptsRoute() {
                   icon={ArrowLeftRightIcon}
                   label="Settlement"
                   options={SETTLEMENT_KINDS}
-                  labels={SETTLEMENT_LABELS}
+                  labels={SETTLEMENT_KIND_LABELS}
                   value={settlementKind}
                   onChange={(next) => void setFilters({ settlementKind: next })}
                 />
@@ -327,15 +308,7 @@ function ReceiptsRoute() {
         <Outlet />
       </PageBody>
 
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={field}
-        from={from}
-        to={to}
-        today={today}
-        onApply={(next) => void setFilters(next)}
-      />
+      {date.popover}
 
       {canPost ? (
         <ReceiptOverlay

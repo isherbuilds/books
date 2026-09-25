@@ -35,6 +35,7 @@ export async function invalidateSettlementState(
     queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.balances.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.openItems.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
       queryKey: orpc.party.openCredits.key({ input: { orgSlug } }),

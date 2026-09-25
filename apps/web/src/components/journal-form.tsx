@@ -172,6 +172,7 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
         </div>
 
         <EntryLines
+          orgSlug={orgSlug}
           title="Lines"
           accounts={accounts}
           parties={parties}

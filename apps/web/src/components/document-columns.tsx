@@ -1,4 +1,5 @@
 import type { documents } from "@accly/db/schema/documents";
+import type { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { Badge } from "@accly/ui/components/badge";
 
 type DocumentState = (typeof documents.$inferSelect)["state"];
@@ -17,6 +18,13 @@ export const DOCUMENT_STATE_LABELS = {
   posted: "Posted",
   cancelled: "Cancelled",
 } as const;
+
+/** How a receipt or payment settles: one wording in every filter, form, list and Sheet. */
+export const SETTLEMENT_KIND_LABELS = {
+  advance: "Advance",
+  against: "Against open items",
+  direct: "Direct",
+} as const satisfies Record<(typeof SETTLEMENT_KINDS)[number], string>;
 
 const SETTLEMENT_LABELS = { paid: "Paid", partPaid: "Part paid", unpaid: "Unpaid" } as const;
 

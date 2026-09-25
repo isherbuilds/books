@@ -4,33 +4,23 @@ import type { ReactNode } from "react";
 import { DetailRow } from "@/components/detail-row";
 
 /**
- * The server's subtotal, discount, taxable, tax, round-off and total for a saved Invoice
- * or Bill. `children` follow the total, such as a Bill's TDS.
+ * The server's subtotal, discount, taxable, GST, round-off and total for a saved Invoice
+ * or Bill. A GST component shows only when it was levied. `children` follow the total,
+ * such as a Bill's TDS.
  */
 export function DocumentTotals({
   document,
   children,
 }: {
   document: {
-    lines: readonly {
-      amountPaise: bigint;
-      cgstPaise: bigint;
-      sgstPaise: bigint;
-      igstPaise: bigint;
-    }[];
+    totals: { taxablePaise: bigint; cgstPaise: bigint; sgstPaise: bigint; igstPaise: bigint };
     discountPaise: bigint;
     roundOffPaise: bigint;
     totalPaise: bigint;
   };
   children?: ReactNode;
 }) {
-  let taxablePaise = ZERO_MONEY;
-  let taxPaise = ZERO_MONEY;
-
-  for (const line of document.lines) {
-    taxablePaise += line.amountPaise;
-    taxPaise += line.cgstPaise + line.sgstPaise + line.igstPaise;
-  }
+  const { taxablePaise, cgstPaise, sgstPaise, igstPaise } = document.totals;
 
   return (
     <dl className="grid gap-2">
@@ -43,7 +33,9 @@ export function DocumentTotals({
         </>
       ) : null}
       <DetailRow label="Taxable">{formatMoney(taxablePaise)}</DetailRow>
-      <DetailRow label="Tax">{formatMoney(taxPaise)}</DetailRow>
+      {cgstPaise > ZERO_MONEY ? <DetailRow label="CGST">{formatMoney(cgstPaise)}</DetailRow> : null}
+      {sgstPaise > ZERO_MONEY ? <DetailRow label="SGST">{formatMoney(sgstPaise)}</DetailRow> : null}
+      {igstPaise > ZERO_MONEY ? <DetailRow label="IGST">{formatMoney(igstPaise)}</DetailRow> : null}
       <DetailRow label="Round-off">{formatMoney(document.roundOffPaise)}</DetailRow>
       <div className="flex items-baseline justify-between gap-4 font-medium">
         <dt>Total</dt>

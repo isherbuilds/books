@@ -24,12 +24,17 @@ shortcuts. Each interaction (select Party, add line, post) paints within
 1. **State** follows [Development](../development.md#react-and-forms): no browser
    storage, draft store or zustand.
 2. **Cached masters.** `party.list`, `account.list`, `paymentMethod.list` and
-   `item.list` return complete lists up to 5,000 rows, stale after
-   five minutes. `party.list` carries only what lists show (name, roles, GSTIN,
-   active); the quick look and the party page read `party.get`. A save writes
-   the returned row into the cache, then invalidates. Link Fields filter in memory. Over the bound,
-   `MASTER_LIST_LIMIT` shows a capacity error. A list that is over the bound,
-   loading or failed never offers Create or "No matches".
+   `item.list` return lists up to 5,000 rows (`MASTER_LIST_LIMIT`), stale
+   after five minutes. `party.list` carries only what lists show (name, roles,
+   GSTIN, active); the quick look and the party page read `party.get`. A save
+   writes the returned row into the cache, then invalidates. Link Fields
+   filter in memory. `party.list` returns `{ rows, hasMore }` and takes an
+   optional `q` on name or GSTIN: past the bound, the Party Link Field, the
+   palette and the parties page search the server, so no party is
+   unreachable. The other masters stay complete or refused with a capacity
+   error, because their fields resolve a saved id from the cached list. A list
+   that is over the bound, loading or failed, or a search still catching up
+   with the text, never offers Create or "No matches".
 3. **Plain mutations.** After a lost response, the operator checks the list
    before re-entry.
 4. **Posting state** (`draft`, `posting`, `posted`, `rejected`) renders in
@@ -54,20 +59,37 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    with an `Outlet`, and the record is its child (`receipts/$receiptId.tsx`).
    There is no index route, because it would unmount the list. Closing clears
    the param and refocuses the row. Parties open a quick look (`?party=`), and
-   `parties_.$partyId` owns editing. Journals link to `/journals/new`, and a
+   `parties_.$partyId` owns editing. Its Transactions tab lists every Invoice,
+   Bill, Note, Receipt and Payment naming the party (`party.transactions`, one
+   keyset page of 25 at a time, only the types the member may read), as Zoho's
+   contact page does. Journals link to `/journals/new`, and a
    journal record is a page at `/journals/$journalId`. Invoices link to
    `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
    Invoice record stays a Sheet.
 9. **Link Field**: a `Combobox` over the cached master, with rows from
-   `linkRows` (prefix, then substring, on label and code). "Create <text>" comes
-   last, hides on an exact match, and needs a complete list and the create
-   grant. Create stacks the master's own form and returns the saved row.
+   `linkRows` (prefix, then substring, on label and code), at most eight
+   (`LINK_ROW_LIMIT`); typing narrows to the rest. Past a party master's bound,
+   the typed text goes to `party.list({ q })`, debounced 200 ms. "Create
+   <text>" comes last, hides on an exact match, and needs a complete list and
+   the create grant. Create stacks the master's own form and returns the saved
+   row. A document's Party field lists the parties holding its role first and
+   hides none; a party it creates starts with that role.
 10. **Lists** use `DataTable`. ↑ and ↓ move row focus and Enter opens the
     record; inside a Sheet, ↑ and ↓ step between rows. A page is 25 rows
     (`pageLimit`). Parties sort and filter in memory and mount 25 rows at a
-    time. Receipts, files and the audit log use `useInfiniteQuery` on a keyset
-    cursor with server filters. Only the `LoadMore` button grows a list;
-    nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+    time; past the master's bound, the search runs on the server. Receipts,
+    files, the audit log and Members use `useInfiniteQuery` on a keyset cursor
+    with server filters; Members keeps its search `q` in the URL, and its
+    pending invitations come with the first page. Only the `LoadMore` button
+    grows a list; nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+    The open-item and credit pickers (`party.openItems`, `party.openCredits`)
+    follow the same rule: 25 rows oldest first, then `LoadMore`, so no fixed
+    count hides a document. Apply credit is a compact Dialog over the record
+    Sheet: a credit combobox searched by number on the server, with a Load
+    more option last; an amount defaulting to the smaller of the credit's
+    unapplied amount and the claim's outstanding; and the outstanding after
+    the apply. The allocation grid has no search, because a narrowed grid
+    would hide amounts already typed against other rows.
 11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
     `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
     Receipt also the method, and focuses the first Link Field. Tab moves
@@ -120,7 +142,7 @@ financial rollback are not adopted.
      `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
      `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-credit-sheet.tsx`, the `DocumentForm` adoption in
+     `components/apply-credit-dialog.tsx`, the `DocumentForm` adoption in
      `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through
@@ -165,7 +187,7 @@ financial rollback are not adopted.
      implemented. Import remains open: template download, upload, row errors
      listed, nothing written on any error.
      Payment offers Against only to roles that can read Bills and Notes; its
-     Credit Note refund picker filters on the server before the 200-row limit.
+     Credit Note refund picker filters on the server before the page.
      Sheet-hosted document forms use `DocumentForm` with the four posting
      states and a list route with the same shell, `DataTable` and record Sheet.
      A document with a line grid uses the page surface. Settings forms use the
@@ -195,7 +217,9 @@ helpers get unit tests; there is no UI test framework.
 ## Deferred
 
 - **Draft autosave.** Gate: an operator loses invoice work.
-- **Remote master lookup above 5,000 rows.** Gate: an Organization needs it.
+- **Remote lookup for items, accounts and payment methods above 5,000 rows.**
+  Their fields resolve a saved id from the cached list, so a search would also
+  need a lookup by id. Gate: an Organization needs it.
 - **Global record search** (`search.records`, pg_trgm, one tenant-predicated
   branch per type). Gate: a second document list, or `receipt.list` search
   over 200 ms at pilot volume. Confirm pg_trgm on the production host first.
