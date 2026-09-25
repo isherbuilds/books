@@ -7,19 +7,18 @@ import {
   validateGstinIdentity,
   timeZone,
 } from "@accly/api/lib/schemas";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { SettingsFields } from "@accly/api/routers/settings";
 import {
   Form,
   FormControl,
   FormDescription,
+  FormField,
   FormItem,
   FormLabel,
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
@@ -27,6 +26,7 @@ import { toast } from "sonner";
 import { useFormState } from "react-hook-form";
 import { z } from "zod";
 
+import { OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettings } from "@/lib/domain-invalidation";
@@ -35,6 +35,16 @@ import { applyOrpcFieldError } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 import { SettingsTabs } from "./route";
+
+const PREFIX_FIELDS = [
+  ["invoicePrefix", "Invoice"],
+  ["billPrefix", "Bill"],
+  ["receiptPrefix", "Receipt"],
+  ["paymentPrefix", "Payment"],
+  ["journalPrefix", "Journal"],
+  ["creditNotePrefix", "Credit note"],
+  ["debitNotePrefix", "Debit note"],
+] as const;
 
 export const Route = createFileRoute("/$orgSlug/settings/organization")({
   head: () => ({ meta: [{ title: "Organization · Accly Books" }] }),
@@ -46,7 +56,10 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   component: SettingsRoute,
 });
 
-const supportedTimeZones = Intl.supportedValuesOf("timeZone");
+const TIME_ZONE_OPTIONS: Option[] = Intl.supportedValuesOf("timeZone").map((code) => ({
+  code,
+  name: code,
+}));
 
 const formSchema = z
   .object({
@@ -77,9 +90,11 @@ const formSchema = z
       .pipe(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
     timeZone,
     invoicePrefix: documentPrefix,
+    billPrefix: documentPrefix,
     receiptPrefix: documentPrefix,
     paymentPrefix: documentPrefix,
     creditNotePrefix: documentPrefix,
+    debitNotePrefix: documentPrefix,
     journalPrefix: documentPrefix,
   })
   .superRefine(validateGstinIdentity);
@@ -93,7 +108,7 @@ function toFormValues(settings: SettingsFields) {
   };
 }
 
-const MONTHS = [
+const MONTH_OPTIONS: Option[] = [
   "January",
   "February",
   "March",
@@ -106,7 +121,7 @@ const MONTHS = [
   "October",
   "November",
   "December",
-] as const;
+].map((name, index) => ({ code: String(index + 1), name }));
 
 function SettingsRoute() {
   const { orgSlug } = Route.useParams();
@@ -138,6 +153,12 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
   const form = useZodForm(formSchema, { defaultValues: toFormValues(defaults) });
   const { isDirty } = useFormState({ control: form.control });
 
+  // Keep a stored zone selectable even when this browser's canonical list omits it.
+  const timeZoneOptions =
+    defaults.timeZone && !TIME_ZONE_OPTIONS.some((option) => option.code === defaults.timeZone)
+      ? [{ code: defaults.timeZone, name: defaults.timeZone }, ...TIME_ZONE_OPTIONS]
+      : TIME_ZONE_OPTIONS;
+
   const update = useMutation(
     orpc.settings.update.mutationOptions({
       onSuccess: async (saved) => {
@@ -162,7 +183,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
 
   return (
     <Form {...form}>
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
+      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
         {/* Frozen while saving: `onSuccess` resets to the saved row, which would
             otherwise discard anything typed during the request. */}
         <fieldset disabled={update.isPending} className="contents">
@@ -266,19 +287,24 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                   </FormItem>
                 )}
               />
-              <RegisteredFormField
+              <FormField
+                control={form.control}
                 name="stateCode"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>State code</FormLabel>
                     <FormControl>
-                      <NativeSelect {...field} required className="text-xs">
-                        {Object.entries(INDIAN_STATES).map(([code, name]) => (
-                          <option key={code} value={code}>
-                            {code} — {name}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      <OptionField
+                        required
+                        options={STATE_OPTIONS}
+                        noun="states"
+                        showCode
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Choose a state"
+                        inputRef={field.ref}
+                        aria-invalid={fieldState.invalid}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -293,7 +319,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                       <Input
                         {...field}
                         required
-                        className="font-mono"
+                        className="font-mono tabular-nums"
                         maxLength={6}
                         inputMode="numeric"
                         pattern="[1-9][0-9]{5}"
@@ -306,23 +332,22 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 )}
               />
             </div>
-            <RegisteredFormField
+            <FormField
+              control={form.control}
               name="timeZone"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <FormItem>
                   <FormLabel>Time zone</FormLabel>
                   <FormControl>
-                    <NativeSelect {...field}>
-                      {/* Keep a stored zone selectable even when this browser's canonical list omits it. */}
-                      {defaults.timeZone && !supportedTimeZones.includes(defaults.timeZone) ? (
-                        <option value={defaults.timeZone}>{defaults.timeZone}</option>
-                      ) : null}
-                      {supportedTimeZones.map((timeZone) => (
-                        <option key={timeZone} value={timeZone}>
-                          {timeZone}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    <OptionField
+                      options={timeZoneOptions}
+                      noun="time zones"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Choose a time zone"
+                      inputRef={field.ref}
+                      aria-invalid={fieldState.invalid}
+                    />
                   </FormControl>
                   <FormDescription>
                     Sets the local date used for numbering and reports. Changing it applies to new
@@ -337,80 +362,38 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
           <section className="flex flex-col gap-3">
             <h2 className="text-xs font-medium text-muted-foreground">Document numbering</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <RegisteredFormField
-                name="invoicePrefix"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice prefix</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={4} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <RegisteredFormField
-                name="receiptPrefix"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Receipt prefix</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={4} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <RegisteredFormField
-                name="paymentPrefix"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment prefix</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={4} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <RegisteredFormField
-                name="journalPrefix"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Journal prefix</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={4} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <RegisteredFormField
-                name="creditNotePrefix"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Credit note prefix</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={4} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {PREFIX_FIELDS.map(([name, label]) => (
+                <RegisteredFormField
+                  key={name}
+                  name={name}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{label} prefix</FormLabel>
+                      <FormControl>
+                        <Input {...field} maxLength={4} className="font-mono uppercase" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ))}
             </div>
-            <RegisteredFormField
+            <FormField
+              control={form.control}
               name="financialYearStart"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <FormItem>
                   <FormLabel>Fiscal year starts in</FormLabel>
                   <FormControl>
-                    <NativeSelect {...field}>
-                      {MONTHS.map((month, index) => (
-                        <option key={month} value={index + 1}>
-                          {month}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    <OptionField
+                      options={MONTH_OPTIONS}
+                      noun="months"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Choose a month"
+                      inputRef={field.ref}
+                      aria-invalid={fieldState.invalid}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

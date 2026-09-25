@@ -1,17 +1,22 @@
+import { authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import { documentLines } from "@accly/db/schema/document-lines";
+import { documents } from "@accly/db/schema/documents";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { settlementPaise } from "../core/allocations";
 import {
   accountLine,
   organizationSnapshot,
   partySnapshot,
   postDocument,
   type PostDocumentInput,
+  type PostDocumentLine,
 } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import { computeTds } from "../core/posting";
@@ -20,15 +25,17 @@ import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
 import { effectiveOn } from "../core/tax-schedule";
-import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import {
   dateOnly,
   orderedPeriod,
+  positiveMoney,
   reason,
   settlementListFields,
   settlementPostFields,
 } from "../lib/schemas";
 import {
+  allocationsOf,
   cancelDocument,
   listSettlements,
   orgSettings,
@@ -36,21 +43,46 @@ import {
   settlementDetail,
 } from "../lib/settlements";
 
-const postInput = z.discriminatedUnion("settlementKind", [
+const commonPostFields = { ...orgInput.shape, ...settlementPostFields };
+
+const postInput = z.union([
   z.strictObject({
-    ...orgInput.shape,
-    ...settlementPostFields,
+    ...commonPostFields,
     settlementKind: z.literal("advance"),
     partyId: z.uuid(),
     tdsSectionId: z.uuid().optional(),
   }),
   z.strictObject({
-    ...orgInput.shape,
-    ...settlementPostFields,
+    ...commonPostFields,
     settlementKind: z.literal("direct"),
     partyId: z.uuid().optional(),
     expenseAccountId: z.uuid(),
     tdsSectionId: z.uuid().optional(),
+  }),
+  z.strictObject({
+    ...commonPostFields,
+    settlementKind: z.literal("against"),
+    exposureSide: z.literal("payable"),
+    partyId: z.uuid(),
+    allocations: z
+      .array(z.strictObject({ billId: z.uuid(), amount: positiveMoney }))
+      .min(1)
+      .max(50),
+    writeOffs: z
+      .array(z.strictObject({ accountId: z.uuid(), amount: positiveMoney }))
+      .max(5)
+      .optional(),
+    fee: z.strictObject({ accountId: z.uuid(), amount: positiveMoney }).optional(),
+  }),
+  z.strictObject({
+    ...commonPostFields,
+    settlementKind: z.literal("against"),
+    exposureSide: z.literal("receivable"),
+    partyId: z.uuid(),
+    allocations: z
+      .array(z.strictObject({ creditNoteId: z.uuid(), amount: positiveMoney }))
+      .min(1)
+      .max(50),
   }),
 ]);
 
@@ -58,6 +90,26 @@ export const paymentRouter = {
   post: orgProcedure({ payment: ["post"] }, postInput).handler(async ({ context, input }) => {
     const { scope } = context;
     const { settlementKind } = input;
+    const tdsSectionId = "tdsSectionId" in input ? input.tdsSectionId : undefined;
+
+    // Settling a claim needs read access to it: bills for a payable, credit notes for a refund.
+    if (settlementKind === "against") {
+      requirePermission(
+        scope,
+        input.exposureSide === "payable" ? { bill: ["read"] } : { note: ["read"] },
+      );
+    }
+
+    if (
+      settlementKind === "against" &&
+      input.exposureSide === "receivable" &&
+      input.allocations.reduce((sum, allocation) => sum + allocation.amount, 0n) !== input.amount
+    ) {
+      throw badRequest(
+        "REFUND_AMOUNT_MISMATCH",
+        "Refund amount must equal the allocated credit notes.",
+      );
+    }
 
     const { posted, tds, section } = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
@@ -65,24 +117,37 @@ export const paymentRouter = {
 
       const party = input.partyId ? await activeParty(tx, scope.orgId, input.partyId) : null;
 
-      const [expenseAccount] =
+      const accountIds =
         settlementKind === "direct"
-          ? await postableAccounts(
-              tx,
-              scope.orgId,
-              [input.expenseAccountId],
-              ["expense", "asset"],
-            ).for("share", { of: accounts })
+          ? [input.expenseAccountId]
+          : settlementKind === "against" && input.exposureSide === "payable"
+            ? [
+                ...(input.writeOffs ?? []).map(({ accountId }) => accountId),
+                ...(input.fee ? [input.fee.accountId] : []),
+              ]
+            : [];
+
+      const validAccounts =
+        accountIds.length > 0
+          ? await postableAccounts(tx, scope.orgId, accountIds, ["expense", "income", "asset"]).for(
+              "share",
+              { of: accounts },
+            )
           : [];
 
-      const [section] = input.tdsSectionId
+      const byAccountId = new Map(validAccounts.map((account) => [account.id, account]));
+
+      const expenseAccount =
+        settlementKind === "direct" ? byAccountId.get(input.expenseAccountId) : null;
+
+      const [section] = tdsSectionId
         ? await tx
             .select()
             .from(tdsSections)
             .where(
               and(
                 eq(tdsSections.orgId, scope.orgId),
-                eq(tdsSections.id, input.tdsSectionId),
+                eq(tdsSections.id, tdsSectionId),
                 effectiveOn(tdsSections, documentDate),
               ),
             )
@@ -94,7 +159,7 @@ export const paymentRouter = {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
       }
 
-      if (input.tdsSectionId && !section) {
+      if (tdsSectionId && !section) {
         throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
       }
 
@@ -116,6 +181,7 @@ export const paymentRouter = {
 
       let lineDescription: string;
       let posting: PostDocumentInput["posting"];
+      let lines: PostDocumentLine[];
 
       if (settlementKind === "advance") {
         lineDescription = input.narration ?? "Advance paid";
@@ -129,8 +195,77 @@ export const paymentRouter = {
           amountPaise: input.amount,
           tds,
         };
+        lines = [accountLine(null, lineDescription, input.amount)];
+      } else if (settlementKind === "against") {
+        lineDescription =
+          input.narration ??
+          (input.exposureSide === "payable" ? "Payment against bills" : "Credit note refund");
+        lines = [accountLine(null, lineDescription, input.amount)];
+
+        if (input.exposureSide === "payable") {
+          const writeOffs = (input.writeOffs ?? []).map(({ accountId, amount }) => {
+            const account = byAccountId.get(accountId);
+
+            if (account?.type !== "income" && account?.type !== "expense") {
+              throw badRequest(
+                "ACCOUNT_INVALID",
+                "Choose an active income or expense leaf for a write-off.",
+              );
+            }
+
+            const line = accountLine(accountId, "Write-off", amount);
+            line.adjustmentKind = "writeOff";
+            lines.push(line);
+
+            return { accountId, amountPaise: amount };
+          });
+
+          if (input.fee) {
+            if (byAccountId.get(input.fee.accountId)?.type !== "expense") {
+              throw badRequest("ACCOUNT_INVALID", "Choose an active expense leaf for the fee.");
+            }
+
+            const line = accountLine(input.fee.accountId, "Payment fee", input.fee.amount);
+            line.adjustmentKind = "fee";
+            lines.push(line);
+          }
+
+          posting = {
+            paymentMethodId: input.paymentMethodId,
+            type: "payment",
+            settlementKind,
+            exposureSide: "payable",
+            partyId: input.partyId,
+            accountId: null,
+            amountPaise: input.amount,
+            tds: null,
+            allocations: input.allocations.map(({ billId, amount }) => ({
+              documentId: billId,
+              amountPaise: amount,
+            })),
+            writeOffs,
+            fee: input.fee
+              ? { accountId: input.fee.accountId, amountPaise: input.fee.amount }
+              : null,
+          };
+        } else {
+          posting = {
+            paymentMethodId: input.paymentMethodId,
+            type: "payment",
+            settlementKind,
+            exposureSide: "receivable",
+            partyId: input.partyId,
+            accountId: null,
+            amountPaise: input.amount,
+            tds: null,
+            sources: input.allocations.map(({ creditNoteId, amount }) => ({
+              documentId: creditNoteId,
+              amountPaise: amount,
+            })),
+          };
+        }
       } else {
-        if (!expenseAccount) {
+        if (!expenseAccount || !["expense", "asset"].includes(expenseAccount.type)) {
           throw badRequest(
             "EXPENSE_ACCOUNT_INVALID",
             "Choose an active expense or asset account that is not a group, system or money account.",
@@ -148,6 +283,7 @@ export const paymentRouter = {
           amountPaise: input.amount,
           tds,
         };
+        lines = [accountLine(expenseAccount.id, lineDescription, input.amount)];
       }
 
       const printSnapshot = {
@@ -161,10 +297,12 @@ export const paymentRouter = {
         dueDate: null,
         placeOfSupplyStateCode: null,
         reference: input.reference ?? null,
+        discountPaise: 0n,
+        againstDocumentId: null,
         narration: input.narration ?? null,
         affectsTax: false,
         printSnapshot,
-        lines: [accountLine(posting.accountId, lineDescription, posting.amountPaise)],
+        lines,
         posting,
         draft: null,
       });
@@ -193,13 +331,42 @@ export const paymentRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const [detail, [tds]] = await Promise.all([
-        settlementDetail(orgId, "payment", input.paymentId),
+      const detail = await settlementDetail(orgId, "payment", input.paymentId);
+      // A refund settles from credit notes; every other non-direct payment is a source
+      // that settles bills, at post or later from an advance.
+      const isRefund = detail.exposureSide === "receivable";
+      const settles = detail.settlementKind !== "direct";
+
+      const canReadRelated =
+        !settles ||
+        authorize(context.scope.roles, isRefund ? { note: ["read"] } : { bill: ["read"] });
+
+      const [allocations, adjustments, [tds], [credit]] = await Promise.all([
+        settles && canReadRelated
+          ? allocationsOf(db, orgId, input.paymentId, isRefund ? "target" : "source")
+          : Promise.resolve([]),
+        db
+          .select({
+            id: documentLines.id,
+            accountId: documentLines.accountId,
+            adjustmentKind: documentLines.adjustmentKind,
+            amountPaise: documentLines.amountPaise,
+          })
+          .from(documentLines)
+          .where(
+            and(
+              eq(documentLines.orgId, orgId),
+              eq(documentLines.documentId, input.paymentId),
+              isNotNull(documentLines.adjustmentKind),
+            ),
+          )
+          .orderBy(asc(documentLines.position)),
         db
           .select({
             code: tdsSections.code,
             description: tdsSections.description,
             rateBasisPoints: tdsSections.rateBasisPoints,
+            basePaise: tdsDeductions.basePaise,
             amountPaise: tdsDeductions.amountPaise,
           })
           .from(tdsDeductions)
@@ -209,9 +376,22 @@ export const paymentRouter = {
           )
           .where(and(eq(tdsDeductions.orgId, orgId), eq(tdsDeductions.documentId, input.paymentId)))
           .limit(1),
+        settles && !isRefund
+          ? db
+              .select({ unappliedPaise: settlementPaise(orgId, "source").balancePaise })
+              .from(documents)
+              .where(and(eq(documents.orgId, orgId), eq(documents.id, input.paymentId)))
+          : Promise.resolve([]),
       ]);
 
-      return { ...detail, tds: tds ?? null };
+      return {
+        ...detail,
+        allocations: canReadRelated ? allocations : null,
+        adjustments,
+        tds: tds ?? null,
+        // A cancelled payment keeps its capacity row but settles nothing.
+        unappliedPaise: credit ? (detail.state === "posted" ? credit.unappliedPaise : 0n) : null,
+      };
     },
   ),
 
@@ -224,7 +404,7 @@ export const paymentRouter = {
     { payment: ["cancel"] },
     orgInput.extend({ paymentId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelDocument(context.scope, "payment", input.paymentId, input.reason),
+    cancelDocument(context.scope, ["payment"], input.paymentId, input.reason),
   ),
 
   tdsSections: orgProcedure(

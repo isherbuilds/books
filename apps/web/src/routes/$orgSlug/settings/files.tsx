@@ -30,6 +30,8 @@ import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { useCan } from "@/lib/membership";
 
+import { SettingsTabs } from "./route";
+
 const filesQuery = (orgSlug: string, query: string) =>
   orpc.file.list.infiniteOptions({
     input: (cursor: { createdAt: string; id: string } | undefined) => ({
@@ -41,7 +43,7 @@ const filesQuery = (orgSlug: string, query: string) =>
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
-export const Route = createFileRoute("/$orgSlug/files")({
+export const Route = createFileRoute("/$orgSlug/settings/files")({
   head: () => ({ meta: [{ title: "Files · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await queryClient.infiniteQuery(filesQuery(orgSlug, "")).catch(() => {});
@@ -131,14 +133,11 @@ function FilesRoute() {
           ) : undefined
         }
       />
+      <SettingsTabs orgSlug={orgSlug} />
 
       <PageBody>
         <ListToolbar>
-          <SearchInput
-            label="Search files"
-            placeholder="Search file name"
-            onQueryChange={setQuery}
-          />
+          <SearchInput label="Search files" placeholder="File name" onQueryChange={setQuery} />
         </ListToolbar>
         <Panel label="Library" footer={<LoadMore query={files} shown={items.length} />}>
           <ListState
@@ -147,11 +146,11 @@ function FilesRoute() {
             isEmpty={items.length === 0}
             empty={
               query ? (
-                "No files match this search."
+                "No matching files"
               ) : (
                 <span className="flex flex-col items-center gap-2">
                   <FileIcon className="size-5" />
-                  <span>No files yet. Upload one to share it with this organization.</span>
+                  <span>No files yet</span>
                 </span>
               )
             }

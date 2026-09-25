@@ -120,10 +120,16 @@ financial rollback are not adopted.
      `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
      `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-advance-sheet.tsx`, adoption in `receipt-form.tsx`, and
-     `lib/domain-invalidation.ts`.
+     `components/apply-credit-sheet.tsx`, the `DocumentForm` adoption in
+     `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
-     two proven shared seams. Each write invalidates the set for what it moved:
+     two proven shared seams. Every record Sheet lists allocations through
+     `AllocationsSection` (the other document linked by type, Reverse while
+     active); the Receipt and Payment forms allocate through
+     `AllocationTable` and its pure `checkAllocations`; `PaymentMethodField`
+     picks the method in the Invoice, Receipt and Payment forms;
+     `DocumentTotals` shows an Invoice's or Bill's totals and `ClaimStatus`
+     its settlement. Each write invalidates the set for what it moved:
      `invalidateInvoiceDrafts` (draft save or discard),
      `invalidateSettlementState` (invoice post or cancel, allocation apply or
      reverse) and `invalidateCashState` (receipt post or cancel); an uncertain
@@ -138,11 +144,12 @@ financial rollback are not adopted.
        `limit + 1` page, in one query
        (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The
        window reads every match before `LIMIT`; measure at pilot volume.
-5. **Remaining forms.** Partly implemented.
+5. **Remaining forms.** Payment, Bill and note forms are implemented; import
+   remains open.
    - Acceptance: Journal, Opening Balance and lock/Lock Exception forms are
      implemented. `components/entry-lines.tsx` is shared by the Journal and
      Opening Balance forms. The routes are
-     `routes/$orgSlug/{opening-balance,locks}.tsx`,
+     `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
      `routes/$orgSlug/journals.tsx`,
      `routes/$orgSlug/journals_.new.tsx` and
      `routes/$orgSlug/journals_.$journalId.tsx`. The form components are
@@ -152,25 +159,35 @@ financial rollback are not adopted.
      Conversion uses `@date-fns/tz` only for offsets, retaining round-trip gap
      rejection and separate date-only arithmetic ([decision](../research/midday-timezones-2026-09-22.md)).
      Payment (`direct`, `advance`, `against` open Bills with allocations, a TDS
-     section Link Field); Bill (lines with `itcEligible`, an optional TDS section,
-     due date, and the Invoice settlement display and cancellation flow); notes
-     (Credit Note and Debit Note against a source Document); and import (template
-     download, upload, row errors listed, nothing written on any error) remain
-     open.
-     Open Sheet-hosted document forms use `DocumentForm` with the four posting
-     states and have a list route with the same shell, `DataTable` and record
-     Sheet. A document with a line grid uses the page surface. Settings forms
-     use the settings form pattern. Forms are reachable from the palette.
-   - Depends on: slice 4 and accounting-core slices 3, 5 and 7.
+     section Link Field), Bill (lines with `itcEligible`, an optional TDS
+     section, due date, and the Invoice settlement display and cancellation
+     flow), and Credit and Debit Notes against a source Document are
+     implemented. Import remains open: template download, upload, row errors
+     listed, nothing written on any error.
+     Payment offers Against only to roles that can read Bills and Notes; its
+     Credit Note refund picker filters on the server before the 200-row limit.
+     Sheet-hosted document forms use `DocumentForm` with the four posting
+     states and a list route with the same shell, `DataTable` and record Sheet.
+     A document with a line grid uses the page surface. Settings forms use the
+     settings form pattern. Forms are reachable from the palette.
+   - Depends on: slice 4 and accounting-core slices 3 and 5; import needs 7.
    - Owns: `routes/$orgSlug/{payments,bills,notes}/`,
+     `routes/$orgSlug/bills_.new.tsx`,
+     `routes/$orgSlug/bills_.$billId.edit.tsx`,
+     `routes/$orgSlug/notes_.new.tsx`,
      `routes/$orgSlug/journals.tsx`, `routes/$orgSlug/journals_.new.tsx`,
      `routes/$orgSlug/journals_.$journalId.tsx`,
-     `routes/$orgSlug/{opening-balance,locks}.tsx`,
+     `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
      `routes/$orgSlug/settings/import.tsx`, `components/entry-lines.tsx`,
      `components/{opening-balance-form,lock-dialog,lock-exception-dialog}.tsx`,
-     their `*-form.tsx`, and `lib/domain-invalidation.ts`.
-   - Interfaces: one `invalidate<Type>State` per Document type; the forms
-     consume the slice 4 parts unchanged.
+     `components/{payment-form,bill-form,note-form}.tsx`,
+     `components/{payment-columns,bill-columns,note-columns}.tsx`, and
+     `lib/domain-invalidation.ts`.
+   - Interfaces: `invalidateBillDrafts` covers Bill draft saves and discards;
+     `invalidateSettlementState` covers Invoice, Bill and note posting and
+     cancellation and allocation changes; `invalidateCashState` covers
+     Receipt and Payment posting and cancellation, plus Invoice counter sales.
+     The forms consume the slice 4 parts unchanged.
 
 Check each slice in the running app on desktop and mobile, in both themes. Pure
 helpers get unit tests; there is no UI test framework.

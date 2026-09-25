@@ -319,16 +319,11 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
           isEmpty={people.length === 0 && invitations.length === 0}
           empty={
             q ? (
-              <p className="max-w-sm">
-                Nobody matches “{q}”. Search covers names, email addresses and invitations.
-              </p>
+              <p>No matching members</p>
             ) : (
               <div className="flex flex-col items-center gap-3">
                 <UsersIcon className="size-5 text-muted-foreground" />
-                <p className="max-w-sm">
-                  You are the only one here. Invite someone and share the link; they create their
-                  account from it.
-                </p>
+                <p>No other members yet</p>
                 <InviteAction orgSlug={orgSlug} compact />
               </div>
             )
@@ -388,20 +383,23 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
                               ))}
                             </DropdownMenuGroup>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              disabled={removeMember.isPending}
-                              onClick={() =>
-                                confirm({
-                                  title: "Remove from organization?",
-                                  description: `${person.name || person.email} loses access to this organization immediately. Their audit history is kept.`,
-                                  confirmLabel: "Remove",
-                                  run: () => removeMember.mutate({ orgSlug, memberId: person.id }),
-                                })
-                              }
-                            >
-                              Remove from organization
-                            </DropdownMenuItem>
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={removeMember.isPending}
+                                onClick={() =>
+                                  confirm({
+                                    title: "Remove from organization?",
+                                    description: `${person.name || person.email} loses access to this organization immediately. Their audit history is kept.`,
+                                    confirmLabel: "Remove",
+                                    run: () =>
+                                      removeMember.mutate({ orgSlug, memberId: person.id }),
+                                  })
+                                }
+                              >
+                                Remove from organization
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : null}
@@ -476,11 +474,7 @@ function MemberDirectory({ orgSlug }: { orgSlug: string }) {
   return (
     <PageBody>
       <ListToolbar>
-        <SearchInput
-          label="Search members"
-          placeholder="Search by name or email"
-          onQueryChange={setQ}
-        />
+        <SearchInput label="Search members" placeholder="Name or email" onQueryChange={setQ} />
       </ListToolbar>
       <MemberResults orgSlug={orgSlug} q={q} />
     </PageBody>

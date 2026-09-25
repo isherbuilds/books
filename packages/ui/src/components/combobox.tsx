@@ -43,7 +43,7 @@ type ComboboxProps<T> = {
 };
 
 const ITEM_CLASS =
-  "group/combobox-item relative flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-xs outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-highlighted:inset-ring data-highlighted:inset-ring-foreground/10 data-highlighted:shadow-xs data-disabled:pointer-events-none data-disabled:opacity-50";
+  "group/combobox-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-2 text-xs outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50";
 
 const TRAILING_BUTTON =
   "flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground";

@@ -2,22 +2,25 @@
 
 ## Start locally
 
-You need the Bun version `packageManager` pins in `package.json`, and Docker.
-Node is not used: every tool with a `node` shebang (Vite, tsc, tsdown, Astro,
-drizzle-kit, Portless, Turborepo, oxlint) runs as `bun --bun <tool>` in the
-package scripts. A new script that calls one follows suit.
+You need the Bun version `packageManager` pins in `package.json`, Node 24 or
+later (Portless declares `node >=24`), and Docker. `portless proxy start` runs
+through its Node shebang so its HTTPS proxy can issue certificates for nested
+`.localhost` names; do not force that command to run with Bun. Other tools
+with a `node` shebang (Vite, tsc, tsdown, Astro, drizzle-kit, Turborepo, oxlint)
+run as `bun --bun <tool>` in the package scripts. A new script that calls one
+follows suit.
 
 ```sh
 bun install
 cp packages/env/.env.example packages/env/.env   # then fill it in
-bunx --bun portless proxy start                   # once per machine
+bunx portless proxy start                       # once per machine
 bun run dev
 ```
 
 `bun run dev` starts PostgreSQL and SeaweedFS, migrates, and runs web, API and
 docs. `dev:web` and `dev:server` need `db:up` and `db:migrate` first. One
-`DATABASE_URL` serves the app, migrations, scripts and tests. React Scan loads
-in development only: compare its render counts, never its timings.
+`DATABASE_URL` serves the app, migrations, scripts and tests. Profile renders
+only when investigating a measured interaction; instrumentation changes timings.
 
 ## Development URLs
 

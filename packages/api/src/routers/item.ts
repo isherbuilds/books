@@ -14,23 +14,10 @@ import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { masterName, money } from "../lib/schemas";
+import { dateOnly, masterName, money, optionalHsnSac, optionalTaxCode } from "../lib/schemas";
 import { orgTimeZone } from "../lib/settlements";
 
-const optionalHsnSac = z
-  .string()
-  .trim()
-  .regex(/^\d{4,8}$/, "Use a 4 to 8 digit HSN/SAC code")
-  .optional();
-
 const optionalUnit = z.string().trim().min(1).max(20).optional();
-
-const optionalTaxCode = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z0-9]{1,12}$/)
-  .optional();
 
 const itemFields = {
   name: masterName,
@@ -207,14 +194,17 @@ export const itemRouter = {
   }),
 
   // The rates an Item may take today; an Invoice resolves its own date's rate at post.
-  taxRates: orgProcedure({ item: ["read"] }, orgInput).handler(async ({ context }) => {
+  taxRates: orgProcedure(
+    { item: ["read"] },
+    orgInput.extend({ date: dateOnly.optional() }),
+  ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
-    const today = businessDate(new Date(), await orgTimeZone(orgId));
+    const date = input.date ?? businessDate(new Date(), await orgTimeZone(orgId));
 
     return db
       .select({ id: taxRates.id, code: taxRates.code, name: taxRates.name })
       .from(taxRates)
-      .where(and(eq(taxRates.orgId, orgId), effectiveOn(taxRates, today)))
+      .where(and(eq(taxRates.orgId, orgId), effectiveOn(taxRates, date)))
       .orderBy(asc(taxRates.rateBasisPoints), asc(taxRates.code));
   }),
 };

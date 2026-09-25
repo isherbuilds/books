@@ -5,7 +5,6 @@ import {
   indianPinCode,
   validateGstinIdentity,
 } from "@accly/api/lib/schemas";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import { ORGANIZATION_SLUG_MIN_LENGTH, organizationSlugIssue } from "@accly/auth/organization-slug";
 import {
   Form,
@@ -14,10 +13,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormField,
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useMutation } from "@tanstack/react-query";
 import { Link, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
@@ -26,6 +25,7 @@ import { useRef } from "react";
 import { Watch, useFormContext, useFormState } from "react-hook-form";
 import { z } from "zod";
 
+import { OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
 import { OrganizationEntryLayout } from "@/components/organization-entry-layout";
 import { ErrorNote } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -71,6 +71,11 @@ const LEGAL_TYPE_LABELS: Record<(typeof LEGAL_TYPES)[number], string> = {
   trust: "Trust",
   society: "Society",
 };
+
+const LEGAL_TYPE_OPTIONS: Option[] = LEGAL_TYPES.map((code) => ({
+  code,
+  name: LEGAL_TYPE_LABELS[code],
+}));
 
 const optionalTrimmedString = z
   .string()
@@ -180,9 +185,9 @@ function CreateOrganizationForm() {
   return (
     <Form {...form}>
       <form noValidate onSubmit={submit} className="flex flex-col gap-6">
-        <div>
+        <div className="flex flex-col gap-1">
           <h2 className="text-sm font-medium">Organization details</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="text-xs leading-5 text-muted-foreground">
             Creation is restricted to the deployment&apos;s founding operator.
           </p>
         </div>
@@ -223,22 +228,23 @@ function CreateOrganizationForm() {
               )}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <RegisteredFormField
+              <FormField
+                control={form.control}
                 name="legalType"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>Legal type</FormLabel>
                     <FormControl>
-                      <NativeSelect {...field} required>
-                        <option value="" disabled>
-                          Choose legal type
-                        </option>
-                        {LEGAL_TYPES.map((legalType) => (
-                          <option key={legalType} value={legalType}>
-                            {LEGAL_TYPE_LABELS[legalType]}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      <OptionField
+                        required
+                        options={LEGAL_TYPE_OPTIONS}
+                        noun="legal types"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Choose legal type"
+                        inputRef={field.ref}
+                        aria-invalid={fieldState.invalid}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -334,22 +340,24 @@ function CreateOrganizationForm() {
                   </FormItem>
                 )}
               />
-              <RegisteredFormField
+              <FormField
+                control={form.control}
                 name="stateCode"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>State code</FormLabel>
                     <FormControl>
-                      <NativeSelect {...field} required className="text-xs">
-                        <option value="" disabled>
-                          Choose state or union territory
-                        </option>
-                        {Object.entries(INDIAN_STATES).map(([code, name]) => (
-                          <option key={code} value={code}>
-                            {code} — {name}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      <OptionField
+                        required
+                        options={STATE_OPTIONS}
+                        noun="states"
+                        showCode
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Choose state or union territory"
+                        inputRef={field.ref}
+                        aria-invalid={fieldState.invalid}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

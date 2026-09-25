@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { documents } from "./documents";
@@ -41,7 +42,14 @@ export const partyLedgerLines = pgTable(
     }),
     unique("party_ledger_lines_org_id_id_unique").on(table.orgId, table.id),
     index("party_ledger_lines_org_party_idx").on(table.orgId, table.partyId, table.side),
-    index("party_ledger_lines_org_document_idx").on(table.orgId, table.documentId),
+    // A document posts at most one line per Party and cancels it at most once, so its
+    // settlement capacity is one indexed row, never a sum.
+    uniqueIndex("party_ledger_lines_org_document_party_kind_idx").on(
+      table.orgId,
+      table.documentId,
+      table.partyId,
+      table.kind,
+    ),
     check("party_ledger_lines_side_check", sql`${table.side} in ('receivable', 'payable')`),
     check("party_ledger_lines_kind_check", sql`${table.kind} in ('post', 'reverse')`),
   ],

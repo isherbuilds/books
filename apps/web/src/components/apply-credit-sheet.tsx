@@ -1,5 +1,5 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
-import { NON_NEGATIVE_MONEY_PATTERN, formatMoney } from "@accly/api/core/money";
+import { NON_NEGATIVE_MONEY_PATTERN, formatMoney, parseMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -40,36 +40,41 @@ import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
 
-const applyAdvanceSchema = z.object({
+const applyCreditSchema = z.object({
   amount: positiveAmount,
 });
 
-/** Mounted only while open, so every open starts with no receipt and an empty amount. */
-export function ApplyAdvanceSheet({
+/** Mounted only while open, so every open starts with no credit and an empty amount. */
+export function ApplyCreditSheet({
   orgSlug,
-  invoiceId,
-  partyId,
+  side,
+  target,
   onClose,
 }: {
   orgSlug: string;
-  invoiceId: string;
-  partyId: string;
+  side: "receivable" | "payable";
+  target: { id: string; partyId: string; number: string; outstandingPaise: bigint };
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [receiptId, setReceiptId] = useState<string | null>(null);
-  const form = useZodForm(applyAdvanceSchema, { defaultValues: { amount: "" } });
-  const receipts = useQuery(orpc.receipt.unapplied.queryOptions({ input: { orgSlug, partyId } }));
-  const selected = receipts.data?.rows.find((receipt) => receipt.id === receiptId);
+  const [sourceId, setSourceId] = useState<string | null>(null);
+  const form = useZodForm(applyCreditSchema, { defaultValues: { amount: "" } });
+
+  const credits = useQuery(
+    orpc.party.openCredits.queryOptions({
+      input: { orgSlug, partyId: target.partyId, side },
+    }),
+  );
+
+  const selected = credits.data?.rows.find((credit) => credit.id === sourceId);
 
   const apply = useMutation(
     orpc.allocation.apply.mutationOptions({
       onSuccess: async () => {
         await invalidateSettlementState(queryClient, orgSlug);
-        toast.success("Advance applied");
+        toast.success("Credit applied");
         onClose();
       },
-      // Retrying could apply it twice; the receipt and the invoice show whether it went through.
       onError: (error) =>
         handleWriteError(error, {
           settle: () => {
@@ -77,17 +82,15 @@ export function ApplyAdvanceSheet({
 
             return invalidateSettlementState(queryClient, orgSlug);
           },
-          fallback: "Could not apply the advance",
-          uncertain:
-            "The result is uncertain. Check the receipt and invoice before applying it again.",
+          fallback: "Could not apply the credit",
+          uncertain: "The result is uncertain. Check the documents before applying it again.",
           refuse: async () => {
             const reason = errorReason(error);
 
-            // The receipt or the invoice moved on since the sheet opened.
             if (reason === "ALLOCATION_SOURCE_INVALID" || reason === "ALLOCATION_TARGET_INVALID") {
               onClose();
               await invalidateSettlementState(queryClient, orgSlug);
-              toast.error(errorMessage(error, "Could not apply the advance"));
+              toast.error(errorMessage(error, "Could not apply the credit"));
 
               return;
             }
@@ -98,7 +101,7 @@ export function ApplyAdvanceSheet({
               form,
               error,
               { ALLOCATION_EXCEEDS_SOURCE: "amount", ALLOCATION_EXCEEDS_OUTSTANDING: "amount" },
-              "Could not apply the advance",
+              "Could not apply the credit",
             );
           },
         }),
@@ -112,60 +115,83 @@ export function ApplyAdvanceSheet({
   const submit = form.handleSubmit(({ amount }) => {
     if (!selected) return;
 
-    apply.mutate({ orgSlug, receiptId: selected.id, invoiceId, amount });
+    const paise = parseMoney(amount);
+
+    if (paise > selected.unappliedPaise || paise > target.outstandingPaise) {
+      const maximum =
+        selected.unappliedPaise < target.outstandingPaise
+          ? selected.unappliedPaise
+          : target.outstandingPaise;
+
+      form.setError("amount", { message: `Enter no more than ${formatMoney(maximum)}` });
+
+      return;
+    }
+
+    apply.mutate({ orgSlug, sourceDocumentId: selected.id, targetDocumentId: target.id, amount });
   });
 
   return (
     <Sheet open onOpenChange={(next) => !next && close()}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Apply advance</SheetTitle>
-          <SheetDescription>
-            Select an unapplied receipt and enter the amount to settle.
-          </SheetDescription>
+          <SheetTitle>Apply credit</SheetTitle>
+          <SheetDescription>Select an unapplied credit to settle {target.number}.</SheetDescription>
         </SheetHeader>
 
         <Form {...form}>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
             <SheetBody>
-              {receipts.isPending ? (
-                <p className="text-muted-foreground">Loading unapplied receipts…</p>
-              ) : receipts.isError ? (
+              {credits.isPending ? (
+                <p className="text-muted-foreground">Loading unapplied credits…</p>
+              ) : credits.isError ? (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-destructive">Could not load unapplied receipts.</p>
+                  <p className="text-destructive">Could not load unapplied credits.</p>
                   <Button
                     type="button"
                     size="xs"
                     variant="outline"
-                    onClick={() => void receipts.refetch()}
+                    onClick={() => void credits.refetch()}
                   >
                     Try again
                   </Button>
                 </div>
-              ) : receipts.data.rows.length === 0 ? (
-                <p className="text-muted-foreground">No unapplied receipts for this party.</p>
+              ) : credits.data.rows.length === 0 ? (
+                <p className="text-muted-foreground">No unapplied credits for this party.</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Receipt</TableHead>
+                      <TableHead>Credit</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Unapplied</TableHead>
                       <TableHead className="w-20" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {receipts.data.rows.map((receipt) => {
-                      const chosen = receipt.id === receiptId;
+                    {credits.data.rows.map((credit) => {
+                      const chosen = credit.id === sourceId;
 
                       return (
-                        <TableRow key={receipt.id}>
-                          <TableCell className="font-mono">{receipt.number}</TableCell>
+                        <TableRow key={credit.id}>
+                          <TableCell>
+                            <span className="text-muted-foreground">
+                              {credit.type === "creditNote"
+                                ? "Credit Note"
+                                : credit.type === "debitNote"
+                                  ? "Debit Note"
+                                  : credit.type === "payment"
+                                    ? "Payment"
+                                    : "Receipt"}{" "}
+                              ·{" "}
+                            </span>
+                            <span className="font-mono">{credit.number}</span>
+                          </TableCell>
                           <TableCell className="tabular-nums">
-                            {formatBusinessDay(receipt.documentDate)}
+                            {formatBusinessDay(credit.documentDate)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {formatMoney(receipt.unappliedPaise)}
+                            {formatMoney(credit.unappliedPaise)}
                           </TableCell>
                           <TableCell className="text-right">
                             {chosen ? (
@@ -176,7 +202,7 @@ export function ApplyAdvanceSheet({
                                 size="xs"
                                 variant="ghost"
                                 onClick={() => {
-                                  setReceiptId(receipt.id);
+                                  setSourceId(credit.id);
                                   form.clearErrors();
                                   form.setValue("amount", "");
                                 }}
@@ -192,9 +218,9 @@ export function ApplyAdvanceSheet({
                 </Table>
               )}
 
-              {receipts.data?.hasMore ? (
+              {credits.data?.hasMore ? (
                 <p className="text-muted-foreground">
-                  Showing the 200 oldest unapplied receipts. Newer ones appear once these are used.
+                  Showing the 200 oldest unapplied credits. Newer ones appear once these are used.
                 </p>
               ) : null}
 
@@ -225,10 +251,10 @@ export function ApplyAdvanceSheet({
 
             <SheetFooter>
               <Button type="button" variant="ghost" disabled={apply.isPending} onClick={close}>
-                Keep invoice
+                Keep {side === "receivable" ? "invoice" : "bill"}
               </Button>
               <Button type="submit" disabled={!selected || apply.isPending}>
-                {apply.isPending ? "Applying…" : "Apply advance"}
+                {apply.isPending ? "Applying…" : "Apply credit"}
               </Button>
             </SheetFooter>
           </form>

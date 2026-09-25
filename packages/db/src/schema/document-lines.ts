@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -19,6 +20,10 @@ import { taxRates } from "./tax-rates";
 
 export const ENTRY_SIDES = ["debit", "credit"] as const;
 
+export const ADJUSTMENT_KINDS = ["fee", "writeOff", "tds"] as const;
+
+export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number];
+
 export type EntrySide = (typeof ENTRY_SIDES)[number];
 
 export const documentLines = pgTable(
@@ -29,10 +34,12 @@ export const documentLines = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     documentId: text("document_id").notNull(),
+    sourceLineId: text("source_line_id"),
     position: integer("position").notNull(),
     kind: text("kind", { enum: ["item", "account"] }).notNull(),
     accountId: text("account_id"),
     entrySide: text("entry_side", { enum: ENTRY_SIDES }),
+    adjustmentKind: text("adjustment_kind", { enum: ADJUSTMENT_KINDS }),
     itemId: text("item_id"),
     partyId: text("party_id"),
     description: text("description").notNull(),
@@ -41,10 +48,14 @@ export const documentLines = pgTable(
     quantity: integer("quantity"),
     unitPricePaise: bigint("unit_price_paise", { mode: "bigint" }),
     taxRateId: text("tax_rate_id"),
+    itcEligible: boolean("itc_eligible"),
     cgstPaise: bigint("cgst_paise", { mode: "bigint" }).notNull(),
     sgstPaise: bigint("sgst_paise", { mode: "bigint" }).notNull(),
     igstPaise: bigint("igst_paise", { mode: "bigint" }).notNull(),
     amountPaise: bigint("amount_paise", { mode: "bigint" }).notNull(),
+    discountPaise: bigint("discount_paise", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
   },
   (table) => [
     foreignKey({
@@ -67,12 +78,21 @@ export const documentLines = pgTable(
       columns: [table.orgId, table.taxRateId],
       foreignColumns: [taxRates.orgId, taxRates.id],
     }),
+    foreignKey({
+      columns: [table.orgId, table.sourceLineId],
+      foreignColumns: [table.orgId, table.id],
+    }),
     unique("document_lines_org_id_id_unique").on(table.orgId, table.id),
     index("document_lines_org_document_idx").on(table.orgId, table.documentId),
+    index("document_lines_org_source_line_idx").on(table.orgId, table.sourceLineId),
     check("document_lines_kind_check", sql`${table.kind} in ('item', 'account')`),
     check(
       "document_lines_entry_side_check",
       sql`${table.entrySide} is null or ${table.entrySide} in ('debit', 'credit')`,
+    ),
+    check(
+      "document_lines_adjustment_kind_check",
+      sql`${table.adjustmentKind} is null or ${table.adjustmentKind} in ('fee', 'writeOff', 'tds')`,
     ),
     check(
       "document_lines_quantity_check",
@@ -81,5 +101,6 @@ export const documentLines = pgTable(
     check("document_lines_cgst_paise_check", sql`${table.cgstPaise} >= 0`),
     check("document_lines_sgst_paise_check", sql`${table.sgstPaise} >= 0`),
     check("document_lines_igst_paise_check", sql`${table.igstPaise} >= 0`),
+    check("document_lines_discount_paise_check", sql`${table.discountPaise} >= 0`),
   ],
 );

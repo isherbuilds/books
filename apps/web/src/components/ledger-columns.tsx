@@ -10,16 +10,14 @@ type StatementLine = Awaited<
   ReturnType<RouterClient<AppRouter>["party"]["statement"]>
 >["lines"][number];
 
-// Only receipts write party exposure today; Invoices, Bills and Notes join here as
-// each Document type lands.
 function particulars(line: StatementLine): string {
   if (line.kind === "reverse") return "Cancellation";
 
-  if (line.documentType === "receipt") {
-    return line.settlementKind === "advance" ? "Advance received" : "Receipt";
+  if (line.documentType === "receipt" && line.settlementKind === "advance") {
+    return "Advance received";
   }
 
-  return line.documentType;
+  return line.typeLabel;
 }
 
 function Amount({ paise }: { paise: bigint }) {
@@ -77,7 +75,7 @@ export function LedgerCard({ line }: { line: StatementLine }) {
         <span className="font-mono font-medium">{line.number ?? "—"}</span>
         <span className="shrink-0 tabular-nums">{formatBalance(line.amountPaise)}</span>
       </div>
-      <p className="mt-1 flex items-baseline justify-between gap-3 text-muted-foreground">
+      <p className="flex items-baseline justify-between gap-3 text-muted-foreground">
         <span className="min-w-0 truncate">
           {formatBusinessDay(line.entryDate)} · {particulars(line)}
         </span>

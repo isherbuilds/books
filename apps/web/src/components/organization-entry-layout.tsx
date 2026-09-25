@@ -25,10 +25,10 @@ export function OrganizationEntryLayout({
           Accly Books
         </Link>
 
-        <div className="max-w-md">
+        <div className="flex max-w-md flex-col gap-2">
           <p className="font-mono text-xs tracking-widest text-muted-foreground">{eyebrow}</p>
-          <h1 className="mt-3 text-xl leading-tight font-medium tracking-tight">{title}</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          <h1 className="text-xl leading-tight font-medium tracking-tight">{title}</h1>
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
 
         {aside ? <div className="text-xs text-muted-foreground">{aside}</div> : null}

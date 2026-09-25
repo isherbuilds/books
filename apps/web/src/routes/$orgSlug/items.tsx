@@ -1,4 +1,5 @@
 import { formatMoney } from "@accly/api/core/money";
+import { searchQuery } from "@accly/api/lib/schemas";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
 import { cn } from "@accly/ui/lib/utils";
@@ -11,8 +12,10 @@ import { z } from "zod";
 import { DataTable, DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { ItemSheet } from "@/components/item-sheet";
-import { PageBody, PageHeader } from "@/components/page";
+import { focusSearch } from "@/components/list-filter";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { itemListOptions, type ItemListRow } from "@/lib/items";
+import { filterLinkItems } from "@/lib/link-rows";
 import { useCan } from "@/lib/membership";
 import { focusRowLink } from "@/lib/row-focus";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -91,7 +94,7 @@ function ItemCard({ item }: { item: ItemListRow }) {
         </span>
         <span className="shrink-0 tabular-nums">{formatMoney(item.unitPricePaise)}</span>
       </div>
-      <p className="mt-1 truncate text-muted-foreground">
+      <p className="truncate text-muted-foreground">
         {[item.hsnSac, item.unit, item.incomeAccountName, item.taxCode].filter(Boolean).join(" · ")}
       </p>
     </>
@@ -101,6 +104,7 @@ function ItemCard({ item }: { item: ItemListRow }) {
 export const Route = createFileRoute("/$orgSlug/items")({
   head: () => ({ meta: [{ title: "Items · Accly Books" }] }),
   validateSearch: z.object({
+    q: searchQuery.catch(undefined),
     create: z.boolean().optional().catch(undefined),
     edit: z.uuid().optional().catch(undefined),
   }),
@@ -113,14 +117,31 @@ export const Route = createFileRoute("/$orgSlug/items")({
 
 function ItemsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, edit } = Route.useSearch();
+  const { q, create, edit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  const field = useRef<HTMLDivElement>(null);
   const newTrigger = useRef<HTMLButtonElement>(null);
   const canCreate = useCan(orgSlug, { item: ["create"] });
   const canUpdate = useCan(orgSlug, { item: ["update"] });
   const items = useQuery(itemListOptions(orgSlug));
-  const rows = items.data ?? [];
-  const openItem = edit ? rows.find((item) => item.id === edit) : undefined;
+  const allItems = items.data ?? [];
+
+  const rows = filterLinkItems(
+    allItems,
+    q ?? "",
+    (item) => item.name,
+    (item) => item.hsnSac ?? undefined,
+  );
+
+  const openItem = edit ? allItems.find((item) => item.id === edit) : undefined;
+
+  const setQuery = (next: string | undefined) =>
+    navigate({ replace: true, search: (previous) => ({ ...previous, q: next }) });
+
+  const clearSearch = () => {
+    focusSearch(field, { empty: true });
+    void setQuery(undefined);
+  };
 
   const openCreate = () =>
     void navigate({ search: (previous) => ({ ...previous, create: true, edit: undefined }) });
@@ -150,6 +171,16 @@ function ItemsRoute() {
         }
       />
       <PageBody>
+        <ListToolbar>
+          <SearchInput
+            label="Search items"
+            placeholder="Name or HSN/SAC"
+            value={q}
+            delay={150}
+            fieldRef={field}
+            onQueryChange={(next) => void setQuery(next || undefined)}
+          />
+        </ListToolbar>
         <DataTable
           columns={ITEM_COLUMNS}
           data={rows}
@@ -160,7 +191,7 @@ function ItemsRoute() {
               ? (item) => ({
                   to: "/$orgSlug/items",
                   params: { orgSlug },
-                  search: { edit: item.id },
+                  search: { q, edit: item.id },
                 })
               : undefined
           }
@@ -168,17 +199,29 @@ function ItemsRoute() {
           query={items}
           errorTitle="Could not load items"
           empty={
-            <TableEmpty
-              title="No items yet"
-              description="Items you add appear here for use on invoices."
-              action={
-                canCreate ? (
-                  <Button size="xs" variant="outline" onClick={openCreate}>
-                    Add item
+            q !== undefined ? (
+              <TableEmpty
+                title="No items match"
+                description="Try another search."
+                action={
+                  <Button size="xs" variant="outline" onClick={clearSearch}>
+                    Clear search
                   </Button>
-                ) : undefined
-              }
-            />
+                }
+              />
+            ) : (
+              <TableEmpty
+                title="No items yet"
+                description="Items you add appear here for use on invoices."
+                action={
+                  canCreate ? (
+                    <Button size="xs" variant="outline" onClick={openCreate}>
+                      Add item
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )
           }
           activeRowId={edit}
         />

@@ -5,13 +5,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@accly/ui/components/form";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState, type Ref } from "react";
 import { useFormContext } from "react-hook-form";
 
 import { LinkField } from "@/components/link-field";
 import { PartySheet } from "@/components/party-form";
 import { useCan } from "@/lib/membership";
+import type { ListState } from "@/lib/list-state";
 import { partyPickerOptions, type PartyOption } from "@/lib/parties";
 
 /** The owner supplies the party query and quick-create action. */
@@ -27,7 +28,7 @@ export function PartyLinkField({
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: {
-  parties: UseQueryResult<PartyOption[]>;
+  parties: ListState<PartyOption[]>;
   value: PartyOption | null;
   onSelect: (party: PartyOption | null) => void;
   onCreate?: (seed: string) => void;
@@ -76,7 +77,7 @@ export function DocumentPartyField({
   orgSlug: string;
   label: string;
   clearable?: boolean;
-  onPartyChange: (party: PartyOption | null) => void;
+  onPartyChange?: (party: PartyOption | null) => void;
 }) {
   const form = useFormContext<DocumentPartyValues>();
   const parties = useQuery(partyPickerOptions(orgSlug));
@@ -89,7 +90,7 @@ export function DocumentPartyField({
     form.setValue("partyId", party?.id ?? null, { shouldDirty: true, shouldValidate: true });
     form.setValue("partyName", party?.name ?? "");
 
-    if (changed) onPartyChange(party);
+    if (changed) onPartyChange?.(party);
   };
 
   return (

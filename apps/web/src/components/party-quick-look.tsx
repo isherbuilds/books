@@ -77,13 +77,13 @@ export function PartyQuickLook({
             ) : null}
           </SheetBody>
 
-          <SheetFooter>
+          <SheetFooter className={canUpdate ? "justify-between" : undefined}>
             {canUpdate ? (
               <Link
                 to="/$orgSlug/parties/$partyId"
                 params={{ orgSlug, partyId: party.id }}
                 search={{ edit: true }}
-                className={buttonVariants({ variant: "outline", className: "mr-auto" })}
+                className={buttonVariants({ variant: "outline" })}
               >
                 Edit
               </Link>

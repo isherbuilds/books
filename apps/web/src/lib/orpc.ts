@@ -37,7 +37,13 @@ const getORPCClient = createIsomorphicFn()
     const link = new RPCLink({
       url: `${env.VITE_SERVER_URL}/rpc`,
       fetch: (url, options) => fetch(url, { ...options, credentials: "include" }),
-      plugins: [new BatchLinkPlugin({ groups: [{ condition: () => true, context: {} }] })],
+      plugins: [
+        new BatchLinkPlugin({
+          groups: [{ condition: () => true, context: {} }],
+          // A batch response cannot carry a File, so the XLSX exports travel alone.
+          exclude: ({ path }) => path[0] === "export",
+        }),
+      ],
     });
 
     return createORPCClient(link);

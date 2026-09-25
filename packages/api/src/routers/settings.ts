@@ -35,9 +35,11 @@ const editableSettings = {
   financialYearStart: z.number().int().min(1).max(12),
   timeZone: timeZone,
   invoicePrefix: documentPrefix,
+  billPrefix: documentPrefix,
   receiptPrefix: documentPrefix,
   paymentPrefix: documentPrefix,
   creditNotePrefix: documentPrefix,
+  debitNotePrefix: documentPrefix,
   journalPrefix: documentPrefix,
 };
 

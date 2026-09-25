@@ -97,7 +97,7 @@ function BankingRoute() {
             query={groups}
             errorTitle="Could not load accounts"
             isEmpty={groupRows.length === 0}
-            empty="No money accounts yet."
+            empty="No money accounts yet"
           >
             <Table>
               <TableHeader>
@@ -123,7 +123,7 @@ function BankingRoute() {
                           {account.active ? null : <Badge variant="muted">Archived</Badge>}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right text-xs font-medium tabular-nums">
                         {formatMoney(account.balancePaise)}
                       </TableCell>
                     </TableRow>
@@ -139,7 +139,7 @@ function BankingRoute() {
             query={methods}
             errorTitle="Could not load payment methods"
             isEmpty={methodRows.length === 0}
-            empty="No payment methods yet."
+            empty="No payment methods yet"
           >
             <Table>
               <TableHeader>

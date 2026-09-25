@@ -1,7 +1,6 @@
-import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
-import { Badge } from "@accly/ui/components/badge";
-import { Button } from "@accly/ui/components/button";
+import { Button, buttonVariants } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import {
   Sheet,
@@ -26,13 +25,14 @@ import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { struck } from "@/components/document-columns";
-import { ApplyAdvanceSheet } from "@/components/apply-advance-sheet";
+import { AllocationsSection } from "@/components/allocations-section";
+import { ClaimStatus, struck } from "@/components/document-columns";
+import { ApplyCreditSheet } from "@/components/apply-credit-sheet";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
-import { InvoiceStatus, InvoiceTotals } from "@/components/invoice-summary";
+import { DocumentTotals } from "@/components/invoice-summary";
 import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
-import { invoiceDetailOptions, type InvoiceDetail } from "@/lib/invoices";
+import { invoiceDetailOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
@@ -54,24 +54,30 @@ function InvoiceSheetRoute() {
   const { timeZone } = useOrgDateTime();
   const invoice = useSuspenseQuery(invoiceDetailOptions(orgSlug, invoiceId)).data;
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [amendOpen, setAmendOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
-  const [reversing, setReversing] = useState<InvoiceDetail["allocations"][number] | null>(null);
   const isDraft = invoice.state === "draft";
   const canEdit = useCan(orgSlug, { invoice: ["create"] }) && isDraft;
 
-  // The server refuses a cancel while an allocation is active, so reverse them first.
+  // The server refuses cancelling or amending while any allocation targets this invoice.
+  const allocationsReversed = invoice.allocations.every((allocation) => allocation.reversed);
+
   const canCancel =
-    useCan(orgSlug, { invoice: ["cancel"] }) &&
+    useCan(orgSlug, { invoice: ["cancel"] }) && invoice.state === "posted" && allocationsReversed;
+
+  const canAmend =
+    useCan(orgSlug, { invoice: ["cancel", "create"] }) &&
     invoice.state === "posted" &&
-    invoice.allocations.every((allocation) => allocation.reversed);
+    allocationsReversed;
+
+  const canPostNote = useCan(orgSlug, { note: ["post"] }) && invoice.state === "posted";
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"] }) &&
+    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
     isPositiveMoney(invoice.outstandingPaise);
 
-  const canReverse = useCan(orgSlug, { allocation: ["reverse"] });
   const { partyName } = invoice;
 
   const close = () =>
@@ -101,6 +107,26 @@ function InvoiceSheetRoute() {
   const invalidateSettlement = () => invalidateSettlementState(queryClient, orgSlug);
   const invalidateDrafts = () => invalidateInvoiceDrafts(queryClient, orgSlug);
 
+  const amend = useMutation(
+    orpc.invoice.amend.mutationOptions({
+      onSuccess: async (draft) => {
+        // Settlement state covers invoice reads, drafts included.
+        await invalidateSettlement();
+        setAmendOpen(false);
+        toast.success("Invoice draft ready");
+        void navigate({
+          to: "/$orgSlug/invoices/$invoiceId/edit",
+          params: { orgSlug, invoiceId: draft.id },
+        });
+      },
+      onError: refused(
+        "Could not amend the invoice",
+        () => setAmendOpen(false),
+        invalidateSettlement,
+      ),
+    }),
+  );
+
   const cancel = useMutation(
     orpc.invoice.cancel.mutationOptions({
       onSuccess: async () => {
@@ -111,21 +137,6 @@ function InvoiceSheetRoute() {
       onError: refused(
         "Could not cancel the invoice",
         () => setCancelOpen(false),
-        invalidateSettlement,
-      ),
-    }),
-  );
-
-  const reverse = useMutation(
-    orpc.allocation.reverse.mutationOptions({
-      onSuccess: async () => {
-        await invalidateSettlement();
-        setReversing(null);
-        toast.success("Allocation reversed");
-      },
-      onError: refused(
-        "Could not reverse the allocation",
-        () => setReversing(null),
         invalidateSettlement,
       ),
     }),
@@ -165,7 +176,7 @@ function InvoiceSheetRoute() {
               <SheetTitle className="min-w-0 truncate font-mono">
                 {invoice.number ?? "Draft"}
               </SheetTitle>
-              <InvoiceStatus invoice={invoice} />
+              <ClaimStatus claim={invoice} />
             </div>
             <SheetDescription>{partyName ?? "No party"}</SheetDescription>
           </SheetHeader>
@@ -202,6 +213,17 @@ function InvoiceSheetRoute() {
               <DetailRow label="Reference" mono>
                 {invoice.reference}
               </DetailRow>
+              {invoice.amendedFromId ? (
+                <DetailRow label="Amended from">
+                  <Link
+                    to="/$orgSlug/invoices/$invoiceId"
+                    params={{ orgSlug, invoiceId: invoice.amendedFromId }}
+                    className="font-mono underline-offset-4 hover:underline"
+                  >
+                    View original
+                  </Link>
+                </DetailRow>
+              ) : null}
               {invoice.cancelledAt ? (
                 <DetailRow label="Cancelled">{formatDate(invoice.cancelledAt, timeZone)}</DetailRow>
               ) : null}
@@ -217,66 +239,27 @@ function InvoiceSheetRoute() {
               </>
             ) : null}
 
-            {invoice.allocations.length > 0 ? (
+            {invoice.notes.length > 0 ? (
               <>
                 <Separator />
                 <section className="grid gap-2">
-                  <h3 className="text-muted-foreground">Allocations</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Receipt</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        {canReverse ? <TableHead className="w-20" /> : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invoice.allocations.map((allocation) => (
-                        <TableRow key={allocation.id}>
-                          <TableCell className="font-mono">
-                            <Link
-                              to="/$orgSlug/receipts/$receiptId"
-                              params={{ orgSlug, receiptId: allocation.sourceDocumentId }}
-                              search={{}}
-                              className="underline-offset-4 hover:underline"
-                            >
-                              {allocation.sourceNumber}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatBusinessDay(allocation.entryDate)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatMoney(allocation.amountPaise)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={allocation.reversed ? "muted" : "secondary"}>
-                              {allocation.reversed ? "Reversed" : "Active"}
-                            </Badge>
-                          </TableCell>
-                          {canReverse ? (
-                            <TableCell className="text-right">
-                              {allocation.reversed ? null : (
-                                <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="ghost"
-                                  onClick={() => setReversing(allocation)}
-                                >
-                                  Reverse
-                                </Button>
-                              )}
-                            </TableCell>
-                          ) : null}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <h3 className="text-muted-foreground">Credit notes</h3>
+                  {invoice.notes.map((note) => (
+                    <div key={note.id} className="flex justify-between gap-3">
+                      <Link
+                        to="/$orgSlug/notes/$noteId"
+                        params={{ orgSlug, noteId: note.id }}
+                        className="font-mono underline-offset-4 hover:underline"
+                      >
+                        {note.number}
+                      </Link>
+                      <span className="tabular-nums">{formatMoney(note.totalPaise)}</span>
+                    </div>
+                  ))}
                 </section>
               </>
             ) : null}
+            <AllocationsSection orgSlug={orgSlug} allocations={invoice.allocations} />
 
             <Separator />
 
@@ -369,10 +352,15 @@ function InvoiceSheetRoute() {
 
             <Separator />
 
-            <InvoiceTotals invoice={invoice} />
+            <DocumentTotals document={invoice} />
           </SheetBody>
 
-          {canEdit || canApply || canCancel ? (
+          {canEdit ||
+          canApply ||
+          canCancel ||
+          canAmend ||
+          canPostNote ||
+          invoice.state === "posted" ? (
             <SheetFooter>
               {canEdit ? (
                 <>
@@ -405,7 +393,40 @@ function InvoiceSheetRoute() {
               ) : null}
               {canApply ? (
                 <Button type="button" variant="outline" onClick={() => setApplyOpen(true)}>
-                  Apply advance
+                  Apply credit
+                </Button>
+              ) : null}
+              {canPostNote ? (
+                <Link
+                  to="/$orgSlug/notes/new"
+                  params={{ orgSlug }}
+                  search={{ type: "creditNote", against: invoice.id }}
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Credit note
+                </Link>
+              ) : null}
+              {invoice.state === "posted" ? (
+                <>
+                  <a
+                    href={`/api/${orgSlug}/invoices/${invoice.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={buttonVariants({ variant: "outline" })}
+                  >
+                    PDF
+                  </a>
+                  <a
+                    href={`/api/${orgSlug}/invoices/${invoice.id}/pdf?download=1`}
+                    className={buttonVariants({ variant: "outline" })}
+                  >
+                    Download PDF
+                  </a>
+                </>
+              ) : null}
+              {canAmend ? (
+                <Button type="button" variant="outline" onClick={() => setAmendOpen(true)}>
+                  Amend
                 </Button>
               ) : null}
               {canCancel ? (
@@ -429,30 +450,29 @@ function InvoiceSheetRoute() {
             onClose={() => setCancelOpen(false)}
             onConfirm={(reason) => cancel.mutate({ orgSlug, invoiceId, reason })}
           />
-
-          {/* Mounted per allocation, so its receipt number never blanks during a close. */}
-          {reversing ? (
-            <ReasonDialog
-              open
-              pending={reverse.isPending}
-              title="Reverse allocation"
-              description={`This removes the amount applied from receipt ${reversing.sourceNumber}.`}
-              placeholder="Why is this allocation being reversed?"
-              keepLabel="Keep allocation"
-              confirmLabel="Reverse allocation"
-              pendingLabel="Reversing…"
-              onClose={() => setReversing(null)}
-              onConfirm={(reason) =>
-                reverse.mutate({ orgSlug, allocationId: reversing.id, reason })
-              }
-            />
-          ) : null}
+          <ReasonDialog
+            open={amendOpen}
+            pending={amend.isPending}
+            title="Amend invoice"
+            description="This cancels the invoice and opens a copy as a draft. Reverse allocations before amending."
+            placeholder="Why is this invoice being amended?"
+            keepLabel="Keep invoice"
+            confirmLabel="Amend invoice"
+            pendingLabel="Amending…"
+            onClose={() => setAmendOpen(false)}
+            onConfirm={(reason) => amend.mutate({ orgSlug, invoiceId, reason })}
+          />
 
           {applyOpen && invoice.partyId ? (
-            <ApplyAdvanceSheet
+            <ApplyCreditSheet
               orgSlug={orgSlug}
-              invoiceId={invoice.id}
-              partyId={invoice.partyId}
+              side="receivable"
+              target={{
+                id: invoice.id,
+                partyId: invoice.partyId,
+                number: invoice.number ?? invoice.id,
+                outstandingPaise: invoice.outstandingPaise,
+              }}
               onClose={() => setApplyOpen(false)}
             />
           ) : null}

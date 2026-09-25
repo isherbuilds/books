@@ -593,6 +593,103 @@ test("an unregistered organization invoices a date with no effective rate", asyn
   ]);
 });
 
+test("header discount splits before GST, round-trips drafts, and rejects excess", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    discount: "150.01",
+    lines: [
+      { kind: "item" as const, itemId: taxableItem.id, quantity: 1 },
+      { kind: "item" as const, itemId: exemptItem.id, quantity: 1 },
+    ],
+  };
+
+  const draft = await api.invoice.saveDraft(fields);
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id })).toMatchObject({
+    discountPaise: 15_001n,
+    lines: [
+      { discountPaise: 10_001n, amountPaise: 89_999n, cgstPaise: 8_100n, sgstPaise: 8_100n },
+      { discountPaise: 5_000n, amountPaise: 45_000n },
+    ],
+  });
+  const posted = await api.invoice.post({ ...fields, draft });
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
+    {
+      totalPaise: 151_200n,
+      discountPaise: 15_001n,
+    },
+  );
+  await expectReason(
+    api.invoice.post({ ...fields, discount: "1500.01" }),
+    "DISCOUNT_EXCEEDS_SUBTOTAL",
+  );
+});
+
+test("counter sale posts an allocated receipt in the invoice transaction", async () => {
+  const cash = required(
+    (await api.paymentMethod.list({ orgSlug: organization.slug })).find(
+      ({ name }) => name === "Cash",
+    ),
+    "cash method",
+  );
+
+  const posted = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [{ kind: "item", itemId: exemptItem.id, quantity: 1 }],
+    settle: { paymentMethodId: cash.id, reference: "COUNTER" },
+  });
+
+  const receipt = required(posted.receipt, "counter-sale receipt");
+  expect(receipt.number.startsWith("RCT")).toBe(true);
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
+    {
+      outstandingPaise: 0n,
+      settlementStatus: "paid",
+      allocations: [expect.objectContaining({ otherDocumentId: receipt.id, amountPaise: 50_000n })],
+    },
+  );
+  expect(
+    await api.receipt.get({ orgSlug: organization.slug, receiptId: receipt.id }),
+  ).toMatchObject({
+    partyId: party.id,
+    settlementKind: "against",
+    totalPaise: 50_000n,
+  });
+});
+
+test("amending cancels the invoice and copies its discounted lines to an editable draft", async () => {
+  const posted = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    discount: "10.00",
+    lines: [{ kind: "item", itemId: exemptItem.id, quantity: 1 }],
+  });
+
+  const draft = await api.invoice.amend({
+    orgSlug: organization.slug,
+    invoiceId: posted.id,
+    reason: "Correct customer details",
+  });
+
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
+    { state: "cancelled" },
+  );
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id })).toMatchObject({
+    state: "draft",
+    amendedFromId: posted.id,
+    version: draft.version,
+    discountPaise: 1_000n,
+    lines: [expect.objectContaining({ discountPaise: 1_000n, amountPaise: 49_000n })],
+  });
+});
+
 test("a line amount beyond the storable range is refused, not left to the database", async () => {
   await expectReason(
     api.invoice.post({

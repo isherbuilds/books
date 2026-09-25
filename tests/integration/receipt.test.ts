@@ -47,6 +47,12 @@ let party: { id: string; updatedAt: Date };
 
 let customerAdvances: Account;
 
+let receivables: Account;
+
+let tdsReceivable: Account;
+
+let expenseAccount: Account;
+
 let bankGroup: Account;
 
 let bankAccount: Account;
@@ -78,6 +84,18 @@ beforeAll(async () => {
   customerAdvances = required(
     fixture.accounts.find(({ systemKey }) => systemKey === "customerAdvances"),
     "customer advances account",
+  );
+  receivables = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "receivables"),
+    "receivables account",
+  );
+  tdsReceivable = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "tdsReceivable"),
+    "TDS receivable account",
+  );
+  expenseAccount = required(
+    fixture.accounts.find(({ type, systemKey }) => type === "expense" && systemKey === null),
+    "expense account",
   );
   bankGroup = required(
     fixture.accounts.find(({ systemKey }) => systemKey === "bank"),
@@ -311,6 +329,56 @@ test("receipt post rejects invalid settlements and enforces advance supply polic
 
   expect(goodsAdvance.state).toBe("posted");
   expect(goodsAdvance.advanceSupply).toBe("goods");
+});
+
+test("receipt fee and customer TDS settle the invoice with four journal legs", async () => {
+  const invoice = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [
+      { kind: "account", accountId: exemptIncome.id, description: "Service", amount: "100.00" },
+    ],
+  });
+
+  const against: ReceiptPostInput = {
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    partyId: party.id,
+    amount: "95.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ invoiceId: invoice.id, amount: "100.00" }],
+    adjustments: [
+      { kind: "fee", accountId: expenseAccount.id, amount: "2.00" },
+      { kind: "tds", amount: "3.00" },
+    ],
+  };
+
+  const receipt = await api.receipt.post(against);
+  const detail = await api.receipt.get({ orgSlug: organization.slug, receiptId: receipt.id });
+  expect(detail.adjustments).toEqual([
+    { adjustmentKind: "fee", accountId: expenseAccount.id, amountPaise: 200n },
+    { adjustmentKind: "tds", accountId: null, amountPaise: 300n },
+  ]);
+  expect((await postingOf(organization.id, receipt.id, "post")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: bankAccount.id, debit: 9_500n, credit: 0n }),
+      expect.objectContaining({ accountId: expenseAccount.id, debit: 200n, credit: 0n }),
+      expect.objectContaining({ accountId: tdsReceivable.id, debit: 300n, credit: 0n }),
+      expect.objectContaining({
+        accountId: receivables.id,
+        partyId: party.id,
+        debit: 0n,
+        credit: 10_000n,
+      }),
+    ]),
+  );
+  expect(
+    (await api.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).outstandingPaise,
+  ).toBe(0n);
+  await expectReason(api.receipt.post({ ...against, amount: "96.00" }), "ADJUSTMENT_UNALLOCATED");
 });
 
 test("cancelling reverses stored lines once even after payment method remapping", async () => {

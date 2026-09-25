@@ -10,7 +10,8 @@ import { z } from "zod";
 import { conflict, nextEditToken } from "../lib/conflict";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
-import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
+import { openCredits, openItems } from "../lib/settlements";
 import {
   indianPinCode,
   indianStateCode,
@@ -44,6 +45,27 @@ type PartyFields = z.infer<z.ZodObject<typeof partyInputFields>>;
 export type PartyRecord = typeof parties.$inferSelect;
 
 const STATEMENT_LIMIT = 5000;
+
+const STATEMENT_TYPE_LABELS = {
+  receipt: "Receipt",
+  payment: "Payment",
+  invoice: "Invoice",
+  bill: "Bill",
+  creditNote: "Credit Note",
+  debitNote: "Debit Note",
+  journal: "Journal",
+  openingBalance: "Opening Balance",
+} as const;
+
+async function requireParty(orgId: string, partyId: string): Promise<void> {
+  const [party] = await db
+    .select({ id: parties.id })
+    .from(parties)
+    .where(and(eq(parties.orgId, orgId), eq(parties.id, partyId)))
+    .limit(1);
+
+  if (!party) throw new ORPCError("NOT_FOUND", { message: "Party not found." });
+}
 
 function partyValues(fields: PartyFields) {
   return {
@@ -224,14 +246,41 @@ export const partyRouter = {
     },
   ),
 
+  // Receivable pickers serve the Receipt form under `party:read`; the payable side
+  // exposes Bills and Debit Notes, which an operator never reads.
+  openItems: orgProcedure(
+    { party: ["read"] },
+    orgInput.extend({ partyId: z.uuid(), side: z.enum(["receivable", "payable"]) }),
+  ).handler(async ({ context, input }) => {
+    if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
+    await requireParty(context.scope.orgId, input.partyId);
+
+    return openItems(context.scope.orgId, input);
+  }),
+
+  openCredits: orgProcedure(
+    { party: ["read"], note: ["read"] },
+    orgInput.extend({
+      partyId: z.uuid(),
+      side: z.enum(["receivable", "payable"]),
+      type: z.enum(["receipt", "creditNote", "payment", "debitNote"]).optional(),
+    }),
+  ).handler(async ({ context, input }) => {
+    if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
+    await requireParty(context.scope.orgId, input.partyId);
+
+    return openCredits(context.scope.orgId, input);
+  }),
+
   // The party's statement of account, a Billing report (accounting-core call 15): its
-  // exposure lines oldest first with a running balance. Positive means the party owes
-  // the organization; negative is an advance held for it.
+  // exposure lines oldest first with a running balance. Receivable claims increase
+  // the balance; payable claims decrease it. The statement combines both sides.
   statement: orgProcedure(
     { party: ["read"], report: ["read"] },
     orgInput.extend({ partyId: z.uuid(), ...period }).superRefine(orderedPeriod),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
+    await requireParty(scope.orgId, input.partyId);
 
     const partyLines = and(
       eq(partyLedgerLines.orgId, scope.orgId),
@@ -289,7 +338,7 @@ export const partyRouter = {
     const lines = rows.map((row) => {
       balancePaise += row.amountPaise;
 
-      return { ...row, balancePaise };
+      return { ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType], balancePaise };
     });
 
     return { openingPaise, lines, closingPaise: balancePaise };

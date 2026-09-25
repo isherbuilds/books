@@ -1,11 +1,11 @@
 import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
-import { SidebarTrigger } from "@accly/ui/components/sidebar";
 import { cn } from "@accly/ui/lib/utils";
 import { createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
 
+import { MobileMenu } from "@/components/app-shell";
 import { useDebouncedCallback } from "@/hooks/use-debounced-value";
 import { errorMessage } from "@/lib/orpc-error";
 
@@ -23,7 +23,7 @@ export function PageHeader({
       data-slot="page-header"
       className="z-10 flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3 lg:pr-4 lg:pl-6 print:h-auto print:px-4 print:py-3"
     >
-      <SidebarTrigger className="print:hidden lg:hidden" />
+      <MobileMenu />
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <h1 className="truncate text-sm font-medium">{title}</h1>

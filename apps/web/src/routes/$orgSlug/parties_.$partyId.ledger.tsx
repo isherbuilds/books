@@ -3,6 +3,7 @@ import { Button } from "@accly/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuTrigger,
 } from "@accly/ui/components/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +15,7 @@ import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { LEDGER_COLUMNS, LedgerCard } from "@/components/ledger-columns";
-import { DateRangePopover, PresetItems } from "@/components/list-filter";
+import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
 import { ListToolbar } from "@/components/page";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -66,14 +67,16 @@ function PartyLedger() {
         <ClientOnly fallback={periodTrigger}>
           <DropdownMenu>
             <DropdownMenuTrigger render={periodTrigger} />
-            <DropdownMenuContent className="p-1">
-              <PresetItems
-                range={range}
-                today={today}
-                financialYearStart={financialYearStart}
-                onSelect={setSearch}
-                onCustom={() => setCustomRangeOpen(true)}
-              />
+            <DropdownMenuContent>
+              <DropdownMenuGroup>
+                <PresetItems
+                  range={range}
+                  today={today}
+                  financialYearStart={financialYearStart}
+                  onSelect={setSearch}
+                  onCustom={() => setCustomRangeOpen(true)}
+                />
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </ClientOnly>
@@ -102,11 +105,41 @@ function PartyLedger() {
         data={lines}
         getRowId={(line) => line.id}
         meta={{ orgSlug }}
-        rowLink={(line) => ({
-          to: "/$orgSlug/receipts/$receiptId",
-          params: { orgSlug, receiptId: line.documentId },
-          search: { partyId },
-        })}
+        rowLink={(line) => {
+          if (line.documentType === "invoice")
+            return {
+              to: "/$orgSlug/invoices/$invoiceId",
+              params: { orgSlug, invoiceId: line.documentId },
+              search: { partyId },
+            };
+
+          if (line.documentType === "bill")
+            return {
+              to: "/$orgSlug/bills/$billId",
+              params: { orgSlug, billId: line.documentId },
+              search: { partyId },
+            };
+
+          if (line.documentType === "payment")
+            return {
+              to: "/$orgSlug/payments/$paymentId",
+              params: { orgSlug, paymentId: line.documentId },
+              search: { partyId },
+            };
+
+          if (line.documentType === "creditNote" || line.documentType === "debitNote")
+            return {
+              to: "/$orgSlug/notes/$noteId",
+              params: { orgSlug, noteId: line.documentId },
+              search: { partyId },
+            };
+
+          return {
+            to: "/$orgSlug/receipts/$receiptId",
+            params: { orgSlug, receiptId: line.documentId },
+            search: { partyId },
+          };
+        }}
         renderCard={(line) => <LedgerCard line={line} />}
         query={statement}
         errorTitle="Could not load the ledger"

@@ -1,13 +1,4 @@
-import { formatBusinessDay } from "@accly/api/lib/business-date";
-import {
-  NON_NEGATIVE_MONEY_PATTERN,
-  ZERO_MONEY,
-  enteredPaise,
-  formatMoney,
-  isPositiveMoney,
-  isZeroMoney,
-  parseMoney,
-} from "@accly/api/core/money";
+import { NON_NEGATIVE_MONEY_PATTERN, ZERO_MONEY, parseMoney } from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -21,33 +12,29 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@accly/ui/components/table";
 import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Watch, useWatch, type FieldPath } from "react-hook-form";
-import { toast } from "sonner";
+import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 
-import { DocumentForm, LineGrid, PostBar, PostedView } from "@/components/document-form";
+import {
+  AllocationTable,
+  checkAllocations,
+  reportRowErrors,
+  type OpenDocument,
+} from "@/components/allocation-table";
+import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
-import { ErrorNote } from "@/components/page";
 import { DocumentPartyField } from "@/components/party-link-field";
+import { PaymentMethodField } from "@/components/payment-method-field";
+import { ReceiptAdjustments } from "@/components/receipt-adjustments";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
-import { paymentMethodListOptions } from "@/lib/receipts";
 import { positiveAmount } from "@/lib/form-schema";
 
 const receiptSchema = z
@@ -58,9 +45,17 @@ const receiptSchema = z
     paymentMethodId: z.string().min(1, "Choose a payment method"),
     settlementKind: z.enum(["advance", "against", "direct"]),
     advanceSupply: z.enum(["goods", "exempt", "taxableService"]).nullable(),
-    // Typed amounts by Invoice id. These are the operator's intent, so submit sends
-    // exactly the non-empty entries and refuses when one is no longer open.
+    // Typed amounts by open item id.
     allocations: z.record(z.string(), z.string()),
+    adjustments: z
+      .array(
+        z.object({
+          kind: z.enum(["fee", "writeOff", "tds"]),
+          accountId: z.string().nullable(),
+          amount: positiveAmount,
+        }),
+      )
+      .max(5),
     incomeAccountId: z.string().nullable(),
     reference: z.string().trim().max(120, "Reference must be 120 characters or fewer"),
     narration: z.string().trim().max(500, "Narration must be 500 characters or fewer"),
@@ -86,6 +81,20 @@ const receiptSchema = z
         message: "Choose an income account",
       });
     }
+
+    values.adjustments.forEach((adjustment, index) => {
+      if (
+        values.settlementKind === "against" &&
+        adjustment.kind !== "tds" &&
+        !adjustment.accountId
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["adjustments", index, "accountId"],
+          message: "Choose an expense account",
+        });
+      }
+    });
   });
 
 type ReceiptFormValues = z.input<typeof receiptSchema>;
@@ -101,6 +110,8 @@ const SERVER_FIELDS = {
   ALLOCATION_EXCEEDS_SOURCE: "allocations",
   ALLOCATION_TARGET_INVALID: "allocations",
   ALLOCATION_EXCEEDS_OUTSTANDING: "allocations",
+  ADJUSTMENT_UNALLOCATED: "allocations",
+  ADJUSTMENT_ACCOUNT_INVALID: "adjustments",
 } satisfies Record<string, FieldPath<ReceiptFormValues>>;
 
 function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
@@ -113,6 +124,7 @@ function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
     advanceSupply: null,
     incomeAccountId: null,
     allocations: {},
+    adjustments: [],
     reference: "",
     narration: "",
     documentDate: today,
@@ -131,35 +143,28 @@ export function ReceiptForm({
   const queryClient = useQueryClient();
 
   const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
+  const adjustmentFields = useFieldArray({ control: form.control, name: "adjustments" });
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
-  const openInvoices = useQuery(
-    orpc.invoice.openInvoices.queryOptions({
-      input: settlementKind === "against" && partyId ? { orgSlug, partyId } : skipToken,
+  const openItems = useQuery(
+    orpc.party.openItems.queryOptions({
+      input:
+        settlementKind === "against" && partyId
+          ? { orgSlug, partyId, side: "receivable" }
+          : skipToken,
     }),
   );
 
-  const openRows = openInvoices.data?.rows ?? [];
-
-  // The receipts list's cache entry; only an active method can take a new receipt.
-  const paymentMethods = useQuery({
-    ...paymentMethodListOptions(orgSlug),
-    select: (methods) => methods.filter((method) => method.active && method.accountActive),
-  });
+  const openRows: OpenDocument[] =
+    openItems.data?.rows.map((row) => ({
+      ...row,
+      label: row.type === "invoice" ? "Invoice" : "Payment",
+      openPaise: row.outstandingPaise,
+    })) ?? [];
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
-
-  useEffect(() => {
-    if (form.getValues("paymentMethodId") || !paymentMethods.data?.length) return;
-
-    const preferred =
-      paymentMethods.data.find((method) => method.name.toLocaleLowerCase() === "bank transfer") ??
-      paymentMethods.data[0];
-
-    form.setValue("paymentMethodId", preferred.id);
-  }, [form, paymentMethods.data]);
 
   const post = useMutation(
     orpc.receipt.post.mutationOptions({
@@ -186,7 +191,7 @@ export function ReceiptForm({
               reason === "ALLOCATION_TARGET_INVALID" ||
               reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
             ) {
-              await openInvoices.refetch();
+              await openItems.refetch();
             }
           },
         }),
@@ -222,68 +227,43 @@ export function ReceiptForm({
     if (values.settlementKind === "against") {
       if (!values.partyId) return;
 
-      const allocations: { invoiceId: string; amount: string }[] = [];
-      let allocatedPaise = ZERO_MONEY;
-      let invalid = false;
+      const { selected, allocatedPaise, rowErrors, tableError } = checkAllocations(
+        values.allocations,
+        openRows,
+      );
 
-      for (const [invoiceId, amount] of Object.entries(values.allocations)) {
-        if (amount === "") continue;
-
-        const invoice = openRows.find((row) => row.id === invoiceId);
-
-        if (!invoice) {
-          form.setError(
-            `allocations.${invoiceId}`,
-            { message: "This invoice is no longer open. Clear the amount to continue." },
-            { shouldFocus: !invalid },
-          );
-          invalid = true;
-          continue;
-        }
-
-        const amountPaise = enteredPaise(amount);
-
-        const message = !NON_NEGATIVE_MONEY_PATTERN.test(amount)
-          ? "Enter a valid amount"
-          : isZeroMoney(amountPaise)
-            ? "Amount must be greater than zero"
-            : amountPaise > invoice.outstandingPaise
-              ? `Enter no more than ${formatMoney(invoice.outstandingPaise)}`
-              : undefined;
-
-        if (message) {
-          form.setError(`allocations.${invoiceId}`, { message }, { shouldFocus: !invalid });
-          invalid = true;
-        } else {
-          allocations.push({ invoiceId, amount });
-          allocatedPaise += amountPaise;
-        }
-      }
-
-      if (invalid) {
-        toast.error("Check the allocated amounts before posting.");
-
-        return;
-      }
+      if (reportRowErrors(form.setError, rowErrors)) return;
 
       const receiptPaise = parseMoney(values.amount);
 
-      const tableError =
-        allocations.length === 0
-          ? "Allocate the receipt to at least one invoice"
-          : allocations.length > 50
-            ? "Allocate to no more than 50 invoices"
-            : allocatedPaise > receiptPaise
-              ? "Allocated amount cannot exceed the receipt amount"
-              : undefined;
+      const adjustments = values.adjustments.map((adjustment) =>
+        adjustment.kind === "tds"
+          ? { kind: "tds" as const, amount: adjustment.amount }
+          : { kind: adjustment.kind, accountId: adjustment.accountId!, amount: adjustment.amount },
+      );
 
-      if (tableError) {
-        form.setError("allocations", { message: tableError });
+      const capacityPaise =
+        receiptPaise +
+        adjustments.reduce(
+          (total, adjustment) => total + parseMoney(adjustment.amount),
+          ZERO_MONEY,
+        );
+
+      const allocationError =
+        tableError ??
+        (allocatedPaise > capacityPaise
+          ? "Allocated amount cannot exceed the receipt and adjustments"
+          : adjustments.length > 0 && allocatedPaise !== capacityPaise
+            ? "Allocate the full receipt and adjustments"
+            : undefined);
+
+      if (allocationError) {
+        form.setError("allocations", { message: allocationError });
 
         return;
       }
 
-      if (allocatedPaise < receiptPaise && !values.advanceSupply) {
+      if (allocatedPaise < capacityPaise && !values.advanceSupply) {
         form.setError(
           "advanceSupply",
           { message: "Choose what the remaining advance is for" },
@@ -297,7 +277,8 @@ export function ReceiptForm({
         ...common,
         settlementKind: "against",
         partyId: values.partyId,
-        allocations,
+        allocations: selected.map(({ id, amount }) => ({ invoiceId: id, amount })),
+        adjustments,
         advanceSupply: values.advanceSupply ?? undefined,
       });
 
@@ -414,32 +395,7 @@ export function ReceiptForm({
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="paymentMethodId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment method</FormLabel>
-                <FormControl>
-                  <NativeSelect {...field} required>
-                    <option value="" disabled>
-                      {paymentMethods.isPending
-                        ? "Loading payment methods…"
-                        : paymentMethods.isError
-                          ? "Could not load payment methods"
-                          : "Choose a payment method"}
-                    </option>
-                    {paymentMethods.data?.map((method) => (
-                      <option key={method.id} value={method.id}>
-                        {method.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <PaymentMethodField orgSlug={orgSlug} />
         </div>
 
         <FormField
@@ -455,6 +411,7 @@ export function ReceiptForm({
                     const value = next[0];
 
                     if (value === "advance" || value === "against" || value === "direct") {
+                      if (value !== "against") adjustmentFields.remove();
                       field.onChange(value);
                     }
                   }}
@@ -463,7 +420,7 @@ export function ReceiptForm({
                   aria-label="Settlement kind"
                 >
                   <ToggleGroupItem value="advance">Advance</ToggleGroupItem>
-                  <ToggleGroupItem value="against">Against invoices</ToggleGroupItem>
+                  <ToggleGroupItem value="against">Against open items</ToggleGroupItem>
                   <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
                 </ToggleGroup>
               </FormControl>
@@ -476,112 +433,16 @@ export function ReceiptForm({
 
         {settlementKind === "against" && partyId ? (
           <>
-            <FormField
-              control={form.control}
-              name="allocations"
-              render={() => (
-                <FormItem>
-                  <LineGrid title="Open invoices">
-                    {openInvoices.isPending ? (
-                      <p className="text-xs text-muted-foreground">Loading open invoices…</p>
-                    ) : openInvoices.isError ? (
-                      <ErrorNote title="Could not load open invoices" error={openInvoices.error} />
-                    ) : openRows.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No open invoices.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Invoice</TableHead>
-                            <TableHead className="text-right">Outstanding</TableHead>
-                            <TableHead className="w-28 text-right">Allocate</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {openRows.map((invoice) => (
-                            <TableRow key={invoice.id}>
-                              <TableCell className="whitespace-normal">
-                                <p className="font-mono">{invoice.number}</p>
-                                <p className="text-muted-foreground tabular-nums">
-                                  {formatBusinessDay(invoice.documentDate)}
-                                  {invoice.dueDate
-                                    ? ` · Due ${formatBusinessDay(invoice.dueDate)}`
-                                    : null}
-                                </p>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatMoney(invoice.outstandingPaise)}
-                              </TableCell>
-                              <TableCell className="w-28">
-                                <RegisteredFormField
-                                  name={`allocations.${invoice.id}`}
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel className="sr-only">
-                                        Amount for invoice {invoice.number}
-                                      </FormLabel>
-                                      <FormControl>
-                                        <Input
-                                          {...field}
-                                          inputMode="decimal"
-                                          autoComplete="off"
-                                          pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                                          placeholder="0.00"
-                                          className="h-7 text-right tabular-nums"
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                    {openInvoices.data?.hasMore ? (
-                      <p className="text-xs text-muted-foreground">
-                        Showing the 200 oldest open invoices. Apply the rest from the invoice.
-                      </p>
-                    ) : null}
-                  </LineGrid>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <ReceiptAdjustments orgSlug={orgSlug} adjustmentFields={adjustmentFields} />
 
-            {/* The only subscriber to the typed amounts, so a keystroke re-renders the
-                totals and the supply field, never the invoice rows. */}
-            <Watch
-              control={form.control}
-              name={["amount", "allocations"]}
-              render={([amount, allocations]) => {
-                // Totals over what was typed, not over the open rows, so an amount for
-                // an invoice that has since closed still counts against the remainder.
-                const allocatedPaise = Object.values(allocations).reduce(
-                  (total, entered) => total + enteredPaise(entered),
-                  ZERO_MONEY,
-                );
-
-                const remainingPaise = enteredPaise(amount) - allocatedPaise;
-
-                return (
-                  <>
-                    <dl className="grid gap-1 border-t border-border pt-2 text-xs">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <dt className="text-muted-foreground">Allocated</dt>
-                        <dd className="tabular-nums">{formatMoney(allocatedPaise)}</dd>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-4 font-medium">
-                        <dt>Remaining as advance</dt>
-                        <dd className="tabular-nums">{formatMoney(remainingPaise)}</dd>
-                      </div>
-                    </dl>
-                    {isPositiveMoney(remainingPaise) ? advanceSupplyField : null}
-                  </>
-                );
-              }}
+            <AllocationTable
+              title="Open items"
+              openHeading="Outstanding"
+              query={openItems}
+              rows={openRows}
+              adjustmentsName="adjustments"
+              advanceRemainder
+              advanceField={advanceSupplyField}
             />
           </>
         ) : null}

@@ -19,7 +19,6 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { cn } from "@accly/ui/lib/utils";
-import type { UseQueryResult } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useFieldArray, useFormContext, Watch } from "react-hook-form";
 import { z } from "zod";
@@ -27,6 +26,7 @@ import { z } from "zod";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { PartyLinkField } from "@/components/party-link-field";
+import { useListState, type ListState } from "@/lib/list-state";
 import type { PartyOption } from "@/lib/parties";
 import { positiveAmount } from "@/lib/form-schema";
 
@@ -133,16 +133,17 @@ function EntryLineFields({
   onCreateParty,
   autoFocus,
   removeDisabled,
-  onRemove,
+  remove,
 }: {
   gridTemplate: string;
   index: number;
-  accounts: UseQueryResult<EntryAccount[]>;
-  parties?: UseQueryResult<PartyOption[]>;
+  accounts: ListState<EntryAccount[]>;
+  parties?: ListState<PartyOption[]>;
   onCreateParty?: (index: number, seed: string) => void;
   autoFocus: boolean;
   removeDisabled: boolean;
-  onRemove: () => void;
+  /** `useFieldArray`'s stable `remove`, so a row's props change only with its own index. */
+  remove: (index: number) => void;
 }) {
   const form = useFormContext<{ lines: EntryLineValues[] }>();
 
@@ -272,13 +273,15 @@ function EntryLineFields({
         disabled={removeDisabled}
         aria-label={`Remove line ${index + 1}`}
         className="col-span-2 justify-self-end md:col-span-1"
-        onClick={onRemove}
+        onClick={() => remove(index)}
       >
         <Trash2Icon />
       </Button>
     </fieldset>
   );
 }
+
+const NO_PARTIES: ListState<PartyOption[]> = { isPending: false, isError: false, error: null };
 
 export function EntryLines({
   title,
@@ -288,13 +291,16 @@ export function EntryLines({
   autoFocusFirst,
 }: {
   title: string;
-  accounts: UseQueryResult<EntryAccount[]>;
-  parties?: UseQueryResult<PartyOption[]>;
+  accounts: ListState<EntryAccount[]>;
+  parties?: ListState<PartyOption[]>;
   onCreateParty?: (index: number, seed: string) => void;
   autoFocusFirst: boolean;
 }) {
   const form = useFormContext<{ lines: EntryLineValues[] }>();
   const lineFields = useFieldArray({ control: form.control, name: "lines" });
+  const accountState = useListState(accounts);
+  // Hooks cannot be conditional; the party state is dropped when the grid has no parties.
+  const partyState = useListState(parties ?? NO_PARTIES);
   const gridTemplate = parties ? ENTRY_GRID_WITH_PARTY : ENTRY_GRID_WITHOUT_PARTY;
 
   return (
@@ -335,12 +341,12 @@ export function EntryLines({
             key={line.id}
             index={index}
             gridTemplate={gridTemplate}
-            accounts={accounts}
-            parties={parties}
+            accounts={accountState}
+            parties={parties ? partyState : undefined}
             onCreateParty={onCreateParty}
             autoFocus={autoFocusFirst && index === 0}
             removeDisabled={lineFields.fields.length <= 2}
-            onRemove={() => lineFields.remove(index)}
+            remove={lineFields.remove}
           />
         ))}
         <FieldArrayError control={form.control} name="lines" />

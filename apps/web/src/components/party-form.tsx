@@ -23,7 +23,6 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
@@ -34,6 +33,7 @@ import { useFormState } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidatePartyState } from "@/lib/domain-invalidation";
@@ -381,20 +381,24 @@ function PartyForm({
                   )}
                 />
 
-                <RegisteredFormField
+                <FormField
+                  control={form.control}
                   name="stateCode"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <FormItem>
                       <FormLabel>State</FormLabel>
                       <FormControl>
-                        <NativeSelect {...field} required>
-                          <option value="">Choose state</option>
-                          {Object.entries(INDIAN_STATES).map(([code, name]) => (
-                            <option key={code} value={code}>
-                              {code} — {name}
-                            </option>
-                          ))}
-                        </NativeSelect>
+                        <OptionField
+                          required
+                          options={STATE_OPTIONS}
+                          noun="states"
+                          showCode
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Choose state"
+                          inputRef={field.ref}
+                          aria-invalid={fieldState.invalid}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

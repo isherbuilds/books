@@ -6,11 +6,14 @@ import { renderPdf } from "@/lib/pdf-render";
 export async function renderReceiptPdf(
   data: ReceiptDetail,
 ): Promise<{ bytes: Uint8Array; fileName: string }> {
-  if (!data.number) throw new Error("A receipt PDF requires an assigned receipt number");
+  // A receipt posts in one step, so a missing number or snapshot breaks an invariant.
+  if (!data.number || !data.printSnapshot) {
+    throw new Error(`Receipt ${data.id} has no number or print snapshot`);
+  }
 
-  if (!data.printSnapshot) throw new Error("A receipt PDF requires its print snapshot");
+  const printable = { ...data, number: data.number, printSnapshot: data.printSnapshot };
 
-  return renderPdf(<ReceiptVoucher data={data} />, {
+  return renderPdf(<ReceiptVoucher data={printable} />, {
     fileName: `${data.number}.pdf`,
     title: `Receipt ${data.number} · ${data.printSnapshot.organization.legalName}`,
   });

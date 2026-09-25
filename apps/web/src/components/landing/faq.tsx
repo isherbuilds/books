@@ -16,7 +16,7 @@ export function LandingFaq({ feature }: { feature?: ShotName }) {
     /* `scroll-mt` clears the sticky bar the header's "Questions" link lands under. */
     <section
       id="faq"
-      className="mx-auto flex w-full max-w-3xl scroll-mt-16 flex-col gap-8 px-5 pt-20 sm:gap-10 sm:px-6 sm:pt-28"
+      className="mx-auto flex w-full max-w-3xl scroll-mt-16 flex-col gap-6 px-4 pt-20 sm:px-6 sm:pt-28"
     >
       <h2 className="text-3xl font-medium tracking-tight text-balance sm:text-center sm:text-4xl">
         The questions we actually get asked.
@@ -31,7 +31,10 @@ export function LandingFaq({ feature }: { feature?: ShotName }) {
           ragged. */}
       <div className="flex flex-col">
         {items.map((item) => (
-          <details key={item.q} className="group border-b border-border py-3 sm:py-5">
+          <details
+            key={item.q}
+            className="group flex flex-col gap-3 border-b border-border py-3 sm:py-4"
+          >
             <summary
               data-focus-inset
               className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-6 text-base font-medium marker:content-none"
@@ -44,7 +47,7 @@ export function LandingFaq({ feature }: { feature?: ShotName }) {
                 +
               </span>
             </summary>
-            <p className="mt-3 text-sm text-muted-foreground text-pretty">{item.a}</p>
+            <p className="text-sm text-muted-foreground text-pretty">{item.a}</p>
           </details>
         ))}
       </div>

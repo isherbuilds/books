@@ -499,8 +499,8 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
   await expectReason(
     fixture.api.allocation.apply({
       ...claim,
-      receiptId: crypto.randomUUID(),
-      invoiceId: crypto.randomUUID(),
+      sourceDocumentId: crypto.randomUUID(),
+      targetDocumentId: crypto.randomUUID(),
       amount: "1.00",
     }),
     "LOCKED",

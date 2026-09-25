@@ -21,9 +21,11 @@ export const SETTINGS_DEFAULTS = {
   timeZone: "Asia/Kolkata",
   financialYearStart: 4,
   invoicePrefix: "INV",
+  billPrefix: "BILL",
   receiptPrefix: "RCT",
   paymentPrefix: "PMT",
   creditNotePrefix: "CN",
+  debitNotePrefix: "DN",
   journalPrefix: "JV",
 } as const;
 
@@ -46,9 +48,11 @@ export const organizationSettings = pgTable(
     city: text("city").notNull(),
     pinCode: text("pin_code").notNull(),
     invoicePrefix: text("invoice_prefix").notNull(),
+    billPrefix: text("bill_prefix").notNull(),
     receiptPrefix: text("receipt_prefix").notNull(),
     paymentPrefix: text("payment_prefix").notNull(),
     creditNotePrefix: text("credit_note_prefix").notNull(),
+    debitNotePrefix: text("debit_note_prefix").notNull(),
     journalPrefix: text("journal_prefix").notNull(),
     // SETTINGS_DEFAULTS is the application source for new rows.
     timeZone: text("time_zone").notNull().default("Asia/Kolkata"),

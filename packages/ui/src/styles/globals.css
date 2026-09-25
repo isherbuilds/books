@@ -41,11 +41,6 @@
   --input: oklch(0.922 0 0);
   /* Focus indicators must maintain 3:1 contrast; guarded by the theme contrast test. */
   --ring: oklch(0.45 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
   /* Status severity. `docs/design.md` §5 says colour means state, and these
      are the one exception: what needs attention (an overdue balance), what is
      provisional, what is settled, and what is neutral identity. Never used
@@ -104,11 +99,6 @@
   --status-clear: oklch(0.8 0.11 155);
   --status-clear-surface: oklch(0.27 0.045 155);
   --status-clear-border: oklch(0.39 0.07 155);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
   --sidebar: oklch(0.145 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.922 0 0);
@@ -130,11 +120,6 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-status-alert: var(--status-alert);
   --color-status-alert-surface: var(--status-alert-surface);

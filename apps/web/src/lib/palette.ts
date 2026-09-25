@@ -1,13 +1,13 @@
 import type { LucideIcon } from "lucide-react";
 
-export type PaletteGroup = "action" | "go" | "organization" | "party" | "receipt";
+export type PaletteGroup = "action" | "go" | "organization" | "party" | "document";
 
 export type PaletteItem = {
   id: string;
   label: string;
   group: PaletteGroup;
   keywords?: string[];
-  /** Muted text after the label: a Party's GSTIN, a Receipt's Party. */
+  /** Muted text after the label: a Party's GSTIN, a document's Party. */
   detail?: string;
   /** Right-aligned meta: an amount or a state. */
   hint?: string;
@@ -23,11 +23,11 @@ const GROUP_RANK: Record<PaletteGroup, number> = {
   go: 1,
   organization: 2,
   party: 3,
-  receipt: 4,
+  document: 4,
 };
 
-// Midday caps results per type (apps/api/src/schemas/search.ts); receipts arrive
-// capped at 8 by the query, so only Parties need the cap here.
+// Midday caps results per type (apps/api/src/schemas/search.ts). Parties arrive whole
+// and documents arrive from several registers, so both groups take the cap here.
 const RECORD_LIMIT = 8;
 
 function matchScore(item: PaletteItem, query: string): number {
@@ -76,7 +76,7 @@ export function rankCommands(items: PaletteItem[], query: string): PaletteSectio
       group,
       items: rows
         .sort((a, b) => b.score - a.score || a.index - b.index)
-        .slice(0, group === "party" ? RECORD_LIMIT : rows.length)
+        .slice(0, group === "party" || group === "document" ? RECORD_LIMIT : rows.length)
         .map(({ item }) => item),
     }));
 }

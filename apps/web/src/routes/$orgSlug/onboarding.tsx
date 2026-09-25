@@ -30,8 +30,8 @@ function OrganizationOnboardingRoute() {
         description={`${organizationName} · start with the details that shape daily work`}
       />
       <PageBody className="max-w-3xl">
-        <section aria-labelledby="setup-path">
-          <div className="mb-2 flex items-center justify-between gap-4">
+        <section aria-labelledby="setup-path" className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-4">
             <h2 id="setup-path" className="font-medium">
               Setup path
             </h2>
@@ -61,11 +61,11 @@ function OrganizationOnboardingRoute() {
         </section>
 
         <Link
-          to="/$orgSlug/receipts"
+          to="/$orgSlug"
           params={{ orgSlug }}
           className={buttonVariants({ className: "w-fit" })}
         >
-          Open receipts
+          Continue to home
           <ArrowRightIcon />
         </Link>
       </PageBody>

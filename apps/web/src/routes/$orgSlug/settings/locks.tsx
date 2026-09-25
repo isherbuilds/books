@@ -19,7 +19,9 @@ import { handleWriteError } from "@/lib/orpc-error";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { requireOrgPermission } from "@/lib/route-permission";
 
-export const Route = createFileRoute("/$orgSlug/locks")({
+import { SettingsTabs } from "./route";
+
+export const Route = createFileRoute("/$orgSlug/settings/locks")({
   head: () => ({ meta: [{ title: "Locks · Accly Books" }] }),
   validateSearch: z.object({
     change: z.enum(LOCK_KINDS).optional().catch(undefined),
@@ -93,6 +95,7 @@ function LocksRoute() {
           ) : null
         }
       />
+      <SettingsTabs orgSlug={orgSlug} />
       <PageBody>
         <ListState query={lockState} errorTitle="Could not load locks" isEmpty={false} empty={null}>
           <ListSection label="Period locks">

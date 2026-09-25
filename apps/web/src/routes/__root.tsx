@@ -95,15 +95,6 @@ function RootDocument() {
     // the server markup deliberately differs by that one attribute.
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Deliberately blocking: React Scan can only instrument renders if it
-            runs before React does. Dev only, so it never ships. */}
-        {import.meta.env.DEV && (
-          <script
-            crossOrigin="anonymous"
-            integrity="sha384-DDZCsimcjpG92OUulxf7DHi4rGS/fNIW7lC5DT8+5ftaTDiUKfzIq+pDTUbPjC86"
-            src="https://unpkg.com/react-scan@0.5.7/dist/auto.global.js"
-          />
-        )}
         <HeadContent />
       </head>
       <body>

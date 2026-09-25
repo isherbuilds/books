@@ -18,6 +18,7 @@ import {
   focusSearch,
   toggleValue,
   type ActiveFilter,
+  OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
@@ -227,26 +228,21 @@ function PartiesRoute() {
         <ListToolbar>
           <SearchInput
             label="Search parties"
-            placeholder="Search name or GSTIN"
+            placeholder="Name or GSTIN"
             value={q}
             delay={150}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CircleDotIcon} label="Status">
-                  {PARTY_STATUSES.map((each) => (
-                    <DropdownMenuCheckboxItem
-                      key={each}
-                      checked={status === each}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ status: checked ? each : undefined })
-                      }
-                    >
-                      {STATUS_LABELS[each]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={CircleDotIcon}
+                  label="Status"
+                  options={PARTY_STATUSES}
+                  labels={STATUS_LABELS}
+                  value={status}
+                  onChange={(next) => void setFilters({ status: next })}
+                />
                 <FilterSubmenu icon={TagsIcon} label="Role">
                   {PARTY_ROLES.map((role) => (
                     <DropdownMenuCheckboxItem
@@ -258,19 +254,14 @@ function PartiesRoute() {
                     </DropdownMenuCheckboxItem>
                   ))}
                 </FilterSubmenu>
-                <FilterSubmenu icon={BadgeCheckIcon} label="GST">
-                  {GST_FILTERS.map((each) => (
-                    <DropdownMenuCheckboxItem
-                      key={each}
-                      checked={gst === each}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ gst: checked ? each : undefined })
-                      }
-                    >
-                      {GST_LABELS[each]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={BadgeCheckIcon}
+                  label="GST"
+                  options={GST_FILTERS}
+                  labels={GST_LABELS}
+                  value={gst}
+                  onChange={(next) => void setFilters({ gst: next })}
+                />
               </FilterMenu>
             }
           />

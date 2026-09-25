@@ -78,9 +78,7 @@ function AuditRoute() {
             empty={
               <span className="flex flex-col items-center gap-2">
                 <ScrollTextIcon className="size-5" />
-                <p className="max-w-sm">
-                  Nothing recorded yet. Actions and denials land here as they happen.
-                </p>
+                <p className="max-w-sm">No audit entries yet</p>
               </span>
             }
           >

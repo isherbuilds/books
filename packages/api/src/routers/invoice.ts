@@ -1,17 +1,17 @@
+import { authorize } from "@accly/auth/access";
 import { db, type DbTransaction } from "@accly/db";
-import { allocations } from "@accly/db/schema/allocations";
 import { accounts } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
-import { DOCUMENT_STATES, documents } from "@accly/db/schema/documents";
+import { documents } from "@accly/db/schema/documents";
 import { items } from "@accly/db/schema/items";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { allocationReversed, invoiceSettlement, remainingPaiseOf } from "../core/allocations";
+import { settlementPaise } from "../core/allocations";
 import {
   organizationSnapshot,
   partySnapshot,
@@ -22,30 +22,34 @@ import {
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
+import { splitDiscount } from "../core/discount";
 import { formatDecimal } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
 import { computeTax, roundOff } from "../core/tax";
-import { effectiveOn } from "../core/tax-schedule";
+import { ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
-import type { Scope } from "../lib/procedures/factory";
 import { activeParty } from "../lib/parties";
-import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { documentListFields, invoiceFields, orderedPeriod, reason } from "../lib/schemas";
+import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
+import { draftToken, invoiceFields, orderedPeriod, reason } from "../lib/schemas";
 import {
-  PICKER_LIMIT,
+  allocationsOf,
+  amendClaim,
   cancelDocument,
-  documentListWhere,
+  claimListFields,
+  listClaims,
+  discardDraft,
+  documentSettlement,
   orgSettings,
   orgTimeZone,
-  pageOf,
   printedPartyName,
 } from "../lib/settlements";
+import { auditReceiptPost, postReceipt } from "./receipt";
 
 type InvoiceFields = z.output<z.ZodObject<typeof invoiceFields>>;
 
-type ResolvedInvoice = Omit<PostDocumentInput, "draft">;
+type ResolvedInvoice = Omit<PostDocumentInput, "draft" | "posting"> & { posting: InvoicePosting };
 
 // Paise are stored as signed 64-bit integers, so a quantity times a price that no
 // column can hold is refused here instead of failing the insert.
@@ -141,25 +145,7 @@ async function resolveInvoice(
       ]
     : [];
 
-  const effectiveRates =
-    taxCodes.length === 0
-      ? []
-      : await executor
-          .select({
-            id: taxRates.id,
-            code: taxRates.code,
-            rateBasisPoints: taxRates.rateBasisPoints,
-          })
-          .from(taxRates)
-          .where(
-            and(
-              eq(taxRates.orgId, scope.orgId),
-              inArray(taxRates.code, taxCodes),
-              effectiveOn(taxRates, documentDate),
-            ),
-          );
-
-  const rateByCode = new Map(effectiveRates.map((rate) => [rate.code, rate]));
+  const rateByCode = await ratesByCode(executor, scope.orgId, taxCodes, documentDate);
 
   if (taxCodes.some((code) => !rateByCode.has(code))) {
     throw badRequest("TAX_RATE_MISSING", "An item has no GST rate effective on the invoice date.");
@@ -224,16 +210,39 @@ async function resolveInvoice(
     };
   });
 
+  const discountPaise = input.discount ?? 0n;
+  const subtotalPaise = unresolvedLines.reduce((sum, { line }) => sum + line.amountPaise, 0n);
+
+  if (discountPaise > subtotalPaise) {
+    throw badRequest("DISCOUNT_EXCEEDS_SUBTOTAL", "Discount cannot exceed the invoice subtotal.");
+  }
+
+  const discounts = splitDiscount(
+    unresolvedLines.map(({ line }) => line.amountPaise),
+    discountPaise,
+  );
+
+  const taxableValues = unresolvedLines.map(
+    ({ line }, index) => line.amountPaise - discounts[index]!,
+  );
+
+  const intraState = settings.stateCode === input.placeOfSupplyStateCode;
+
   const tax = computeTax({
-    intraState: settings.stateCode === input.placeOfSupplyStateCode,
-    lines: unresolvedLines.map(({ line, rateBasisPoints }) => ({
-      taxablePaise: line.amountPaise,
+    intraState,
+    lines: unresolvedLines.map(({ rateBasisPoints }, index) => ({
+      taxablePaise: taxableValues[index]!,
       rateBasisPoints,
     })),
   });
 
   const lines: PostDocumentLine[] = unresolvedLines.map(({ line }, index) => ({
     ...line,
+    amountPaise: taxableValues[index]!,
+    discountPaise: discounts[index]!,
+    itcEligible: null,
+    sourceLineId: null,
+    adjustmentKind: null,
     ...tax.lines[index]!,
   }));
 
@@ -270,8 +279,11 @@ async function resolveInvoice(
       documentDate,
       dueDate: input.dueDate ?? null,
       placeOfSupplyStateCode: input.placeOfSupplyStateCode,
+      intraState,
       reference: input.reference ?? null,
       narration: input.narration ?? null,
+      discountPaise,
+      againstDocumentId: null,
       affectsTax:
         registered && unresolvedLines.some(({ account }) => account.supplyClass !== "notASupply"),
       printSnapshot: {
@@ -285,14 +297,19 @@ async function resolveInvoice(
   };
 }
 
-// The draft's id and the version its editor loaded; without one the call writes a new
-// document.
-const draftToken = z.object({ id: z.uuid(), version: z.number().int().min(1) });
-
 const invoiceInput = orgInput
   .extend(invoiceFields)
   .extend({ draft: draftToken.optional() })
   .strict();
+
+const postInput = invoiceInput.extend({
+  settle: z
+    .strictObject({
+      paymentMethodId: z.uuid(),
+      reference: z.string().trim().max(120).optional(),
+    })
+    .optional(),
+});
 
 export const invoiceRouter = {
   saveDraft: orgProcedure({ invoice: ["create"] }, invoiceInput).handler(
@@ -308,17 +325,37 @@ export const invoiceRouter = {
     },
   ),
 
-  post: orgProcedure({ invoice: ["post"] }, invoiceInput).handler(async ({ context, input }) => {
-    const { posted, amountPaise } = await db.transaction(async (tx) => {
-      const settings = await orgSettings(context.scope.orgId, tx);
-      const { invoice } = await resolveInvoice(tx, context.scope, input, settings);
+  post: orgProcedure({ invoice: ["post"] }, postInput).handler(async ({ context, input }) => {
+    const { scope } = context;
 
-      const posted = await postDocument(tx, context.scope, settings, settings.invoicePrefix, {
+    // A counter sale also posts a Receipt, so it needs that permission too.
+    if (input.settle) requirePermission(scope, { receipt: ["post"] });
+
+    const { posted, amountPaise, receipt, receiptInput } = await db.transaction(async (tx) => {
+      const settings = await orgSettings(scope.orgId, tx);
+      const { invoice } = await resolveInvoice(tx, scope, input, settings);
+
+      const posted = await postDocument(tx, scope, settings, settings.invoicePrefix, {
         ...invoice,
         draft: input.draft ?? null,
       });
 
-      return { posted, amountPaise: invoice.posting.amountPaise };
+      const receiptInput = input.settle
+        ? {
+            orgSlug: input.orgSlug,
+            settlementKind: "against" as const,
+            documentDate: invoice.documentDate,
+            partyId: invoice.posting.partyId,
+            paymentMethodId: input.settle.paymentMethodId,
+            reference: input.settle.reference,
+            amount: invoice.posting.amountPaise,
+            allocations: [{ invoiceId: posted.id, amount: invoice.posting.amountPaise }],
+          }
+        : null;
+
+      const receipt = receiptInput ? await postReceipt(tx, scope, settings, receiptInput) : null;
+
+      return { posted, amountPaise: invoice.posting.amountPaise, receipt, receiptInput };
     });
 
     audit({
@@ -329,14 +366,24 @@ export const invoiceRouter = {
       meta: { number: posted.number, amount: formatDecimal(amountPaise) },
     });
 
-    return posted;
+    if (receipt && receiptInput) {
+      auditReceiptPost(
+        scope,
+        receipt.posted,
+        receiptInput,
+        receipt.allocatedPaise,
+        receipt.advanceSupply,
+      );
+    }
+
+    return { ...posted, receipt: receipt?.posted ?? null };
   }),
 
   get: orgProcedure({ invoice: ["read"] }, orgInput.extend({ invoiceId: z.uuid() })).handler(
     async ({ context, input }) => {
       const { orgId } = context.scope;
-
-      const outstandingPaise = remainingPaiseOf(orgId, "target");
+      const canReadNotes = authorize(context.scope.roles, { note: ["read"] });
+      const { capacityPaise, balancePaise } = settlementPaise(orgId, "target");
 
       // The version token and the data it protects return from one consistent read:
       // an editor must never receive version 2's token beside version 1's lines.
@@ -358,8 +405,12 @@ export const invoiceRouter = {
                 narration: documents.narration,
                 cancelledAt: documents.cancelledAt,
                 totalPaise: documents.totalPaise,
+                amendedFromId: documents.amendedFromId,
+                capacityPaise,
+                discountPaise: documents.discountPaise,
+                printSnapshot: documents.printSnapshot,
                 roundOffPaise: documents.roundOffPaise,
-                outstandingPaise,
+                outstandingPaise: balancePaise,
               })
               .from(documents)
               .where(
@@ -384,42 +435,52 @@ export const invoiceRouter = {
                 unit: documentLines.unit,
                 quantity: documentLines.quantity,
                 unitPricePaise: documentLines.unitPricePaise,
+                discountPaise: documentLines.discountPaise,
                 taxRateId: documentLines.taxRateId,
+                rateBasisPoints: taxRates.rateBasisPoints,
                 cgstPaise: documentLines.cgstPaise,
                 sgstPaise: documentLines.sgstPaise,
                 igstPaise: documentLines.igstPaise,
                 amountPaise: documentLines.amountPaise,
               })
               .from(documentLines)
+              .leftJoin(
+                taxRates,
+                and(eq(taxRates.orgId, orgId), eq(taxRates.id, documentLines.taxRateId)),
+              )
               .where(
                 and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, input.invoiceId)),
               )
               .orderBy(asc(documentLines.position));
 
-            const allocationRows = await tx
-              .select({
-                id: allocations.id,
-                sourceDocumentId: allocations.sourceDocumentId,
-                sourceNumber: documents.number,
-                amountPaise: allocations.amountPaise,
-                entryDate: allocations.entryDate,
-                reversed: allocationReversed(orgId),
-              })
-              .from(allocations)
-              .innerJoin(
-                documents,
-                and(eq(documents.orgId, orgId), eq(documents.id, allocations.sourceDocumentId)),
-              )
-              .where(
-                and(
-                  eq(allocations.orgId, orgId),
-                  eq(allocations.targetDocumentId, input.invoiceId),
-                  eq(allocations.kind, "apply"),
-                ),
-              )
-              .orderBy(asc(allocations.entryDate), asc(allocations.id));
+            const allocations = await allocationsOf(
+              tx,
+              orgId,
+              input.invoiceId,
+              "target",
+              canReadNotes ? undefined : ["receipt"],
+            );
 
-            return { invoice, lines, allocationRows };
+            const notes = canReadNotes
+              ? await tx
+                  .select({
+                    id: documents.id,
+                    type: documents.type,
+                    number: documents.number,
+                    totalPaise: documents.totalPaise,
+                  })
+                  .from(documents)
+                  .where(
+                    and(
+                      eq(documents.orgId, orgId),
+                      eq(documents.againstDocumentId, input.invoiceId),
+                      eq(documents.type, "creditNote"),
+                      eq(documents.state, "posted"),
+                    ),
+                  )
+              : [];
+
+            return { invoice, lines, allocations, notes };
           },
           { isolationLevel: "repeatable read", accessMode: "read only" },
         ),
@@ -428,135 +489,42 @@ export const invoiceRouter = {
 
       if (!snapshot) throw new ORPCError("NOT_FOUND", { message: "Invoice not found." });
 
-      const { invoice, lines, allocationRows } = snapshot;
+      const { invoice, lines, allocations, notes } = snapshot;
 
       return {
         ...invoice,
-        ...invoiceSettlement(invoice, businessDate(new Date(), timeZone)),
+        ...documentSettlement(invoice, businessDate(new Date(), timeZone)),
+        notes: notes.map((note) => ({ ...note, number: postedNumber(note.number, note.id) })),
         printClass: lines.some((line) => line.taxRateId !== null)
           ? ("taxInvoice" as const)
           : ("billOfSupply" as const),
         lines: lines.map(({ taxRateId: _taxRateId, ...line }) => line),
-        allocations: allocationRows.map((row) => ({
-          ...row,
-          sourceNumber: postedNumber(row.sourceNumber, row.sourceDocumentId),
-        })),
+        allocations,
       };
     },
   ),
 
   list: orgProcedure(
     { invoice: ["read"] },
-    orgInput
-      .extend({
-        ...documentListFields,
-        state: z.enum(DOCUMENT_STATES).optional(),
-        settlement: z.enum(["open", "overdue"]).optional(),
-      })
-      .superRefine(orderedPeriod),
-  ).handler(async ({ context, input }) => {
-    const { orgId } = context.scope;
-    // `overdue` compares due dates with today, so the time zone is read first.
-    const today = businessDate(new Date(), await orgTimeZone(orgId));
-    const outstandingPaise = remainingPaiseOf(orgId, "target");
+    orgInput.extend(claimListFields).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => listClaims(context.scope.orgId, "invoice", input)),
 
-    const page = await db
-      .select({
-        id: documents.id,
-        number: documents.number,
-        documentDate: documents.documentDate,
-        dueDate: documents.dueDate,
-        state: documents.state,
-        totalPaise: documents.totalPaise,
-        reference: documents.reference,
-        partyName: printedPartyName,
-        outstandingPaise,
-      })
-      .from(documents)
-      .where(
-        and(
-          documentListWhere(orgId, "invoice", input),
-          input.state ? eq(documents.state, input.state) : undefined,
-          input.settlement
-            ? and(
-                eq(documents.state, "posted"),
-                sql`${outstandingPaise} > 0`,
-                input.settlement === "overdue" ? lt(documents.dueDate, today) : undefined,
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(desc(documents.id))
-      .limit(input.limit + 1);
-
-    const { rows, hasMore } = pageOf(page, input.limit);
-
-    return { rows: rows.map((row) => ({ ...row, ...invoiceSettlement(row, today) })), hasMore };
-  }),
-
-  openInvoices: orgProcedure({ invoice: ["read"] }, orgInput.extend({ partyId: z.uuid() })).handler(
-    async ({ context, input }) => {
-      const { orgId } = context.scope;
-      const outstandingPaise = remainingPaiseOf(orgId, "target");
-
-      const rows = await db
-        .select({
-          id: documents.id,
-          number: documents.number,
-          documentDate: documents.documentDate,
-          dueDate: documents.dueDate,
-          outstandingPaise,
-        })
-        .from(documents)
-        .where(
-          and(
-            eq(documents.orgId, orgId),
-            eq(documents.type, "invoice"),
-            eq(documents.state, "posted"),
-            eq(documents.partyId, input.partyId),
-            sql`${outstandingPaise} > 0`,
-          ),
-        )
-        .orderBy(asc(documents.documentDate), asc(documents.id))
-        .limit(PICKER_LIMIT + 1);
-
-      return pageOf(
-        rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
-        PICKER_LIMIT,
-      );
-    },
+  amend: orgProcedure(
+    { invoice: ["cancel", "create"] },
+    orgInput.extend({ invoiceId: z.uuid(), reason }),
+  ).handler(({ context, input }) =>
+    amendClaim(context.scope, "invoice", input.invoiceId, input.reason),
   ),
 
   cancel: orgProcedure(
     { invoice: ["cancel"] },
     orgInput.extend({ invoiceId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelDocument(context.scope, "invoice", input.invoiceId, input.reason),
+    cancelDocument(context.scope, ["invoice"], input.invoiceId, input.reason),
   ),
 
   discardDraft: orgProcedure(
     { invoice: ["create"] },
     orgInput.extend({ draft: draftToken }),
-  ).handler(async ({ context, input }) => {
-    const [discarded] = await db
-      .delete(documents)
-      .where(
-        and(
-          eq(documents.orgId, context.scope.orgId),
-          eq(documents.id, input.draft.id),
-          eq(documents.type, "invoice"),
-          eq(documents.state, "draft"),
-          eq(documents.version, input.draft.version),
-        ),
-      )
-      .returning({ id: documents.id });
-
-    if (!discarded) {
-      throw new ORPCError("CONFLICT", {
-        message: "This draft changed. Reload it and try again.",
-      });
-    }
-
-    return discarded;
-  }),
+  ).handler(({ context, input }) => discardDraft(context.scope.orgId, "invoice", input.draft)),
 };

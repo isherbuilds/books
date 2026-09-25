@@ -3,19 +3,23 @@ import {
   Building2Icon,
   BookOpenTextIcon,
   ContactRoundIcon,
-  FileIcon,
+  FileInputIcon,
+  FileMinusIcon,
+  FilePlusIcon,
+  FileSpreadsheetIcon,
   FileTextIcon,
+  HandCoinsIcon,
   LandmarkIcon,
   ListTreeIcon,
-  LockIcon,
   PackageIcon,
   ReceiptIndianRupeeIcon,
-  ScaleIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
 
-// One source of truth for three consumers: the sidebar and settings strip render
+import type { NoteType } from "@/lib/notes";
+
+// One source of truth for three consumers: the sidebar, palette and settings strip render
 // destinations, while onboarding renders its setup subset. Add a page to the
 // section whose navigation surface owns it.
 type NavEntry<Route extends string> = {
@@ -24,7 +28,7 @@ type NavEntry<Route extends string> = {
   permission: AppPermission;
 };
 
-export const NAV_GROUPS = ["Sales", "Accounting", "Workspace"] as const;
+export const NAV_GROUPS = ["Sales", "Purchases", "Masters", "Accounting"] as const;
 
 // Whoever reads money accounts, methods and balances sees Banks, the CA included. The
 // tab and the route loader share it, so they cannot disagree and redirect-loop.
@@ -40,34 +44,31 @@ export const BANKS_MANAGE_PERMISSION: AppPermission = {
   paymentMethod: ["create", "update"],
 };
 
-type NavGroup = (typeof NAV_GROUPS)[number];
+export type NavGroup = (typeof NAV_GROUPS)[number];
 
 type PrimaryNavItem = NavEntry<
   | "/$orgSlug/receipts"
   | "/$orgSlug/invoices"
+  | "/$orgSlug/notes"
+  | "/$orgSlug/bills"
+  | "/$orgSlug/payments"
   | "/$orgSlug/parties"
   | "/$orgSlug/items"
   | "/$orgSlug/banking"
   | "/$orgSlug/journals"
   | "/$orgSlug/accounts"
-  | "/$orgSlug/opening-balance"
-  | "/$orgSlug/locks"
-  | "/$orgSlug/files"
+  | "/$orgSlug/reports"
 > & {
   icon: LucideIcon;
   group: NavGroup;
+  // Credit and Debit notes share one register; the type filter tells the two links
+  // apart, and a link is active only while the list carries its type.
+  noteType?: NoteType;
 };
 
-// No entry's path is a prefix of another's, so prefix matching highlights exactly
-// one item. Nesting a second entry under an existing one lit up both.
+// Home sits above the groups. No other path is a prefix of another, so prefix
+// matching highlights exactly one item.
 export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
-  {
-    to: "/$orgSlug/receipts",
-    label: "Receipts",
-    icon: ReceiptIndianRupeeIcon,
-    group: "Sales",
-    permission: { receipt: ["read"] },
-  },
   {
     to: "/$orgSlug/invoices",
     label: "Invoices",
@@ -76,17 +77,54 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
     permission: { invoice: ["read"] },
   },
   {
+    to: "/$orgSlug/receipts",
+    label: "Receipts",
+    icon: ReceiptIndianRupeeIcon,
+    group: "Sales",
+    permission: { receipt: ["read"] },
+  },
+  {
+    to: "/$orgSlug/notes",
+    noteType: "creditNote",
+    label: "Credit notes",
+    icon: FileMinusIcon,
+    group: "Sales",
+    permission: { note: ["read"] },
+  },
+  {
+    to: "/$orgSlug/bills",
+    label: "Bills",
+    icon: FileInputIcon,
+    group: "Purchases",
+    permission: { bill: ["read"] },
+  },
+  {
+    to: "/$orgSlug/payments",
+    label: "Payments",
+    icon: HandCoinsIcon,
+    group: "Purchases",
+    permission: { payment: ["read"] },
+  },
+  {
+    to: "/$orgSlug/notes",
+    noteType: "debitNote",
+    label: "Debit notes",
+    icon: FilePlusIcon,
+    group: "Purchases",
+    permission: { note: ["read"] },
+  },
+  {
     to: "/$orgSlug/parties",
     label: "Parties",
     icon: ContactRoundIcon,
-    group: "Sales",
+    group: "Masters",
     permission: { party: ["read"] },
   },
   {
     to: "/$orgSlug/items",
     label: "Items",
     icon: PackageIcon,
-    group: "Sales",
+    group: "Masters",
     permission: { item: ["read"] },
   },
   {
@@ -111,32 +149,25 @@ export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
     permission: { account: ["read"] },
   },
   {
-    to: "/$orgSlug/opening-balance",
-    label: "Opening balance",
-    icon: ScaleIcon,
+    to: "/$orgSlug/reports",
+    label: "Reports",
+    icon: FileSpreadsheetIcon,
     group: "Accounting",
-    permission: { openingBalance: ["read"] },
-  },
-  {
-    to: "/$orgSlug/locks",
-    label: "Locks",
-    icon: LockIcon,
-    group: "Accounting",
-    permission: { lock: ["read"] },
-  },
-  {
-    to: "/$orgSlug/files",
-    label: "Files",
-    icon: FileIcon,
-    group: "Workspace",
-    permission: { file: ["read"] },
+    permission: { export: ["read"] },
   },
 ];
 
 type SettingsTab = NavEntry<
-  "/$orgSlug/settings/organization" | "/$orgSlug/settings/members" | "/$orgSlug/settings/audit"
+  | "/$orgSlug/settings/organization"
+  | "/$orgSlug/settings/members"
+  | "/$orgSlug/settings/opening-balance"
+  | "/$orgSlug/settings/locks"
+  | "/$orgSlug/settings/files"
+  | "/$orgSlug/settings/audit"
 >;
 
+// Setup and control pages a member opens rarely: set once at cutover, or by the CA at
+// a filing. Zoho Books files Opening Balances and Transaction Locking under Settings too.
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   {
     to: "/$orgSlug/settings/organization",
@@ -146,6 +177,13 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     permission: { settings: ["update"] },
   },
   { to: "/$orgSlug/settings/members", label: "Members", permission: { member: ["read"] } },
+  {
+    to: "/$orgSlug/settings/opening-balance",
+    label: "Opening balance",
+    permission: { openingBalance: ["read"] },
+  },
+  { to: "/$orgSlug/settings/locks", label: "Locks", permission: { lock: ["read"] } },
+  { to: "/$orgSlug/settings/files", label: "Files", permission: { file: ["read"] } },
   { to: "/$orgSlug/settings/audit", label: "Audit", permission: { audit: ["read"] } },
 ];
 
