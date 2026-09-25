@@ -1008,3 +1008,28 @@ test("an invitation id from another tenant cannot be revoked", async () => {
   const stillPending = await clientFor(alice).member.list({ orgSlug: alpha.slug });
   expect(stillPending.invitations.map((row) => row.id)).toContain(invited.id);
 });
+
+test("the roster pages members by keyset; invitations ride the first page", async () => {
+  const owner = await createTestUser("roster-page-owner");
+  const organization = await createOrganization(owner, "roster-page");
+  const person = await createTestUser("roster-page-member");
+  await joinOrganization(person, organization.id);
+
+  const api = clientFor(owner);
+
+  const invited = await api.member.invite({
+    orgSlug: organization.slug,
+    email: `roster-${Bun.randomUUIDv7()}@example.com`,
+    role: "operator",
+  });
+
+  const first = await api.member.list({ orgSlug: organization.slug, limit: 1 });
+  expect(first.members.map((row) => row.userId)).toEqual([owner.user.id]);
+  expect(first.hasMore).toBe(true);
+  expect(first.invitations.map((row) => row.id)).toEqual([invited.id]);
+
+  const cursor = required(first.members[0], "first page member").id;
+  const next = await api.member.list({ orgSlug: organization.slug, limit: 1, cursor });
+  expect(next).toMatchObject({ hasMore: false, invitations: [] });
+  expect(next.members.map((row) => row.userId)).toEqual([person.user.id]);
+});

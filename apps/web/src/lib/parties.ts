@@ -24,24 +24,30 @@ export const ROLE_LABELS: Record<PartyRole, string> = {
   government: "Government",
 };
 
-// The complete master list, one cache entry per organization: the parties page,
-// the Party Link Field and the palette share it and filter in memory.
-export const partyListOptions = (orgSlug: string) => ({
-  ...orpc.party.list.queryOptions({ input: { orgSlug } }),
+type PartyList = Awaited<ReturnType<AppRouterClient["party"]["list"]>>;
+
+export type PartyListRow = PartyList["rows"][number];
+
+// The master, one cache entry per organization: the parties page, the Party Link
+// Field and the palette share it and filter in memory. Past 5,000 parties `hasMore`
+// is true and each of them searches the server with `q` instead. The master's key
+// carries no `q`, so invalidating it also reaches every search.
+export const partyListOptions = (orgSlug: string, q?: string) => ({
+  ...orpc.party.list.queryOptions({ input: q ? { orgSlug, q } : { orgSlug } }),
   staleTime: 5 * 60_000,
 });
 
 /** The active rows a Link Field offers: id, name and GSTIN. */
 export type PartyOption = { id: string; name: string; gstin?: string | null };
 
-type PartyListRow = Awaited<ReturnType<AppRouterClient["party"]["list"]>>[number];
+export type PartyPicker = { rows: PartyOption[]; hasMore: boolean };
 
-function activeParties(parties: PartyListRow[]): PartyOption[] {
-  return parties.filter((party) => party.active);
+function activeParties({ rows, hasMore }: PartyList): PartyPicker {
+  return { rows: rows.filter((party) => party.active), hasMore };
 }
 
-export const partyPickerOptions = (orgSlug: string) => ({
-  ...partyListOptions(orgSlug),
+export const partyPickerOptions = (orgSlug: string, q?: string) => ({
+  ...partyListOptions(orgSlug, q),
   select: activeParties,
 });
 

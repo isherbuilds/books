@@ -38,7 +38,7 @@ import {
   type PartyFilters,
 } from "@/lib/parties";
 
-// The list is complete in the cache; the table mounts it 25 rows at a time, one Load
+// The list is cached whole up to 5,000 rows; the table mounts it 25 rows at a time, one Load
 // more per step, the same page as the server keyset lists (lib/schemas `pageLimit`).
 const ROW_STEP = 25;
 
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/$orgSlug/parties")({
     sort: z.enum(PARTY_SORTS).optional().catch(undefined),
     order: z.enum(["desc"]).optional().catch(undefined),
   }),
-  // Filters and sort never refetch: the master is complete and cached.
+  // Filters and sort never refetch: the master is cached. Past its bound, a search does.
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
@@ -85,10 +85,14 @@ function PartiesRoute() {
   const [limit, setLimit] = useState(ROW_STEP);
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
-  const parties = useQuery(partyListOptions(orgSlug));
+  const partyMaster = useQuery(partyListOptions(orgSlug));
   const totals = useQuery({ ...partyTotalsOptions(orgSlug), enabled: canReadReceipts });
+  // Past the master's bound the search runs on the server; filters and sort stay in memory.
+  const serverSearch = partyMaster.data?.hasMore === true && q !== undefined;
+  const partySearch = useQuery({ ...partyListOptions(orgSlug, q), enabled: serverSearch });
+  const parties = serverSearch ? partySearch : partyMaster;
 
-  const master = parties.data ?? [];
+  const master = parties.data?.rows ?? [];
   const openParty = openPartyId ? master.find((each) => each.id === openPartyId) : undefined;
   const totalsById = new Map(totals.data?.map((each) => [each.partyId, each]));
 
@@ -297,6 +301,11 @@ function PartiesRoute() {
           }}
           shown={Math.min(limit, rows.length)}
         />
+        {parties.data?.hasMore ? (
+          <p className="px-3 text-muted-foreground">
+            Showing the first 5,000 parties. Search by name or GSTIN to find the rest.
+          </p>
+        ) : null}
         {/* The quick look opens over the list, which stays mounted. */}
         {openParty ? (
           <PartyQuickLook

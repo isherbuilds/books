@@ -75,6 +75,14 @@ Check UI items in the running app on desktop and mobile, in both themes.
   shows Clear unavailable, clears the hidden amount and error, and can submit
   a new allocation. The seeded Organizations have no posted Invoices or Bills,
   so the running-app check could not exercise this transition.
+- **Limits rule ([#17](https://github.com/isherbuilds/books/issues/17))**:
+  Verification. Members pages 25 at a time with Load more, keeps `q` in the
+  URL and renders cards on mobile; Link Fields show at most eight matches;
+  past 5,000 parties the Party Link Field, palette and parties page search
+  the server. Remaining: check each in the running app on desktop and mobile
+  in both themes, and the party search on an Organization seeded past 5,000
+  parties. The register party filter menus and chips still read the first
+  5,000 parties.
 - **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
   sort measurement, the H4 runs, and slice 5 import. Slice 4 is implemented
   and runtime verified with accounting-core slices 4a and 4b-i; slice 5's

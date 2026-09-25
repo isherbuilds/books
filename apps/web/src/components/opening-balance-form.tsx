@@ -112,7 +112,7 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
           />
         </div>
 
-        <EntryLines title="Balances" accounts={accounts} autoFocusFirst={false} />
+        <EntryLines orgSlug={orgSlug} title="Balances" accounts={accounts} autoFocusFirst={false} />
       </DocumentForm>
     </Form>
   );

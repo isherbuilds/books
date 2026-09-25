@@ -1,3 +1,5 @@
+import { searchQuery } from "@accly/api/lib/schemas";
+import type { AppRouterClient } from "@accly/api/routers/index";
 import { ORG_ROLES, ROLE_LABELS, parseRoles } from "@accly/auth/access";
 import { Badge } from "@accly/ui/components/badge";
 import { Button } from "@accly/ui/components/button";
@@ -19,39 +21,25 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@accly/ui/components/dropdown-menu";
 import { Input } from "@accly/ui/components/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@accly/ui/components/table";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClientOnly, createFileRoute } from "@tanstack/react-router";
-import { CopyIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react";
-import { useState } from "react";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ClientOnly, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createColumnHelper } from "@tanstack/react-table";
+import { CopyIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { useConfirm } from "@/components/confirm-dialog";
-import {
-  ListState,
-  ListToolbar,
-  PageBody,
-  PageHeader,
-  Panel,
-  SearchInput,
-} from "@/components/page";
+import { DataTable, DATA_TABLE_FEATURES } from "@/components/data-table/data-table";
+import { RowActionsMenu } from "@/components/data-table/row-actions-menu";
+import { TableEmpty } from "@/components/data-table/table-empty";
+import { focusSearch } from "@/components/list-filter";
+import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateMembership, invalidateRoster } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
@@ -61,14 +49,21 @@ import { useCan } from "@/lib/membership";
 
 import { SettingsTabs } from "./route";
 
-const MEMBER_PAGE_LIMIT = 100;
+// Members page by the server keyset, 25 at a time (lib/schemas `pageLimit`).
+const memberListOptions = (orgSlug: string, q: string | undefined) =>
+  orpc.member.list.infiniteOptions({
+    input: (cursor: string | undefined) => ({ orgSlug, q, cursor }),
+    initialPageParam: undefined,
+    getNextPageParam: (last) => (last.hasMore ? last.members.at(-1)?.id : undefined),
+  });
 
 export const Route = createFileRoute("/$orgSlug/settings/members")({
   head: () => ({ meta: [{ title: "Members · Accly Books" }] }),
-  loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
-    await queryClient
-      .query(orpc.member.list.queryOptions({ input: { orgSlug, limit: MEMBER_PAGE_LIMIT } }))
-      .catch(() => {});
+  // The search lives in the URL, so a reload keeps it.
+  validateSearch: z.object({ q: searchQuery.catch(undefined) }),
+  loaderDeps: ({ search: { q } }) => ({ q }),
+  loader: async ({ context: { queryClient }, deps: { q }, params: { orgSlug } }) => {
+    await queryClient.infiniteQuery(memberListOptions(orgSlug, q)).catch(() => {});
   },
   component: MembersRoute,
 });
@@ -251,21 +246,100 @@ function InviteAction({ orgSlug, compact = false }: { orgSlug: string; compact?:
   );
 }
 
-function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
+type RosterPage = Awaited<ReturnType<AppRouterClient["member"]["list"]>>;
+
+/** A member or a pending invitation: the roster shows both in one table. */
+type RosterRow =
+  | ({ kind: "member" } & RosterPage["members"][number])
+  | ({ kind: "invitation" } & RosterPage["invitations"][number]);
+
+const col = createColumnHelper<typeof DATA_TABLE_FEATURES, RosterRow>();
+
+const ROSTER_COLUMNS = [
+  col.display({
+    id: "person",
+    header: "Person",
+    cell: ({ row: { original: row } }) =>
+      row.kind === "member" ? (
+        <div className="min-w-0">
+          <div className="truncate font-medium">{row.name}</div>
+          <div className="truncate text-muted-foreground">{row.email}</div>
+        </div>
+      ) : (
+        <span className="truncate text-muted-foreground">{row.email}</span>
+      ),
+  }),
+  col.display({
+    id: "role",
+    header: "Role",
+    meta: { className: "w-48" },
+    cell: ({ row: { original: row } }) => <RosterRole row={row} />,
+  }),
+  col.display({
+    id: "status",
+    header: "Status",
+    meta: { className: "w-56" },
+    cell: ({ row: { original: row } }) => <RosterStatus row={row} />,
+  }),
+  col.display({
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    meta: { className: "w-10 px-1 text-center" },
+    cell: ({ row, table }) => {
+      const orgSlug = table.options.meta?.orgSlug;
+
+      return orgSlug ? <RosterActions orgSlug={orgSlug} row={row.original} /> : null;
+    },
+  }),
+];
+
+function RosterRole({ row }: { row: RosterRow }) {
+  return row.role ? <RoleBadge role={row.role} /> : <span>Unassigned</span>;
+}
+
+function RosterStatus({ row }: { row: RosterRow }) {
   const { timeZone } = useOrgDateTime();
+
+  if (row.kind === "member") return <span className="text-muted-foreground">active</span>;
+
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
+      <Badge variant="outline">invited</Badge>
+      expires {formatDate(row.expiresAt, timeZone)}
+    </span>
+  );
+}
+
+function RosterCard({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        {row.kind === "member" ? (
+          <>
+            <span className="truncate font-medium">{row.name}</span>
+            <span className="truncate text-muted-foreground">{row.email}</span>
+          </>
+        ) : (
+          <span className="truncate text-muted-foreground">{row.email}</span>
+        )}
+        <span className="flex flex-wrap items-center gap-2">
+          <RosterRole row={row} />
+          <RosterStatus row={row} />
+        </span>
+      </div>
+      <RosterActions orgSlug={orgSlug} row={row} />
+    </div>
+  );
+}
+
+// The row owns its mutations and confirm dialog: both outlive the menu that starts them.
+function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
   const queryClient = useQueryClient();
   const [confirm, confirmDialog] = useConfirm();
-
-  const members = useQuery(
-    orpc.member.list.queryOptions({
-      input: { orgSlug, limit: MEMBER_PAGE_LIMIT, q: q || undefined },
-    }),
-  );
-
-  const onError = (error: Error) => toast.error(errorMessage(error, "Could not update the roster"));
   // The roster is readable org-wide; only its actions need the grant.
   const canManage = useCan(orgSlug, { member: ["update", "delete"] });
   const canRevoke = useCan(orgSlug, { invitation: ["cancel"] });
+  const onError = (error: Error) => toast.error(errorMessage(error, "Could not update the roster"));
 
   const updateRole = useMutation(
     orpc.member.updateRole.mutationOptions({
@@ -297,192 +371,147 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
     }),
   );
 
-  const people = members.data?.members ?? [];
-  const invitations = members.data?.invitations ?? [];
+  if (row.kind === "member") {
+    if (!canManage) return null;
 
+    const name = row.name || row.email;
+
+    return (
+      <>
+        <RowActionsMenu label={`Actions for ${name}`}>
+          <DropdownMenuLabel>Change role</DropdownMenuLabel>
+          {ORG_ROLES.map((option) => (
+            <DropdownMenuItem
+              key={option}
+              disabled={parseRoles(row.role).includes(option) || updateRole.isPending}
+              onClick={() => updateRole.mutate({ orgSlug, memberId: row.id, role: option })}
+            >
+              {ROLE_LABELS[option]}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={removeMember.isPending}
+            onClick={() =>
+              confirm({
+                title: "Remove from organization?",
+                description: `${name} loses access to this organization immediately. Their audit history is kept.`,
+                confirmLabel: "Remove",
+                run: () => removeMember.mutate({ orgSlug, memberId: row.id }),
+              })
+            }
+          >
+            Remove from organization
+          </DropdownMenuItem>
+        </RowActionsMenu>
+        {confirmDialog}
+      </>
+    );
+  }
+
+  // Invitation rows arrive only for members with the invite grant. The link is the
+  // only way to share an invitation, so Copy stays on a plain-http origin too.
   return (
     <>
-      <Panel
-        label="People"
-        action={
-          <span className="shrink-0 tabular-nums">
-            {people.length === MEMBER_PAGE_LIMIT
-              ? `first ${MEMBER_PAGE_LIMIT} — search to narrow`
-              : people.length}
-            {invitations.length > 0 ? ` · ${invitations.length} invited` : ""}
-          </span>
-        }
-      >
-        <ListState
-          query={members}
-          errorTitle="Could not load members"
-          isEmpty={people.length === 0 && invitations.length === 0}
-          empty={
-            q ? (
-              <p>No matching members</p>
-            ) : (
-              <div className="flex flex-col items-center gap-3">
-                <UsersIcon className="size-5 text-muted-foreground" />
-                <p>No other members yet</p>
-                <InviteAction orgSlug={orgSlug} compact />
-              </div>
+      <RowActionsMenu label={`Actions for the invitation to ${row.email}`}>
+        <DropdownMenuItem
+          onClick={() =>
+            navigator.clipboard.writeText(row.url).then(
+              () => toast.success("Invitation link copied"),
+              () => toast.error("Could not copy the link"),
             )
           }
         >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Person</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-8" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {people.map((person) => (
-                <TableRow key={person.id}>
-                  <TableCell>
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{person.name}</div>
-                      <div className="truncate text-muted-foreground">{person.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <RoleBadge role={person.role} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">active</TableCell>
-                  <TableCell className="text-right">
-                    <ClientOnly fallback={null}>
-                      {canManage ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon-xs" />}
-                            aria-label={`Actions for ${person.name || person.email}`}
-                          >
-                            <MoreHorizontalIcon />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-40">
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel>Change role</DropdownMenuLabel>
-                              {ORG_ROLES.map((option) => (
-                                <DropdownMenuItem
-                                  key={option}
-                                  disabled={
-                                    parseRoles(person.role).includes(option) || updateRole.isPending
-                                  }
-                                  onClick={() =>
-                                    updateRole.mutate({
-                                      orgSlug,
-                                      memberId: person.id,
-                                      role: option,
-                                    })
-                                  }
-                                >
-                                  {ROLE_LABELS[option]}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                disabled={removeMember.isPending}
-                                onClick={() =>
-                                  confirm({
-                                    title: "Remove from organization?",
-                                    description: `${person.name || person.email} loses access to this organization immediately. Their audit history is kept.`,
-                                    confirmLabel: "Remove",
-                                    run: () =>
-                                      removeMember.mutate({ orgSlug, memberId: person.id }),
-                                  })
-                                }
-                              >
-                                Remove from organization
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : null}
-                    </ClientOnly>
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {invitations.map((invitation) => (
-                <TableRow key={invitation.id} className="text-muted-foreground">
-                  <TableCell>
-                    <div className="truncate">{invitation.email}</div>
-                  </TableCell>
-                  <TableCell>
-                    {invitation.role ? <RoleBadge role={invitation.role} /> : "Unassigned"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-2 whitespace-nowrap">
-                      <Badge variant="outline">invited</Badge>
-                      expires {formatDate(invitation.expiresAt, timeZone)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="flex justify-end gap-1">
-                      {/* Rows arrive only for members with the invite grant. */}
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() =>
-                          navigator.clipboard.writeText(invitation.url).then(
-                            () => toast.success("Invitation link copied"),
-                            () => toast.error("Could not copy the link"),
-                          )
-                        }
-                      >
-                        <CopyIcon />
-                        Copy link
-                      </Button>
-                      {canRevoke ? (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          disabled={revoke.isPending}
-                          onClick={() =>
-                            confirm({
-                              title: "Cancel this invitation?",
-                              description: `The link for ${invitation.email} stops working. You can invite them again afterwards.`,
-                              confirmLabel: "Cancel invitation",
-                              run: () => revoke.mutate({ orgSlug, invitationId: invitation.id }),
-                            })
-                          }
-                        >
-                          Cancel
-                        </Button>
-                      ) : null}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </ListState>
-      </Panel>
+          <CopyIcon />
+          Copy link
+        </DropdownMenuItem>
+        {canRevoke ? (
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={revoke.isPending}
+            onClick={() =>
+              confirm({
+                title: "Cancel this invitation?",
+                description: `The link for ${row.email} stops working. You can invite them again afterwards.`,
+                confirmLabel: "Cancel invitation",
+                run: () => revoke.mutate({ orgSlug, invitationId: row.id }),
+              })
+            }
+          >
+            Cancel invitation
+          </DropdownMenuItem>
+        ) : null}
+      </RowActionsMenu>
       {confirmDialog}
     </>
   );
 }
 
-function MemberDirectory({ orgSlug }: { orgSlug: string }) {
-  const [q, setQ] = useState("");
+function MemberDirectory({ orgSlug, q }: { orgSlug: string; q: string | undefined }) {
+  const navigate = useNavigate({ from: Route.fullPath });
+  const field = useRef<HTMLDivElement>(null);
+  const roster = useInfiniteQuery(memberListOptions(orgSlug, q));
+  const pages = roster.data?.pages ?? [];
+
+  // Invitations ride the first page only.
+  const rows: RosterRow[] = [
+    ...pages.flatMap((page) =>
+      page.members.map((person): RosterRow => ({ kind: "member", ...person })),
+    ),
+    ...(pages[0]?.invitations ?? []).map((invite): RosterRow => ({
+      kind: "invitation",
+      ...invite,
+    })),
+  ];
+
+  const setQuery = (next: string | undefined) =>
+    navigate({ replace: true, search: (previous) => ({ ...previous, q: next }) });
+
+  const clearSearch = () => {
+    focusSearch(field, { empty: true });
+    void setQuery(undefined);
+  };
 
   return (
     <PageBody>
       <ListToolbar>
-        <SearchInput label="Search members" placeholder="Name or email" onQueryChange={setQ} />
+        <SearchInput
+          label="Search members"
+          placeholder="Name or email"
+          value={q}
+          fieldRef={field}
+          onQueryChange={(next) => void setQuery(next || undefined)}
+        />
       </ListToolbar>
-      <MemberResults orgSlug={orgSlug} q={q} />
+      <DataTable
+        columns={ROSTER_COLUMNS}
+        data={rows}
+        getRowId={(row) => `${row.kind}:${row.id}`}
+        meta={{ orgSlug }}
+        renderCard={(row) => <RosterCard orgSlug={orgSlug} row={row} />}
+        query={roster}
+        errorTitle="Could not load members"
+        empty={
+          <TableEmpty
+            title="No members match"
+            description="Try another name or email."
+            action={
+              <Button size="xs" variant="outline" onClick={clearSearch}>
+                Clear search
+              </Button>
+            }
+          />
+        }
+      />
+      <LoadMore query={roster} shown={rows.length} />
     </PageBody>
   );
 }
 
 function MembersRoute() {
   const { orgSlug } = Route.useParams();
+  const { q } = Route.useSearch();
 
   return (
     <>
@@ -492,7 +521,7 @@ function MembersRoute() {
         action={<InviteAction orgSlug={orgSlug} />}
       />
       <SettingsTabs orgSlug={orgSlug} />
-      <MemberDirectory key={orgSlug} orgSlug={orgSlug} />
+      <MemberDirectory key={orgSlug} orgSlug={orgSlug} q={q} />
     </>
   );
 }

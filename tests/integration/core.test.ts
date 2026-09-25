@@ -258,10 +258,15 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   });
 
   const listed = await api.party.list({ orgSlug: organization.slug });
-  expect(listed).toHaveLength(5);
-  expect(listed.map((party) => party.id)).toEqual(
+  expect(listed.hasMore).toBe(false);
+  expect(listed.rows).toHaveLength(5);
+  expect(listed.rows.map((party) => party.id)).toEqual(
     expect.arrayContaining([original.id, namesake.id, ram.id, sita.id]),
   );
+
+  // Past the bound the Link Field searches the server on name or GSTIN.
+  const searched = await api.party.list({ orgSlug: organization.slug, q: "सीत" });
+  expect(searched).toEqual({ rows: [expect.objectContaining({ id: sita.id })], hasMore: false });
 });
 
 test("a party edit from a stale copy is refused", async () => {

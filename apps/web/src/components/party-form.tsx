@@ -178,12 +178,19 @@ function PartyForm({
   const saved = (row: PartyRecord) => {
     const { id, name, roles, gstin, active } = row;
 
-    queryClient.setQueryData(listKey, (rows) =>
-      rows
-        ? [...rows.filter((each) => each.id !== id), { id, name, roles, gstin, active }].sort(
-            (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-          )
-        : rows,
+    queryClient.setQueryData(listKey, (list) =>
+      list
+        ? {
+            ...list,
+            rows: [
+              ...list.rows.filter((each) => each.id !== id),
+              { id, name, roles, gstin, active },
+            ].sort(
+              (left, right) =>
+                left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+            ),
+          }
+        : list,
     );
     queryClient.setQueryData(orpc.party.get.queryKey({ input: { orgSlug, partyId: row.id } }), row);
     void queryClient.invalidateQueries({ queryKey: listKey });

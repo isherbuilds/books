@@ -218,7 +218,7 @@ export function PaymentForm({
 
   useEffect(() => {
     if (!initialPartyId || !parties.data) return;
-    const selected = parties.data.find((party) => party.id === initialPartyId);
+    const selected = parties.data.rows.find((party) => party.id === initialPartyId);
 
     if (selected && form.getValues("partyId") === initialPartyId)
       form.setValue("partyName", selected.name);

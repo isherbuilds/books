@@ -132,7 +132,7 @@ function PaymentsRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.find((each) => each.id === partyId);
+    const party = parties.data?.rows.find((each) => each.id === partyId);
     chips.push({
       id: "partyId",
       name: "Party",

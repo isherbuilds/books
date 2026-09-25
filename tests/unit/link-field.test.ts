@@ -31,3 +31,12 @@ test("an existing name, a committed value, or no create grant offers no Create r
   expect(linkRows(options("Kapoor Stores", { selectedLabel: "Kapoor Stores" }))).toEqual(rows);
   expect(linkRows(options("sha", { canCreate: false }))).toEqual([sharma, asha]);
 });
+
+test("at most eight matches show, with Create still last", () => {
+  const many = Array.from({ length: 12 }, (_, index): Row => ({ name: `Shah ${index}` }));
+
+  expect(linkRows(options("shah", { items: many }))).toEqual([
+    ...many.slice(0, 8),
+    { __create: "shah" },
+  ]);
+});

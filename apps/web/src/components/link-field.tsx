@@ -19,6 +19,13 @@ type LinkFieldProps<T> = {
   query: { isPending: boolean; isError: boolean; error: unknown };
   /** The records in the plural, for status copy: "parties", "income accounts". */
   noun: string;
+  /**
+   * False while `items` may miss a match: a master past its bound, or a server
+   * search still catching up with the text. It withholds Create and "No matches".
+   */
+  complete?: boolean;
+  /** The typed text, trimmed; empty while the field shows its committed value. */
+  onSearch?: (needle: string) => void;
   getKey: (item: T) => string;
   getLabel: (item: T) => string;
   /** An identifier matched by prefix and shown right-aligned, such as a GSTIN. */
@@ -41,7 +48,13 @@ type LinkFieldProps<T> = {
 };
 
 // Design §9: the empty row says what would be here.
-function statusText(status: LinkStatus, noun: string, needle: string, canCreate: boolean) {
+function statusText(
+  status: LinkStatus,
+  noun: string,
+  needle: string,
+  canCreate: boolean,
+  complete: boolean,
+) {
   if (status === "pending") return `Loading ${noun}…`;
 
   if (status === "error") return `Could not load ${noun}`;
@@ -49,6 +62,8 @@ function statusText(status: LinkStatus, noun: string, needle: string, canCreate:
   if (status === "overflow") {
     return `More than 5,000 ${noun}. Picking is unavailable until the list is smaller.`;
   }
+
+  if (!complete) return `Searching ${noun}…`;
 
   if (needle) return `No ${noun} match “${needle}”`;
 
@@ -59,6 +74,8 @@ export function LinkField<T>({
   items,
   query: listQuery,
   noun,
+  complete = true,
+  onSearch,
   getKey,
   getLabel,
   getCode,
@@ -87,7 +104,7 @@ export function LinkField<T>({
   const [query, setQuery] = useState(() => selectedLabel);
   const [open, setOpen] = useState(false);
   const highlighted = useRef<T | CreateItem | undefined>(undefined);
-  const canCreate = onCreate !== undefined && status === "ready";
+  const canCreate = onCreate !== undefined && status === "ready" && complete;
   const needle = query === selectedLabel ? "" : query.trim();
 
   const rows = linkRows({
@@ -99,7 +116,14 @@ export function LinkField<T>({
     getCode,
   });
 
+  const changeQuery = (text: string) => {
+    setQuery(text);
+    onSearch?.(text === selectedLabel ? "" : text.trim());
+  };
+
   const choose = (item: T | CreateItem) => {
+    onSearch?.("");
+
     if (isCreateItem(item)) {
       onCreate?.(item.__create);
       setOpen(false);
@@ -184,9 +208,11 @@ export function LinkField<T>({
         autoHighlight
         value={value}
         inputValue={query}
-        onInputValueChange={setQuery}
+        onInputValueChange={changeQuery}
         emptyContent={
-          <p className="px-3 py-4 text-center">{statusText(status, noun, needle, canCreate)}</p>
+          <p className="px-3 py-4 text-center">
+            {statusText(status, noun, needle, canCreate, complete)}
+          </p>
         }
         open={open}
         onOpenChange={setOpen}
@@ -206,7 +232,7 @@ export function LinkField<T>({
           "aria-required": ariaRequired,
           onKeyDown: handleKeyDown,
           // Uncommitted text never stands in for the stored value.
-          onBlur: () => setQuery(selectedLabel),
+          onBlur: () => changeQuery(selectedLabel),
         }}
       />
     </ClientOnly>

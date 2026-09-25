@@ -229,7 +229,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 1. **Spine, Party, templates, money.** Implemented: the settings row, chart
    templates, Parties with a namesake check and one GSTIN per Organization (an
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
-   rows then `MASTER_LIST_LIMIT`, money accounts and methods.
+   rows then `MASTER_LIST_LIMIT` (parties search the server instead), money
+   accounts and methods.
 2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
    no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`

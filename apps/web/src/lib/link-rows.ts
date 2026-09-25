@@ -1,5 +1,8 @@
 export type CreateItem = { __create: string };
 
+/** A Link Field shows at most this many matches; typing narrows to the rest. */
+export const LINK_ROW_LIMIT = 8;
+
 export function isCreateItem<T>(item: T | CreateItem): item is CreateItem {
   return typeof item === "object" && item !== null && "__create" in item;
 }
@@ -31,9 +34,9 @@ export function filterLinkItems<T>(
 }
 
 /**
- * The rows a Link Field shows. Untouched text equals the committed label, so the
- * whole list opens with the current record checked, as Midday's pickers do. A typed
- * name that already exists gets no Create row; Create is otherwise always last.
+ * The rows a Link Field shows: the best `LINK_ROW_LIMIT` matches. Untouched text
+ * equals the committed label, so the list opens unfiltered, as Midday's pickers do.
+ * A typed name that already exists gets no Create row; Create is otherwise always last.
  */
 export function linkRows<T>({
   items,
@@ -51,12 +54,13 @@ export function linkRows<T>({
   getCode?: (item: T) => string | undefined;
 }): Array<T | CreateItem> {
   const needle = query === selectedLabel ? "" : query.trim();
-  const matches = filterLinkItems(items, needle, getLabel, getCode);
+  const all = filterLinkItems(items, needle, getLabel, getCode);
+  const matches = all.slice(0, LINK_ROW_LIMIT);
 
   if (!canCreate || needle === "") return matches;
 
   const lower = needle.toLowerCase();
-  const exists = matches.some((item) => getLabel(item).trim().toLowerCase() === lower);
+  const exists = all.some((item) => getLabel(item).trim().toLowerCase() === lower);
 
   return exists ? matches : [...matches, { __create: needle }];
 }

@@ -104,7 +104,7 @@ function BillsRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.find((candidate) => candidate.id === partyId);
+    const party = parties.data?.rows.find((candidate) => candidate.id === partyId);
     chips.push({
       id: "partyId",
       name: "Supplier",
