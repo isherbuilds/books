@@ -4,15 +4,15 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeftRightIcon, CircleDotIcon } from "lucide-react";
+import { useRef } from "react";
 import { useIsMutating } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { FormSheet } from "@/components/form-sheet";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
@@ -25,7 +25,6 @@ import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/comp
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -39,6 +38,8 @@ const LABELS = { against: "Against", advance: "Advance", direct: "Direct" } as c
 
 const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
+  // Seeds the new payment's party; kept apart from the `partyId` list filter.
+  payeeId: z.uuid().optional().catch(undefined),
   q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   from: z.iso.date().optional().catch(undefined),
@@ -47,12 +48,12 @@ const paymentSearch = z.object({
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
 });
 
-type Filters = Omit<z.infer<typeof paymentSearch>, "create">;
+type Filters = Omit<z.infer<typeof paymentSearch>, "create" | "payeeId">;
 
 export const Route = createFileRoute("/$orgSlug/payments")({
   head: () => ({ meta: [{ title: "Payments · Accly Books" }] }),
   validateSearch: paymentSearch,
-  loaderDeps: ({ search: { create: _create, ...filters } }) => filters,
+  loaderDeps: ({ search: { create: _create, payeeId: _payeeId, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, params: { orgSlug }, deps }) => {
     await queryClient.infiniteQuery(paymentListOptions(orgSlug, deps)).catch(() => {});
   },
@@ -87,17 +88,14 @@ function PaymentOverlay({
 
 function PaymentsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, ...filters } = Route.useSearch();
+  const { create, payeeId, ...filters } = Route.useSearch();
   const { q, partyId, from, to, state, settlementKind } = filters;
-  const { today, financialYearStart } = useOrgDateTime();
+  const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
   const newTrigger = useRef<HTMLButtonElement>(null);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canPost = useCan(orgSlug, { payment: ["post"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
-  const range: SearchRange = { from, to };
-  const rangeText = rangeLabel(range, today, financialYearStart);
 
   const payments = useInfiniteQuery({
     ...paymentListOptions(orgSlug, filters),
@@ -116,6 +114,8 @@ function PaymentsRoute() {
 
   const setFilters = (patch: Partial<Filters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
+
+  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -141,13 +141,7 @@ function PaymentsRoute() {
     });
   }
 
-  if (from || to)
-    chips.push({
-      id: "date",
-      name: "Date",
-      label: rangeText,
-      remove: () => setFilters({ from: undefined, to: undefined }),
-    });
+  if (date.chip) chips.push(date.chip);
 
   if (state)
     chips.push({
@@ -164,7 +158,13 @@ function PaymentsRoute() {
       label: LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
-  const openCreate = () => void navigate({ search: (previous) => ({ ...previous, create: true }) });
+
+  // A party-filtered list seeds that party as the payee; the filter itself stays apart.
+  const openCreate = () =>
+    void navigate({
+      search: (previous) => ({ ...previous, create: true, payeeId: previous.partyId }),
+    });
+
   usePaletteActions(
     canPost ? [{ id: "payment:new", label: "New payment", group: "action", run: openCreate }] : [],
   );
@@ -172,7 +172,7 @@ function PaymentsRoute() {
   const closeOverlay = () =>
     void navigate({
       replace: true,
-      search: (previous) => ({ ...previous, create: undefined }),
+      search: (previous) => ({ ...previous, create: undefined, payeeId: undefined }),
     }).then(() => newTrigger.current?.focus());
 
   const empty =
@@ -222,15 +222,7 @@ function PaymentsRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
-                  <PresetItems
-                    range={range}
-                    today={today}
-                    financialYearStart={financialYearStart}
-                    onSelect={(next) => void setFilters(next)}
-                    onCustom={() => setCustomRangeOpen(true)}
-                  />
-                </FilterSubmenu>
+                {date.submenu}
                 <FilterSubmenu icon={CircleDotIcon} label="State">
                   {STATES.map((each) => (
                     <DropdownMenuCheckboxItem
@@ -265,7 +257,7 @@ function PaymentsRoute() {
           rowLink={(payment) => ({
             to: "/$orgSlug/payments/$paymentId",
             params: { orgSlug, paymentId: payment.id },
-            search: (previous) => ({ ...previous, create: undefined }),
+            search: (previous) => ({ ...previous, create: undefined, payeeId: undefined }),
           })}
           renderCard={(payment) => <PaymentCard payment={payment} />}
           query={payments}
@@ -276,17 +268,9 @@ function PaymentsRoute() {
         <LoadMore query={payments} shown={rows.length} />
         <Outlet />
       </PageBody>
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={field}
-        from={from}
-        to={to}
-        today={today}
-        onApply={(next) => void setFilters(next)}
-      />
+      {date.popover}
       {canPost && create ? (
-        <PaymentOverlay orgSlug={orgSlug} today={today} partyId={partyId} onClose={closeOverlay} />
+        <PaymentOverlay orgSlug={orgSlug} today={today} partyId={payeeId} onClose={closeOverlay} />
       ) : null}
     </>
   );

@@ -48,12 +48,7 @@ async function itemValues(tx: DbTransaction, orgId: string, fields: ItemFields, 
         .then(([row]) => row)
     : undefined;
 
-  const [incomeAccount] = await postableAccounts(
-    tx,
-    orgId,
-    [fields.incomeAccountId],
-    ["income"],
-  ).for("share", { of: accounts });
+  const [incomeAccount] = await postableAccounts(tx, orgId, [fields.incomeAccountId], ["income"]);
 
   if (!incomeAccount) {
     throw badRequest(

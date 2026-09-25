@@ -12,7 +12,6 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
-import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
@@ -24,6 +23,7 @@ import {
   reportRowErrors,
   type OpenDocument,
 } from "@/components/allocation-table";
+import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
@@ -226,6 +226,12 @@ export function ReceiptForm({
 
     if (values.settlementKind === "against") {
       if (!values.partyId) return;
+
+      if (!openItems.isSuccess || openItems.isFetching) {
+        form.setError("allocations", { message: "Wait for the open documents to load" });
+
+        return;
+      }
 
       const { selected, allocatedPaise, rowErrors, tableError } = checkAllocations(
         values.allocations,
@@ -477,31 +483,7 @@ export function ReceiptForm({
           />
         ) : null}
 
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ReferenceNarrationFields />
 
         <RegisteredFormField
           name="documentDate"
