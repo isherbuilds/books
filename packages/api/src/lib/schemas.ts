@@ -239,6 +239,23 @@ export const indianPinCode = z
   .trim()
   .regex(/^[1-9][0-9]{5}$/, "Use a valid 6-digit PIN code");
 
+/** The legal identity and address an organization is created with and later edits. */
+export const organizationProfileFields = {
+  legalName: z.string().trim().min(1).max(200),
+  pan,
+  gstin: optionalGstin,
+  stateCode: indianStateCode,
+  addressLine1: z.string().trim().min(1).max(200),
+  addressLine2: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((value) => value || undefined)
+    .optional(),
+  city: z.string().trim().min(1).max(120),
+  pinCode: indianPinCode,
+};
+
 export function validateGstinIdentity(
   value: { gstin?: string; pan?: string; stateCode: string },
   context: z.RefinementCtx,

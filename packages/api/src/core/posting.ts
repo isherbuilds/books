@@ -1,7 +1,7 @@
 import type { DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import type { EntrySide } from "@accly/db/schema/document-lines";
-import type { AdvanceSupply, DocumentType } from "@accly/db/schema/documents";
+import type { AdvanceSupply } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
@@ -9,7 +9,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Scope } from "../lib/procedures/factory";
 import type { AllocationTarget } from "./allocations";
 import type { SystemAccountKey } from "./chart-templates";
-import { divideHalfUp } from "./money";
+import { creditOf, debitOf, divideHalfUp, sumPaise } from "./money";
 
 // Keyed by the text `systemKey` column, so reading it needs no cast; `systemAccount`
 // still takes a typed key.
@@ -193,12 +193,11 @@ export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): Jo
   ];
 
   if (document.settlementKind === "against") {
-    const allocatedPaise = document.allocations.reduce(
-      (sum, { amountPaise }) => sum + amountPaise,
-      0n,
-    );
+    const allocatedPaise = sumPaise(document.allocations.map((target) => target.amountPaise));
 
-    let adjustmentPaise = 0n;
+    const adjustmentPaise = sumPaise(
+      document.adjustments.map((adjustment) => adjustment.amountPaise),
+    );
 
     for (const adjustment of document.adjustments) {
       lines.push({
@@ -208,7 +207,6 @@ export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): Jo
         debit: adjustment.amountPaise,
         credit: 0n,
       });
-      adjustmentPaise += adjustment.amountPaise;
     }
 
     if (allocatedPaise <= 0n) {
@@ -309,9 +307,7 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   }
 
   if (document.settlementKind === "against" && document.exposureSide === "receivable") {
-    const sourcedPaise = document.sources.reduce((sum, source) => sum + source.amountPaise, 0n);
-
-    if (sourcedPaise !== document.amountPaise) {
+    if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
       throw new Error("Refund amount must equal its allocated credits");
     }
   }
@@ -327,16 +323,8 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
       credit: 0n,
     });
   } else if (document.settlementKind === "against") {
-    const allocatedPaise = document.allocations.reduce(
-      (sum, target) => sum + target.amountPaise,
-      0n,
-    );
-
-    const writeOffPaise = document.writeOffs.reduce(
-      (sum, writeOff) => sum + writeOff.amountPaise,
-      0n,
-    );
-
+    const allocatedPaise = sumPaise(document.allocations.map((target) => target.amountPaise));
+    const writeOffPaise = sumPaise(document.writeOffs.map((writeOff) => writeOff.amountPaise));
     const remainderPaise = document.amountPaise + writeOffPaise - allocatedPaise;
 
     lines.push({
@@ -468,8 +456,8 @@ export function postInvoice(document: InvoicePosting, byKey: SystemAccounts): Jo
     lines.push({
       accountId: systemAccount(byKey, "roundOff"),
       partyId: null,
-      debit: document.roundOffPaise < 0n ? -document.roundOffPaise : 0n,
-      credit: document.roundOffPaise > 0n ? document.roundOffPaise : 0n,
+      debit: creditOf(document.roundOffPaise),
+      credit: debitOf(document.roundOffPaise),
     });
   }
 
@@ -516,8 +504,8 @@ export function postBill(document: BillPosting, byKey: SystemAccounts): JournalL
     lines.push({
       accountId: systemAccount(byKey, "roundOff"),
       partyId: null,
-      debit: document.roundOffPaise > 0n ? document.roundOffPaise : 0n,
-      credit: document.roundOffPaise < 0n ? -document.roundOffPaise : 0n,
+      debit: debitOf(document.roundOffPaise),
+      credit: creditOf(document.roundOffPaise),
     });
   }
 
@@ -623,135 +611,74 @@ export function reverseLines(lines: readonly JournalLineInput[]): JournalLineInp
   }));
 }
 
-// The validation every stored-line reversal passes, single or batched.
-function reversalOf(entryId: string, storedLines: readonly JournalLineInput[]): JournalLineInput[] {
-  if (storedLines.length === 0) {
-    throw new Error(`Journal entry ${entryId} has no lines to reverse`);
-  }
+type RecordEntryArgs = {
+  document: { id: string; posting: DocumentPosting | AllocationPosting };
+  entryDate: string;
+  narration: string;
+};
 
-  const lines = reverseLines(storedLines);
-  assertBalanced(lines);
-
-  return lines;
-}
-
-type EntryDocumentType = DocumentType | "allocation";
-
-type RecordEntryArgs =
-  | {
-      kind: "post";
-      document: { id: string; posting: DocumentPosting | AllocationPosting };
-      entryDate: string;
-      narration: string;
-    }
-  | {
-      kind: "reverse";
-      document: { id: string; type: EntryDocumentType };
-      entryDate: string;
-      narration: string;
-    };
-
-// The only call Billing makes into General Accounting. A post runs the document
-// type's posting function; a reverse swaps the stored lines of the post entry and
-// never re-runs the posting function, rates or mappings.
+// The only call Billing makes into General Accounting to post: it runs the document
+// type's posting function. Reversal goes through `reverseEntries`, which swaps stored
+// lines and never re-runs the posting function, rates or mappings.
 export async function recordEntry(
   tx: DbTransaction,
   scope: Scope,
   args: RecordEntryArgs,
 ): Promise<void> {
+  const { posting } = args.document;
   let lines: JournalLineInput[];
-  let document: { id: string; type: EntryDocumentType };
-  let reversesEntryId: string | null = null;
 
-  if (args.kind === "post") {
-    const { posting } = args.document;
-    document = { id: args.document.id, type: posting.type };
-
-    if (posting.type === "journal" || posting.type === "openingBalance") {
-      lines = postJournal(posting);
-    } else {
-      // All of them, not only the keys this posting needs: at most 18 rows on one partial
-      // index, and each posting function stays the only list of its keys.
-      const systemRows = await tx
-        .select({ id: accounts.id, systemKey: accounts.systemKey })
-        .from(accounts)
-        .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
-
-      const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
-
-      switch (posting.type) {
-        case "receipt":
-          lines = postReceipt(posting, byKey);
-          break;
-        case "payment":
-          lines = postPayment(posting, byKey);
-          break;
-        case "invoice":
-          lines = postInvoice(posting, byKey);
-          break;
-        case "bill":
-          lines = postBill(posting, byKey);
-          break;
-        case "creditNote":
-          lines = postCreditNote(posting, byKey);
-          break;
-        case "debitNote":
-          lines = postDebitNote(posting, byKey);
-          break;
-        case "allocation":
-          lines = postAllocation(posting, byKey);
-          break;
-        default:
-          posting satisfies never;
-          throw new Error("Unsupported posting");
-      }
-    }
-
-    assertBalanced(lines);
+  if (posting.type === "journal" || posting.type === "openingBalance") {
+    lines = postJournal(posting);
   } else {
-    document = args.document;
+    // All of them, not only the keys this posting needs: at most 18 rows on one partial
+    // index, and each posting function stays the only list of its keys.
+    const systemRows = await tx
+      .select({ id: accounts.id, systemKey: accounts.systemKey })
+      .from(accounts)
+      .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
 
-    const storedLines = await tx
-      .select({
-        entryId: journalLines.entryId,
-        accountId: journalLines.accountId,
-        partyId: journalLines.partyId,
-        debit: journalLines.debit,
-        credit: journalLines.credit,
-      })
-      .from(journalLines)
-      .innerJoin(
-        journalEntries,
-        and(eq(journalEntries.orgId, scope.orgId), eq(journalEntries.id, journalLines.entryId)),
-      )
-      .where(
-        and(
-          eq(journalLines.orgId, scope.orgId),
-          eq(journalEntries.documentType, document.type),
-          eq(journalEntries.documentId, document.id),
-          eq(journalEntries.kind, "post"),
-        ),
-      );
+    const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
 
-    const [postLine] = storedLines;
-
-    if (!postLine) {
-      throw new Error(`Document ${document.id} is missing its post journal entry`);
+    switch (posting.type) {
+      case "receipt":
+        lines = postReceipt(posting, byKey);
+        break;
+      case "payment":
+        lines = postPayment(posting, byKey);
+        break;
+      case "invoice":
+        lines = postInvoice(posting, byKey);
+        break;
+      case "bill":
+        lines = postBill(posting, byKey);
+        break;
+      case "creditNote":
+        lines = postCreditNote(posting, byKey);
+        break;
+      case "debitNote":
+        lines = postDebitNote(posting, byKey);
+        break;
+      case "allocation":
+        lines = postAllocation(posting, byKey);
+        break;
+      default:
+        posting satisfies never;
+        throw new Error("Unsupported posting");
     }
-
-    reversesEntryId = postLine.entryId;
-    lines = reversalOf(postLine.entryId, storedLines);
   }
+
+  assertBalanced(lines);
 
   const entryId = Bun.randomUUIDv7();
 
   await tx.insert(journalEntries).values({
     id: entryId,
     orgId: scope.orgId,
-    documentType: document.type,
-    documentId: document.id,
-    kind: args.kind,
-    reversesEntryId,
+    documentType: posting.type,
+    documentId: args.document.id,
+    kind: "post",
+    reversesEntryId: null,
     entryDate: args.entryDate,
     narration: args.narration,
     createdBy: scope.userId,
@@ -767,8 +694,7 @@ export async function recordEntry(
 }
 
 // Reverses stored entries by id in a fixed number of statements: one read of their
-// lines, one header insert, one line insert. Same posting boundary and same
-// validation as a single `recordEntry` reverse; no posting function re-runs.
+// lines, one header insert, one line insert. No posting function re-runs.
 export async function reverseEntries(
   tx: DbTransaction,
   scope: Scope,
@@ -813,8 +739,12 @@ export async function reverseEntries(
   const lineRows: (typeof journalLines.$inferInsert)[] = [];
 
   for (const reversedEntryId of entryIds) {
-    const stored = byEntry.get(reversedEntryId) ?? [];
-    const lines = reversalOf(reversedEntryId, stored);
+    const stored = byEntry.get(reversedEntryId);
+
+    if (!stored) throw new Error(`Journal entry ${reversedEntryId} has no lines to reverse`);
+
+    const lines = reverseLines(stored);
+    assertBalanced(lines);
 
     const entryId = Bun.randomUUIDv7();
 

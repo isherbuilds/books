@@ -2,15 +2,15 @@ import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { CalendarIcon, CircleDollarSignIcon, CircleDotIcon, ContactRoundIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { CircleDollarSignIcon, CircleDotIcon, ContactRoundIcon } from "lucide-react";
+import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { INVOICE_COLUMNS, InvoiceCard } from "@/components/invoice-columns";
 import { DOCUMENT_STATE_LABELS } from "@/components/document-columns";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
@@ -22,11 +22,9 @@ import {
 import { PartyFilterItems } from "@/components/party-filter-items";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { invoiceListOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyListOptions } from "@/lib/parties";
 
 const INVOICE_STATES = ["draft", "posted", "cancelled"] as const;
@@ -61,12 +59,8 @@ function InvoicesRoute() {
   const { orgSlug } = Route.useParams();
   const filters = Route.useSearch();
   const { q, partyId, state, settlement, from, to } = filters;
-  const { today, financialYearStart } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
-  const range: SearchRange = { from, to };
-  const rangeText = rangeLabel(range, today, financialYearStart);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canCreate = useCan(orgSlug, { invoice: ["create"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
 
@@ -88,6 +82,8 @@ function InvoicesRoute() {
 
   const setFilters = (patch: Partial<InvoiceFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
+
+  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -113,14 +109,7 @@ function InvoicesRoute() {
     });
   }
 
-  if (from || to) {
-    chips.push({
-      id: "date",
-      name: "Date",
-      label: rangeText,
-      remove: () => setFilters({ from: undefined, to: undefined }),
-    });
-  }
+  if (date.chip) chips.push(date.chip);
 
   if (state)
     chips.push({
@@ -187,15 +176,7 @@ function InvoicesRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
-                  <PresetItems
-                    range={range}
-                    today={today}
-                    financialYearStart={financialYearStart}
-                    onSelect={(next) => void setFilters(next)}
-                    onCustom={() => setCustomRangeOpen(true)}
-                  />
-                </FilterSubmenu>
+                {date.submenu}
                 {canReadParties ? (
                   <FilterSubmenu icon={ContactRoundIcon} label="Party">
                     <PartyFilterItems
@@ -259,15 +240,7 @@ function InvoicesRoute() {
         <Outlet />
       </PageBody>
 
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={field}
-        from={from}
-        to={to}
-        today={today}
-        onApply={(next) => void setFilters(next)}
-      />
+      {date.popover}
     </>
   );
 }

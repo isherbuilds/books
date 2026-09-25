@@ -5,13 +5,13 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon, WalletIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeftRightIcon, CircleDotIcon, WalletIcon } from "lucide-react";
+import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
@@ -25,7 +25,6 @@ import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/comp
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -80,13 +79,10 @@ function ReceiptsRoute() {
   const { orgSlug } = Route.useParams();
   const { create, ...filters } = Route.useSearch();
   const { q, partyId, from, to, paymentMethodIds, state, settlementKind } = filters;
-  const { today, financialYearStart } = useOrgDateTime();
+  const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
-  const range: SearchRange = { from, to };
-  const rangeText = rangeLabel(range, today, financialYearStart);
   const newTrigger = useRef<HTMLButtonElement>(null);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const canPost = useCan(orgSlug, { receipt: ["post"] });
   const canReadMethods = useCan(orgSlug, { paymentMethod: ["read"] });
   const canReadParties = useCan(orgSlug, { party: ["read"] });
@@ -112,6 +108,8 @@ function ReceiptsRoute() {
 
   const setFilters = (patch: Partial<ReceiptFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
+
+  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   // Both Clear buttons unmount once the filters go, so focus moves to the box first.
   const clear = () => {
@@ -141,14 +139,7 @@ function ReceiptsRoute() {
     });
   }
 
-  if (from || to) {
-    chips.push({
-      id: "date",
-      name: "Date",
-      label: rangeText,
-      remove: () => setFilters({ from: undefined, to: undefined }),
-    });
-  }
+  if (date.chip) chips.push(date.chip);
 
   if (paymentMethodIds) {
     const names = paymentMethodIds.map(
@@ -245,15 +236,7 @@ function ReceiptsRoute() {
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
-                <FilterSubmenu icon={CalendarIcon} label={rangeText}>
-                  <PresetItems
-                    range={range}
-                    today={today}
-                    financialYearStart={financialYearStart}
-                    onSelect={(next) => void setFilters(next)}
-                    onCustom={() => setCustomRangeOpen(true)}
-                  />
-                </FilterSubmenu>
+                {date.submenu}
                 {canReadMethods ? (
                   <FilterSubmenu icon={WalletIcon} label="Payment method">
                     {methods.data?.length ? (
@@ -327,15 +310,7 @@ function ReceiptsRoute() {
         <Outlet />
       </PageBody>
 
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={field}
-        from={from}
-        to={to}
-        today={today}
-        onApply={(next) => void setFilters(next)}
-      />
+      {date.popover}
 
       {canPost ? (
         <ReceiptOverlay
