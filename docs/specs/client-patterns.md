@@ -70,8 +70,11 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
     The open-item and credit pickers (`party.openItems`, `party.openCredits`)
     follow the same rule: 25 rows oldest first, then `LoadMore`, so no fixed
-    count hides a document. Apply credit also searches credits by number on
-    the server. The allocation grid has no search, because a narrowed grid
+    count hides a document. Apply credit is a compact Dialog over the record
+    Sheet: a credit combobox searched by number on the server, with a Load
+    more option last; an amount defaulting to the smaller of the credit's
+    unapplied amount and the claim's outstanding; and the outstanding after
+    the apply. The allocation grid has no search, because a narrowed grid
     would hide amounts already typed against other rows.
 11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
     `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
@@ -125,7 +128,7 @@ financial rollback are not adopted.
      `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
      `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-credit-sheet.tsx`, the `DocumentForm` adoption in
+     `components/apply-credit-dialog.tsx`, the `DocumentForm` adoption in
      `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through

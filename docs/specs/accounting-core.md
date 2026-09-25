@@ -635,7 +635,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `packages/api/src/core/allocations.ts`,
      `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
      `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
-     `apply-credit-sheet.tsx`,
+     `apply-credit-dialog.tsx`,
      `apps/web/src/routes/$orgSlug/journals_.$journalId.tsx`. Touches:
      `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
      and query), `apps/web/src/lib/domain-invalidation.ts`,

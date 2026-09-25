@@ -21,7 +21,8 @@ type ComboboxProps<T> = {
   /** Selected record; `null` keeps the input free text after a pick (the legacy pickers). */
   value?: T | null;
   onInputValueChange?: (value: string) => void;
-  onSelect: (item: T) => void;
+  /** Return `false` to keep the value and the open list, as a Load more row does. */
+  onSelect: (item: T) => void | false;
   emptyContent?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -125,8 +126,9 @@ function Combobox<T>({
         if (details.reason !== "item-press") onInputValueChange?.(next);
       }}
       onValueChange={(item, details) => {
-        if (item != null) onSelect(item);
-        else if (details.reason === "clear-press") onClear?.();
+        if (item != null) {
+          if (onSelect(item) === false) details.cancel();
+        } else if (details.reason === "clear-press") onClear?.();
       }}
       onItemHighlighted={onItemHighlighted}
       open={open}

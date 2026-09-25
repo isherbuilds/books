@@ -27,7 +27,7 @@ import { toast } from "sonner";
 
 import { AllocationsSection } from "@/components/allocations-section";
 import { ClaimStatus, struck } from "@/components/document-columns";
-import { ApplyCreditSheet } from "@/components/apply-credit-sheet";
+import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -464,7 +464,7 @@ function InvoiceSheetRoute() {
           />
 
           {applyOpen && invoice.partyId ? (
-            <ApplyCreditSheet
+            <ApplyCreditDialog
               orgSlug={orgSlug}
               side="receivable"
               target={{
