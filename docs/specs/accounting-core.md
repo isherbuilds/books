@@ -103,9 +103,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    gross to the rupee and posts the signed difference to the `roundOff`
    Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`). **Invoice
    lines are Items only**: the Item carries the income Account and the dated
-   rate, and the line may override its description and price. A one-off charge
-   uses a generic Item (for example "Professional fees") that an owner or
-   accountant creates once; operators do not gain `item` `create` (call 10).
+   rate, and the line may override its description and price. No Items are
+   seeded. A one-off charge uses a generic Item (for example "Professional
+   fees") that the owner or accountant creates once, as in ERPNext and Zoho
+   Books; operators do not gain `item` `create` (call 10).
    Decided 2026-09-25 (#10): ERPNext's Sales Invoice Item requires an
    `item_code` and only the Item Manager role creates Items; Zoho Books'
    invoice API requires `item_id` on every line. `TAXABLE_ACCOUNT_LINE`

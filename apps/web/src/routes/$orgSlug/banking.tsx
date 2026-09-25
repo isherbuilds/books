@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -23,7 +23,7 @@ import { useCan } from "@/lib/membership";
 import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { BANKS_MANAGE_PERMISSION, BANKS_PERMISSION } from "@/lib/navigation";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
+import { errorMessage, loadRouteQuery } from "@/lib/orpc-error";
 import { paymentMethodListOptions } from "@/lib/receipts";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -40,6 +40,8 @@ export const Route = createFileRoute("/$orgSlug/banking")({
     await Promise.all([
       queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {}),
       queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
+      // The account Sheet's parent list; a failed load reaches the route error view.
+      loadRouteQuery(queryClient.query(accountListOptions(orgSlug))),
     ]);
   },
   component: BankingRoute,
@@ -58,15 +60,18 @@ function BankingRoute() {
       search: (previous) => ({ ...previous, create: undefined, accountId: undefined }),
     });
 
-  // The chart feeds the account Sheet's parent list, read only while it is open.
-  const chart = useQuery({
+  const chart = useSuspenseQuery({
     ...accountListOptions(orgSlug),
     select: deriveAccountRows,
-    enabled: create === "account",
-  });
+  }).data;
 
-  // A new money account starts under Bank Accounts; Cash stays one choice away.
-  const bankGroupId = chart.data?.find((account) => account.systemKey === "bank")?.id ?? "";
+  // A Payment Method takes only a leaf directly under the cash or bank group, so a new
+  // money account goes there: Bank Accounts first, Cash one choice away.
+  const moneyGroups = chart.filter(
+    (account) => account.systemKey === "bank" || account.systemKey === "cash",
+  );
+
+  const bankGroupId = moneyGroups.find((account) => account.systemKey === "bank")?.id ?? "";
 
   const groups = useQuery({
     ...moneyBalanceOptions(orgSlug),
@@ -216,11 +221,12 @@ function BankingRoute() {
         </ListSection>
       </PageBody>
 
-      {canManage && create === "account" && chart.data ? (
+      {canManage && create === "account" ? (
         <AccountSheet
           orgSlug={orgSlug}
-          accounts={chart.data}
+          accounts={chart}
           defaultParent={bankGroupId}
+          parentIds={moneyGroups.map((account) => account.id)}
           onCreated={(account) =>
             void navigate({ replace: true, search: { create: "method", accountId: account.id } })
           }
