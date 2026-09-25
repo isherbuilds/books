@@ -31,6 +31,7 @@ import { ApplyCreditSheet } from "@/components/apply-credit-sheet";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
+import { ReceiptOverlay } from "@/components/receipt-overlay";
 import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { invoiceDetailOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
@@ -51,11 +52,12 @@ function InvoiceSheetRoute() {
   const { orgSlug, invoiceId } = Route.useParams();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  const { timeZone } = useOrgDateTime();
+  const { timeZone, today } = useOrgDateTime();
   const invoice = useSuspenseQuery(invoiceDetailOptions(orgSlug, invoiceId)).data;
   const [cancelOpen, setCancelOpen] = useState(false);
   const [amendOpen, setAmendOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const isDraft = invoice.state === "draft";
   const canEdit = useCan(orgSlug, { invoice: ["create"] }) && isDraft;
 
@@ -74,6 +76,13 @@ function InvoiceSheetRoute() {
 
   const canApply =
     useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
+    invoice.state === "posted" &&
+    invoice.partyId !== null &&
+    isPositiveMoney(invoice.outstandingPaise);
+
+  // Posting the receipt refetches this invoice, so its outstanding is current on return.
+  const canRecordReceipt =
+    useCan(orgSlug, { receipt: ["post"] }) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
     isPositiveMoney(invoice.outstandingPaise);
@@ -356,6 +365,7 @@ function InvoiceSheetRoute() {
           </SheetBody>
 
           {canEdit ||
+          canRecordReceipt ||
           canApply ||
           canCancel ||
           canAmend ||
@@ -390,6 +400,11 @@ function InvoiceSheetRoute() {
                     {discard.isPending ? "Discarding…" : "Discard draft"}
                   </Button>
                 </>
+              ) : null}
+              {canRecordReceipt ? (
+                <Button type="button" variant="outline" onClick={() => setReceiptOpen(true)}>
+                  Record receipt
+                </Button>
               ) : null}
               {canApply ? (
                 <Button type="button" variant="outline" onClick={() => setApplyOpen(true)}>
@@ -474,6 +489,21 @@ function InvoiceSheetRoute() {
                 outstandingPaise: invoice.outstandingPaise,
               }}
               onClose={() => setApplyOpen(false)}
+            />
+          ) : null}
+
+          {receiptOpen && invoice.partyId ? (
+            <ReceiptOverlay
+              orgSlug={orgSlug}
+              today={today}
+              invoice={{
+                id: invoice.id,
+                partyId: invoice.partyId,
+                partyName: partyName ?? "",
+                outstandingPaise: invoice.outstandingPaise,
+              }}
+              open
+              onClose={() => setReceiptOpen(false)}
             />
           ) : null}
         </SheetContent>

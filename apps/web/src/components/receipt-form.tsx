@@ -1,4 +1,9 @@
-import { NON_NEGATIVE_MONEY_PATTERN, ZERO_MONEY, parseMoney } from "@accly/api/core/money";
+import {
+  NON_NEGATIVE_MONEY_PATTERN,
+  ZERO_MONEY,
+  formatDecimal,
+  parseMoney,
+} from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
@@ -114,16 +119,31 @@ const SERVER_FIELDS = {
   ADJUSTMENT_ACCOUNT_INVALID: "adjustments",
 } satisfies Record<string, FieldPath<ReceiptFormValues>>;
 
-function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
+/** A posted Invoice the receipt settles, as its record showed it. */
+export type ReceiptInvoice = {
+  id: string;
+  partyId: string;
+  partyName: string;
+  outstandingPaise: bigint;
+};
+
+// From an Invoice, the receipt starts against it for its whole outstanding.
+function defaults(
+  today: string,
+  paymentMethodId = "",
+  invoice?: ReceiptInvoice,
+): ReceiptFormValues {
+  const amount = invoice ? formatDecimal(invoice.outstandingPaise) : "";
+
   return {
-    partyId: null,
-    partyName: "",
-    amount: "",
+    partyId: invoice?.partyId ?? null,
+    partyName: invoice?.partyName ?? "",
+    amount,
     paymentMethodId,
-    settlementKind: "advance",
+    settlementKind: invoice ? "against" : "advance",
     advanceSupply: null,
     incomeAccountId: null,
-    allocations: {},
+    allocations: invoice ? { [invoice.id]: amount } : {},
     adjustments: [],
     reference: "",
     narration: "",
@@ -134,15 +154,17 @@ function defaults(today: string, paymentMethodId = ""): ReceiptFormValues {
 export function ReceiptForm({
   orgSlug,
   today,
+  invoice,
   onClose,
 }: {
   orgSlug: string;
   today: string;
+  invoice?: ReceiptInvoice;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const form = useZodForm(receiptSchema, { defaultValues: defaults(today) });
+  const form = useZodForm(receiptSchema, { defaultValues: defaults(today, "", invoice) });
   const adjustmentFields = useFieldArray({ control: form.control, name: "adjustments" });
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
@@ -382,6 +404,18 @@ export function ReceiptForm({
                 <FormControl>
                   <Input
                     {...field}
+                    // A partial receipt from an Invoice moves its allocation too, until
+                    // the operator types a different allocation.
+                    onChange={(event) => {
+                      if (
+                        invoice &&
+                        form.getValues(`allocations.${invoice.id}`) === form.getValues("amount")
+                      ) {
+                        form.setValue(`allocations.${invoice.id}`, event.target.value);
+                      }
+
+                      void field.onChange(event);
+                    }}
                     required
                     inputMode="decimal"
                     autoComplete="off"
