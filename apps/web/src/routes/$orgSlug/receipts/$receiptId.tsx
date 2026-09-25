@@ -20,7 +20,7 @@ import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { struck } from "@/components/document-columns";
+import { SETTLEMENT_KIND_LABELS, struck } from "@/components/document-columns";
 import { AllocationsSection } from "@/components/allocations-section";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
@@ -173,7 +173,7 @@ function ReceiptSheetRoute() {
               </DetailRow>
               <DetailRow label="Payment method">{receipt.printSnapshot?.paymentMethod}</DetailRow>
               <DetailRow label="Settlement">
-                <span className="capitalize">{receipt.settlementKind}</span>
+                {receipt.settlementKind && SETTLEMENT_KIND_LABELS[receipt.settlementKind]}
               </DetailRow>
               <DetailRow label="Reference" mono>
                 {receipt.reference}

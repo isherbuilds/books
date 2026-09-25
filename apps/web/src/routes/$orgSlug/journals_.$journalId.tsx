@@ -112,7 +112,9 @@ function JournalPage() {
             {journal.reference}
           </DetailRow>
           <DetailRow label="Narration">
-            <span className="whitespace-pre-wrap break-words">{journal.narration}</span>
+            {journal.narration ? (
+              <span className="whitespace-pre-wrap break-words">{journal.narration}</span>
+            ) : null}
           </DetailRow>
           {journal.cancelledAt ? (
             <DetailRow label="Cancelled">{formatDate(journal.cancelledAt, timeZone)}</DetailRow>
@@ -121,7 +123,7 @@ function JournalPage() {
 
         <Separator />
 
-        <PostedLines lines={journal.lines} totalPaise={journal.totalPaise} />
+        <PostedLines lines={journal.lines} />
       </PageBody>
 
       <ReasonDialog

@@ -117,13 +117,6 @@ function JournalsRoute() {
       <TableEmpty
         title="No journals yet"
         description="Post a journal to move balances between accounts."
-        action={
-          canPost ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New journal
-            </Button>
-          ) : undefined
-        }
       />
     );
 

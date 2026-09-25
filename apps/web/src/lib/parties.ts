@@ -51,6 +51,11 @@ export const partyPickerOptions = (orgSlug: string) => ({
 export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
   orpc.receipt.partyTotals.queryOptions({ input: { orgSlug, partyId } });
 
+// Every party's closing balance for the register, a separate read so posting never
+// refetches the master. Sparse: a party with no ledger line has no row.
+export const partyBalancesOptions = (orgSlug: string) =>
+  orpc.party.balances.queryOptions({ input: { orgSlug } });
+
 // The party page reads the whole statement for its balance and the Ledger tab reads a
 // date range; with no range both share one cache entry.
 export const partyStatementOptions = (

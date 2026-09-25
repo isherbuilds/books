@@ -1,17 +1,17 @@
 import { db } from "@accly/db";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
-import { env } from "@accly/env/server";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { audit } from "../audit";
 import { createOrganization, createOrganizationInput } from "../core/organizations";
+import { isFounder } from "../lib/founder";
 import { orgInput, orgProcedure, sessionProcedure } from "../lib/procedures/factory";
 
 export const organizationRouter = {
   create: sessionProcedure.input(createOrganizationInput).handler(async ({ context, input }) => {
     const { session } = context;
 
-    if (session.user.email.toLowerCase() !== env.FOUNDING_EMAIL.toLowerCase()) {
+    if (!isFounder(session.user.email)) {
       throw new ORPCError("FORBIDDEN", {
         message: "Only the founding account can create organizations.",
       });
@@ -29,6 +29,9 @@ export const organizationRouter = {
 
     return created;
   }),
+
+  // `/join` has no organization yet, so the founder check is session-level here.
+  canCreate: sessionProcedure.handler(({ context }) => isFounder(context.session.user.email)),
 
   getProfile: orgProcedure({ settings: ["read"] }, orgInput).handler(async ({ context }) => {
     const { scope } = context;

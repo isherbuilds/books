@@ -173,7 +173,7 @@ function BillSheetRoute() {
               </SheetTitle>
               <ClaimStatus claim={bill} />
             </div>
-            <SheetDescription>{bill.partyName ?? "No supplier"}</SheetDescription>
+            <SheetDescription>{bill.partyName ?? "No party"}</SheetDescription>
           </SheetHeader>
           <SheetBody>
             <div className="grid gap-1">
@@ -200,7 +200,6 @@ function BillSheetRoute() {
               <DetailRow label="Due date">
                 {bill.dueDate ? formatBusinessDate(bill.dueDate) : null}
               </DetailRow>
-              <DetailRow label="Supplier">{bill.partyName}</DetailRow>
               <DetailRow label="Place of supply" mono>
                 {bill.placeOfSupplyStateCode}
               </DetailRow>

@@ -23,7 +23,7 @@ export const BILL_COLUMNS = [
     cell: ({ getValue }) => <TextOrDash value={getValue()} />,
   }),
   column.accessor("partyName", {
-    header: "Supplier",
+    header: "Party",
     cell: ({ getValue }) => <TextOrDash value={getValue()} />,
   }),
   column.accessor("documentDate", {
@@ -38,18 +38,18 @@ export const BILL_COLUMNS = [
       <span className="tabular-nums">{getValue() ? formatBusinessDay(getValue()!) : "—"}</span>
     ),
   }),
+  column.display({
+    id: "status",
+    header: "Status",
+    meta: { className: "w-44" },
+    cell: ({ row: { original: bill } }) => <ClaimStatus claim={bill} />,
+  }),
   column.accessor("totalPaise", {
     header: "Total",
     meta: { align: "right", className: "w-32" },
     cell: ({ row: { original: bill } }) => (
       <span className={cn("tabular-nums", struck(bill.state))}>{formatMoney(bill.totalPaise)}</span>
     ),
-  }),
-  column.display({
-    id: "status",
-    header: "Status",
-    meta: { className: "w-44" },
-    cell: ({ row: { original: bill } }) => <ClaimStatus claim={bill} />,
   }),
 ];
 
@@ -68,7 +68,7 @@ export function BillCard({ bill }: { bill: BillListRow }) {
         </span>
       </div>
       <p className="truncate text-muted-foreground">
-        {bill.partyName ?? "No supplier"} · {formatBusinessDay(bill.documentDate)}
+        {bill.partyName ?? "No party"} · {formatBusinessDay(bill.documentDate)}
         {bill.dueDate ? ` · Due ${formatBusinessDay(bill.dueDate)}` : ""}
       </p>
       {bill.reference ? (

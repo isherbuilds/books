@@ -38,7 +38,7 @@ import {
 } from "@accly/ui/components/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
-import { CopyIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react";
+import { CopyIcon, MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -220,9 +220,6 @@ function InviteDialog({
               )}
 
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => change(false)}>
-                  Done
-                </Button>
                 <Button type="submit" disabled={invite.isPending}>
                   {invite.isPending ? "Creating…" : "Create invitation"}
                 </Button>
@@ -235,7 +232,7 @@ function InviteDialog({
   );
 }
 
-function InviteAction({ orgSlug, compact = false }: { orgSlug: string; compact?: boolean }) {
+function InviteAction({ orgSlug }: { orgSlug: string }) {
   const canInvite = useCan(orgSlug, { invitation: ["create"] });
   const [open, setOpen] = useState(false);
 
@@ -243,9 +240,7 @@ function InviteAction({ orgSlug, compact = false }: { orgSlug: string; compact?:
 
   return (
     <>
-      <Button size={compact ? "xs" : undefined} onClick={() => setOpen(true)}>
-        {compact ? "Invite someone" : "Invite"}
-      </Button>
+      <Button onClick={() => setOpen(true)}>Invite</Button>
       <InviteDialog open={open} onOpenChange={setOpen} orgSlug={orgSlug} />
     </>
   );
@@ -291,7 +286,7 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
     orpc.member.revokeInvitation.mutationOptions({
       onSuccess: async () => {
         await invalidateRoster(queryClient, orgSlug);
-        toast.success("Invitation canceled");
+        toast.success("Invitation cancelled");
       },
       onError,
     }),
@@ -317,24 +312,14 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
           query={members}
           errorTitle="Could not load members"
           isEmpty={people.length === 0 && invitations.length === 0}
-          empty={
-            q ? (
-              <p>No matching members</p>
-            ) : (
-              <div className="flex flex-col items-center gap-3">
-                <UsersIcon className="size-5 text-muted-foreground" />
-                <p>No other members yet</p>
-                <InviteAction orgSlug={orgSlug} compact />
-              </div>
-            )
-          }
+          // The roster always holds the viewer, so only a search can empty it.
+          empty={<p>No matching members</p>}
         >
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Person</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
@@ -350,7 +335,6 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
                   <TableCell>
                     <RoleBadge role={person.role} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">active</TableCell>
                   <TableCell className="text-right">
                     <ClientOnly fallback={null}>
                       {canManage ? (
@@ -411,16 +395,18 @@ function MemberResults({ orgSlug, q }: { orgSlug: string; q: string }) {
               {invitations.map((invitation) => (
                 <TableRow key={invitation.id} className="text-muted-foreground">
                   <TableCell>
-                    <div className="truncate">{invitation.email}</div>
+                    <div className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{invitation.email}</span>
+                        <Badge variant="outline">Invited</Badge>
+                      </span>
+                      <div className="truncate">
+                        Expires {formatDate(invitation.expiresAt, timeZone)}
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>
                     {invitation.role ? <RoleBadge role={invitation.role} /> : "Unassigned"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-2 whitespace-nowrap">
-                      <Badge variant="outline">invited</Badge>
-                      expires {formatDate(invitation.expiresAt, timeZone)}
-                    </span>
                   </TableCell>
                   <TableCell className="text-right">
                     <span className="flex justify-end gap-1">

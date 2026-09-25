@@ -159,13 +159,6 @@ function InvoicesRoute() {
       <TableEmpty
         title="No invoices yet"
         description="Draft and posted invoices appear here, newest first."
-        action={
-          canPost ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New invoice
-            </Button>
-          ) : undefined
-        }
       />
     );
 

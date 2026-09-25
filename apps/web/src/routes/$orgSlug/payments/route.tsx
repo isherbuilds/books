@@ -4,7 +4,7 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon } from "lucide-react";
+import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon, ContactRoundIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useIsMutating } from "@tanstack/react-query";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { FormSheet } from "@/components/form-sheet";
 import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { SETTLEMENT_KIND_LABELS } from "@/components/document-columns";
 import {
   FilterChips,
   FilterMenu,
@@ -23,6 +24,7 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
+import { PartyFilterItems } from "@/components/party-filter-items";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
@@ -34,8 +36,6 @@ import { partyListOptions } from "@/lib/parties";
 import { paymentListOptions } from "@/lib/payments";
 
 const STATES = ["posted", "cancelled"] as const;
-
-const LABELS = { against: "Against", advance: "Advance", direct: "Direct" } as const;
 
 const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
@@ -161,7 +161,7 @@ function PaymentsRoute() {
     chips.push({
       id: "settlementKind",
       name: "Settlement",
-      label: LABELS[settlementKind],
+      label: SETTLEMENT_KIND_LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
   const openCreate = () => void navigate({ search: (previous) => ({ ...previous, create: true }) });
@@ -190,13 +190,6 @@ function PaymentsRoute() {
       <TableEmpty
         title="No payments yet"
         description="Posted payments appear here, newest first."
-        action={
-          canPost ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New payment
-            </Button>
-          ) : undefined
-        }
       />
     );
 
@@ -231,6 +224,15 @@ function PaymentsRoute() {
                     onCustom={() => setCustomRangeOpen(true)}
                   />
                 </FilterSubmenu>
+                {canReadParties ? (
+                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
+                    <PartyFilterItems
+                      orgSlug={orgSlug}
+                      partyId={partyId}
+                      onChange={(next) => void setFilters({ partyId: next })}
+                    />
+                  </FilterSubmenu>
+                ) : null}
                 <FilterSubmenu icon={CircleDotIcon} label="State">
                   {STATES.map((each) => (
                     <DropdownMenuCheckboxItem
@@ -248,7 +250,7 @@ function PaymentsRoute() {
                   icon={ArrowLeftRightIcon}
                   label="Settlement"
                   options={SETTLEMENT_KINDS}
-                  labels={LABELS}
+                  labels={SETTLEMENT_KIND_LABELS}
                   value={settlementKind}
                   onChange={(next) => void setFilters({ settlementKind: next })}
                 />

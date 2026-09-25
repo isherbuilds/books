@@ -3,7 +3,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -19,13 +18,7 @@ type PostedLine = {
   amountPaise: bigint;
 };
 
-export function PostedLines({
-  lines,
-  totalPaise,
-}: {
-  lines: readonly PostedLine[];
-  totalPaise: bigint;
-}) {
+export function PostedLines({ lines }: { lines: readonly PostedLine[] }) {
   const showParty = lines.some((line) => line.partyName);
 
   return (
@@ -62,13 +55,6 @@ export function PostedLines({
               </TableRow>
             ))}
           </TableBody>
-          <TableFooter>
-            <TableRow>
-              <TableCell colSpan={showParty ? 3 : 2}>Total</TableCell>
-              <TableCell className="text-right tabular-nums">{formatMoney(totalPaise)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatMoney(totalPaise)}</TableCell>
-            </TableRow>
-          </TableFooter>
         </Table>
       </div>
 
@@ -93,10 +79,6 @@ export function PostedLines({
             ) : null}
           </div>
         ))}
-        <div className="flex items-center justify-between px-3 py-2 font-medium">
-          <span>Total</span>
-          <span className="text-right tabular-nums">{formatMoney(totalPaise)}</span>
-        </div>
       </div>
     </section>
   );

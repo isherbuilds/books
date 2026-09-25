@@ -44,7 +44,7 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
 
   const placeOfSupply = data.placeOfSupplyStateCode
     ? `${INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode} (${data.placeOfSupplyStateCode})`
-    : "—";
+    : null;
 
   return (
     <PrintedDocument
@@ -53,29 +53,20 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       number={data.number}
       cancelled={data.state === "cancelled"}
     >
-      <section style={{ display: "flex", gap: 20, marginBottom: 18 }}>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>Seller</SectionHeading>
-          <div style={{ fontWeight: 700 }}>{organization.legalName}</div>
-          <div>{organization.address}</div>
-          {organization.gstin ? <div>GSTIN {organization.gstin}</div> : null}
-          <div>PAN {organization.pan}</div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>Buyer</SectionHeading>
-          <div style={{ fontWeight: 700 }}>{party.name}</div>
-          <div>{party.address}</div>
-          {party.gstin ? <div>GSTIN {party.gstin}</div> : null}
-          {party.pan ? <div>PAN {party.pan}</div> : null}
-        </div>
+      <section style={{ marginBottom: 18 }}>
+        <SectionHeading>Buyer</SectionHeading>
+        <div style={{ fontWeight: 700 }}>{party.name}</div>
+        <div>{party.address}</div>
+        {party.gstin ? <div>GSTIN {party.gstin}</div> : null}
+        {party.pan ? <div>PAN {party.pan}</div> : null}
       </section>
 
       <section style={{ marginBottom: 18 }}>
         <DetailRow label="Date">{formatBusinessDate(data.documentDate)}</DetailRow>
-        <DetailRow label="Due date">
-          {data.dueDate ? formatBusinessDate(data.dueDate) : "—"}
-        </DetailRow>
-        <DetailRow label="Place of supply">{placeOfSupply}</DetailRow>
+        {data.dueDate ? (
+          <DetailRow label="Due date">{formatBusinessDate(data.dueDate)}</DetailRow>
+        ) : null}
+        {placeOfSupply ? <DetailRow label="Place of supply">{placeOfSupply}</DetailRow> : null}
       </section>
 
       <section>

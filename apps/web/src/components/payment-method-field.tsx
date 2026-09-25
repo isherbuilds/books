@@ -1,15 +1,18 @@
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@accly/ui/components/form";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 
 import { LinkField } from "@/components/link-field";
+import { useCan } from "@/lib/membership";
 import { paymentMethodListOptions } from "@/lib/receipts";
 
 /**
@@ -19,6 +22,7 @@ import { paymentMethodListOptions } from "@/lib/receipts";
  */
 export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
   const { control, getValues, setValue } = useFormContext<{ paymentMethodId: string }>();
+  const canCreate = useCan(orgSlug, { paymentMethod: ["create"] });
 
   const methods = useQuery({
     ...paymentMethodListOptions(orgSlug),
@@ -56,6 +60,26 @@ export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
               aria-invalid={fieldState.invalid}
             />
           </FormControl>
+          {/* No active method would leave the required field a dead end. */}
+          {methods.data?.length === 0 ? (
+            <FormDescription>
+              {canCreate ? (
+                <>
+                  No active payment method.{" "}
+                  <Link
+                    to="/$orgSlug/banking"
+                    params={{ orgSlug }}
+                    search={{ create: true }}
+                    className="text-foreground underline underline-offset-4"
+                  >
+                    Add one in Banking
+                  </Link>
+                </>
+              ) : (
+                "No active payment method. Ask an owner or accountant to add one in Banking."
+              )}
+            </FormDescription>
+          ) : null}
           <FormMessage />
         </FormItem>
       )}

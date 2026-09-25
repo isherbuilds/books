@@ -28,6 +28,52 @@ const auditQuery = (orgSlug: string) =>
     staleTime: 0,
   });
 
+const ACTION_LABELS: Record<string, string> = {
+  "account.setActive": "Account status changed",
+  "allocation.apply": "Allocation applied",
+  "allocation.reverse": "Allocation reversed",
+  "file.delete": "File deleted",
+  "file.read": "File opened",
+  "file.upload": "File uploaded",
+  "lock.grantException": "Lock exception granted",
+  "lock.revokeException": "Lock exception revoked",
+  "lock.set": "Period lock changed",
+  "member.invite": "Member invited",
+  "member.invite.revoke": "Invitation cancelled",
+  "member.remove": "Member removed",
+  "member.role.update": "Member role changed",
+  "organization.create": "Organization created",
+  "rbac.permission": "Permission check",
+  "settings.update": "Settings updated",
+};
+
+// Documents write `<type>.post`, `<type>.cancel` and `<type>.amend`.
+const DOCUMENT_LABELS: Record<string, string> = {
+  bill: "Bill",
+  creditNote: "Credit note",
+  debitNote: "Debit note",
+  invoice: "Invoice",
+  journal: "Journal",
+  openingBalance: "Opening balance",
+  payment: "Payment",
+  receipt: "Receipt",
+};
+
+const DOCUMENT_VERBS: Record<string, string> = {
+  amend: "amended",
+  cancel: "cancelled",
+  post: "posted",
+};
+
+/** The action in words; a code this page does not know shows as stored. */
+function actionLabel(action: string): string {
+  const [documentType = "", verb = ""] = action.split(".");
+  const document = DOCUMENT_LABELS[documentType];
+  const done = DOCUMENT_VERBS[verb];
+
+  return ACTION_LABELS[action] ?? (document && done ? `${document} ${done}` : action);
+}
+
 function describeMeta(meta: Record<string, unknown> | null | undefined): string {
   if (!meta) return "—";
 
@@ -106,8 +152,10 @@ function AuditRoute() {
                       </TableCell>
                       <TableCell>
                         <span className="flex items-center gap-2">
-                          <span className="font-medium">{entry.action}</span>
-                          {entry.denied && <Badge variant="destructive">denied</Badge>}
+                          <span className="font-medium" title={entry.action}>
+                            {actionLabel(entry.action)}
+                          </span>
+                          {entry.denied && <Badge variant="destructive">Denied</Badge>}
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">

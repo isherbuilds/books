@@ -344,6 +344,19 @@ export const partyRouter = {
     return { openingPaise, lines, closingPaise: balancePaise };
   }),
 
+  // Each party's closing balance, the sum the statement ends on. Sparse: a party with
+  // no ledger line has no row.
+  balances: orgProcedure({ party: ["read"], report: ["read"] }, orgInput).handler(({ context }) =>
+    db
+      .select({
+        partyId: partyLedgerLines.partyId,
+        balancePaise: sql<bigint>`sum(${partyLedgerLines.amountPaise})::bigint`.mapWith(BigInt),
+      })
+      .from(partyLedgerLines)
+      .where(eq(partyLedgerLines.orgId, context.scope.orgId))
+      .groupBy(partyLedgerLines.partyId),
+  ),
+
   // The complete master; every caller filters `active` in memory from this one entry.
   // Only what the list, Link Field and palette show: contact and address fields come
   // from `get` when one party opens.

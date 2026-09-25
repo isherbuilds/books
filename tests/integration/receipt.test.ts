@@ -775,6 +775,13 @@ test("receipt list filters narrow the keyset and party totals count posted recei
   ]);
   expect(statement.closingPaise).toBe(-10_000n);
 
+  // The parties register shows the same closing balance.
+  expect(
+    (await api.party.balances({ orgSlug: organization.slug })).find(
+      (row) => row.partyId === buyer.id,
+    ),
+  ).toEqual({ partyId: buyer.id, balancePaise: -10_000n });
+
   const fromSecond = await api.party.statement({
     orgSlug: organization.slug,
     partyId: buyer.id,

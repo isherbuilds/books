@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { AllocationsSection } from "@/components/allocations-section";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
-import { struck } from "@/components/document-columns";
+import { SETTLEMENT_KIND_LABELS, struck } from "@/components/document-columns";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
@@ -143,11 +143,7 @@ function PaymentSheetRoute() {
               <DetailRow label="Settlement">
                 {refund
                   ? "Refund credit notes"
-                  : payment.settlementKind === "against"
-                    ? "Against bills"
-                    : payment.settlementKind === "advance"
-                      ? "Advance"
-                      : "Direct"}
+                  : payment.settlementKind && SETTLEMENT_KIND_LABELS[payment.settlementKind]}
               </DetailRow>
               <DetailRow label="Reference" mono>
                 {payment.reference}

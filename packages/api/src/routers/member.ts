@@ -8,6 +8,7 @@ import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { isFounder } from "../lib/founder";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern } from "../lib/schemas";
@@ -68,6 +69,8 @@ export const memberRouter = {
     return {
       roles,
       user: { name: sessionUser.name, email: sessionUser.email },
+      // Only the flag reaches the client, never FOUNDING_EMAIL.
+      founder: isFounder(sessionUser.email),
       organizations,
       timeZone: settings.timeZone,
       // Every org page needs the financial year: the period presets are built from it.

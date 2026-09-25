@@ -357,7 +357,7 @@ export function ReceiptForm({
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
         footer={
-          <PostBar onClose={onClose} closeLabel="Cancel">
+          <PostBar onClose={onClose} closeLabel="Close">
             <Button type="submit">
               {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
               <Kbd>⌘↵</Kbd>

@@ -32,10 +32,7 @@ function EditBillRoute() {
 
   return (
     <>
-      <PageHeader
-        title="Edit bill draft"
-        description="Review the draft, save changes, or post it."
-      />
+      <PageHeader title="Edit bill draft" />
       <BillForm
         orgSlug={orgSlug}
         today={today}

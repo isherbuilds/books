@@ -5,13 +5,20 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CalendarIcon, CircleDotIcon, WalletIcon } from "lucide-react";
+import {
+  ArrowLeftRightIcon,
+  CalendarIcon,
+  CircleDotIcon,
+  ContactRoundIcon,
+  WalletIcon,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { SETTLEMENT_KIND_LABELS } from "@/components/document-columns";
 import {
   FilterChips,
   FilterMenu,
@@ -23,6 +30,7 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
+import { PartyFilterItems } from "@/components/party-filter-items";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
@@ -36,12 +44,6 @@ import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
 const RECEIPT_STATES = ["posted", "cancelled"] as const;
 
 const STATE_LABELS = { posted: "Posted", cancelled: "Cancelled" } as const;
-
-const SETTLEMENT_LABELS = {
-  against: "Against invoices",
-  advance: "Advance",
-  direct: "Direct",
-} as const satisfies Record<(typeof SETTLEMENT_KINDS)[number], string>;
 
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
@@ -180,7 +182,7 @@ function ReceiptsRoute() {
     chips.push({
       id: "settlementKind",
       name: "Settlement",
-      label: SETTLEMENT_LABELS[settlementKind],
+      label: SETTLEMENT_KIND_LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
   }
@@ -212,13 +214,6 @@ function ReceiptsRoute() {
       <TableEmpty
         title="No receipts yet"
         description="Posted receipts appear here, newest first."
-        action={
-          canPost ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New receipt
-            </Button>
-          ) : undefined
-        }
       />
     );
 
@@ -254,6 +249,15 @@ function ReceiptsRoute() {
                     onCustom={() => setCustomRangeOpen(true)}
                   />
                 </FilterSubmenu>
+                {canReadParties ? (
+                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
+                    <PartyFilterItems
+                      orgSlug={orgSlug}
+                      partyId={partyId}
+                      onChange={(next) => void setFilters({ partyId: next })}
+                    />
+                  </FilterSubmenu>
+                ) : null}
                 {canReadMethods ? (
                   <FilterSubmenu icon={WalletIcon} label="Payment method">
                     {methods.data?.length ? (
@@ -296,7 +300,7 @@ function ReceiptsRoute() {
                   icon={ArrowLeftRightIcon}
                   label="Settlement"
                   options={SETTLEMENT_KINDS}
-                  labels={SETTLEMENT_LABELS}
+                  labels={SETTLEMENT_KIND_LABELS}
                   value={settlementKind}
                   onChange={(next) => void setFilters({ settlementKind: next })}
                 />

@@ -9,6 +9,7 @@ import { OrganizationEntryLayout } from "@/components/organization-entry-layout"
 import { ErrorNote } from "@/components/page";
 import { SignInForm } from "@/components/sign-in-form";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/join")({
   ssr: false,
@@ -88,6 +89,9 @@ function OrganizationPicker({ userId }: { userId: string }) {
       return { organizations: organizations.data, invitations: invitations.data };
     },
   });
+
+  // Only the founding account may create one, so only it sees the link.
+  const canCreate = useQuery(orpc.organization.canCreate.queryOptions());
 
   if (destinations.isPending)
     return (
@@ -180,12 +184,14 @@ function OrganizationPicker({ userId }: { userId: string }) {
           </p>
         </div>
       )}
-      <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-        Founding operator?{" "}
-        <Link to="/create" className="text-foreground underline underline-offset-4">
-          Create an organization
-        </Link>
-      </p>
+      {canCreate.data ? (
+        <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+          Founding operator?{" "}
+          <Link to="/create" className="text-foreground underline underline-offset-4">
+            Create an organization
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }
