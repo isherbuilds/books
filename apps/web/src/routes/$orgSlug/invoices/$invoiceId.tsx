@@ -498,6 +498,9 @@ function InvoiceSheetRoute() {
               today={today}
               invoice={{
                 id: invoice.id,
+                number: invoice.number ?? invoice.id,
+                documentDate: invoice.documentDate,
+                dueDate: invoice.dueDate,
                 partyId: invoice.partyId,
                 partyName: partyName ?? "",
                 outstandingPaise: invoice.outstandingPaise,

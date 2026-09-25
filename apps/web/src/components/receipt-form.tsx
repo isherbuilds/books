@@ -122,6 +122,9 @@ const SERVER_FIELDS = {
 /** A posted Invoice the receipt settles, as its record showed it. */
 export type ReceiptInvoice = {
   id: string;
+  number: string;
+  documentDate: string;
+  dueDate: string | null;
   partyId: string;
   partyName: string;
   outstandingPaise: bigint;
@@ -179,12 +182,35 @@ export function ReceiptForm({
     }),
   );
 
-  const openRows: OpenDocument[] =
+  const loadedRows: OpenDocument[] =
     openItems.data?.rows.map((row) => ({
       ...row,
       label: row.type === "invoice" ? "Invoice" : "Payment",
       openPaise: row.outstandingPaise,
     })) ?? [];
+
+  // The seeded Invoice can sit past the loaded page of open items. Keep it selectable
+  // from its own record; the server still refuses it if it has since been settled. A
+  // complete page without it means it is no longer open.
+  const seedMissing =
+    invoice !== undefined &&
+    partyId === invoice.partyId &&
+    openItems.data?.hasMore === true &&
+    !loadedRows.some((row) => row.id === invoice.id);
+
+  const openRows: OpenDocument[] = seedMissing
+    ? [
+        ...loadedRows,
+        {
+          id: invoice.id,
+          label: "Invoice",
+          number: invoice.number,
+          documentDate: invoice.documentDate,
+          dueDate: invoice.dueDate,
+          openPaise: invoice.outstandingPaise,
+        },
+      ]
+    : loadedRows;
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
 
