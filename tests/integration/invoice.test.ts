@@ -186,13 +186,20 @@ test("a new item accepts its first edit with the loaded token and refuses that t
     ...fields,
     itemId: created.id,
     updatedAt: loaded,
+    active: true,
     unitPrice: "12.00",
   });
 
   expect(updated).toMatchObject({ id: created.id, unitPricePaise: 1_200n });
 
   await expectORPCCode(
-    api.item.update({ ...fields, itemId: created.id, updatedAt: loaded, unitPrice: "15.00" }),
+    api.item.update({
+      ...fields,
+      itemId: created.id,
+      updatedAt: loaded,
+      active: true,
+      unitPrice: "15.00",
+    }),
     "CONFLICT",
   );
 });

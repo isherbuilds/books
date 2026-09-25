@@ -177,7 +177,15 @@ test("an income account cannot be archived while an active item uses it", async 
     "ACCOUNT_IN_USE",
   );
 
-  await accountantApi.item.setActive({ orgSlug, itemId: item.id, active: false });
+  await accountantApi.item.update({
+    orgSlug,
+    itemId: item.id,
+    updatedAt: item.updatedAt.toISOString(),
+    active: false,
+    name: "Course",
+    unitPrice: "100.00",
+    incomeAccountId: income.id,
+  });
   await accountantApi.account.setActive({ orgSlug, accountId: income.id, active: false });
 });
 

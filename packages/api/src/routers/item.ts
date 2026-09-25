@@ -147,10 +147,11 @@ export const itemRouter = {
     orgInput.extend({
       itemId: z.uuid(),
       updatedAt: z.iso.datetime({ precision: 3 }),
+      active: z.boolean(),
       ...itemFields,
     }),
   ).handler(async ({ context, input }) => {
-    const { orgSlug: _claim, itemId, updatedAt, ...fields } = input;
+    const { orgSlug: _claim, itemId, updatedAt, active, ...fields } = input;
     const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
     return db
@@ -159,7 +160,7 @@ export const itemRouter = {
 
         const [updated] = await tx
           .update(items)
-          .set({ ...values, updatedAt: nextEditToken(items.updatedAt) })
+          .set({ ...values, active, updatedAt: nextEditToken(items.updatedAt) })
           .where(
             and(
               eq(items.orgId, context.scope.orgId),
@@ -176,21 +177,6 @@ export const itemRouter = {
         return updated;
       })
       .catch(itemNameTaken);
-  }),
-
-  setActive: orgProcedure(
-    { item: ["update"] },
-    orgInput.extend({ itemId: z.uuid(), active: z.boolean() }),
-  ).handler(async ({ context, input }) => {
-    const [updated] = await db
-      .update(items)
-      .set({ active: input.active, updatedAt: nextEditToken(items.updatedAt) })
-      .where(and(eq(items.orgId, context.scope.orgId), eq(items.id, input.itemId)))
-      .returning();
-
-    if (!updated) throw new ORPCError("NOT_FOUND", { message: "Item not found." });
-
-    return updated;
   }),
 
   // The rates an Item may take today; an Invoice resolves its own date's rate at post.

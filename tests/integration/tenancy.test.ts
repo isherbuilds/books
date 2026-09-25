@@ -399,9 +399,18 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     api.party.openItems({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
     "NOT_FOUND",
   );
+  // Beta's own income account passes validation, so only the tenant predicate refuses it.
   await expectORPCCode(
-    api.item.setActive({ orgSlug: beta.slug, itemId: alphaItem.id, active: false }),
-    "NOT_FOUND",
+    api.item.update({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      active: false,
+      name: "Shared Service",
+      unitPrice: "5.00",
+      incomeAccountId: betaIncome.id,
+    }),
+    "CONFLICT",
   );
   await expectORPCCode(
     api.invoice.get({ orgSlug: beta.slug, invoiceId: alphaInvoice.id }),
@@ -684,12 +693,11 @@ const GUARDED_CALLS = {
       ...claim,
       itemId: crypto.randomUUID(),
       updatedAt: new Date().toISOString(),
+      active: true,
       name: "Intrusion",
       unitPrice: "1.00",
       incomeAccountId: crypto.randomUUID(),
     }),
-  "item.setActive": (api, claim) =>
-    api.item.setActive({ ...claim, itemId: crypto.randomUUID(), active: false }),
   "item.taxRates": (api, claim) => api.item.taxRates({ ...claim }),
   "invoice.saveDraft": (api, claim) =>
     api.invoice.saveDraft({
