@@ -1150,7 +1150,8 @@ interface OrgSlugPartiesPartyIdRouteChildren {
 
 const OrgSlugPartiesPartyIdRouteChildren: OrgSlugPartiesPartyIdRouteChildren = {
   OrgSlugPartiesPartyIdLedgerRoute: OrgSlugPartiesPartyIdLedgerRoute,
-  OrgSlugPartiesPartyIdTransactionsRoute: OrgSlugPartiesPartyIdTransactionsRoute,
+  OrgSlugPartiesPartyIdTransactionsRoute:
+    OrgSlugPartiesPartyIdTransactionsRoute,
   OrgSlugPartiesPartyIdIndexRoute: OrgSlugPartiesPartyIdIndexRoute,
 }
 
