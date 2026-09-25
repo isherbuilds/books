@@ -29,7 +29,7 @@ import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
-import { partyListOptions } from "@/lib/parties";
+import { partyListOptions, usePartyName } from "@/lib/parties";
 import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
 
 // A Receipt posts in full, so it is never a draft.
@@ -105,6 +105,8 @@ function ReceiptsRoute() {
     enabled: canReadParties && partyId !== undefined,
   });
 
+  const partyName = usePartyName(orgSlug, partyId, parties.data?.rows);
+
   const activeRowId = useMatch({ from: "/$orgSlug/receipts/$receiptId", shouldThrow: false })
     ?.params.receiptId;
 
@@ -131,12 +133,10 @@ function ReceiptsRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.rows.find((each) => each.id === partyId);
-
     chips.push({
       id: "partyId",
       name: "Party",
-      label: party ? `Party: ${party.name}` : "One party",
+      label: partyName ? `Party: ${partyName}` : "One party",
       remove: () => setFilters({ partyId: undefined }),
     });
   }

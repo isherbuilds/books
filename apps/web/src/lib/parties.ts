@@ -1,4 +1,5 @@
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { skipToken, useQuery } from "@tanstack/react-query";
 
 import { orpc } from "@/lib/orpc";
 
@@ -50,6 +51,27 @@ export const partyPickerOptions = (orgSlug: string, q?: string) => ({
   ...partyListOptions(orgSlug, q),
   select: activeParties,
 });
+
+/**
+ * A linked party's name. Loaded `rows` answer first; a party past the 5,000-row cap
+ * or filtered out of them is read with `party.get`. Pass `rows` only when the viewer
+ * may read parties: without them nothing is fetched.
+ */
+export function usePartyName(
+  orgSlug: string,
+  partyId: string | undefined,
+  rows: PartyOption[] | undefined,
+) {
+  const listed = partyId ? rows?.find((party) => party.id === partyId) : undefined;
+
+  const fetched = useQuery(
+    orpc.party.get.queryOptions({
+      input: partyId && rows && !listed ? { orgSlug, partyId } : skipToken,
+    }),
+  );
+
+  return listed?.name ?? fetched.data?.name;
+}
 
 // Receipt money per party, a separate read so posting a receipt never refetches
 // the master. Sparse: a party with no posted receipt has no row. A party page passes
