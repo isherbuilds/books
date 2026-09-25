@@ -9,8 +9,8 @@ import { z } from "zod";
 import { audit } from "../audit";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { likePattern } from "../lib/schemas";
-import { orgSettings } from "../lib/settlements";
+import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
+import { orgSettings, pageOf } from "../lib/settlements";
 
 const roleInput = z.enum(ORG_ROLES);
 
@@ -63,8 +63,9 @@ export const memberRouter = {
   list: orgProcedure(
     { member: ["read"] },
     orgInput.extend({
-      q: z.string().trim().max(200).optional(),
-      limit: z.number().int().min(1).max(200).default(100),
+      q: searchQuery,
+      cursor: z.uuid().optional(),
+      limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
     const { orgId, roles } = context.scope;
@@ -87,12 +88,15 @@ export const memberRouter = {
         .where(
           and(
             eq(member.organizationId, orgId),
+            // Ids are UUIDv7, so id order is join order and a keyset cursor.
+            input.cursor ? gt(member.id, input.cursor) : undefined,
             search ? or(ilike(user.name, search), ilike(user.email, search)) : undefined,
           ),
         )
-        .orderBy(asc(member.createdAt))
-        .limit(input.limit),
-      canInvite
+        .orderBy(asc(member.id))
+        .limit(input.limit + 1),
+      // Pending invitations expire within days, so the first page carries them all.
+      canInvite && !input.cursor
         ? db
             .select({
               id: invitation.id,
@@ -109,13 +113,17 @@ export const memberRouter = {
                 search ? ilike(invitation.email, search) : undefined,
               ),
             )
-            .orderBy(asc(invitation.expiresAt))
-            .limit(input.limit)
+            .orderBy(asc(invitation.expiresAt), asc(invitation.id))
+            .limit(MASTER_LIST_LIMIT + 1)
+            .then(capMasterList)
         : [],
     ]);
 
+    const page = pageOf(members, input.limit);
+
     return {
-      members,
+      members: page.rows,
+      hasMore: page.hasMore,
       invitations: invited.map((row) => ({ ...row, url: invitationUrl(row.id) })),
     };
   }),

@@ -49,7 +49,7 @@ import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
-import { partyPickerOptions } from "@/lib/parties";
+import { partyPickerOptions, usePartyName } from "@/lib/parties";
 
 const schema = z
   .object({
@@ -221,13 +221,12 @@ export function PaymentForm({
 
   const section = sections.data?.find((item) => item.id === tdsSectionId);
 
-  useEffect(() => {
-    if (!initialPartyId || !parties.data) return;
-    const selected = parties.data.find((party) => party.id === initialPartyId);
+  const initialPartyName = usePartyName(orgSlug, initialPartyId, parties.data?.rows);
 
-    if (selected && form.getValues("partyId") === initialPartyId)
-      form.setValue("partyName", selected.name);
-  }, [initialPartyId, parties.data, form]);
+  useEffect(() => {
+    if (initialPartyName && form.getValues("partyId") === initialPartyId)
+      form.setValue("partyName", initialPartyName);
+  }, [initialPartyId, initialPartyName, form]);
 
   const post = useMutation(
     orpc.payment.post.mutationOptions({

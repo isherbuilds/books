@@ -2,7 +2,7 @@ import { searchQuery } from "@accly/api/lib/schemas";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { functionalUpdate, type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import { BadgeCheckIcon, CircleDotIcon, TagsIcon } from "lucide-react";
@@ -26,6 +26,7 @@ import { PARTY_COLUMNS, PARTY_SORTS, PartyCard, type PartyRow } from "@/componen
 import { PartySheet } from "@/components/party-form";
 import { PartyQuickLook } from "@/components/party-quick-look";
 import { membershipOptions, useCan } from "@/lib/membership";
+import { orpc } from "@/lib/orpc";
 import { focusRowLink } from "@/lib/row-focus";
 import {
   GST_FILTERS,
@@ -38,7 +39,7 @@ import {
   type PartyFilters,
 } from "@/lib/parties";
 
-// The list is complete in the cache; the table mounts it 25 rows at a time, one Load
+// The list is cached whole up to 5,000 rows; the table mounts it 25 rows at a time, one Load
 // more per step, the same page as the server keyset lists (lib/schemas `pageLimit`).
 const ROW_STEP = 25;
 
@@ -60,7 +61,7 @@ export const Route = createFileRoute("/$orgSlug/parties")({
     sort: z.enum(PARTY_SORTS).optional().catch(undefined),
     order: z.enum(["desc"]).optional().catch(undefined),
   }),
-  // Filters and sort never refetch: the master is complete and cached.
+  // Filters and sort never refetch: the master is cached. Past its bound, a search does.
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
@@ -85,11 +86,26 @@ function PartiesRoute() {
   const [limit, setLimit] = useState(ROW_STEP);
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const canReadReceipts = useCan(orgSlug, { receipt: ["read"] });
-  const parties = useQuery(partyListOptions(orgSlug));
+  const partyMaster = useQuery(partyListOptions(orgSlug));
   const totals = useQuery({ ...partyTotalsOptions(orgSlug), enabled: canReadReceipts });
+  // Past the master's bound the search runs on the server; filters and sort stay in memory.
+  const serverSearch = partyMaster.data?.hasMore === true && q !== undefined;
+  const partySearch = useQuery({ ...partyListOptions(orgSlug, q), enabled: serverSearch });
+  const parties = serverSearch ? partySearch : partyMaster;
 
-  const master = parties.data ?? [];
-  const openParty = openPartyId ? master.find((each) => each.id === openPartyId) : undefined;
+  const master = parties.data?.rows ?? [];
+  const listedParty = openPartyId ? master.find((each) => each.id === openPartyId) : undefined;
+
+  // A linked party past the master's bound, or outside a server search, is read on its
+  // own; the quick look shares this `party.get` entry, so it costs no second request.
+  const fetchedParty = useQuery(
+    orpc.party.get.queryOptions({
+      input:
+        openPartyId && parties.data && !listedParty ? { orgSlug, partyId: openPartyId } : skipToken,
+    }),
+  );
+
+  const openParty = listedParty ?? fetchedParty.data;
   const totalsById = new Map(totals.data?.map((each) => [each.partyId, each]));
 
   const rows: PartyRow[] = filterParties(master, { q, status, roles, gst }).map((party) => ({
@@ -297,6 +313,11 @@ function PartiesRoute() {
           }}
           shown={Math.min(limit, rows.length)}
         />
+        {parties.data?.hasMore ? (
+          <p className="px-3 text-muted-foreground">
+            Showing the first 5,000 parties. Search by name or GSTIN to find the rest.
+          </p>
+        ) : null}
         {/* The quick look opens over the list, which stays mounted. */}
         {openParty ? (
           <PartyQuickLook

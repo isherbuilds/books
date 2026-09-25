@@ -29,7 +29,7 @@ import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { partyListOptions } from "@/lib/parties";
+import { partyListOptions, usePartyName } from "@/lib/parties";
 import { paymentListOptions } from "@/lib/payments";
 
 const STATES = ["posted", "cancelled"] as const;
@@ -107,6 +107,8 @@ function PaymentsRoute() {
     enabled: canReadParties && partyId !== undefined,
   });
 
+  const partyName = usePartyName(orgSlug, partyId, parties.data?.rows);
+
   const activeRowId = useMatch({ from: "/$orgSlug/payments/$paymentId", shouldThrow: false })
     ?.params.paymentId;
 
@@ -132,11 +134,10 @@ function PaymentsRoute() {
   const chips: ActiveFilter[] = [];
 
   if (partyId) {
-    const party = parties.data?.find((each) => each.id === partyId);
     chips.push({
       id: "partyId",
       name: "Party",
-      label: party ? `Party: ${party.name}` : "One party",
+      label: partyName ? `Party: ${partyName}` : "One party",
       remove: () => setFilters({ partyId: undefined }),
     });
   }

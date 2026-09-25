@@ -237,6 +237,15 @@ function PaletteBody({
   const searchReady = debouncedQuery.length >= MIN_SEARCH_CHARS;
 
   const partyQuery = useQuery({ ...partyListOptions(orgSlug), enabled: canReadParties });
+  const partiesPastBound = partyQuery.data?.hasMore === true;
+
+  // Past the master's bound, parties come from a server search, as documents do.
+  const partySearch = useQuery({
+    ...partyListOptions(orgSlug, debouncedQuery),
+    enabled: partiesPastBound && searchReady,
+  });
+
+  const parties = (partiesPastBound ? partySearch.data : partyQuery.data)?.rows ?? [];
 
   const documentQueries = useQueries({
     queries: searches.map((search) => ({
@@ -304,7 +313,7 @@ function PaletteBody({
     }));
 
   const partyItems = typed
-    ? (partyQuery.data ?? []).map((party): PaletteItem => ({
+    ? parties.map((party): PaletteItem => ({
         id: `party:${party.id}`,
         label: party.name,
         group: "party",

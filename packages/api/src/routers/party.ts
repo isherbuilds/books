@@ -4,17 +4,18 @@ import { documents } from "@accly/db/schema/documents";
 import { PARTY_ROLES, parties } from "@accly/db/schema/parties";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, lt, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { conflict, nextEditToken } from "../lib/conflict";
-import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
+import { MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
-import { openCredits, openItems } from "../lib/settlements";
+import { openCredits, openItems, pageOf } from "../lib/settlements";
 import {
   indianPinCode,
   indianStateCode,
+  likePattern,
   masterName,
   optionalGstin,
   optionalPan,
@@ -354,23 +355,33 @@ export const partyRouter = {
     return { openingPaise, lines, closingPaise: balancePaise };
   }),
 
-  // The complete master; every caller filters `active` in memory from this one entry.
-  // Only what the list, Link Field and palette show: contact and address fields come
-  // from `get` when one party opens.
-  list: orgProcedure({ party: ["read"] }, orgInput).handler(async ({ context }) => {
-    const rows = await db
-      .select({
-        id: parties.id,
-        name: parties.name,
-        roles: parties.roles,
-        gstin: parties.gstin,
-        active: parties.active,
-      })
-      .from(parties)
-      .where(eq(parties.orgId, context.scope.orgId))
-      .orderBy(asc(parties.name), asc(parties.id))
-      .limit(MASTER_LIST_LIMIT + 1);
+  // The master up to MASTER_LIST_LIMIT rows; every caller filters `active` in memory
+  // from this one entry. Past the bound `hasMore` is true, and callers search with `q`
+  // on name or GSTIN, so no party is unreachable. Only what the list, Link Field and
+  // palette show: contact and address fields come from `get` when one party opens.
+  list: orgProcedure({ party: ["read"] }, orgInput.extend({ q: searchQuery })).handler(
+    async ({ context, input }) => {
+      const pattern = input.q ? likePattern(input.q) : undefined;
 
-    return capMasterList(rows);
-  }),
+      const rows = await db
+        .select({
+          id: parties.id,
+          name: parties.name,
+          roles: parties.roles,
+          gstin: parties.gstin,
+          active: parties.active,
+        })
+        .from(parties)
+        .where(
+          and(
+            eq(parties.orgId, context.scope.orgId),
+            pattern ? or(ilike(parties.name, pattern), ilike(parties.gstin, pattern)) : undefined,
+          ),
+        )
+        .orderBy(asc(parties.name), asc(parties.id))
+        .limit(MASTER_LIST_LIMIT + 1);
+
+      return pageOf(rows, MASTER_LIST_LIMIT);
+    },
+  ),
 };
