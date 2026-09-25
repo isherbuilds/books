@@ -136,7 +136,7 @@ beforeAll(async () => {
     city: "Pune",
     pinCode: "411001",
   });
-  originalLegalName = (await api.organization.getProfile({ orgSlug: organization.slug })).legalName;
+  originalLegalName = (await api.settings.get({ orgSlug: organization.slug })).legalName;
 
   const posted = await api.receipt.post({
     orgSlug: organization.slug,

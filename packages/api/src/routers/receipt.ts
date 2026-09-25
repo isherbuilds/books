@@ -1,5 +1,4 @@
 import { db, type DbTransaction } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
@@ -16,7 +15,7 @@ import {
   receiptTax,
   type PostDocumentInput,
 } from "../core/documents";
-import { formatDecimal } from "../core/money";
+import { formatDecimal, sumPaise } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
@@ -95,11 +94,11 @@ export async function postReceipt(
 
   const allocatedPaise =
     settlementKind === "against"
-      ? input.allocations.reduce((sum, allocation) => sum + allocation.amount, 0n)
+      ? sumPaise(input.allocations.map((allocation) => allocation.amount))
       : 0n;
 
   const adjustments = settlementKind === "against" ? (input.adjustments ?? []) : [];
-  const adjustmentPaise = adjustments.reduce((sum, adjustment) => sum + adjustment.amount, 0n);
+  const adjustmentPaise = sumPaise(adjustments.map((adjustment) => adjustment.amount));
 
   const remainderSupply =
     settlementKind === "against" && allocatedPaise < input.amount + adjustmentPaise
@@ -118,9 +117,7 @@ export async function postReceipt(
 
   const [incomeAccount] =
     settlementKind === "direct"
-      ? await postableAccounts(tx, scope.orgId, [input.incomeAccountId], ["income"]).for("share", {
-          of: accounts,
-        })
+      ? await postableAccounts(tx, scope.orgId, [input.incomeAccountId], ["income"])
       : [];
 
   const adjustmentIds = [
@@ -131,12 +128,7 @@ export async function postReceipt(
     ),
   ];
 
-  const adjustmentAccounts =
-    adjustmentIds.length > 0
-      ? await postableAccounts(tx, scope.orgId, adjustmentIds, ["expense"]).for("share", {
-          of: accounts,
-        })
-      : [];
+  const adjustmentAccounts = await postableAccounts(tx, scope.orgId, adjustmentIds, ["expense"]);
 
   if (adjustmentAccounts.length !== adjustmentIds.length) {
     throw badRequest("ADJUSTMENT_ACCOUNT_INVALID", "Choose an active non-system expense leaf.");

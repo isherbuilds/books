@@ -630,7 +630,6 @@ test("an unknown slug is FORBIDDEN, not NOT_FOUND — existence never leaks", as
 // Compared against `appRouter` below, so a new procedure that is not listed here
 // fails the suite rather than going uncovered.
 const GUARDED_CALLS = {
-  "organization.getProfile": (api, claim) => api.organization.getProfile({ ...claim }),
   "party.create": (api, claim) =>
     api.party.create({
       ...claim,
