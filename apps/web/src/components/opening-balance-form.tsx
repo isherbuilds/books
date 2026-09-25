@@ -103,8 +103,8 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
                   <Input {...field} required type="date" />
                 </FormControl>
                 <FormDescription>
-                  The day before your first entry here. Party balances come from the import, never
-                  from this document.
+                  The day before your first entry here. Party balances (receivables, payables and
+                  advances) cannot go on this document, and Accly Books cannot record them yet.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

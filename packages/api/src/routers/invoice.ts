@@ -32,7 +32,13 @@ import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
-import { draftToken, invoiceFields, orderedPeriod, reason } from "../lib/schemas";
+import {
+  draftToken,
+  invoiceFields,
+  orderedPeriod,
+  reason,
+  settlementPostFields,
+} from "../lib/schemas";
 import {
   allocationsOf,
   amendClaim,
@@ -306,7 +312,7 @@ const postInput = invoiceInput.extend({
   settle: z
     .strictObject({
       paymentMethodId: z.uuid(),
-      reference: z.string().trim().max(120).optional(),
+      reference: settlementPostFields.reference,
     })
     .optional(),
 });

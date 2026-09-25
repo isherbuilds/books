@@ -231,7 +231,7 @@ function NoteSheetRoute() {
                     void navigate({
                       to: "/$orgSlug/payments",
                       params: { orgSlug },
-                      search: { create: true, partyId: note.partyId! },
+                      search: { create: true, payeeId: note.partyId! },
                     })
                   }
                 >
