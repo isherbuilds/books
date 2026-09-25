@@ -4,6 +4,29 @@ Accly Books is online, multi-tenant accounting and billing for Indian
 businesses. One Organization is one legal entity with one PAN. An owner and a
 chartered accountant (CA) can belong to several Organizations.
 
+## Ambition
+
+Accly Books aims to become economic infrastructure: books a first-time owner
+keeps on day one and a group of companies runs for decades, so switching is the
+obvious choice. It wins on qualities a competitor cannot copy by adding
+features, and every new capability must strengthen one of them:
+
+- **Trust by construction.** Every figure traces to the document that made it.
+  Posted entries never change, party statements sum to their control accounts,
+  and locks follow filed returns.
+- **No learning curve.** The software asks less and derives more: it fills
+  what it already knows (PAN and state from a GSTIN, the Party and Invoice when
+  recording its Receipt), and every screen works on its defaults. Depth appears
+  only when an Organization's data needs it; there are no modes, and nothing
+  asks to be configured before it is used.
+- **Speed.** Keyboard-first entry against a measured speed gate.
+- **Scale without ceilings.** One login spans many Organizations, and nothing a
+  user owns is unreachable because of a count: a list page shows 25 rows, a
+  picker shows at most 8 matches, and search or Load more reaches every record.
+
+Feature parity is not the goal. A parity feature stays evidence-gated like any
+other increment.
+
 ## Position
 
 TallyPrime and Zoho Books India already file GST, so compliance coverage is
@@ -43,6 +66,7 @@ per entity.
 | E-invoicing         | Turnover above ₹5 crore or a customer need, plus an owner    |
 | Offline mode        | Evidence that network, UPS and a paper fallback fail         |
 | AI assistance       | An owned workflow with consent, provenance, review, failures |
+| Group consolidation | Two live Organizations of one group that need one statement  |
 
 ## Language
 
