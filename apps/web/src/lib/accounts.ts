@@ -20,3 +20,29 @@ export const incomeAccountOptions = (orgSlug: string) => ({
   ...orpc.account.list.queryOptions({ input: { orgSlug, type: "income", activeOnly: true } }),
   staleTime: 5 * 60_000,
 });
+
+/**
+ * The leaves a document line may post to, from the full chart: active, not a system
+ * account, not a group, and not a cash or bank leaf (a Payment Method owns those).
+ */
+export function postableAccounts(
+  rows: readonly AccountListRow[],
+  types: readonly AccountListRow["type"][],
+): AccountListRow[] {
+  const groupIds = new Set(rows.map((account) => account.parentId));
+
+  const moneyGroupIds = new Set(
+    rows.flatMap((account) =>
+      account.systemKey === "cash" || account.systemKey === "bank" ? [account.id] : [],
+    ),
+  );
+
+  return rows.filter(
+    (account) =>
+      account.active &&
+      !account.systemKey &&
+      !groupIds.has(account.id) &&
+      types.includes(account.type) &&
+      (account.parentId === null || !moneyGroupIds.has(account.parentId)),
+  );
+}

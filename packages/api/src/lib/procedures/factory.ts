@@ -85,20 +85,27 @@ async function authorizeOrg(
     throw new ORPCError("FORBIDDEN", { message: NO_ORG_ACCESS });
   }
 
-  const { orgId, roles } = membership;
+  const scope = { userId, ...membership };
+  requirePermission(scope, permission);
 
-  if (!authorize(roles, permission)) {
-    audit({
-      action: "rbac.permission",
-      denied: true,
-      actorId: userId,
-      orgId,
-      meta: { roles, permission },
-    });
-    throw new ORPCError("FORBIDDEN", { message: "You do not have permission to do that." });
-  }
+  return scope;
+}
 
-  return { userId, orgId, roles };
+/**
+ * The guard's permission check, for a grant that only part of an input needs (a counter
+ * sale's Receipt, a payable-side picker). A denial is audited like the guard's own.
+ */
+export function requirePermission(scope: Scope, permission: AppPermission): void {
+  if (authorize(scope.roles, permission)) return;
+
+  audit({
+    action: "rbac.permission",
+    denied: true,
+    actorId: scope.userId,
+    orgId: scope.orgId,
+    meta: { roles: scope.roles, permission },
+  });
+  throw new ORPCError("FORBIDDEN", { message: "You do not have permission to do that." });
 }
 
 export const orgProcedure = <TSchema extends z.ZodType<{ orgSlug: string }, unknown>>(

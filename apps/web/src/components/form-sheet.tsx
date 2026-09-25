@@ -21,7 +21,7 @@ export function FormSheet({
   onClose: () => void;
   saving: boolean;
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   /** Base UI owns focus: what it focuses on open is where it returns from on close. */
   initialFocus?: ComponentProps<typeof SheetContent>["initialFocus"];
   children: ReactNode;
@@ -32,7 +32,7 @@ export function FormSheet({
         <SheetContent initialFocus={initialFocus}>
           <SheetHeader>
             <SheetTitle>{title}</SheetTitle>
-            <SheetDescription>{description}</SheetDescription>
+            {description ? <SheetDescription>{description}</SheetDescription> : null}
           </SheetHeader>
           {children}
         </SheetContent>

@@ -13,7 +13,7 @@ export function LandingCapabilities() {
   return (
     // Tight against the hero: no band between them, so the heading is the whole
     // transition.
-    <section className="mx-auto flex w-full max-w-[84rem] flex-col gap-8 px-5 pt-16 sm:gap-12 sm:px-6">
+    <section className="mx-auto flex w-full max-w-[84rem] flex-col gap-4 px-4 pt-16 sm:gap-6 sm:px-6">
       <div className="flex max-w-2xl flex-col gap-3 sm:mx-auto sm:items-center sm:text-center">
         <h2 className="text-3xl font-medium tracking-tight text-balance sm:text-4xl">
           Billing and the ledger, in one system.
@@ -28,7 +28,7 @@ export function LandingCapabilities() {
           <Link
             key={feature.to}
             to={feature.to}
-            className="group flex flex-col overflow-hidden rounded-2xl bg-muted p-2 transition-colors duration-100 ease-out hover:bg-accent"
+            className="group flex flex-col overflow-hidden rounded-xl bg-muted p-2 transition-colors duration-100 ease-out hover:bg-accent"
           >
             {/* The thumbnail repeats the card's own label, so it is decorative
                 to a screen reader; the link's name is the text below. */}
@@ -42,10 +42,10 @@ export function LandingCapabilities() {
                 className="relative"
               />
             </div>
-            <div className="flex flex-col gap-1 px-4 py-5">
+            <div className="flex flex-col gap-2 px-4 py-4">
               <span className="text-sm font-medium">{feature.label}</span>
               <span className="text-xs text-muted-foreground">{feature.blurb}</span>
-              <span className="mt-2 text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
+              <span className="text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
                 See it in the product →
               </span>
             </div>

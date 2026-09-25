@@ -111,6 +111,8 @@ export async function postEntryLines(
     narration: input.narration,
     affectsTax: false,
     printSnapshot: null,
+    discountPaise: 0n,
+    againstDocumentId: null,
     lines: storedLines,
     posting,
     draft: null,

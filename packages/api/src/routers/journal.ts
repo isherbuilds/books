@@ -134,7 +134,7 @@ export const journalRouter = {
       .from(documents)
       .where(
         and(
-          documentListWhere(orgId, "journal", input),
+          documentListWhere(orgId, ["journal"], input),
           input.state ? eq(documents.state, input.state) : undefined,
         ),
       )
@@ -163,6 +163,6 @@ export const journalRouter = {
     { journal: ["cancel"] },
     orgInput.extend({ journalId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelDocument(context.scope, "journal", input.journalId, input.reason),
+    cancelDocument(context.scope, ["journal"], input.journalId, input.reason),
   ),
 };

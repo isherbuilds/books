@@ -12,7 +12,7 @@ export const Route = createFileRoute("/$orgSlug/settings/")({
 
     const first = SETTINGS_TABS.find(({ permission }) => authorize(membership.roles, permission));
     throw redirect({
-      to: first?.to ?? "/$orgSlug/receipts",
+      to: first?.to ?? "/$orgSlug",
       params: { orgSlug },
     });
   },

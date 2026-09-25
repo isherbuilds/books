@@ -52,13 +52,13 @@ export function LandingClosing() {
           heading hidden behind the header. */}
       <section
         id="contact"
-        className="mx-auto w-full max-w-336 scroll-mt-16 px-5 pt-20 sm:px-6 sm:pt-28"
+        className="mx-auto w-full max-w-336 scroll-mt-16 px-4 pt-20 sm:px-6 sm:pt-28"
       >
-        <div className="relative overflow-hidden rounded-2xl px-6 py-14 sm:px-16 sm:py-16">
+        <div className="relative overflow-hidden rounded-xl px-6 py-14 sm:px-16 sm:py-16">
           <Wash />
           {/* The wash never inverts, so everything drawn on it uses the pinned
               ink from `wash.tsx` rather than a theme token. */}
-          <div className="relative flex flex-col items-center gap-5 text-center">
+          <div className="relative flex flex-col items-center gap-4 text-center">
             <h2
               className={`max-w-2xl text-3xl font-medium tracking-tight text-balance sm:text-4xl ${ON_WASH}`}
             >
@@ -68,7 +68,7 @@ export function LandingClosing() {
               Confirm your Organization, add bank accounts and payment methods, invite the team,
               then post the first receipt.
             </p>
-            <div className="mt-1 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
               {/* Same pairing as the hero: the walkthrough is the primary ask,
                   because "Open your books" is a login wall to anyone
                   without an account. */}
@@ -94,9 +94,9 @@ export function LandingClosing() {
         </div>
       </section>
 
-      <footer className="mx-auto w-full max-w-336 px-5 pt-20 sm:px-6 sm:pt-24">
-        <div className="grid gap-10 border-t border-border pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <div className="flex flex-col gap-5">
+      <footer className="mx-auto w-full max-w-336 px-4 pt-20 sm:px-6 sm:pt-24">
+        <div className="grid gap-6 border-t border-border pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="flex flex-col gap-4">
             <p className="max-w-xs text-sm text-pretty">
               One system, from the first invoice of the month to the period your CA locks.
             </p>
@@ -105,7 +105,7 @@ export function LandingClosing() {
                 <span key={badge.label} className="flex items-center gap-2 text-xs">
                   <span
                     aria-hidden
-                    className={`size-1.5 rounded-full ${
+                    className={`size-1.5 rounded-md ${
                       badge.state === "held" ? "bg-status-clear" : "bg-status-note"
                     }`}
                   />
@@ -115,7 +115,7 @@ export function LandingClosing() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 lg:grid-cols-3 lg:justify-self-end lg:gap-16">
+          <div className="grid grid-cols-2 gap-6 lg:grid-cols-3 lg:justify-self-end lg:gap-16">
             <nav className="flex flex-col gap-2 text-xs">
               <span className="text-muted-foreground">Product</span>
               {FEATURES.map((feature) => (

@@ -2,6 +2,7 @@ import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import { documents } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
+import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, exists, inArray, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -13,10 +14,21 @@ import { recordEntry } from "./posting";
 
 export type AllocationTarget = { documentId: string; amountPaise: bigint };
 
+export type AllocationPair = {
+  sourceDocumentId: string;
+  targetDocumentId: string;
+  amountPaise: bigint;
+};
+
+type Side = "receivable" | "payable";
+
+type LockedDocument = Pick<
+  typeof documents.$inferSelect,
+  "id" | "type" | "state" | "settlementKind" | "exposureSide" | "partyId"
+>;
+
 const reversal = alias(allocations, "allocation_reversal");
 
-// An apply is active until a reverse row names it. This is the only definition of
-// "active"; the subquery correlates with the enclosing query's `allocations` row.
 function reversalOf(orgId: string) {
   return db
     .select({ id: reversal.id })
@@ -44,23 +56,38 @@ export function allocationReversed(orgId: string) {
 }
 
 /**
- * The document's total less its active allocations, looked up per row of the enclosing
- * query through `allocations (org_id, source/target_document_id)`. A register or picker
- * aggregates only the allocations of the documents it considers, never the
- * Organization's whole allocation history; "active" is still `activeApply`.
+ * A document's settlement capacity and what is left of it, as correlated scalars on the
+ * enclosing `documents` row. Every settling document names one Party and posts one
+ * party-ledger line for it (a unique index), so capacity is that line's absolute
+ * amount, read by index; the balance subtracts active applies through the allocation
+ * index for `role`. Grouped joins would aggregate the whole organization before a party
+ * filter or a page limit applies. A document with lines for two parties (a slice 9a
+ * Journal) makes the scalar fail loudly until this read takes the party.
  */
-export function remainingPaiseOf(orgId: string, side: "source" | "target") {
+export function settlementPaise(orgId: string, role: "source" | "target") {
   const documentId =
-    side === "source" ? allocations.sourceDocumentId : allocations.targetDocumentId;
+    role === "source" ? allocations.sourceDocumentId : allocations.targetDocumentId;
 
-  const allocated = db
-    .select({
-      allocatedPaise: sql`coalesce(sum(${allocations.amountPaise}), 0)::bigint`,
-    })
+  const capacity = sql`coalesce((${db
+    .select({ amount: sql`abs(${partyLedgerLines.amountPaise})` })
+    .from(partyLedgerLines)
+    .where(
+      and(
+        eq(partyLedgerLines.orgId, orgId),
+        eq(partyLedgerLines.documentId, documents.id),
+        eq(partyLedgerLines.kind, "post"),
+      ),
+    )}), 0)`;
+
+  const applied = db
+    .select({ amount: sql`coalesce(sum(${allocations.amountPaise}), 0)` })
     .from(allocations)
     .where(and(activeApply(orgId), eq(documentId, documents.id)));
 
-  return sql<bigint>`${documents.totalPaise} - (${allocated})`.mapWith(BigInt);
+  return {
+    capacityPaise: sql<bigint>`${capacity}::bigint`.mapWith(BigInt),
+    balancePaise: sql<bigint>`(${capacity} - (${applied}))::bigint`.mapWith(BigInt),
+  };
 }
 
 /** Active applies from or to any of the documents. */
@@ -88,8 +115,7 @@ export async function activeAllocationsOf(
     );
 }
 
-// NO KEY UPDATE, not UPDATE: an allocation insert takes KEY SHARE on both documents it
-// names, and an UPDATE lock would make that check wait out of ascending id order.
+// NO KEY UPDATE: inserts take KEY SHARE on both named documents.
 async function lockDocuments(tx: DbTransaction, orgId: string, documentIds: readonly string[]) {
   return tx
     .select({
@@ -97,8 +123,8 @@ async function lockDocuments(tx: DbTransaction, orgId: string, documentIds: read
       type: documents.type,
       state: documents.state,
       settlementKind: documents.settlementKind,
+      exposureSide: documents.exposureSide,
       partyId: documents.partyId,
-      totalPaise: documents.totalPaise,
     })
     .from(documents)
     .where(and(eq(documents.orgId, orgId), inArray(documents.id, [...documentIds])))
@@ -106,106 +132,163 @@ async function lockDocuments(tx: DbTransaction, orgId: string, documentIds: read
     .for("no key update");
 }
 
-/** Locks the source and targets in ascending id order, then rechecks before inserting. */
+function roleOf(document: LockedDocument): { side: Side; role: "source" | "target" } | null {
+  switch (document.type) {
+    case "invoice":
+      return { side: "receivable", role: "target" };
+    case "bill":
+      return { side: "payable", role: "target" };
+    case "creditNote":
+      return { side: "receivable", role: "source" };
+    case "debitNote":
+      return { side: "payable", role: "source" };
+    case "receipt":
+      return document.exposureSide === "receivable" && document.settlementKind !== "direct"
+        ? { side: "receivable", role: "source" }
+        : null;
+    case "payment":
+      return document.settlementKind !== "direct" && document.exposureSide
+        ? {
+            side: document.exposureSide,
+            role: document.exposureSide === "payable" ? "source" : "target",
+          }
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** Only money held in an advance account needs a journal entry when allocated after post. */
+function allocationEntrySide(
+  source: Pick<LockedDocument, "type" | "settlementKind" | "exposureSide">,
+): Side | null {
+  if (source.settlementKind === "direct") return null;
+
+  if (source.type === "receipt" && source.exposureSide === "receivable") return "receivable";
+
+  if (source.type === "payment" && source.exposureSide === "payable") return "payable";
+
+  return null;
+}
+
+/** Lock all named documents in ascending id order, consume their balances, and move applied advances. */
 export async function applyAllocations(
   tx: DbTransaction,
   scope: Scope,
   args: {
-    sourceDocumentId: string;
-    // A Receipt post allocates from its own draft before numbering it.
-    sourceState: "draft" | "posted";
-    targets: readonly AllocationTarget[];
+    pairs: readonly AllocationPair[];
+    draftDocumentId: string | null;
     entryDate: string;
+    requiredSourceType?: "creditNote";
   },
-): Promise<{ partyId: string; rows: Array<{ id: string; amountPaise: bigint }> }> {
-  const targetIds = args.targets.map((target) => target.documentId);
+): Promise<{ id: string; amountPaise: bigint }[]> {
+  if (args.pairs.length === 0)
+    throw badRequest("ALLOCATION_TARGET_INVALID", "Choose an allocation.");
+  const keys = args.pairs.map((pair) => `${pair.sourceDocumentId}:${pair.targetDocumentId}`);
 
-  if (
-    targetIds.length === 0 ||
-    new Set(targetIds).size !== targetIds.length ||
-    args.targets.some((target) => target.amountPaise <= 0n)
-  ) {
-    throw badRequest(
-      "ALLOCATION_TARGET_INVALID",
-      "Choose each invoice once with a positive amount.",
-    );
+  if (new Set(keys).size !== keys.length || args.pairs.some((pair) => pair.amountPaise <= 0n)) {
+    throw badRequest("ALLOCATION_TARGET_INVALID", "Choose each pair once with a positive amount.");
   }
 
-  const locked = await lockDocuments(tx, scope.orgId, [args.sourceDocumentId, ...targetIds]);
-  const source = locked.find((document) => document.id === args.sourceDocumentId);
+  const ids = [
+    ...new Set(args.pairs.flatMap((pair) => [pair.sourceDocumentId, pair.targetDocumentId])),
+  ];
 
-  const allocatableReceipt =
-    source?.settlementKind === "advance" || source?.settlementKind === "against";
+  const locked = await lockDocuments(tx, scope.orgId, ids);
+  const byId = new Map(locked.map((document) => [document.id, document]));
+  const firstSource = byId.get(args.pairs[0]!.sourceDocumentId);
+  const firstRole = firstSource && roleOf(firstSource);
+  const partyId = firstSource?.partyId;
 
-  // A direct Receipt credits income, so it holds no advance to allocate.
-  if (
-    !source ||
-    source.type !== "receipt" ||
-    source.state !== args.sourceState ||
-    !allocatableReceipt ||
-    source.partyId === null
-  ) {
+  if (!firstRole || firstRole.role !== "source" || !partyId) {
     throw badRequest(
       "ALLOCATION_SOURCE_INVALID",
-      "Choose an advance or against receipt with a party.",
+      "Choose a posted settlement source with a party.",
     );
   }
 
-  const active = await activeAllocationsOf(tx, scope.orgId, [source.id, ...targetIds]);
+  const side = firstRole.side;
 
-  // One pass: what each invoice already received, and what this receipt already gave.
-  const receivedPaise = new Map<string, bigint>();
-  let givenPaise = 0n;
-
-  for (const row of active) {
-    if (row.sourceDocumentId === source.id) givenPaise += row.amountPaise;
-    receivedPaise.set(
-      row.targetDocumentId,
-      (receivedPaise.get(row.targetDocumentId) ?? 0n) + row.amountPaise,
-    );
-  }
-
-  for (const target of args.targets) {
-    const invoice = locked.find((document) => document.id === target.documentId);
+  for (const pair of args.pairs) {
+    const source = byId.get(pair.sourceDocumentId);
+    const target = byId.get(pair.targetDocumentId);
 
     if (
-      !invoice ||
-      invoice.type !== "invoice" ||
-      invoice.state !== "posted" ||
-      invoice.partyId !== source.partyId
+      !source ||
+      roleOf(source)?.role !== "source" ||
+      roleOf(source)?.side !== side ||
+      source.partyId !== partyId ||
+      (source.state !== "posted" &&
+        !(source.state === "draft" && source.id === args.draftDocumentId)) ||
+      (args.requiredSourceType && source.type !== args.requiredSourceType)
+    ) {
+      throw badRequest(
+        "ALLOCATION_SOURCE_INVALID",
+        "Choose a posted source for the same party and side.",
+      );
+    }
+
+    if (
+      !target ||
+      roleOf(target)?.role !== "target" ||
+      roleOf(target)?.side !== side ||
+      target.partyId !== partyId ||
+      (target.state !== "posted" &&
+        !(target.state === "draft" && target.id === args.draftDocumentId))
     ) {
       throw badRequest(
         "ALLOCATION_TARGET_INVALID",
-        "Choose posted invoices for the same party as the receipt.",
+        "Choose a posted target for the same party and side.",
       );
     }
+  }
 
-    const outstandingPaise = invoice.totalPaise - (receivedPaise.get(invoice.id) ?? 0n);
+  const sourceIds = new Set(args.pairs.map((pair) => pair.sourceDocumentId));
+  const targetIds = new Set(args.pairs.map((pair) => pair.targetDocumentId));
 
-    if (target.amountPaise > outstandingPaise) {
+  // Read after the locks, so no concurrent apply changes a balance before the insert.
+  const balances = await tx
+    .select({
+      id: documents.id,
+      source: settlementPaise(scope.orgId, "source").balancePaise,
+      target: settlementPaise(scope.orgId, "target").balancePaise,
+    })
+    .from(documents)
+    .where(and(eq(documents.orgId, scope.orgId), inArray(documents.id, ids)));
+
+  const left = new Map(
+    balances.map((row) => [row.id, sourceIds.has(row.id) ? row.source : row.target]),
+  );
+
+  for (const pair of args.pairs) {
+    left.set(pair.sourceDocumentId, left.get(pair.sourceDocumentId)! - pair.amountPaise);
+    left.set(pair.targetDocumentId, left.get(pair.targetDocumentId)! - pair.amountPaise);
+  }
+
+  for (const targetId of targetIds) {
+    const outstanding = left.get(targetId)!;
+
+    if (outstanding < 0n)
       throw badRequest(
         "ALLOCATION_EXCEEDS_OUTSTANDING",
-        `Allocation exceeds the invoice outstanding amount of ${formatMoney(outstandingPaise)}.`,
+        `Allocation exceeds outstanding by ${formatMoney(-outstanding)}.`,
       );
-    }
   }
 
-  const allocatedPaise = args.targets.reduce((sum, target) => sum + target.amountPaise, 0n);
-  const unappliedPaise = source.totalPaise - givenPaise;
+  for (const sourceId of sourceIds) {
+    const unapplied = left.get(sourceId)!;
 
-  if (allocatedPaise > unappliedPaise) {
-    throw badRequest(
-      "ALLOCATION_EXCEEDS_SOURCE",
-      `Allocation exceeds the receipt's unapplied amount of ${formatMoney(unappliedPaise)}.`,
-    );
+    if (unapplied < 0n)
+      throw badRequest(
+        "ALLOCATION_EXCEEDS_SOURCE",
+        `Allocation exceeds unapplied amount by ${formatMoney(-unapplied)}.`,
+      );
   }
 
-  const rows = args.targets.map((target) => ({
+  const rows = args.pairs.map((pair) => ({
     id: Bun.randomUUIDv7(),
     orgId: scope.orgId,
-    sourceDocumentId: source.id,
-    targetDocumentId: target.documentId,
-    amountPaise: target.amountPaise,
+    ...pair,
     kind: "apply" as const,
     reversesAllocationId: null,
     entryDate: args.entryDate,
@@ -214,16 +297,34 @@ export async function applyAllocations(
 
   await tx.insert(allocations).values(rows);
 
-  return {
-    partyId: source.partyId,
-    rows: rows.map(({ id, amountPaise }) => ({ id, amountPaise })),
-  };
+  // Money a posted advance holds moves from the advance account to the control account.
+  // A source posting now credits the control account itself, and a note holds no advance.
+  for (const row of rows) {
+    const source = byId.get(row.sourceDocumentId)!;
+    const entrySide = source.id === args.draftDocumentId ? null : allocationEntrySide(source);
+
+    if (entrySide)
+      await recordEntry(tx, scope, {
+        kind: "post",
+        document: {
+          id: row.id,
+          posting: {
+            type: "allocation",
+            side: entrySide,
+            direction: "apply",
+            partyId,
+            amountPaise: row.amountPaise,
+          },
+        },
+        entryDate: args.entryDate,
+        narration: "Apply advance to claim",
+      });
+  }
+
+  return rows.map(({ id, amountPaise }) => ({ id, amountPaise }));
 }
 
-/**
- * Appends the reverse row, then reverses the apply's journal entry. An allocation
- * made at Receipt post has no entry of its own, so its reversal posts one.
- */
+/** Append a reverse, then reverse its entry or release a source allocated at post. */
 export async function reverseAllocation(
   tx: DbTransaction,
   scope: Scope,
@@ -231,7 +332,6 @@ export async function reverseAllocation(
   entryDate: string,
   narration: string,
 ): Promise<{ id: string; amountPaise: bigint }> {
-  // An apply row and its post entry never change, so they are read before the lock.
   const [apply] = await tx
     .select({
       sourceDocumentId: allocations.sourceDocumentId,
@@ -258,20 +358,17 @@ export async function reverseAllocation(
     )
     .limit(1);
 
-  if (!apply) {
-    throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
-  }
+  if (!apply) throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
 
   const locked = await lockDocuments(tx, scope.orgId, [
     apply.sourceDocumentId,
     apply.targetDocumentId,
   ]);
 
-  const partyId = locked.find((document) => document.id === apply.sourceDocumentId)?.partyId;
+  const source = locked.find((document) => document.id === apply.sourceDocumentId);
 
-  if (!partyId) throw impossible(`allocation ${allocationId} has a source without a party`);
+  if (!source?.partyId) throw impossible(`allocation ${allocationId} has a source without a party`);
 
-  // The unique index allows one reverse per apply, so a lost race inserts nothing.
   const [reversed] = await tx
     .insert(allocations)
     .values({
@@ -291,62 +388,35 @@ export async function reverseAllocation(
     })
     .returning({ id: allocations.id });
 
-  if (!reversed) {
-    throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
+  if (!reversed) throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
+
+  if (apply.postEntryId) {
+    await recordEntry(tx, scope, {
+      kind: "reverse",
+      document: { id: allocationId, type: "allocation" },
+      entryDate,
+      narration,
+    });
+  } else {
+    const side = allocationEntrySide(source);
+
+    if (side)
+      await recordEntry(tx, scope, {
+        kind: "post",
+        document: {
+          id: allocationId,
+          posting: {
+            type: "allocation",
+            side,
+            direction: "release",
+            partyId: source.partyId,
+            amountPaise: apply.amountPaise,
+          },
+        },
+        entryDate,
+        narration,
+      });
   }
 
-  await recordEntry(
-    tx,
-    scope,
-    apply.postEntryId
-      ? {
-          kind: "reverse",
-          document: { id: allocationId, type: "allocation" },
-          entryDate,
-          narration,
-        }
-      : {
-          kind: "post",
-          document: {
-            id: allocationId,
-            posting: {
-              type: "allocation",
-              direction: "invoiceToAdvance",
-              partyId,
-              amountPaise: apply.amountPaise,
-            },
-          },
-          entryDate,
-          narration,
-        },
-  );
-
   return { id: reversed.id, amountPaise: apply.amountPaise };
-}
-
-/** An Invoice's settlement state; `today` is the Organization's business date. */
-export function invoiceSettlement(
-  invoice: {
-    state: (typeof documents.$inferSelect)["state"];
-    totalPaise: bigint;
-    outstandingPaise: bigint;
-    dueDate: string | null;
-  },
-  today: string,
-): { settlementStatus: "paid" | "partPaid" | "unpaid"; overdue: boolean } {
-  const settlementStatus =
-    invoice.outstandingPaise === 0n
-      ? "paid"
-      : invoice.outstandingPaise < invoice.totalPaise
-        ? "partPaid"
-        : "unpaid";
-
-  return {
-    settlementStatus,
-    overdue:
-      invoice.state === "posted" &&
-      settlementStatus !== "paid" &&
-      invoice.dueDate !== null &&
-      invoice.dueDate < today,
-  };
 }

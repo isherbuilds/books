@@ -1,7 +1,7 @@
 # Spec: Accounting core
 
-Status: slices 1–3, 4a, 4b-i, 5 (Journal, Opening Balance, locks) and 8
-(chart of accounts) are implemented. Slices 4b-ii, 6–7 and 9 (party Journals)
+Status: slices 1–3, 4a, 4b-i, 4b-ii, 5 (Journal, Opening Balance, locks)
+and 8 (chart of accounts) are implemented. Slices 6–7 and 9 (party Journals)
 are open; remaining runtime and CA acceptance work is in the work registry.
 Authority: the founder's decisions. `docs/research` and Git keep the evidence
 behind them.
@@ -171,8 +171,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     `receivables` for the allocated amount and `customerAdvances` for the
     remainder; its party ledger line is the negative full amount. Applying an
     advance to an Invoice posts Dr `customerAdvances` / Cr `receivables`.
-    Supplier allocation, note allocation and Payment settlement remain in
-    slice 4b-ii.
+    Supplier allocation, note allocation and Payment settlement follow the
+    [4b-ii contract](#slices).
 
 17. **Settlement changes.** Allocations are append-only `apply` and `reverse`
     rows; one reverse may name each apply. A document's allocation capacity
@@ -212,14 +212,14 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     cancellation from slice 9a) appends reverse rows for its active
     allocations, with no journal entry of its own, and reverses every
     un-reversed allocation journal entry from the document. `allocation.apply` and `allocation.reverse` check the period lock
-    on their entry date. Slice 4b-ii copies this model: it keeps ERPNext's
+    on their entry date. Slice 4b-ii uses this model: it keeps ERPNext's
     separate advance account, and rejects Zoho-style gross posting, which sends
     every Receipt through the advance account and doubles journal rows, and the
     Odoo and Tally shape without an advance account, which loses the liability
     that Schedule III and GST advance tracking need.
-18. **Due dates.** Posted Invoices expose outstanding,
-    `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Invoice
-    lists filter open or overdue settlement. Bills remain in slice 4b-ii.
+18. **Due dates.** Posted Invoices and Bills expose outstanding,
+    `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Their
+    lists filter open or overdue settlement.
 
 ## Slices
 
@@ -233,15 +233,15 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
    no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
-   allocations and `receipt.unapplied` belong to slice 4b-i. Open: CA
-   acceptance, and posting p95
+   allocations use `party.openItems`; credits use `party.openCredits` (4b-ii).
+   Open: CA acceptance, and posting p95
    under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
    receipts per organization).
 3. **Payment with TDS.** Implemented: `payment.*`, `tdsSections({ date })` and
    the TDS register XLSX. TDS is the amount times the rate, half-up to the
    rupee, at the earlier of credit or payment. A Party without a PAN is refused.
    The register reads the PAN from the snapshot, and a Form 140 correction fixes
-   a filed quarter. No web form yet. Open: the CA verifies the 13-row seed.
+   a filed quarter. The web form is available. Open: the CA verifies the 13-row seed.
 4. **Invoice and settlement**, in three parts.
 
    **4a. Items, GST calculation and Invoice.** Implemented: dated Tax Rates;
@@ -266,32 +266,184 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    and CA read. The web lists Invoices at `/$orgSlug/invoices` with each record
    in a Sheet (detail, cancel, discard); a new Invoice and a draft are edited on
    the pages `/$orgSlug/invoices/new` and `/$orgSlug/invoices/$invoiceId/edit`
-   (Design §10: a line grid is a Page). Items live at Settings > Items.
+   (Design §10: a line grid is a Page). Items live under Masters.
 
    **4b-i. Allocations and Invoice settlement.** Implemented: append-only
    allocations; Receipt `against`; advance-to-Invoice apply and reversal
    entries; allocation-aware cancellation; Invoice outstanding, settlement
-   status, and open or overdue filters; `invoice.openInvoices`; and
-   `receipt.unapplied`. `invoice.openInvoices` and `receipt.unapplied` return
-   the 200 oldest rows and `hasMore`. The web supports Receipt allocation at
-   post, allocation detail and reversal, applying an advance, Invoice
-   settlement status, and open or overdue filtering. CA acceptance is open.
+   status, and open or overdue filters. The original `invoice.openInvoices`
+   and `receipt.unapplied` pickers returned the 200 oldest rows and `hasMore`;
+   4b-ii replaces them with `party.openItems` and `party.openCredits`, both
+   scoped by side. The web supports Receipt allocation at post, allocation
+   detail and reversal, applying a credit, Invoice settlement status, and open
+   or overdue filtering. CA acceptance is open.
 
-   **4b-ii. Bills, notes and remaining settlement.** Open: Bill, Credit Note
-   and Debit Note; Payment `against`; fee and write-off lines; customer TDS;
-   counter sale; cancel-and-copy (`amendedFrom`); GST registers; Invoice PDF;
-   header discount; and supplier, note and Payment allocation.
+   **4b-ii. Bills, notes and remaining settlement.** Implemented. Bill,
+   Credit Note and Debit Note; Payment `against`; fee and write-off lines;
+   customer TDS; counter sale; cancel-and-copy (`amendedFrom`); GST registers;
+   Invoice PDF; header discount; and supplier, note and Payment allocation.
+   The contract:
+
+   - **Storage.** `documents` gains `discountPaise` (not null, default 0,
+     `>= 0`), `amendedFromId` and `againstDocumentId` (nullable, composite
+     keys to `documents`), and `intraState`, the supply type stored when an
+     Invoice or Bill is written and copied to its notes, so a later settings
+     or Party state change never reclassifies it. `document_lines` gains
+     `discountPaise` (not null, default 0), `itcEligible` (nullable boolean,
+     set on Bill and Debit Note lines only), `sourceLineId` (nullable
+     composite key to `document_lines`, set on note lines only) and
+     `adjustmentKind` (nullable: `fee`, `writeOff`, `tds`).
+     `tds_deductions` gains `basePaise`: a Payment's gross, a Bill's taxable
+     total. A Bill draft keeps its section in that row. `organization_settings`
+     gains `billPrefix` (`BILL`) and `debitNotePrefix` (`DN`);
+     `creditNotePrefix` (`CN`) exists. The baseline is regenerated (rule 4);
+     no environment retains data.
+   - **Sides and roles.** A settling document writes one party ledger line.
+     Its allocation capacity is the absolute amount of that line's `post`
+     row, read from `party_ledger_lines`, never `totalPaise`. A unique index
+     on `(orgId, documentId, partyId, kind)` makes the one row a database
+     fact, so every register, detail and picker reads outstanding and
+     unapplied per row through one correlated, index-backed expression
+     (`settlementPaise`), never a grouped aggregate of the organization. On each side a
+     _target_ holds the claim and a _source_ settles it:
+
+     | Side         | Targets (claim)                        | Sources (settle)                                    | Ledger sign        |
+     | ------------ | -------------------------------------- | --------------------------------------------------- | ------------------ |
+     | `receivable` | Invoice; refund Payment (`receivable`) | Receipt `advance`/`against`; Credit Note            | target +, source − |
+     | `payable`    | Bill                                   | Payment `advance`/`against` (`payable`); Debit Note | target −, source + |
+
+     An allocation pairs one source and one target of the same Party and
+     side. Outstanding is target capacity less active allocations to it;
+     unapplied is source capacity less active allocations from it. Locking,
+     append-only rows and cancellation follow call 17 unchanged.
+
+   - **Allocation entries.** Only a Receipt or Payment source holds its
+     unapplied amount on the advance account. Applying one after post writes
+     `receivable` Dr `customerAdvances` / Cr `receivables`, or `payable` Dr
+     `payables` / Cr `supplierAdvances`; reversing reverses that entry, and
+     reversing an allocation made at post writes the opposite (release)
+     entry. A note source sits on the control account already: its applies
+     and reverses write no entry. `AllocationPosting` is
+     `{ type: "allocation", side, direction: "apply" | "release", partyId, amountPaise }`.
+   - **Bill** (`bill:*`; owner and accountant post and cancel, CA reads).
+     Drafts as the Invoice (`saveDraft`, `post`, `discardDraft`, version
+     token). Header: supplier `partyId` with a `stateCode`, `documentDate`
+     (the supplier's invoice date), required `reference` (the supplier's
+     invoice number, 1–40), optional `dueDate`, `placeOfSupplyStateCode`
+     (defaults to the Organization state), optional `tdsSectionId`,
+     `narration`. 1–100 account lines `{ accountId, description, amount,
+taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
+     leaf. `taxCode` resolves to the rate effective on the Bill date; an invalid
+     code is `TAX_CODE_INVALID`. `amount` is the taxable value.
+     Tax is `computeTax` with intra-state when the Party `stateCode` equals
+     the place of supply. `itcEligible` is forced false when the Organization
+     has no `gstin`. TDS is `computeTds` on the taxable total at the Bill (the
+     earlier of credit or payment), needs the Party PAN
+     (`TDS_PAN_REQUIRED`), and writes one `tds_deductions` row. Posting: Dr
+     each line account for its taxable value plus its tax when not
+     `itcEligible`; Dr `cgstInput`, `sgstInput`, `igstInput` for eligible tax;
+     Cr `tdsPayable` for TDS; round-off as the Invoice; Cr `payables` for the
+     rest, which is the capacity. `affectsTax` is true when the Organization
+     is registered. Settlement status and overdue as call 18.
+   - **Credit Note and Debit Note** (`note:*`, one resource; no draft). A
+     note names `againstDocumentId`: a posted Invoice (Credit Note) or a
+     posted Bill (Debit Note) with `documentDate` on or after the source's.
+     Lines are `{ sourceLineId, amount }`, 1–100, each a distinct line of the
+     source; `amount` is the taxable value credited, and the note's tax uses
+     the source line's rate and the source's supply type. The cumulative
+     taxable per source line across posted notes may not exceed the line's
+     (`NOTE_EXCEEDS_SOURCE`); a line credited in full takes exactly the
+     line's remaining tax components, otherwise `computeTax` and the same
+     bound per component. The note total rounds as the Invoice, and the
+     cumulative note total is bounded by the source total. A Credit Note
+     posts Dr income per account, Dr output GST, Cr `receivables`; a Debit
+     Note posts Dr `payables`, Cr each account (including ineligible tax), Cr
+     input GST for eligible tax. Both copy `affectsTax` from the source. At
+     post a note allocates to its source up to the source's outstanding; the
+     rest stays an unapplied source. Numbering uses `creditNotePrefix` and
+     `debitNotePrefix`.
+   - **Payment `against`.** `exposureSide` is explicit input. `payable`:
+     `allocations` of `{ documentId, amount }` target posted Bills of the
+     Party (1–50); the remainder is a supplier advance (Dr `supplierAdvances`).
+     It takes no TDS: the Bill deducts at credit.
+     `receivable` is a refund: the targets are the Payment itself and the
+     allocations name Credit Notes as sources; the amount equals their sum
+     exactly and no TDS is allowed. Unused Receipt advances stay unrefundable
+     (Deferred).
+   - **Fee, write-off and customer TDS.** A Receipt `against` may carry
+     `adjustments` of `{ kind: "fee" | "writeOff" | "tds", accountId?, amount }`,
+     at most 5: `fee` and `writeOff` name an active non-system expense leaf,
+     and `tds` posts to `tdsReceivable` with no account input. Each is a debit
+     that settles with the money: capacity is the amount received plus the
+     adjustments. A Payment `against` `payable` may carry `writeOff` (credit
+     to an active non-system income or expense leaf, settles) and `fee` (Dr
+     an expense leaf, Cr the method; does not settle). A document with
+     settling adjustments allocates its whole capacity, so no advance
+     remainder mixes with a write-off (`ADJUSTMENT_UNALLOCATED`). Adjustments
+     are stored as account lines with `adjustmentKind`.
+   - **Header discount** (Invoice). Optional `discount` splits pro rata over
+     each line's pre-discount value, half-up. Correct rounding on the first
+     largest line, then other lines in input order if needed, so every line's
+     discount stays between zero and its pre-discount value. A line stores its `discountPaise`, and
+     `amountPaise` stays the taxable value after discount. A discount above
+     the subtotal is `DISCOUNT_EXCEEDS_SUBTOTAL`; a zero total stays
+     `INVOICE_ZERO_TOTAL`.
+   - **Counter sale.** `invoice.post` takes optional `settle: {
+paymentMethodId, reference? }` and, in the same transaction, posts an
+     `against` Receipt for the Invoice total allocated to it. The Invoice
+     numbers before the Receipt. Needs `invoice:post` and `receipt:post`.
+   - **Cancel and copy.** `invoice.amend` and `bill.amend` take
+     `{ id, reason }`, cancel under the normal rules and return a new draft
+     copying the header and lines with `amendedFromId`. Need `cancel` and
+     `create` on the type. Audited.
+     An Invoice or Bill with any posted note against it refuses both cancel
+     and amend (`CONFLICT`, naming the notes).
+   - **Pickers.** `party.openItems({ partyId, side })` returns targets with
+     outstanding (`{ id, type, number, documentDate, dueDate, outstandingPaise }`)
+     and `party.openCredits({ partyId, side, type? })` returns sources with unapplied
+     credit (`{ id, type, number, documentDate, unappliedPaise }`); both the
+     200 oldest and `hasMore`. The optional credit `type` filters before the limit;
+     reading credits requires the Note read grant. They replace `invoice.openInvoices` and
+     `receipt.unapplied`. `allocation.apply` takes `{ sourceDocumentId,
+targetDocumentId, amount }`.
+     Invoice and Payment details omit related Note or Bill metadata for a role
+     without that document's read grant.
+   - **GST registers** (`export.gstOutwardXlsx`, `export.gstInwardXlsx`,
+     `{ from, to }`, `export` grant). Posted, uncancelled documents with
+     `affectsTax` in the range. Outward: Invoices and Credit Notes (negated)
+     grouped by document and rate into B2B (Party `gstin`), B2CL (inter-state,
+     unregistered, Invoice total above ₹1,00,000) and B2CS (the rest, by place
+     of supply and rate); CDNR and CDNUR for notes; HSN summary by `hsnSac`
+     and rate; an exempt sheet of `nil`, `exempt` and `nonGst` lines and
+     direct Receipts. The exempt sheet splits inter- and intra-state by place
+     of supply against the Organization's state, as ERPNext's GSTR-1 does. A
+     direct Receipt stores its place of supply and `intraState` when posted:
+     the Party's state when it names one, else the Organization's (an
+     over-the-counter supply to an unregistered recipient). A register row
+     without a supply type is an invariant failure, never a default. Inward: Bills and Debit Notes (negated) by document and
+     rate, with eligible and ineligible tax. The registers read documents and
+     lines, never `advanceSupply`. The TDS register includes Bills.
+   - **Invoice PDF** at `/api/$orgSlug/invoices/$invoiceId/pdf`, as the
+     Receipt PDF: `invoice.get`, the print snapshot and the stored lines. The
+     title is "Invoice" until the CA approves print classes (Product).
+   - **Web.** Bills and Payments under Purchases; Credit and Debit Notes
+     under a Notes list; Bill pages as the Invoice (line grid); the Payment
+     form a Sheet; a note is a page picked from its source record. The
+     Invoice form adds Discount and Counter sale; the Receipt form adds
+     adjustments; record Sheets add Amend, Apply credit (both sides) and the
+     Invoice PDF.
 
    **Released credits versus advances.** Reversing an allocation on a fully
    allocated `against` Receipt posts `invoiceToAdvance`, yet the Receipt stored
    no `advanceSupply` and `reverseAllocation` records none, so the released
-   credit is unclassified while the journal balances. A credit released from a
-   previously invoiced settlement is not an advance accepted before supply, and
-   a Receipt's nullable `advanceSupply` is never authoritative for a later
-   state. Settle the model — classify released credits explicitly, or record
-   them as released credits distinct from advances — before any tax workflow
-   reads `advanceSupply`. Never rewrite the posted Receipt to manufacture that
-   history.
+   credit is unclassified while the journal balances. The same applies to a
+   Payment `against` remainder released to `supplierAdvances`. A credit
+   released from a previously billed settlement is not an advance accepted
+   before supply, and a document's nullable `advanceSupply` is never
+   authoritative for a later state. Settle the model — classify released
+   credits explicitly, or record them as released credits distinct from
+   advances — before any tax workflow reads `advanceSupply`. Never rewrite
+   the posted document to manufacture that history.
    - Legacy reference (a716b6c):
      - Header discount: split pro rata, half-up, with the residue on the
        largest line, so lines sum to the header
@@ -312,7 +464,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 5. **Journal, Opening Balance, locks.** Implemented: `journal.*`,
    `openingBalance.{post,get,cancel}`,
    `lock.{get,set,grantException,revokeException}`, the `/$orgSlug/journals`
-   routes and Accounting > Opening balance and Accounting > Locks. Open: CA
+   routes and Settings > Opening balance and Settings > Locks. Open: CA
    acceptance.
    - Legacy reference (a716b6c):
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
@@ -418,8 +570,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `receivables` control account with its `systemKey`; Opening Balance
      passes `false`. `payables`, `customerAdvances` and `supplierAdvances`
      stay refused (`ACCOUNT_INVALID`): advance sources are Receipts, payable
-     targets arrive with the 4b-ii Bill, and each is admitted only with its
-     own settlement rule, so a Journal's party ledger line never mixes
+     targets are Bills, and each is admitted only with its own settlement rule,
+     so a Journal's party ledger line never mixes
      control accounts (call 17). A `receivables` line without `partyId` is
      `PARTY_REQUIRED` (`BAD_REQUEST`), checked in the posting transaction
      after the accounts resolve; elsewhere the party stays optional
@@ -444,9 +596,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `receivables` credit for the target's party (call 17), the same quantity
      posting capped against, and admits a posted Journal with such a credit.
      Applying or reversing from a Journal writes no entry.
-     `party.openCredits({ partyId })` replaces `receipt.unapplied`: Receipts
-     and Journals with unapplied credit for the party, 200 oldest and
-     `hasMore`.
+     `party.openCredits({ partyId, side: "receivable" })` already lists
+     receivable credits; 9a adds Journals with unapplied credit for the party
+     alongside Receipts, with the same 200-oldest limit and `hasMore`.
    - Cancel: `reverseDocument` already reverses party ledger lines; a Journal
      cancel appends reverse rows for its active allocations with no entry, as
      Receipt cancel does.
@@ -455,8 +607,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `receivables` credit line shows the Receipt form's open invoices grid.
      Journal detail lists party lines and allocations with Reverse, as Invoice
      detail does. The party Ledger links a Journal line to its record as it
-     links Receipts. Apply advance becomes Apply credit and lists
-     `party.openCredits`.
+     links Receipts. Apply credit already lists `party.openCredits`; 9a adds
+     Journal credits to that sheet.
    - Acceptance, with Priya owing a ₹10,000 Invoice: a Journal
      Dr `Sibling Discount` 500 / Cr `receivables` (Priya) 500 allocated to
      that Invoice leaves outstanding 9,500, statement balance 9,500, one day
@@ -471,16 +623,17 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `tests/integration/allocation.test.ts` extended per the acceptance;
      `tests/unit/posting.test.ts` for the netting; the guarded-call table for
      `party.openCredits`; `bun run check-types`; the form exercised in the app.
-     Re-measure the "Settlement reads at volume" registry item: capacity now
-     joins `party_ledger_lines`.
-   - Depends on: slice 8 (the expense leaf) and 4b-i. Owns:
+     A Journal writes one party ledger line per party, so `settlementPaise`
+     then takes the target's party; re-measure the "Settlement reads at
+     volume" registry item.
+   - Depends on: slice 8 (the expense leaf) and 4b-ii. Owns:
      `packages/api/src/lib/accounts.ts` (`journalAccounts`),
      `packages/api/src/core/posting.ts` (`JournalLinePosting`),
      `packages/api/src/core/documents.ts` (Journal party lines),
      `packages/api/src/core/allocations.ts`,
      `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
      `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
-     `apply-advance-sheet.tsx`,
+     `apply-credit-sheet.tsx`,
      `apps/web/src/routes/$orgSlug/journals_.$journalId.tsx`. Touches:
      `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
      and query), `apps/web/src/lib/domain-invalidation.ts`,
@@ -488,15 +641,16 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    - Interfaces: `JournalLinePosting` gains `systemKey` (nullable) and
      `allocations` (`AllocationTarget[]`, empty except on a `receivables`
      credit); `applyAllocations` keeps its argument shape and widens its
-     source rule; `party.openCredits` rows are
-     `{ id, type: "receipt" | "journal", number, documentDate, unappliedPaise }`.
+     source rule; `party.openCredits` keeps its Receipt and Credit Note rows
+     and adds Journal rows for the receivable side:
+     `{ id, type: "journal", number, documentDate, unappliedPaise }`.
 
    **9b. Journal debits as open items.** A Journal netting to a `receivables`
    debit for a party (the Rahul side of a transfer, a charge with no Invoice)
    is settleable: Receipt `against` and `allocation.apply` may target it.
-   `party.openItems({ partyId })` replaces `invoice.openInvoices`: Invoices
-   and Journal debits with outstanding, 200 oldest and `hasMore`, `dueDate`
-   null for a Journal. Invoice list open and overdue filters stay
+   `party.openItems({ partyId, side: "receivable" })` already lists Invoices;
+   9b adds Journal debits with outstanding, 200 oldest and `hasMore`, with
+   `dueDate` null for a Journal. Invoice list open and overdue filters stay
    Invoice-only. A Journal with active allocations targeting it refuses cancel
    (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's
    grid is titled Open items and shows type and number.
@@ -608,8 +762,8 @@ slice 9.
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
   ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
-  `CONFLICT`); all three mutations audited. Web: Accounting > Opening balance
-  (form when none is posted, record with Cancel when one is) and Accounting >
+  `CONFLICT`); all three mutations audited. Web: Settings > Opening balance
+  (form when none is posted, record with Cancel when one is) and Settings >
   Locks (both locks with Change, exceptions with Grant and Revoke); forms show
   `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
   requires a loaded lock state. Switching Organization or lock kind starts a
@@ -643,8 +797,11 @@ slice 9.
 - **Period-close balance snapshot** (like ERPNext's Account Closing Balance).
   Gate: a trial balance or ledger misses its latency budget at pilot volume.
 - **Partitioning `journal_lines`.** Gate: ten million rows.
-- **TDS thresholds, amount overrides and the no-PAN rate** (§397(2)). Gate: the
-  slice 4b-ii Bill spec, or the first pilot case.
+- **TDS thresholds, amount overrides and the no-PAN rate** (§397(2)). A
+  Payment `against` Bills takes no TDS; the Bill deducts at credit. An advance
+  Payment with TDS followed by a Bill with TDS is not netted: the accountant
+  reconciles by Journal. Gate for thresholds, overrides and the no-PAN rate:
+  the first pilot case.
 - **TDS schedule updates for existing Organizations.** Gate: the first statute
   change after pilot data exists.
 - **Clearing TDS Payable** by Journal, on purpose: a Payment cannot name a
@@ -657,7 +814,7 @@ slice 9.
 - **Receipt gaps**: refunds of unused advances, refundable deposits,
   third-party payers, `direct` to a non-income account. Gate: the CA answers
   the worked examples below.
-- **GSTR-1 Table 13.** Gate: the slice 4b-ii registers.
+- **GSTR-1 Table 13.** Gate: a CA asks.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
 - **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.

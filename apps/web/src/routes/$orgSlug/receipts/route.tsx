@@ -11,15 +11,15 @@ import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
+import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
 import {
-  DateRangePopover,
   FilterChips,
   FilterMenu,
   FilterSubmenu,
-  PresetItems,
   focusSearch,
   toggleValue,
   type ActiveFilter,
+  OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
@@ -239,7 +239,7 @@ function ReceiptsRoute() {
         <ListToolbar>
           <SearchInput
             label="Search receipts"
-            placeholder="Search number, party, or reference"
+            placeholder="Number, party, or reference"
             value={q}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
@@ -284,32 +284,22 @@ function ReceiptsRoute() {
                     )}
                   </FilterSubmenu>
                 ) : null}
-                <FilterSubmenu icon={CircleDotIcon} label="State">
-                  {RECEIPT_STATES.map((each) => (
-                    <DropdownMenuCheckboxItem
-                      key={each}
-                      checked={state === each}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ state: checked ? each : undefined })
-                      }
-                    >
-                      {STATE_LABELS[each]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
-                <FilterSubmenu icon={ArrowLeftRightIcon} label="Settlement">
-                  {SETTLEMENT_KINDS.map((each) => (
-                    <DropdownMenuCheckboxItem
-                      key={each}
-                      checked={settlementKind === each}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ settlementKind: checked ? each : undefined })
-                      }
-                    >
-                      {SETTLEMENT_LABELS[each]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={CircleDotIcon}
+                  label="State"
+                  options={RECEIPT_STATES}
+                  labels={STATE_LABELS}
+                  value={state}
+                  onChange={(next) => void setFilters({ state: next })}
+                />
+                <OptionFilter
+                  icon={ArrowLeftRightIcon}
+                  label="Settlement"
+                  options={SETTLEMENT_KINDS}
+                  labels={SETTLEMENT_LABELS}
+                  value={settlementKind}
+                  onChange={(next) => void setFilters({ settlementKind: next })}
+                />
               </FilterMenu>
             }
           />

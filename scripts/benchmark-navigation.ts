@@ -33,7 +33,7 @@ if (!Number.isInteger(SAMPLE_COUNT) || SAMPLE_COUNT < 1) {
 // The label says whether the route's data could already be cached in this sample.
 const steps = [
   { path: `/${ORG_SLUG}/parties`, label: "parties (cold)" },
-  { path: `/${ORG_SLUG}/files`, label: "files (cold)" },
+  { path: `/${ORG_SLUG}/invoices`, label: "invoices (cold)" },
   { path: `/${ORG_SLUG}/settings`, label: "settings (cold, redirects)" },
   { path: `/${ORG_SLUG}/receipts`, label: "receipts (fresh cache)" },
   { path: `/${ORG_SLUG}/parties`, label: "parties (fresh cache)" },
@@ -204,3 +204,11 @@ const report = JSON.stringify(
 if (process.env.PERF_OUTPUT) await Bun.write(process.env.PERF_OUTPUT, `${report}\n`);
 
 console.log(report);
+
+// The client-pattern speed gate requires a navigation interaction to paint within
+// 200 ms. Cached revisits isolate browser navigation from network and route chunks.
+for (const result of summary.filter((step) => step.label.includes("fresh cache"))) {
+  if (result.committedMedianMs > 200) {
+    throw new Error(`${result.label} exceeded the 200 ms navigation budget`);
+  }
+}

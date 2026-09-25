@@ -14,8 +14,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
 import { required } from "../support/assert";
-import { createFounderSession, type TestUser } from "../support/auth";
-import { eventually, expectReason } from "../support/client";
+import {
+  createFounderSession,
+  createTestUser,
+  joinOrganization,
+  type TestUser,
+} from "../support/auth";
+import { clientFor, eventually, expectORPCCode, expectReason } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 import { readZipText } from "../support/xlsx";
 
@@ -46,6 +51,10 @@ let tdsPayable: Account;
 let bankAccount: Account;
 
 let expenseAccount: Account;
+
+let incomeAccount: Account;
+
+let payables: Account;
 
 let bankTransfer: PaymentMethod;
 
@@ -102,6 +111,17 @@ beforeAll(async () => {
   expenseAccount = required(
     own.accounts.find(({ type, systemKey }) => type === "expense" && systemKey === null),
     "expense account",
+  );
+  incomeAccount = required(
+    own.accounts.find(
+      ({ type, systemKey, supplyClass }) =>
+        type === "income" && systemKey === null && supplyClass === "exempt",
+    ),
+    "income account",
+  );
+  payables = required(
+    own.accounts.find(({ systemKey }) => systemKey === "payables"),
+    "payables account",
   );
   bankTransfer = required(
     own.methods.find(({ name }) => name === "Bank transfer"),
@@ -169,6 +189,7 @@ test("advance payment deducts TDS and posts payable exposure", async () => {
       code: "1024",
       description: expect.any(String),
       rateBasisPoints: 200,
+      basePaise: 100_000n,
       amountPaise: 2_000n,
     },
   });
@@ -328,6 +349,273 @@ test("direct payments post without exposure and reject invalid accounts or TDS",
 
   expect(directWithTdsDetail.tds).toMatchObject({ code: "1024", amountPaise: 200n });
   expect((await postingOf(organization.id, directWithTds.id, "post")).lines).toHaveLength(3);
+});
+
+test("against payment settles a bill with write-off and fee, and reversal reopens the bill", async () => {
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    reference: "PAY-BILL-1",
+    documentDate: "2026-09-12",
+    lines: [
+      {
+        accountId: expenseAccount.id,
+        description: "Supplier services",
+        amount: "100.00",
+        itcEligible: false,
+      },
+    ],
+  });
+
+  const paymentInput = {
+    orgSlug: organization.slug,
+    settlementKind: "against" as const,
+    exposureSide: "payable" as const,
+    partyId: vendor.id,
+    amount: "95.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ billId: bill.id, amount: "100.00" }],
+    writeOffs: [{ accountId: incomeAccount.id, amount: "5.00" }],
+    fee: { accountId: expenseAccount.id, amount: "2.00" },
+  };
+
+  await expectORPCCode(
+    // SAFETY: deliberately sends a field the strict schema refuses, to prove the refusal.
+    api.payment.post({ ...paymentInput, tdsSectionId: section1024.id } as PaymentPostInput),
+    "BAD_REQUEST",
+  );
+  const payment = await api.payment.post(paymentInput);
+
+  const detail = await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id });
+
+  const allocation = required(
+    required(detail.allocations, "bill allocations")[0],
+    "bill allocation",
+  );
+
+  expect(detail).toMatchObject({
+    settlementKind: "against",
+    exposureSide: "payable",
+    unappliedPaise: 0n,
+    tds: null,
+    adjustments: expect.arrayContaining([
+      expect.objectContaining({
+        adjustmentKind: "writeOff",
+        accountId: incomeAccount.id,
+        amountPaise: 500n,
+      }),
+      expect.objectContaining({
+        adjustmentKind: "fee",
+        accountId: expenseAccount.id,
+        amountPaise: 200n,
+      }),
+    ]),
+  });
+  expect(allocation).toMatchObject({
+    otherDocumentId: bill.id,
+    amountPaise: 10_000n,
+    reversed: false,
+  });
+  expect((await postingOf(organization.id, payment.id, "post")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        accountId: payables.id,
+        partyId: vendor.id,
+        debit: 10_000n,
+        credit: 0n,
+      }),
+      expect.objectContaining({ accountId: bankAccount.id, debit: 0n, credit: 9_700n }),
+      expect.objectContaining({ accountId: incomeAccount.id, credit: 500n }),
+      expect.objectContaining({ accountId: expenseAccount.id, debit: 200n }),
+    ]),
+  );
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(0n);
+  await expect(
+    api.bill.cancel({
+      orgSlug: organization.slug,
+      billId: bill.id,
+      reason: "Must reverse payment first",
+    }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: allocation.id,
+    reason: "Reopen bill",
+  });
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(10_000n);
+});
+
+test("against payment remainder is an available supplier advance", async () => {
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    reference: "PAY-BILL-2",
+    documentDate: "2026-09-12",
+    lines: [
+      {
+        accountId: expenseAccount.id,
+        description: "Supplier services",
+        amount: "100.00",
+        itcEligible: false,
+      },
+    ],
+  });
+
+  const payment = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "120.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ billId: bill.id, amount: "100.00" }],
+  });
+
+  expect((await postingOf(organization.id, payment.id, "post")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: payables.id, debit: 10_000n }),
+      expect.objectContaining({ accountId: supplierAdvances.id, debit: 2_000n }),
+      expect.objectContaining({ accountId: bankAccount.id, credit: 12_000n }),
+    ]),
+  );
+  expect(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id })).unappliedPaise,
+  ).toBe(2_000n);
+  expect(
+    (
+      await api.party.openCredits({
+        orgSlug: organization.slug,
+        partyId: vendor.id,
+        side: "payable",
+      })
+    ).rows,
+  ).toContainEqual(expect.objectContaining({ id: payment.id, unappliedPaise: 2_000n }));
+  expect(
+    (await api.payment.list({ orgSlug: organization.slug, q: payment.number })).rows,
+  ).toContainEqual(
+    expect.objectContaining({ id: payment.id, settlementKind: "against", exposureSide: "payable" }),
+  );
+});
+
+test("a credit note refund allocates the exact unapplied credit", async () => {
+  const customer = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Refund Customer",
+    roles: ["customer"],
+    stateCode: "27",
+  });
+
+  const item = await api.item.create({
+    orgSlug: organization.slug,
+    name: "Refundable service",
+    incomeAccountId: incomeAccount.id,
+    unitPrice: "100.00",
+  });
+
+  const invoice = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: customer.id,
+    documentDate: "2026-09-12",
+    placeOfSupplyStateCode: "27",
+    lines: [{ kind: "item", itemId: item.id, quantity: 1, unitPrice: "100.00" }],
+  });
+
+  await api.receipt.post({
+    orgSlug: organization.slug,
+    partyId: customer.id,
+    settlementKind: "against",
+    amount: "100.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ invoiceId: invoice.id, amount: "100.00" }],
+  });
+
+  const invoiceDetail = await api.invoice.get({
+    orgSlug: organization.slug,
+    invoiceId: invoice.id,
+  });
+
+  const note = await api.note.post({
+    orgSlug: organization.slug,
+    type: "creditNote",
+    againstDocumentId: invoice.id,
+    documentDate: "2026-09-12",
+    narration: "Refund service",
+    lines: [
+      { sourceLineId: required(invoiceDetail.lines[0], "invoice line").id, amount: "100.00" },
+    ],
+  });
+
+  const input = {
+    orgSlug: organization.slug,
+    settlementKind: "against" as const,
+    exposureSide: "receivable" as const,
+    partyId: customer.id,
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ creditNoteId: note.id, amount: "100.00" }],
+  };
+
+  const advance = await api.receipt.post({
+    orgSlug: organization.slug,
+    partyId: customer.id,
+    settlementKind: "advance",
+    advanceSupply: "goods",
+    amount: "100.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+  });
+
+  await expectReason(
+    api.payment.post({
+      ...input,
+      amount: "100.00",
+      allocations: [{ creditNoteId: advance.id, amount: "100.00" }],
+    }),
+    "ALLOCATION_SOURCE_INVALID",
+  );
+  await expectReason(api.payment.post({ ...input, amount: "99.00" }), "REFUND_AMOUNT_MISMATCH");
+  const refund = await api.payment.post({ ...input, amount: "100.00" });
+  const detail = await api.payment.get({ orgSlug: organization.slug, paymentId: refund.id });
+  expect(detail).toMatchObject({
+    exposureSide: "receivable",
+    settlementKind: "against",
+    tds: null,
+    unappliedPaise: null,
+  });
+  expect(detail.allocations).toContainEqual(
+    expect.objectContaining({
+      otherDocumentId: note.id,
+      otherType: "creditNote",
+      amountPaise: 10_000n,
+    }),
+  );
+  const operator = await createTestUser("refund-operator");
+  await joinOrganization(operator, organization.id, "operator");
+
+  const restricted = clientFor(operator);
+  expect(
+    (await restricted.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).notes,
+  ).toEqual([]);
+  expect(
+    (await restricted.payment.get({ orgSlug: organization.slug, paymentId: refund.id }))
+      .allocations,
+  ).toBeNull();
+
+  expect((await postingOf(organization.id, refund.id, "post")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: bankAccount.id, credit: 10_000n }),
+    ]),
+  );
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
+    0n,
+  );
 });
 
 test("posting refuses an archived party", async () => {

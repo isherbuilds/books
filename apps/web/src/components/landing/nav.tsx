@@ -21,8 +21,8 @@ import { FEATURES } from "./features";
    weight so they don't outweigh the nav. The theme control lives in the footer,
    not here; the bigger ask stays in the hero and the closing panel. */
 
-/* The only theme control on a public page: the sidebar's `ThemeToggle` is a
-   `SidebarMenuButton` and cannot be lifted out of the app shell.
+/* The only theme control on a public page; inside the app the choice lives in the
+   rail's user menu.
 
    The rendered markup must not depend on the resolved theme. `resolvedTheme` is
    undefined during SSR, so branching on it here hydrates as a mismatch; the
@@ -37,7 +37,7 @@ export function ThemeSwitch() {
       type="button"
       aria-label="Toggle theme"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="rounded-md p-1.5 text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
+      className="rounded-md p-2 text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
     >
       <SunIcon className="hidden size-4 dark:block" />
       <MoonIcon className="size-4 dark:hidden" />
@@ -58,7 +58,7 @@ const SHELVES = (["Sales"] as const).map((name) => ({
    only the logo heavier; that is what keeps a bar quiet. Only a hover colour
    shift; no pill, no underline. */
 const LINK =
-  "px-2.5 py-1.5 text-sm font-normal text-foreground transition-colors duration-100 ease-out hover:text-muted-foreground";
+  "px-2 py-2 text-sm font-normal text-foreground transition-colors duration-100 ease-out hover:text-muted-foreground";
 
 export function LandingNav() {
   const [open, setOpen] = useState(false);
@@ -67,7 +67,7 @@ export function LandingNav() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/85 backdrop-blur-md">
-      <div className="mx-auto grid h-14 w-full max-w-336 grid-cols-[1fr_auto_1fr] items-center gap-6 px-5 sm:px-6">
+      <div className="mx-auto grid h-14 w-full max-w-336 grid-cols-[1fr_auto_1fr] items-center gap-6 px-4 sm:px-6">
         <Link to="/" className="justify-self-start text-sm font-medium">
           Accly Books
         </Link>
@@ -115,7 +115,7 @@ export function LandingNav() {
               Product
               <ChevronDownIcon
                 data-open={open || undefined}
-                className="size-3 text-muted-foreground transition-transform duration-200 ease-out data-open:rotate-180 motion-reduce:transition-none"
+                className="size-3 text-muted-foreground transition-transform duration-150 ease-out data-open:rotate-180 motion-reduce:transition-none"
               />
             </button>
             {open ? (
@@ -123,17 +123,17 @@ export function LandingNav() {
                surface, no shadow. The bar above stays visible, so the menu
                reads as a continuation of it rather than as a popover. */
               <div className="absolute inset-x-0 top-14 origin-top animate-in border-b border-border bg-background duration-150 ease-out fade-in slide-in-from-top-1 motion-reduce:animate-none">
-                <div className="mx-auto grid w-full max-w-336 grid-cols-1 px-5 py-6 sm:px-6">
+                <div className="mx-auto grid w-full max-w-336 grid-cols-1 px-4 py-6 sm:px-6">
                   {SHELVES.map((shelf) => (
-                    <div key={shelf.name}>
-                      <p className="pb-1 text-xs text-muted-foreground">{shelf.name}</p>
+                    <div key={shelf.name} className="flex flex-col gap-1">
+                      <p className="text-xs text-muted-foreground">{shelf.name}</p>
                       <ul className="flex flex-col">
                         {shelf.modules.map((item) => (
                           <li key={item.to}>
                             <Link
                               to={item.to}
                               onClick={() => setOpen(false)}
-                              className="group -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 transition-colors duration-100 ease-out hover:bg-muted"
+                              className="group flex flex-col gap-1 rounded-md px-2 py-2 transition-colors duration-100 ease-out hover:bg-muted"
                             >
                               <span className="text-sm">{item.label}</span>
                               <span className="text-xs text-muted-foreground">{item.blurb}</span>
@@ -145,7 +145,7 @@ export function LandingNav() {
                   ))}
                 </div>
                 <div className="border-t border-border">
-                  <div className="mx-auto flex w-full max-w-336 items-center justify-between px-5 py-3 text-sm sm:px-6">
+                  <div className="mx-auto flex w-full max-w-336 items-center justify-between px-4 py-3 text-sm sm:px-6">
                     <p className="text-muted-foreground">
                       One login across your Organizations, and one ledger under every document.
                     </p>
@@ -217,11 +217,11 @@ export function LandingNav() {
           strip showing keeps the page obviously still there, and `overscroll-auto`
           lets a flick past the menu's end carry on scrolling it. */}
       {menu ? (
-        <div className="absolute inset-x-0 top-14 max-h-[calc(100svh-8rem)] animate-in overflow-y-auto overscroll-auto rounded-b-2xl border-b border-border bg-background shadow-lg duration-200 ease-out fade-in slide-in-from-top-2 motion-reduce:animate-none md:hidden">
-          <nav className="flex flex-col gap-6 px-5 py-6 text-sm" aria-label="Main">
+        <div className="absolute inset-x-0 top-14 max-h-[calc(100svh-8rem)] animate-in overflow-y-auto overscroll-auto rounded-b-xl border-b border-border bg-background shadow-lg duration-150 ease-out fade-in slide-in-from-top-2 motion-reduce:animate-none md:hidden">
+          <nav className="flex flex-col gap-6 px-4 py-6 text-sm" aria-label="Main">
             {SHELVES.map((shelf) => (
               <div key={shelf.name} className="flex flex-col gap-1">
-                <p className="px-3 pb-1 text-xs text-muted-foreground">{shelf.name}</p>
+                <p className="px-3 text-xs text-muted-foreground">{shelf.name}</p>
                 {shelf.modules.map((item) => (
                   <Link
                     key={item.to}
@@ -229,8 +229,8 @@ export function LandingNav() {
                     onClick={() => setMenu(false)}
                     className="flex gap-3 rounded-lg p-3 transition-colors duration-100 ease-out hover:bg-muted"
                   >
-                    <item.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span className="flex flex-col gap-0.5">
+                    <item.icon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="flex flex-col gap-1">
                       <span className="font-normal">{item.label}</span>
                       <span className="text-xs text-muted-foreground">{item.blurb}</span>
                     </span>

@@ -1,6 +1,6 @@
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/invoice-details.tsx and sheets/invoice-details-sheet.tsx.
-import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
@@ -14,14 +14,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@accly/ui/components/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@accly/ui/components/table";
 import { cn } from "@accly/ui/lib/utils";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -29,6 +21,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { struck } from "@/components/document-columns";
+import { AllocationsSection } from "@/components/allocations-section";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
@@ -187,53 +180,28 @@ function ReceiptSheetRoute() {
               </DetailRow>
             </dl>
 
-            {receipt.allocations.length > 0 ? (
+            {receipt.adjustments.length > 0 ? (
               <>
                 <Separator />
                 <section className="grid gap-2">
-                  <h3 className="text-muted-foreground">Allocations</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead className="text-right">State</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {receipt.allocations.map((allocation) => (
-                        <TableRow key={allocation.id}>
-                          <TableCell>
-                            <Link
-                              to="/$orgSlug/invoices/$invoiceId"
-                              params={{
-                                orgSlug,
-                                invoiceId: allocation.targetDocumentId,
-                              }}
-                              className="font-mono underline-offset-4 hover:underline"
-                            >
-                              {allocation.targetNumber}
-                            </Link>
-                          </TableCell>
-                          <TableCell>{formatBusinessDay(allocation.entryDate)}</TableCell>
-                          <TableCell className="text-right">
-                            {formatMoney(allocation.amountPaise)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {allocation.reversed ? (
-                              <Badge variant="muted">Reversed</Badge>
-                            ) : (
-                              <Badge variant="outline">Active</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <h3 className="text-muted-foreground">Adjustments</h3>
+                  {receipt.adjustments.map((adjustment, index) => (
+                    <div key={index} className="flex justify-between gap-3">
+                      <span>
+                        {adjustment.adjustmentKind === "tds"
+                          ? "Customer TDS"
+                          : adjustment.adjustmentKind === "writeOff"
+                            ? "Write-off"
+                            : "Fee"}
+                      </span>
+                      <span className="tabular-nums">{formatMoney(adjustment.amountPaise)}</span>
+                    </div>
+                  ))}
                 </section>
               </>
             ) : null}
+
+            <AllocationsSection orgSlug={orgSlug} allocations={receipt.allocations} />
 
             {receipt.narration ? (
               <>

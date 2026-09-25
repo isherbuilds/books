@@ -127,6 +127,7 @@ export const invoiceFields = {
   dueDate: dateOnly.optional(),
   placeOfSupplyStateCode: indianStateCode,
   reference: settlementPostFields.reference,
+  discount: money.optional(),
   narration: settlementPostFields.narration,
   lines: z
     .array(
@@ -149,6 +150,23 @@ export const invoiceFields = {
     .min(1)
     .max(100),
 };
+
+export const optionalTaxCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{1,12}$/)
+  .optional();
+
+export const optionalHsnSac = z
+  .string()
+  .trim()
+  .regex(/^\d{4,8}$/, "Use a 4 to 8 digit HSN/SAC code")
+  .optional();
+
+// The draft's id and the version its editor loaded; without one a save writes a new
+// document.
+export const draftToken = z.object({ id: z.uuid(), version: z.number().int().min(1) });
 
 /** The keyset, period and search fields every document register takes. */
 export const documentPageFields = {

@@ -94,15 +94,31 @@ button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
 
 ## 7. Sidebar
 
-- `lib/navigation.ts` owns the groups; Settings is the footer link.
+- `lib/navigation.ts` owns the groups: Home, then Sales, Purchases, Masters and
+  Accounting. Settings is the footer link; its tabs hold the rarely opened
+  pages (Opening balance, Locks, Files, Audit), as Zoho files them.
+- The rail is a plain `<aside>` in `components/app-shell.tsx`, not the shadcn
+  Sidebar: it server-renders with the page and has no provider, cookie, resize
+  listener or per-row Tooltip. Only the account menus mount on the client.
+- Each group is a native `<details>`, open by default. A member collapses the
+  groups they never use; navigating into a collapsed group reopens it, so the
+  active row is never hidden. The rail fits a 768 px screen, so there is no
+  Zoho-style accordion: one open group would cost a click per switch and move
+  rows under the pointer. `name="nav"` on the `<details>` makes it one if ever
+  wanted. The chevron shows only on hover, focus, or while collapsed.
 - The rail is flat on the canvas (`--sidebar` equals `--background`); the
   content panel is the raised card.
 - Hover changes only the background to `bg-sidebar-accent/60`. The active row
   uses the full accent and a foreground icon; label weight and width stay
   fixed, and colours never transition on this frequent action.
-- Below `lg` the rail is a Sheet, and `PageHeader` owns its trigger.
+- The desktop rail is an `<aside>`. Below `lg`, `PageHeader` opens the same nav
+  content in a modal `Sheet`. A link, the backdrop or Esc closes the sheet.
 - The second header row is the palette trigger: "Find anything…" with its Mod+K
-  `Kbd`.
+  `Kbd`. The palette finds Parties and, by number, Party or reference, every
+  Invoice, Receipt, Bill, Payment and Note.
+- The org switcher keeps the section: Invoices in one organization opens
+  Invoices in the next; a record page opens its register. The theme choice lives
+  in the user menu.
 - Links preload on hover or focus with zero delay, never all at mount.
 - Focus is one global unlayered `:focus-visible` rule in `globals.css`: a 2.5px
   rounded ring 2px off the element. Full-bleed targets inset it; components add
@@ -133,6 +149,13 @@ means a primitive lacks a prop.
 - `ListState` is the only pending, error, retry and empty branch. `LoadMore` is
   the only way a list grows: it shows the count and fetches the next 25 rows.
 
+**Choice controls.** Use a dropdown menu for actions and short option lists,
+including filter checkboxes. Use radio items for one-of-many choices such as
+theme. Use a popover for anchored interactive content such as the custom date
+calendar. Use a combobox when someone types to find and choose a record. Menu
+rows stay inset within their popup, with related items grouped before a
+separator.
+
 **Header grammar.** A title is a static noun of up to two words, never data.
 Context goes in the description (`Code · Name`, or a short phrase without a full
 stop). A date appears only when it is interactive. Actions sit right at 32 px
@@ -146,8 +169,9 @@ opens in a right Sheet over the mounted list unless it carries a line grid. A
 record with a line grid is a page (`journals_.$journalId`), like a Party that
 outgrows a Sheet. Closing a Sheet refocuses its row. Records never open in a
 side pane. Operational tables never scroll sideways: below `md` rows become
-compact cards (`px-3 py-2 border-b`, identifier, name and status first). Report
-and print tables may scroll.
+compact cards (`px-3 py-2 border-b`, identifier, name and status first). The
+card stacks its lines with `gap-1`; a `*Card` renderer returns a fragment and
+sets no margins. Report and print tables may scroll.
 Scrollbars are 6 px; the rail hides its own. `DataTable` rows stay single-line:
 truncate with a `title`, keep identifiers whole, and hide optional columns below
 a breakpoint. Elsewhere long text wraps (`break-words`) or truncates with a
@@ -165,8 +189,8 @@ bundled fonts and aligned numerals.
 - Nothing stands in for data that has not arrived. Render the chrome from route
   params and leave the data region empty; a `DataTable` header may show first.
   No skeletons.
-- One exception: the palette, keyed on the organization, keeps its previous
-  receipt results, re-ranked against the live text, while a search runs.
+- The palette is keyed on the organization. It shows document results for the
+  current search as each register responds.
 
 ## 10. Task overlays
 
@@ -194,6 +218,11 @@ bundled fonts and aligned numerals.
 - Chart creation picks the parent with a `NativeSelect` grouped by account type
   (a type's top level or an existing group), then the name; codes are generated,
   not another input to complete.
+- Single-choice pickers use `LinkField`; a fixed list (states, legal types,
+  months, time zones) goes through `OptionField`. `NativeSelect` stays only
+  where `<optgroup>` grouping carries meaning (chart parent, payment-method
+  account) and for the Reports period preset, which shows a non-selectable
+  Custom state.
 - A Sheet moves only by its 150 ms opacity and slide transition; list and
   keyboard actions stay static.
 - Transient notifications sit at the top center with an explicit close button,

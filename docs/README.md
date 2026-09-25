@@ -21,41 +21,84 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 4b-ii,
-  6–7 and 9 (party lines on Journals, Journal credits and debits as allocation
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 6–7 and
+  9 (party lines on Journals, Journal credits and debits as allocation
   sources and targets), CA acceptance of every implemented slice, and the
-  slice 2 posting p95 on native PostgreSQL at `db:seed:volume`. Slices 1–5 and
-  8 are implemented; their open runtime checks are listed below.
+  slice 2 posting p95 on native PostgreSQL at `db:seed:volume`. Slices 1–5
+  and 8 are implemented; their open runtime checks are listed below.
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as
   a released credit distinct from an advance, before any tax workflow reads
-  `advanceSupply` ([decision](./specs/accounting-core.md#slices)).
-- **Settlement reads at volume**: Verification. Invoice open and overdue
-  filters and `receipt.unapplied` sum each document's active allocations per
-  row (`remainingPaiseOf`).
-  Measure them on 100,000 Invoices with allocations before adding any stored
-  balance.
+  `advanceSupply`. The same applies to a Payment `against` remainder released
+  to `supplierAdvances` ([decision](./specs/accounting-core.md#slices)).
+- **Settlement reads at volume**: Verification. Every read of outstanding or
+  unapplied goes through `settlementPaise`: per row, one indexed lookup of the
+  document's single `post` party ledger line (a unique index) less its active
+  applies. Measured with `EXPLAIN ANALYZE` on `db:seed:volume` (100,000
+  Receipts per organization, 44,000 party ledger lines, no Invoices), grouped
+  joins before and correlated reads after: a 25-row register page with
+  balances 140–150 → 0.3–0.6 ms; the Invoice list and its open filter 48 →
+  0.1 ms; `party.openItems` 47 → 0.1 ms; `party.openCredits` for a party
+  with 5,799 open advances 85 → 55 ms, which reads every open credit and
+  sorts in memory before the 200-row limit. Open: the unfiltered Invoice,
+  Bill and Note register pages, the open and overdue filters and both
+  pickers on 100,000 Invoices and Bills with allocations; decide then
+  whether `openCredits` needs a `(org, party, date)` index.
 - **[Keyboard focus](./design.md)**: Verification. One global rounded ring
   with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
   the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
   link, and the muted sidebar palette trigger passed in both themes. Remaining:
   mobile widths, dark theme, dialogs, menus, comboboxes and compact data-table
   rows. Cell-level text links sit about 2px from the ring.
+- **[Choice controls](./design.md#8-layout-primitives)**: Verification. The
+  signed-in desktop pass confirmed organization and account menus in both
+  themes, the active organization mark, theme radio selection and Escape
+  dismissal. Remaining: filter submenus, date popover and record combobox;
+  keyboard focus, edge placement and empty search results; mobile widths in
+  both themes. The Mac locked before those checks could finish.
+- **[Navigation, Home and Reports](./design.md)**: Verification. The native
+  rail, collapsible groups, Home, Reports (four XLSX downloads), palette
+  document search and the section-keeping org switcher were checked on
+  desktop in both themes and on a 375 px drawer. Remaining: keyboard pass
+  through the collapsed groups and the drawer, and `account.moneyBalances`
+  (Home and Banking) timed at `db:seed:volume`. Account ledgers and a
+  Party hub are not built; they need new reads and stay out until slice 5
+  closes.
 - **Review fixes**: Verification. Run the journal, invoice, auth integrity and
   settings integration tests when Docker is available. Check the Product menu
   and group-hover links with mouse and touch at desktop and mobile widths, in
   both themes. Confirm a failed Load more request shows one retry control and
   a failed background refresh keeps its rows.
+- **Stale allocation recovery**: Verification. In a local two-session fixture,
+  select an open Invoice in a Receipt and an open Bill in a Payment, settle each
+  from the other session, then refresh the form's open rows. Confirm each form
+  shows Clear unavailable, clears the hidden amount and error, and can submit
+  a new allocation. The seeded Organizations have no posted Invoices or Bills,
+  so the running-app check could not exercise this transition.
 - **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
-  sort measurement, the H4 runs, and the remaining slice 5 forms. Slice 4 is
-  implemented and runtime verified with accounting-core slices 4a and 4b-i;
-  slice 5's Journal, Opening Balance and lock forms are implemented; remaining
-  forms per client-patterns slice 5 stay open.
+  sort measurement, the H4 runs, and slice 5 import. Slice 4 is implemented
+  and runtime verified with accounting-core slices 4a and 4b-i; slice 5's
+  Journal, Opening Balance, lock, Payment, Bill and note forms are implemented.
 - **Invoice pages**: Verification. On the production build at 1440 and 390 px,
   light and dark: New opens `/invoices/new`, Save Draft moves to
   `/invoices/$invoiceId/edit`, Post opens the record Sheet, and a draft reopens
   from the record with every field. Open: keyboard-only entry, Post and next,
   a stale-draft CONFLICT closing the editor, and a real phone.
+- **Bills, payments and notes**: Verification. Open: hands-on form entry for
+  Bill lines, TDS and ITC; Payment against Bills and as a refund; Credit and
+  Debit Note pages; Invoice discount, counter sale and amend; and Receipt
+  adjustments at 1440 and 390 px in both themes. API flows, record Sheets
+  and mobile list and form rendering were exercised. Headless browser limits
+  blocked screenshots and form automation. Dates now format from a fixed
+  month table, so hydration error #418 ("Sep" versus "Sept") should be gone:
+  confirm on the Invoices, Payments and Notes lists. Also open after the
+  review fixes: the shared Allocations table with Reverse on the Invoice,
+  Bill, Note, Payment (an advance applied later) and Receipt Sheets; the
+  shared open-items table with Fill and totals in the Receipt and Payment
+  forms, and Payment write-offs; Apply credit on a Bill opening only on
+  demand; the Note form's line-level refusal; the Payment method field in
+  the Invoice, Receipt and Payment forms; the organization prefix fields;
+  and the Invoice PDF totals (Subtotal and Discount only with a discount).
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.

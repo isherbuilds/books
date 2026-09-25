@@ -185,7 +185,7 @@ export function DataTable<T extends RowData>({
                   data-row-link
                   data-focus-inset
                   data-active={row.id === activeRowId || undefined}
-                  className={cn(CARD_CLASS, "block scroll-mt-2 data-active:bg-muted")}
+                  className={cn(CARD_CLASS, "scroll-mt-2 data-active:bg-muted")}
                 >
                   {renderCard(row.original)}
                 </Link>
@@ -203,7 +203,7 @@ export function DataTable<T extends RowData>({
   );
 }
 
-const CARD_CLASS = "min-h-10 border-b border-border/60 px-3 py-2 text-xs";
+const CARD_CLASS = "flex min-h-10 flex-col gap-1 border-b border-border/60 px-3 py-2 text-xs";
 
 // A compiled child: it receives plain values only, never the table or row objects,
 // so a memoized row cannot render stale after a sort or a visibility change.

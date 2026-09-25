@@ -1,7 +1,6 @@
 import { searchQuery } from "@accly/api/lib/schemas";
 import { ACCOUNT_TYPES, type AccountType } from "@accly/db/schema/accounts";
 import { Button } from "@accly/ui/components/button";
-import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ListTreeIcon } from "lucide-react";
@@ -15,9 +14,9 @@ import { TableEmpty } from "@/components/data-table/table-empty";
 import {
   FilterChips,
   FilterMenu,
-  FilterSubmenu,
   focusSearch,
   type ActiveFilter,
+  OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { accountListOptions, type AccountListRow, type AccountRow } from "@/lib/accounts";
@@ -142,26 +141,21 @@ function AccountsRoute() {
         <ListToolbar>
           <SearchInput
             label="Search accounts"
-            placeholder="Search name or code"
+            placeholder="Name or code"
             value={q}
             delay={150}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
             trailing={
               <FilterMenu anchor={field} active={type !== undefined}>
-                <FilterSubmenu icon={ListTreeIcon} label="Type">
-                  {ACCOUNT_TYPES.map((accountType) => (
-                    <DropdownMenuCheckboxItem
-                      key={accountType}
-                      checked={type === accountType}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ type: checked ? accountType : undefined })
-                      }
-                    >
-                      {ACCOUNT_TYPE_LABELS[accountType]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={ListTreeIcon}
+                  label="Type"
+                  options={ACCOUNT_TYPES}
+                  labels={ACCOUNT_TYPE_LABELS}
+                  value={type}
+                  onChange={(next) => void setFilters({ type: next })}
+                />
               </FilterMenu>
             }
           />

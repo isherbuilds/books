@@ -1,6 +1,5 @@
 import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
-import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CalendarIcon, CircleDotIcon } from "lucide-react";
@@ -10,14 +9,14 @@ import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { JOURNAL_COLUMNS, JournalCard } from "@/components/journal-columns";
+import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
 import {
-  DateRangePopover,
   FilterChips,
   FilterMenu,
   FilterSubmenu,
-  PresetItems,
   focusSearch,
   type ActiveFilter,
+  OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
@@ -139,7 +138,7 @@ function JournalsRoute() {
         <ListToolbar>
           <SearchInput
             label="Search journals"
-            placeholder="Search number, reference, narration"
+            placeholder="Number, reference, or narration"
             value={q}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
@@ -154,19 +153,14 @@ function JournalsRoute() {
                     onCustom={() => setCustomRangeOpen(true)}
                   />
                 </FilterSubmenu>
-                <FilterSubmenu icon={CircleDotIcon} label="State">
-                  {JOURNAL_STATES.map((each) => (
-                    <DropdownMenuCheckboxItem
-                      key={each}
-                      checked={state === each}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ state: checked ? each : undefined })
-                      }
-                    >
-                      {STATE_LABELS[each]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={CircleDotIcon}
+                  label="State"
+                  options={JOURNAL_STATES}
+                  labels={STATE_LABELS}
+                  value={state}
+                  onChange={(next) => void setFilters({ state: next })}
+                />
               </FilterMenu>
             }
           />

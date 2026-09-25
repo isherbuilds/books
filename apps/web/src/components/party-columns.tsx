@@ -116,7 +116,7 @@ export function PartyCard({ party }: { party: PartyRow }) {
           <span className="shrink-0 tabular-nums">{formatMoney(party.totals.receivedPaise)}</span>
         ) : null}
       </div>
-      <p className="mt-1 truncate text-muted-foreground">
+      <p className="truncate text-muted-foreground">
         {party.roles.map((role) => ROLE_LABELS[role]).join(", ")}
         {party.gstin ? ` · ${party.gstin}` : ""}
       </p>

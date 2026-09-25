@@ -124,6 +124,6 @@ export const openingBalanceRouter = {
     { openingBalance: ["cancel"] },
     orgInput.extend({ openingBalanceId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelDocument(context.scope, "openingBalance", input.openingBalanceId, input.reason),
+    cancelDocument(context.scope, ["openingBalance"], input.openingBalanceId, input.reason),
   ),
 };

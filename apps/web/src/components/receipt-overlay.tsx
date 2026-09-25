@@ -20,13 +20,7 @@ export function ReceiptOverlay({
   const saving = useIsMutating({ mutationKey: orpc.receipt.post.mutationKey() }) > 0;
 
   return (
-    <FormSheet
-      open={open}
-      onClose={onClose}
-      saving={saving}
-      title="New receipt"
-      description="Record money received by the organization."
-    >
+    <FormSheet open={open} onClose={onClose} saving={saving} title="New receipt">
       <ReceiptForm orgSlug={orgSlug} today={today} onClose={onClose} />
     </FormSheet>
   );

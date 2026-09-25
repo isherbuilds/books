@@ -23,12 +23,12 @@ per entity.
 
 - **Live**: tenancy, auth, members, files, audit, security headers, upload
   cleanup; Parties with ledger, Items with dated GST rates, Invoices with
-  drafts, Receipts with allocations, Payments with TDS (API only), Journals,
-  the Opening Balance, period locks with exceptions, the chart of accounts,
-  money accounts and payment methods, day book and TDS register XLSX (API
-  only).
+  drafts, Bills, Payments, Credit and Debit Notes, Receipts with allocations,
+  Journals, the Opening Balance, period locks with exceptions, the chart of
+  accounts, money accounts and payment methods, day book, TDS register and
+  GST registers XLSX (API only).
 - **Next**: the open [accounting-core slices](./specs/accounting-core.md#slices)
-  (4b-ii, 6, 7 and 9). Runtime and CA acceptance status is in the
+  (6, 7 and 9). Runtime and CA acceptance status is in the
   [work registry](./README.md#work-lifecycle).
 - **Evidence-gated**: the table below. This work gets no placeholder route,
   table, permission or navigation entry. It starts only with an observed or paid

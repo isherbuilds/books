@@ -1,6 +1,5 @@
 import { searchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
-import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { CalendarIcon, CircleDollarSignIcon, CircleDotIcon, ContactRoundIcon } from "lucide-react";
@@ -10,16 +9,17 @@ import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { INVOICE_COLUMNS, InvoiceCard } from "@/components/invoice-columns";
-import { INVOICE_STATE_LABELS } from "@/components/invoice-summary";
+import { DOCUMENT_STATE_LABELS } from "@/components/document-columns";
+import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
 import {
-  DateRangePopover,
   FilterChips,
   FilterMenu,
   FilterSubmenu,
-  PresetItems,
   focusSearch,
   type ActiveFilter,
+  OptionFilter,
 } from "@/components/list-filter";
+import { PartyFilterItems } from "@/components/party-filter-items";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
@@ -47,36 +47,6 @@ const invoiceSearch = z.object({
 type InvoiceFilters = z.infer<typeof invoiceSearch>;
 
 // A closed submenu renders nothing, so the party master loads only once it opens.
-function PartyFilterItems({
-  orgSlug,
-  partyId,
-  onChange,
-}: {
-  orgSlug: string;
-  partyId: string | undefined;
-  onChange: (partyId: string | undefined) => void;
-}) {
-  const parties = useQuery(partyListOptions(orgSlug));
-
-  if (!parties.data?.length) {
-    return (
-      <DropdownMenuItem disabled>
-        {parties.isPending ? "Loading…" : parties.isError ? "Could not load parties" : "No parties"}
-      </DropdownMenuItem>
-    );
-  }
-
-  return parties.data.map((party) => (
-    <DropdownMenuCheckboxItem
-      key={party.id}
-      checked={partyId === party.id}
-      onCheckedChange={(checked) => onChange(checked ? party.id : undefined)}
-    >
-      {party.name}
-    </DropdownMenuCheckboxItem>
-  ));
-}
-
 export const Route = createFileRoute("/$orgSlug/invoices")({
   head: () => ({ meta: [{ title: "Invoices · Accly Books" }] }),
   validateSearch: invoiceSearch,
@@ -156,7 +126,7 @@ function InvoicesRoute() {
     chips.push({
       id: "state",
       name: "State",
-      label: INVOICE_STATE_LABELS[state],
+      label: DOCUMENT_STATE_LABELS[state],
       remove: () => setFilters({ state: undefined }),
     });
 
@@ -209,7 +179,7 @@ function InvoicesRoute() {
         <ListToolbar>
           <SearchInput
             label="Search invoices"
-            placeholder="Search number, party, or reference"
+            placeholder="Number, party, or reference"
             value={q}
             fieldRef={field}
             onQueryChange={(next) => void setFilters({ q: next || undefined })}
@@ -233,32 +203,22 @@ function InvoicesRoute() {
                     />
                   </FilterSubmenu>
                 ) : null}
-                <FilterSubmenu icon={CircleDotIcon} label="State">
-                  {INVOICE_STATES.map((candidate) => (
-                    <DropdownMenuCheckboxItem
-                      key={candidate}
-                      checked={state === candidate}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ state: checked ? candidate : undefined })
-                      }
-                    >
-                      {INVOICE_STATE_LABELS[candidate]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
-                <FilterSubmenu icon={CircleDollarSignIcon} label="Settlement">
-                  {SETTLEMENT_FILTERS.map((candidate) => (
-                    <DropdownMenuCheckboxItem
-                      key={candidate}
-                      checked={settlement === candidate}
-                      onCheckedChange={(checked) =>
-                        void setFilters({ settlement: checked ? candidate : undefined })
-                      }
-                    >
-                      {SETTLEMENT_FILTER_LABELS[candidate]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </FilterSubmenu>
+                <OptionFilter
+                  icon={CircleDotIcon}
+                  label="State"
+                  options={INVOICE_STATES}
+                  labels={DOCUMENT_STATE_LABELS}
+                  value={state}
+                  onChange={(next) => void setFilters({ state: next })}
+                />
+                <OptionFilter
+                  icon={CircleDollarSignIcon}
+                  label="Settlement"
+                  options={SETTLEMENT_FILTERS}
+                  labels={SETTLEMENT_FILTER_LABELS}
+                  value={settlement}
+                  onChange={(next) => void setFilters({ settlement: next })}
+                />
               </FilterMenu>
             }
           />

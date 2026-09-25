@@ -37,7 +37,7 @@ test("label matches rank by prefix, word prefix, then substring", () => {
     command("substring", "Unrecorded", "action"),
     command("none", "Parties", "go"),
     command("word-prefix", "New receipt", "party"),
-    command("label-prefix", "Receipts", "receipt"),
+    command("label-prefix", "Receipts", "document"),
   ];
 
   expect(ids(rankCommands(items, "rec"))).toEqual(["label-prefix", "word-prefix", "substring"]);
@@ -46,7 +46,7 @@ test("label matches rank by prefix, word prefix, then substring", () => {
 test("keyword-only matches rank below label matches", () => {
   const items = [
     command("keyword", "Settle", "action", ["payments"]),
-    command("label", "Open payments", "receipt"),
+    command("label", "Open payments", "document"),
   ];
 
   expect(ids(rankCommands(items, "pay"))).toEqual(["label", "keyword"]);
@@ -68,7 +68,7 @@ test("a group stays together and ranks by its best match", () => {
 
 test("score ties fall back to group order", () => {
   const items = [
-    command("receipt", "Find rec", "receipt"),
+    command("document", "Find rec", "document"),
     command("party", "Find rec", "party"),
     command("organization", "Find rec", "organization"),
     command("go", "Find rec", "go"),
@@ -80,7 +80,7 @@ test("score ties fall back to group order", () => {
     "go",
     "organization",
     "party",
-    "receipt",
+    "document",
   ]);
 });
 

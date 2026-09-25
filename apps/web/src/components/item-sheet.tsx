@@ -10,7 +10,6 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -206,7 +205,7 @@ function ItemForm({
                         pattern="[0-9]{4,8}"
                         maxLength={8}
                         placeholder="998313"
-                        className="font-mono"
+                        className="font-mono tabular-nums"
                       />
                     </FormControl>
                     <FormMessage />
@@ -284,24 +283,22 @@ function ItemForm({
               <FormField
                 control={form.control}
                 name="taxCode"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>GST rate</FormLabel>
                     <FormControl>
-                      <NativeSelect {...field} required>
-                        <option value="" disabled>
-                          {rates.isPending
-                            ? "Loading GST rates…"
-                            : rates.isError
-                              ? "Could not load GST rates"
-                              : "Choose a GST rate"}
-                        </option>
-                        {rates.data?.map((rate) => (
-                          <option key={rate.id} value={rate.code}>
-                            {rate.name}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      <LinkField
+                        items={rates.data}
+                        query={rates}
+                        noun="GST rates"
+                        getKey={(rate) => rate.id}
+                        getLabel={(rate) => rate.name}
+                        value={rates.data?.find((rate) => rate.code === field.value) ?? null}
+                        onSelect={(rate) => field.onChange(rate?.code ?? "")}
+                        placeholder="Choose a GST rate"
+                        inputRef={field.ref}
+                        aria-invalid={fieldState.invalid}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -310,22 +307,23 @@ function ItemForm({
             ) : null}
           </SheetBody>
 
-          <SheetFooter>
+          <SheetFooter className={item ? "justify-between" : undefined}>
             {item ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                className="mr-auto"
                 onClick={() => setActive.mutate({ orgSlug, itemId: item.id, active: !item.active })}
               >
                 {item.active ? "Archive" : "Restore"}
               </Button>
             ) : null}
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <SubmitButton isSubmitting={saving}>{item ? "Save item" : "Add item"}</SubmitButton>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <SubmitButton isSubmitting={saving}>{item ? "Save item" : "Add item"}</SubmitButton>
+            </div>
           </SheetFooter>
         </fieldset>
       </form>

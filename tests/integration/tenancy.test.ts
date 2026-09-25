@@ -344,14 +344,14 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   const [alphaAllocations] = await Promise.all([
     api.allocation.apply({
       orgSlug: alpha.slug,
-      receiptId: alphaReceipt.id,
-      invoiceId: alphaInvoice.id,
+      sourceDocumentId: alphaReceipt.id,
+      targetDocumentId: alphaInvoice.id,
       amount: "1.00",
     }),
     api.allocation.apply({
       orgSlug: beta.slug,
-      receiptId: betaReceipt.id,
-      invoiceId: betaInvoice.id,
+      sourceDocumentId: betaReceipt.id,
+      targetDocumentId: betaInvoice.id,
       amount: "1.00",
     }),
   ]);
@@ -365,6 +365,8 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     betaJournals,
     alphaUnapplied,
     betaUnapplied,
+    alphaOpenItems,
+    betaOpenItems,
   ] = await Promise.all([
     api.item.list({ orgSlug: alpha.slug }),
     api.item.list({ orgSlug: beta.slug }),
@@ -372,8 +374,10 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     api.invoice.list({ orgSlug: beta.slug }),
     api.journal.list({ orgSlug: alpha.slug }),
     api.journal.list({ orgSlug: beta.slug }),
-    api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
-    api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+    api.party.openCredits({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
+    api.party.openCredits({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
+    api.party.openItems({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
+    api.party.openItems({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
   ]);
 
   expect(alphaItems.map(({ id }) => id)).toEqual([alphaItem.id]);
@@ -384,7 +388,17 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   expect(betaJournals.rows.map(({ id }) => id)).toEqual([betaJournal.id]);
   expect(alphaUnapplied.rows.map(({ id }) => id)).toEqual([alphaReceipt.id]);
   expect(betaUnapplied.rows.map(({ id }) => id)).toEqual([betaReceipt.id]);
+  expect(alphaOpenItems.rows.map(({ id }) => id)).toEqual([alphaInvoice.id]);
+  expect(betaOpenItems.rows.map(({ id }) => id)).toEqual([betaInvoice.id]);
 
+  await expectORPCCode(
+    api.party.openCredits({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.party.openItems({ orgSlug: beta.slug, partyId: alphaParty.id, side: "receivable" }),
+    "NOT_FOUND",
+  );
   await expectORPCCode(
     api.item.setActive({ orgSlug: beta.slug, itemId: alphaItem.id, active: false }),
     "NOT_FOUND",
@@ -404,8 +418,8 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   await expectReason(
     api.allocation.apply({
       orgSlug: beta.slug,
-      receiptId: alphaReceipt.id,
-      invoiceId: betaInvoice.id,
+      sourceDocumentId: alphaReceipt.id,
+      targetDocumentId: betaInvoice.id,
       amount: "1.00",
     }),
     "ALLOCATION_SOURCE_INVALID",
@@ -453,8 +467,8 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
   );
 
   const [alphaUnappliedAfter, betaUnappliedAfter] = await Promise.all([
-    api.receipt.unapplied({ orgSlug: alpha.slug, partyId: alphaParty.id }),
-    api.receipt.unapplied({ orgSlug: beta.slug, partyId: betaParty.id }),
+    api.party.openCredits({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
+    api.party.openCredits({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
   ]);
 
   expect(alphaUnappliedAfter.rows).toEqual(alphaUnapplied.rows);
@@ -693,8 +707,8 @@ const GUARDED_CALLS = {
     }),
   "invoice.get": (api, claim) => api.invoice.get({ ...claim, invoiceId: crypto.randomUUID() }),
   "invoice.list": (api, claim) => api.invoice.list({ ...claim }),
-  "invoice.openInvoices": (api, claim) =>
-    api.invoice.openInvoices({ ...claim, partyId: crypto.randomUUID() }),
+  "invoice.amend": (api, claim) =>
+    api.invoice.amend({ ...claim, invoiceId: crypto.randomUUID(), reason: "intrusion" }),
   "invoice.cancel": (api, claim) =>
     api.invoice.cancel({ ...claim, invoiceId: crypto.randomUUID(), reason: "intrusion" }),
   "invoice.discardDraft": (api, claim) =>
@@ -710,8 +724,47 @@ const GUARDED_CALLS = {
   "receipt.get": (api, claim) => api.receipt.get({ ...claim, receiptId: crypto.randomUUID() }),
   "receipt.list": (api, claim) => api.receipt.list({ ...claim }),
   "receipt.partyTotals": (api, claim) => api.receipt.partyTotals({ ...claim }),
-  "receipt.unapplied": (api, claim) =>
-    api.receipt.unapplied({ ...claim, partyId: crypto.randomUUID() }),
+  "party.openItems": (api, claim) =>
+    api.party.openItems({ ...claim, partyId: crypto.randomUUID(), side: "receivable" }),
+  "party.openCredits": (api, claim) =>
+    api.party.openCredits({ ...claim, partyId: crypto.randomUUID(), side: "payable" }),
+  "bill.saveDraft": (api, claim) =>
+    api.bill.saveDraft({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      lines: [
+        { accountId: crypto.randomUUID(), description: "x", amount: "1.00", itcEligible: false },
+      ],
+    }),
+  "bill.post": (api, claim) =>
+    api.bill.post({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      reference: "INV-1",
+      lines: [
+        { accountId: crypto.randomUUID(), description: "x", amount: "1.00", itcEligible: false },
+      ],
+    }),
+  "bill.get": (api, claim) => api.bill.get({ ...claim, billId: crypto.randomUUID() }),
+  "bill.list": (api, claim) => api.bill.list({ ...claim }),
+  "bill.cancel": (api, claim) =>
+    api.bill.cancel({ ...claim, billId: crypto.randomUUID(), reason: "intrusion" }),
+  "bill.discardDraft": (api, claim) =>
+    api.bill.discardDraft({ ...claim, draft: { id: crypto.randomUUID(), version: 1 } }),
+  "bill.amend": (api, claim) =>
+    api.bill.amend({ ...claim, billId: crypto.randomUUID(), reason: "intrusion" }),
+  "note.post": (api, claim) =>
+    api.note.post({
+      ...claim,
+      type: "creditNote",
+      againstDocumentId: crypto.randomUUID(),
+      narration: "Intrusion",
+      lines: [{ sourceLineId: crypto.randomUUID(), amount: "1.00" }],
+    }),
+  "note.get": (api, claim) => api.note.get({ ...claim, noteId: crypto.randomUUID() }),
+  "note.list": (api, claim) => api.note.list({ ...claim }),
+  "note.cancel": (api, claim) =>
+    api.note.cancel({ ...claim, noteId: crypto.randomUUID(), reason: "intrusion" }),
   "journal.post": (api, claim) =>
     api.journal.post({
       ...claim,
@@ -768,8 +821,8 @@ const GUARDED_CALLS = {
   "allocation.apply": (api, claim) =>
     api.allocation.apply({
       ...claim,
-      receiptId: crypto.randomUUID(),
-      invoiceId: crypto.randomUUID(),
+      sourceDocumentId: crypto.randomUUID(),
+      targetDocumentId: crypto.randomUUID(),
       amount: "1.00",
     }),
   "allocation.reverse": (api, claim) =>
@@ -796,6 +849,10 @@ const GUARDED_CALLS = {
     api.payment.cancel({ ...claim, paymentId: crypto.randomUUID(), reason: "intrusion" }),
   "export.tdsRegisterXlsx": (api, claim) =>
     api.export.tdsRegisterXlsx({ ...claim, from: "2026-09-01", to: "2026-09-30" }),
+  "export.gstOutwardXlsx": (api, claim) =>
+    api.export.gstOutwardXlsx({ ...claim, from: "2026-09-01", to: "2026-09-30" }),
+  "export.gstInwardXlsx": (api, claim) =>
+    api.export.gstInwardXlsx({ ...claim, from: "2026-09-01", to: "2026-09-30" }),
   "settings.get": (api, claim) => api.settings.get({ ...claim }),
   "settings.update": (api, claim) =>
     api.settings.update({
@@ -809,10 +866,12 @@ const GUARDED_CALLS = {
       financialYearStart: 4,
       timeZone: "Asia/Kolkata",
       invoicePrefix: "INV",
+      billPrefix: "BILL",
       receiptPrefix: "RCT",
       paymentPrefix: "PMT",
       journalPrefix: "JV",
       creditNotePrefix: "CN",
+      debitNotePrefix: "DN",
     }),
   "audit.list": (api, claim) => api.audit.list({ ...claim }),
   "file.list": (api, claim) => api.file.list({ ...claim }),

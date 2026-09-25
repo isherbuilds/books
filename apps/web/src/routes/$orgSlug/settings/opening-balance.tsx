@@ -19,7 +19,9 @@ import { orpc } from "@/lib/orpc";
 import { handleWriteError } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";
 
-export const Route = createFileRoute("/$orgSlug/opening-balance")({
+import { SettingsTabs } from "./route";
+
+export const Route = createFileRoute("/$orgSlug/settings/opening-balance")({
   head: () => ({ meta: [{ title: "Opening balance · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { openingBalance: ["read"] });
@@ -72,6 +74,7 @@ function OpeningBalanceRoute() {
           ) : undefined
         }
       />
+      <SettingsTabs orgSlug={orgSlug} />
       {openingBalance.isError ? (
         <PageBody>
           <ErrorNote title="Could not load the opening balance" error={openingBalance.error} />
@@ -79,7 +82,7 @@ function OpeningBalanceRoute() {
       ) : document ? (
         <PageBody>
           <div className="grid gap-4">
-            <h2 className="font-mono text-sm font-medium">{document.number}</h2>
+            <h2 className="font-mono text-sm font-medium tabular-nums">{document.number}</h2>
 
             <dl className="grid max-w-2xl gap-3">
               <DetailRow label="As at">{formatBusinessDate(document.documentDate)}</DetailRow>
@@ -97,7 +100,7 @@ function OpeningBalanceRoute() {
         <OpeningBalanceForm orgSlug={orgSlug} />
       ) : (
         <PageBody>
-          <p className="text-muted-foreground">No opening balance has been posted.</p>
+          <p className="text-muted-foreground">No opening balance posted</p>
         </PageBody>
       )}
 

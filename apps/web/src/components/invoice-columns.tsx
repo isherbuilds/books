@@ -4,8 +4,7 @@ import { cn } from "@accly/ui/lib/utils";
 import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
-import { struck } from "@/components/document-columns";
-import { InvoiceStatus } from "@/components/invoice-summary";
+import { ClaimStatus, struck } from "@/components/document-columns";
 import type { InvoiceListRow } from "@/lib/invoices";
 
 const column = createColumnHelper<typeof DATA_TABLE_FEATURES, InvoiceListRow>();
@@ -45,7 +44,7 @@ export const INVOICE_COLUMNS = [
     id: "status",
     header: "Status",
     meta: { className: "w-44" },
-    cell: ({ row: { original: invoice } }) => <InvoiceStatus invoice={invoice} />,
+    cell: ({ row: { original: invoice } }) => <ClaimStatus claim={invoice} />,
   }),
   column.accessor("totalPaise", {
     header: "Total",
@@ -66,13 +65,13 @@ export function InvoiceCard({ invoice }: { invoice: InvoiceListRow }) {
           <span className={cn("font-mono font-medium", struck(invoice.state))}>
             {invoice.number ?? "Draft"}
           </span>
-          <InvoiceStatus invoice={invoice} />
+          <ClaimStatus claim={invoice} />
         </span>
         <span className={cn("shrink-0 tabular-nums", struck(invoice.state))}>
           {formatMoney(invoice.totalPaise)}
         </span>
       </div>
-      <p className="mt-1 truncate text-muted-foreground">
+      <p className="truncate text-muted-foreground">
         {invoice.partyName ?? "No party"} · {formatBusinessDay(invoice.documentDate)}
         {invoice.dueDate ? ` · Due ${formatBusinessDay(invoice.dueDate)}` : ""}
       </p>

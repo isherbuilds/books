@@ -75,7 +75,10 @@ export const documents = pgTable(
     documentDate: date("document_date", { mode: "string" }).notNull(),
     dueDate: date("due_date", { mode: "string" }),
     placeOfSupplyStateCode: text("place_of_supply_state_code"),
+    intraState: boolean("intra_state"),
     partyId: text("party_id"),
+    amendedFromId: text("amended_from_id"),
+    againstDocumentId: text("against_document_id"),
     exposureSide: text("exposure_side", { enum: EXPOSURE_SIDES }),
     settlementKind: text("settlement_kind", { enum: SETTLEMENT_KINDS }),
     advanceSupply: text("advance_supply", { enum: ADVANCE_SUPPLY_KINDS }),
@@ -85,6 +88,9 @@ export const documents = pgTable(
     source: text("source", { enum: DOCUMENT_SOURCES }).notNull().default("user"),
     version: integer("version").notNull().default(1),
     totalPaise: bigint("total_paise", { mode: "bigint" }).notNull(),
+    discountPaise: bigint("discount_paise", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
     roundOffPaise: bigint("round_off_paise", { mode: "bigint" }).notNull(),
     affectsTax: boolean("affects_tax").notNull().default(false),
     printSnapshot: jsonb("print_snapshot").$type<PrintSnapshot>(),
@@ -103,6 +109,14 @@ export const documents = pgTable(
       columns: [table.orgId, table.paymentMethodId],
       foreignColumns: [paymentMethods.orgId, paymentMethods.id],
     }),
+    foreignKey({
+      columns: [table.orgId, table.amendedFromId],
+      foreignColumns: [table.orgId, table.id],
+    }),
+    foreignKey({
+      columns: [table.orgId, table.againstDocumentId],
+      foreignColumns: [table.orgId, table.id],
+    }),
     unique("documents_org_id_id_unique").on(table.orgId, table.id),
     uniqueIndex("documents_org_number_idx")
       .on(table.orgId, table.type, table.financialYear, table.number)
@@ -115,6 +129,8 @@ export const documents = pgTable(
     // The newest-first keyset of each document list, without filtering type on the heap.
     index("documents_org_type_id_idx").on(table.orgId, table.type, table.id),
     index("documents_org_party_idx").on(table.orgId, table.partyId),
+    index("documents_org_amended_from_idx").on(table.orgId, table.amendedFromId),
+    index("documents_org_against_document_idx").on(table.orgId, table.againstDocumentId),
     // receipt.partyTotals reads only this index: one ordered, index-only scan per
     // organization instead of filtering every document on the heap.
     index("documents_posted_receipt_party_idx")
@@ -127,6 +143,10 @@ export const documents = pgTable(
       sql`${table.type} in ('receipt', 'payment', 'invoice', 'bill', 'creditNote', 'debitNote', 'journal', 'openingBalance')`,
     ),
     check("documents_state_check", sql`${table.state} in ('draft', 'posted', 'cancelled')`),
+    check(
+      "documents_supply_type_check",
+      sql`${table.type} not in ('invoice', 'bill', 'creditNote', 'debitNote') or ${table.intraState} is not null`,
+    ),
     // The number format (GST Rules 46 and 50) and the advance supply values follow tax
     // law, so postNumbered and the receipt input enforce them, not a CHECK.
     check(
@@ -143,5 +163,6 @@ export const documents = pgTable(
     ),
     check("documents_source_check", sql`${table.source} in ('user', 'opening')`),
     check("documents_total_paise_check", sql`${table.totalPaise} >= 0`),
+    check("documents_discount_paise_check", sql`${table.discountPaise} >= 0`),
   ],
 );

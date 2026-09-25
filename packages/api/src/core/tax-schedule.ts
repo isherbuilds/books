@@ -1,6 +1,6 @@
-import type { DbTransaction } from "@accly/db";
+import type { db, DbTransaction } from "@accly/db";
 import { taxRates } from "@accly/db/schema/tax-rates";
-import { and, gte, isNull, lte, or, type Column } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, type Column } from "drizzle-orm";
 
 // No GST0: nil and exempt supplies carry no rate, because the income Account's supply
 // class already decides them. GST 2.0 added 40% on 2025-09-22 and moved the last 28%
@@ -22,6 +22,29 @@ export function effectiveOn(table: { effectiveFrom: Column; effectiveTo: Column 
     lte(table.effectiveFrom, date),
     or(isNull(table.effectiveTo), gte(table.effectiveTo, date)),
   );
+}
+
+/** The Tax Rates effective on `date` for `codes`, keyed by code; a missing code has none. */
+export async function ratesByCode(
+  executor: typeof db | DbTransaction,
+  orgId: string,
+  codes: readonly string[],
+  date: string,
+): Promise<Map<string, { id: string; rateBasisPoints: number }>> {
+  if (codes.length === 0) return new Map();
+
+  const rates = await executor
+    .select({ id: taxRates.id, code: taxRates.code, rateBasisPoints: taxRates.rateBasisPoints })
+    .from(taxRates)
+    .where(
+      and(
+        eq(taxRates.orgId, orgId),
+        inArray(taxRates.code, [...codes]),
+        effectiveOn(taxRates, date),
+      ),
+    );
+
+  return new Map(rates.map(({ code, ...rate }) => [code, rate]));
 }
 
 export async function seedTaxRates(tx: DbTransaction, orgId: string): Promise<void> {

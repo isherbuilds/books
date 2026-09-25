@@ -3,12 +3,18 @@ import { expect, test } from "bun:test";
 import {
   assertBalanced,
   computeTds,
-  postInvoice,
   postAllocation,
+  postBill,
+  postCreditNote,
+  postDebitNote,
+  postInvoice,
+  postJournal,
   postPayment,
   postReceipt,
-  postJournal,
   reverseLines,
+  type BillPosting,
+  type CreditNotePosting,
+  type DebitNotePosting,
   type InvoicePosting,
   type JournalPosting,
   type PaymentPosting,
@@ -123,6 +129,7 @@ test("receipt against invoices credits receivables and keeps no advance when ful
       accountId: null,
       amountPaise: 12_500n,
       allocations: [{ documentId: "invoice-1", amountPaise: 12_500n }],
+      adjustments: [],
       advanceSupply: null,
     },
     accounts,
@@ -160,6 +167,7 @@ test("receipt against invoices credits an unallocated remainder to customer adva
         { documentId: "invoice-2", amountPaise: 4_000n },
       ],
       advanceSupply: "exempt",
+      adjustments: [],
     },
     accounts,
   );
@@ -187,30 +195,34 @@ test("receipt against invoices credits an unallocated remainder to customer adva
   expect(() => assertBalanced(lines)).not.toThrow();
 });
 
-test("receipt against invoices cannot balance an allocation greater than its amount", () => {
-  const lines = postReceipt(
-    {
-      type: "receipt",
-      methodAccountId: "bank-account",
-      settlementKind: "against",
-      exposureSide: "receivable",
-      partyId: "customer-1",
-      accountId: null,
-      amountPaise: 12_500n,
-      allocations: [{ documentId: "invoice-1", amountPaise: 12_501n }],
-      advanceSupply: null,
-    },
-    accounts,
-  );
-
-  expect(() => assertBalanced(lines)).toThrow("Journal entry is not balanced");
+test("receipt against invoices rejects allocations above its capacity", () => {
+  expect(() =>
+    assertBalanced(
+      postReceipt(
+        {
+          type: "receipt",
+          methodAccountId: "bank-account",
+          settlementKind: "against",
+          exposureSide: "receivable",
+          partyId: "customer-1",
+          accountId: null,
+          amountPaise: 12_500n,
+          allocations: [{ documentId: "invoice-1", amountPaise: 12_501n }],
+          adjustments: [],
+          advanceSupply: null,
+        },
+        accounts,
+      ),
+    ),
+  ).toThrow("Journal entry is not balanced");
 });
 
 test("advance allocation moves the party balance from advances to receivables", () => {
   const lines = postAllocation(
     {
       type: "allocation",
-      direction: "advanceToInvoice",
+      side: "receivable",
+      direction: "apply",
       partyId: "customer-1",
       amountPaise: 2_500n,
     },
@@ -238,7 +250,8 @@ test("reversing a post-time allocation moves the party balance from receivables 
   const lines = postAllocation(
     {
       type: "allocation",
-      direction: "invoiceToAdvance",
+      side: "receivable",
+      direction: "release",
       partyId: "customer-1",
       amountPaise: 2_500n,
     },
@@ -490,5 +503,184 @@ test("invoice posting groups income accounts and posts tax and positive round-of
   expect(() => assertBalanced(lines)).not.toThrow();
   expect(() => assertBalanced(postInvoice({ ...invoice, amountPaise: 41_300n }, accounts))).toThrow(
     "Journal entry is not balanced",
+  );
+});
+
+test("bill posts eligible input tax, ineligible line tax, TDS, and positive round-off", () => {
+  const bill: BillPosting = {
+    type: "bill",
+    exposureSide: "payable",
+    partyId: "vendor-1",
+    amountPaise: 13_801n,
+    lines: [
+      { accountId: "supplies", amountPaise: 10_000n },
+      // This line already includes its ineligible input tax.
+      { accountId: "repairs", amountPaise: 2_000n },
+    ],
+    cgstPaise: 900n,
+    sgstPaise: 900n,
+    igstPaise: 0n,
+    roundOffPaise: 1n,
+    tdsPaise: 100n,
+  };
+
+  const lines = postBill(bill, accounts);
+  expect(
+    lines.map(({ accountId, partyId, debit, credit }) => [accountId, partyId, debit, credit]),
+  ).toEqual([
+    ["supplies", null, 10_000n, 0n],
+    ["repairs", null, 2_000n, 0n],
+    ["cgstInput-account", null, 900n, 0n],
+    ["sgstInput-account", null, 900n, 0n],
+    ["roundOff-account", null, 1n, 0n],
+    ["tdsPayable-account", "vendor-1", 0n, 100n],
+    ["payables-account", "vendor-1", 0n, 13_701n],
+  ]);
+});
+
+test("credit note mirrors invoice income, tax, and round-off", () => {
+  const note: CreditNotePosting = {
+    type: "creditNote",
+    exposureSide: "receivable",
+    partyId: "customer-1",
+    amountPaise: 11_801n,
+    lines: [{ accountId: "income", amountPaise: 10_000n }],
+    cgstPaise: 900n,
+    sgstPaise: 900n,
+    igstPaise: 0n,
+    roundOffPaise: 1n,
+  };
+
+  expect(
+    postCreditNote(note, accounts).map(({ accountId, debit, credit }) => [
+      accountId,
+      debit,
+      credit,
+    ]),
+  ).toEqual([
+    ["receivables-account", 0n, 11_801n],
+    ["income", 10_000n, 0n],
+    ["cgstOutput-account", 900n, 0n],
+    ["sgstOutput-account", 900n, 0n],
+    ["roundOff-account", 1n, 0n],
+  ]);
+});
+
+test("debit note mirrors bill expense, input tax, and round-off", () => {
+  const note: DebitNotePosting = {
+    type: "debitNote",
+    exposureSide: "payable",
+    partyId: "vendor-1",
+    amountPaise: 5_901n,
+    lines: [{ accountId: "supplies", amountPaise: 5_000n }],
+    cgstPaise: 450n,
+    sgstPaise: 450n,
+    igstPaise: 0n,
+    roundOffPaise: 1n,
+  };
+
+  expect(
+    postDebitNote(note, accounts).map(({ accountId, debit, credit }) => [accountId, debit, credit]),
+  ).toEqual([
+    ["supplies", 0n, 5_000n],
+    ["cgstInput-account", 0n, 450n],
+    ["sgstInput-account", 0n, 450n],
+    ["roundOff-account", 0n, 1n],
+    ["payables-account", 5_901n, 0n],
+  ]);
+});
+
+test("payment against bills settles write-off and advance remainder while fee increases cash paid", () => {
+  const lines = postPayment(
+    {
+      type: "payment",
+      methodAccountId: "bank",
+      settlementKind: "against",
+      exposureSide: "payable",
+      partyId: "vendor-1",
+      accountId: null,
+      amountPaise: 9_000n,
+      allocations: [{ documentId: "bill-1", amountPaise: 9_500n }],
+      writeOffs: [{ accountId: "discount", amountPaise: 1_000n }],
+      fee: { accountId: "bank-fees", amountPaise: 50n },
+      tds: null,
+    },
+    accounts,
+  );
+
+  expect(lines.map(({ accountId, debit, credit }) => [accountId, debit, credit])).toEqual([
+    ["payables-account", 9_500n, 0n],
+    ["supplierAdvances-account", 500n, 0n],
+    ["bank", 0n, 9_050n],
+    ["discount", 0n, 1_000n],
+    ["bank-fees", 50n, 0n],
+  ]);
+});
+
+test("refund payment debits receivables and credits the payment method", () => {
+  const lines = postPayment(
+    {
+      type: "payment",
+      methodAccountId: "bank",
+      settlementKind: "against",
+      exposureSide: "receivable",
+      partyId: "customer-1",
+      accountId: null,
+      amountPaise: 3_000n,
+      sources: [{ documentId: "credit-note-1", amountPaise: 3_000n }],
+      tds: null,
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    { accountId: "receivables-account", partyId: "customer-1", debit: 3_000n, credit: 0n },
+    { accountId: "bank", partyId: null, debit: 0n, credit: 3_000n },
+  ]);
+});
+
+test("receipt against invoices settles customer fee and TDS with no extra advance", () => {
+  const lines = postReceipt(
+    {
+      type: "receipt",
+      methodAccountId: "bank",
+      settlementKind: "against",
+      exposureSide: "receivable",
+      partyId: "customer-1",
+      accountId: null,
+      amountPaise: 9_000n,
+      allocations: [{ documentId: "invoice-1", amountPaise: 9_500n }],
+      adjustments: [
+        { kind: "fee", accountId: "bank-fees", amountPaise: 200n },
+        { kind: "tds", amountPaise: 300n },
+      ],
+      advanceSupply: null,
+    },
+    accounts,
+  );
+
+  expect(lines).toEqual([
+    { accountId: "bank", partyId: null, debit: 9_000n, credit: 0n },
+    { accountId: "bank-fees", partyId: null, debit: 200n, credit: 0n },
+    { accountId: "tdsReceivable-account", partyId: null, debit: 300n, credit: 0n },
+    { accountId: "receivables-account", partyId: "customer-1", debit: 0n, credit: 9_500n },
+  ]);
+});
+
+test("payable allocation apply and release transfer between payables and supplier advances", () => {
+  const posting = {
+    type: "allocation",
+    side: "payable",
+    partyId: "vendor-1",
+    amountPaise: 1_200n,
+  } as const;
+
+  const apply = postAllocation({ ...posting, direction: "apply" }, accounts);
+  expect(apply).toEqual([
+    { accountId: "payables-account", partyId: "vendor-1", debit: 1_200n, credit: 0n },
+    { accountId: "supplierAdvances-account", partyId: "vendor-1", debit: 0n, credit: 1_200n },
+  ]);
+  expect(postAllocation({ ...posting, direction: "release" }, accounts)).toEqual(
+    reverseLines(apply),
   );
 });

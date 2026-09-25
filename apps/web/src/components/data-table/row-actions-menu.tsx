@@ -5,6 +5,7 @@ import { Button } from "@accly/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@accly/ui/components/dropdown-menu";
@@ -31,8 +32,8 @@ export function RowActionsMenu({ label, children }: { label: string; children: R
         >
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44 p-1">
-          {children}
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuGroup>{children}</DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </ClientOnly>

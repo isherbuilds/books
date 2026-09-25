@@ -77,7 +77,7 @@ export function JournalCard({ journal }: { journal: JournalRow }) {
           {formatMoney(journal.totalPaise)}
         </span>
       </div>
-      <p className="mt-1 truncate text-muted-foreground">
+      <p className="truncate text-muted-foreground">
         {journal.narration ?? "No narration"} · {formatBusinessDay(journal.documentDate)}
         {journal.reference ? ` · ${journal.reference}` : null}
       </p>

@@ -1,3 +1,4 @@
+import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { tzOffset } from "@date-fns/tz";
 import { getRouteApi } from "@tanstack/react-router";
 
@@ -26,19 +27,37 @@ function formatter(
   return created;
 }
 
-export function formatDateTime(value: string | Date, timeZone: string): string {
-  return formatter(`dateTime|${timeZone}`, "en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
+// The wall clock in the org zone, from numeric parts only: month names and am/pm
+// wording differ between ICU versions, so the server render would not hydrate.
+function wallClock(instant: Date, timeZone: string) {
+  const parts = formatter(`localMinute|${timeZone}`, "en-CA", {
     timeZone,
-  }).format(new Date(value));
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(instant);
+
+  const at = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+
+  return {
+    day: `${at("year")}-${at("month")}-${at("day")}`,
+    hour: Number(at("hour")),
+    minute: at("minute"),
+  };
+}
+
+export function formatDateTime(value: string | Date, timeZone: string): string {
+  const { day, hour, minute } = wallClock(new Date(value), timeZone);
+
+  return `${formatBusinessDate(day)}, ${hour % 12 || 12}:${minute} ${hour < 12 ? "am" : "pm"}`;
 }
 
 export function formatDate(value: string | Date, timeZone: string): string {
-  return formatter(`date|${timeZone}`, "en-IN", {
-    dateStyle: "medium",
-    timeZone,
-  }).format(new Date(value));
+  return formatBusinessDate(wallClock(new Date(value), timeZone).day);
 }
 
 /**
@@ -53,20 +72,8 @@ export function orgLocalToInstant(local: string, timeZone: string): Date {
   const guess = new Date(asUtc.getTime() - tzOffset(timeZone, asUtc) * 60_000);
   const instant = new Date(asUtc.getTime() - tzOffset(timeZone, guess) * 60_000);
 
-  const parts = formatter(`localMinute|${timeZone}`, "en-CA", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).formatToParts(instant);
-
-  const at = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value;
-
-  const roundTrip = `${at("year")}-${at("month")}-${at("day")}T${at("hour")}:${at("minute")}`;
+  const clock = wallClock(instant, timeZone);
+  const roundTrip = `${clock.day}T${String(clock.hour).padStart(2, "0")}:${clock.minute}`;
 
   if (roundTrip !== local) {
     throw new RangeError("This local time does not exist in the organization's time zone");

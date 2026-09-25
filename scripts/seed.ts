@@ -3,6 +3,7 @@ import {
   accountLine,
   partySnapshot,
   postDocument,
+  receiptSupply,
   receiptTax,
   reverseDocument,
   type PostDocumentInput,
@@ -627,18 +628,22 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
         const { id } = await postDocument(tx, org.scope, settings, settings.receiptPrefix, {
           documentDate: plan.date,
           dueDate: null,
-          placeOfSupplyStateCode: null,
+          ...(account
+            ? receiptSupply(party?.stateCode ?? null, settings.stateCode)
+            : { placeOfSupplyStateCode: null }),
           reference: plan.reference,
           narration: plan.narration,
           posting,
           affectsTax: account ? receiptTax(settings.gstin, account.supplyClass).affectsTax : false,
           printSnapshot,
+          discountPaise: 0n,
+          againstDocumentId: null,
           lines: [accountLine(account?.id ?? null, lineDescription, plan.amountPaise)],
           draft: null,
         });
 
         if (plan.cancelReason) {
-          await reverseDocument(tx, org.scope, settings, "receipt", id, plan.cancelReason);
+          await reverseDocument(tx, org.scope, settings, ["receipt"], id, plan.cancelReason);
         }
       }
     });

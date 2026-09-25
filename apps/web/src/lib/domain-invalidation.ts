@@ -21,8 +21,9 @@ export function invalidateInvoiceDrafts(queryClient: QueryInvalidator, orgSlug: 
   return queryClient.invalidateQueries({ queryKey: orpc.invoice.key({ input: { orgSlug } }) });
 }
 
-// Posting or cancelling an invoice and applying or reversing an allocation move
-// outstanding, unapplied and the party statement, never a cash or bank balance.
+// Posting or cancelling an invoice, bill or note and applying or reversing an
+// allocation move outstanding, unapplied and the party statement and pickers, never a
+// cash or bank balance.
 export async function invalidateSettlementState(
   queryClient: QueryInvalidator,
   orgSlug: string,
@@ -30,13 +31,24 @@ export async function invalidateSettlementState(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: orpc.receipt.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.invoice.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.payment.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.openItems.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
-      queryKey: orpc.party.statement.key({ input: { orgSlug } }),
+      queryKey: orpc.party.openCredits.key({ input: { orgSlug } }),
     }),
   ]);
 }
 
-// Posting or cancelling a receipt also moves the cash or bank leaf its method names.
+// A bill draft save or discard changes only bill reads.
+export function invalidateBillDrafts(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) });
+}
+
+// Posting or cancelling a receipt or payment also moves the cash or bank leaf its
+// method names.
 export async function invalidateCashState(
   queryClient: QueryInvalidator,
   orgSlug: string,

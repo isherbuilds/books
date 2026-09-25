@@ -83,7 +83,7 @@ export function ReceiptCard({ receipt }: { receipt: ReceiptRow }) {
           {formatMoney(receipt.totalPaise)}
         </span>
       </div>
-      <p className="mt-1 truncate text-muted-foreground">
+      <p className="truncate text-muted-foreground">
         {receipt.partyName ?? "No party"} · {formatBusinessDay(receipt.documentDate)} ·{" "}
         {receipt.paymentMethodName}
       </p>

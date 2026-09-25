@@ -176,7 +176,7 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     api.invoice.get({ orgSlug: organization.slug, invoiceId: firstInvoice.id }),
     api.invoice.get({ orgSlug: organization.slug, invoiceId: secondInvoice.id }),
     api.receipt.get({ orgSlug: organization.slug, receiptId: receipt.id }),
-    api.receipt.unapplied({ orgSlug: organization.slug, partyId: party.id }),
+    api.party.openCredits({ orgSlug: organization.slug, partyId: party.id, side: "receivable" }),
   ]);
 
   expect(first).toMatchObject({
@@ -193,14 +193,14 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   expect(detail.allocations).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        targetDocumentId: firstInvoice.id,
-        targetNumber: firstInvoice.number,
+        otherDocumentId: firstInvoice.id,
+        otherNumber: firstInvoice.number,
         amountPaise: 600_000n,
         reversed: false,
       }),
       expect.objectContaining({
-        targetDocumentId: secondInvoice.id,
-        targetNumber: secondInvoice.number,
+        otherDocumentId: secondInvoice.id,
+        otherNumber: secondInvoice.number,
         amountPaise: 300_000n,
         reversed: false,
       }),
@@ -211,19 +211,19 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   );
 
   const postTimeAllocationId = required(
-    detail.allocations.find(({ targetDocumentId }) => targetDocumentId === firstInvoice.id),
+    detail.allocations.find(({ otherDocumentId }) => otherDocumentId === firstInvoice.id),
     "post-time allocation to the first invoice",
   ).id;
 
   const activeAtCancelId = required(
-    detail.allocations.find(({ targetDocumentId }) => targetDocumentId === secondInvoice.id),
+    detail.allocations.find(({ otherDocumentId }) => otherDocumentId === secondInvoice.id),
     "post-time allocation to the second invoice",
   ).id;
 
   const [applied] = await api.allocation.apply({
     orgSlug: organization.slug,
-    receiptId: receipt.id,
-    invoiceId: secondInvoice.id,
+    sourceDocumentId: receipt.id,
+    targetDocumentId: secondInvoice.id,
     amount: "1000.00",
   });
 
@@ -257,8 +257,8 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   await expectReason(
     api.allocation.apply({
       orgSlug: organization.slug,
-      receiptId: receipt.id,
-      invoiceId: spareInvoice.id,
+      sourceDocumentId: receipt.id,
+      targetDocumentId: spareInvoice.id,
       amount: "0.01",
     }),
     "ALLOCATION_EXCEEDS_SOURCE",
@@ -445,16 +445,17 @@ test("a direct receipt is neither listed nor accepted as an allocation source", 
   await expectReason(
     api.allocation.apply({
       orgSlug: organization.slug,
-      receiptId: direct.id,
-      invoiceId: invoice.id,
+      sourceDocumentId: direct.id,
+      targetDocumentId: invoice.id,
       amount: "100.00",
     }),
     "ALLOCATION_SOURCE_INVALID",
   );
 
-  const unapplied = await api.receipt.unapplied({
+  const unapplied = await api.party.openCredits({
     orgSlug: organization.slug,
     partyId: party.id,
+    side: "receivable",
   });
 
   expect(unapplied.rows.map(({ id }) => id)).not.toContain(direct.id);
@@ -471,8 +472,8 @@ test("two concurrent applies cannot spend one advance twice", async () => {
     [first, second].map((invoice) =>
       api.allocation.apply({
         orgSlug: organization.slug,
-        receiptId: advance.id,
-        invoiceId: invoice.id,
+        sourceDocumentId: advance.id,
+        targetDocumentId: invoice.id,
         amount: "500.00",
       }),
     ),
@@ -494,12 +495,24 @@ test("an operator cannot apply an allocation", async () => {
   await expectORPCCode(
     clientFor(operator).allocation.apply({
       orgSlug: organization.slug,
-      receiptId: crypto.randomUUID(),
-      invoiceId: crypto.randomUUID(),
+      sourceDocumentId: crypto.randomUUID(),
+      targetDocumentId: crypto.randomUUID(),
       amount: "0.01",
     }),
     "FORBIDDEN",
   );
+});
+
+test("an operator reads a customer's open items but not a supplier's", async () => {
+  const operator = await createTestUser(`picker-operator-${uniqueSuffix()}`);
+  await joinOrganization(operator, organization.id, "operator");
+  const client = clientFor(operator);
+  const claim = { orgSlug: organization.slug, partyId: party.id };
+
+  await client.party.openItems({ ...claim, side: "receivable" });
+  await expectORPCCode(client.party.openItems({ ...claim, side: "payable" }), "FORBIDDEN");
+  await expectORPCCode(client.party.openCredits({ ...claim, side: "receivable" }), "FORBIDDEN");
+  await expectORPCCode(client.party.openCredits({ ...claim, side: "payable" }), "FORBIDDEN");
 });
 
 test("an against receipt names what its unallocated remainder is received for", async () => {
@@ -517,4 +530,274 @@ test("an against receipt names what its unallocated remainder is received for", 
   await expectReason(api.receipt.post(receipt), "ADVANCE_SUPPLY_REQUIRED");
   // Fully allocated: nothing is held as an advance, so no supply is asked for.
   await api.receipt.post({ ...receipt, amount: "600.00" });
+});
+
+test("a supplier payment advance settles a bill and reverses its allocation entry", async () => {
+  const supplier = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Allocation Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+    addressLine1: "8 Supplier Road",
+    city: "Pune",
+    pinCode: "411001",
+  });
+
+  const expense = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ type, systemKey }) => type === "expense" && !systemKey,
+    ),
+    "expense account",
+  );
+
+  const payables = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ systemKey }) => systemKey === "payables",
+    ),
+    "payables account",
+  );
+
+  const supplierAdvances = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ systemKey }) => systemKey === "supplierAdvances",
+    ),
+    "supplier advances account",
+  );
+
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    documentDate: "2026-09-12",
+    reference: "SUP-ALLOC-1",
+    lines: [
+      { accountId: expense.id, description: "Services", amount: "1000.00", itcEligible: false },
+    ],
+  });
+
+  const payment = await api.payment.post({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    settlementKind: "advance",
+    amount: "1000.00",
+    paymentMethodId: bankTransfer.id,
+  });
+
+  const items = await api.party.openItems({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    side: "payable",
+  });
+
+  const credits = await api.party.openCredits({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    side: "payable",
+  });
+
+  expect(items.rows).toContainEqual(
+    expect.objectContaining({ id: bill.id, outstandingPaise: 100_000n }),
+  );
+  expect(credits.rows).toContainEqual(
+    expect.objectContaining({ id: payment.id, unappliedPaise: 100_000n }),
+  );
+
+  const [applied] = await api.allocation.apply({
+    orgSlug: organization.slug,
+    sourceDocumentId: payment.id,
+    targetDocumentId: bill.id,
+    amount: "1000.00",
+  });
+
+  const allocation = required(applied, "supplier allocation");
+  const post = await postingOf(organization.id, allocation.id, "post");
+  expect(post.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        accountId: payables.id,
+        partyId: supplier.id,
+        debit: 100_000n,
+        credit: 0n,
+      }),
+      expect.objectContaining({
+        accountId: supplierAdvances.id,
+        partyId: supplier.id,
+        debit: 0n,
+        credit: 100_000n,
+      }),
+    ]),
+  );
+  expect(
+    (
+      await api.party.openItems({
+        orgSlug: organization.slug,
+        partyId: supplier.id,
+        side: "payable",
+      })
+    ).rows,
+  ).not.toContainEqual(expect.objectContaining({ id: bill.id }));
+  // An advance applied after posting shows its allocation, so it can be reversed.
+  expect(
+    await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id }),
+  ).toMatchObject({
+    unappliedPaise: 0n,
+    allocations: [expect.objectContaining({ id: allocation.id, otherDocumentId: bill.id })],
+  });
+
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: allocation.id,
+    reason: "Wrong supplier application",
+  });
+  const reversal = await postingOf(organization.id, allocation.id, "reverse");
+  expect(reversal.entry.reversesEntryId).toBe(post.entry.id);
+  expect(reversal.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        accountId: payables.id,
+        partyId: supplier.id,
+        debit: 0n,
+        credit: 100_000n,
+      }),
+      expect.objectContaining({
+        accountId: supplierAdvances.id,
+        partyId: supplier.id,
+        debit: 100_000n,
+        credit: 0n,
+      }),
+    ]),
+  );
+  const statement = await api.party.statement({ orgSlug: organization.slug, partyId: supplier.id });
+  expect(statement.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ documentId: bill.id, typeLabel: "Bill", amountPaise: -100_000n }),
+      expect.objectContaining({
+        documentId: payment.id,
+        typeLabel: "Payment",
+        amountPaise: 100_000n,
+      }),
+    ]),
+  );
+  expect(statement.closingPaise).toBe(0n);
+});
+
+test("an unapplied credit note settles another invoice without an allocation journal entry", async () => {
+  const [original, next] = await Promise.all([postInvoice("100.00"), postInvoice("100.00")]);
+  const receipt = await postAdvance("100.00");
+  await api.allocation.apply({
+    orgSlug: organization.slug,
+    sourceDocumentId: receipt.id,
+    targetDocumentId: original.id,
+    amount: "100.00",
+  });
+  const detail = await api.invoice.get({ orgSlug: organization.slug, invoiceId: original.id });
+  const sourceLine = required(detail.lines[0], "invoice line");
+
+  const note = await api.note.post({
+    orgSlug: organization.slug,
+    type: "creditNote",
+    againstDocumentId: original.id,
+    documentDate: "2026-09-12",
+    narration: "Returned service",
+    lines: [{ sourceLineId: sourceLine.id, amount: "100.00" }],
+  });
+
+  expect(
+    (
+      await api.party.openCredits({
+        orgSlug: organization.slug,
+        partyId: party.id,
+        side: "receivable",
+      })
+    ).rows,
+  ).toContainEqual(expect.objectContaining({ id: note.id, unappliedPaise: 10_000n }));
+
+  const noteCredits = await api.party.openCredits({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    side: "receivable",
+    type: "creditNote",
+  });
+
+  expect(noteCredits.rows).toContainEqual(expect.objectContaining({ id: note.id }));
+  expect(noteCredits.rows.every((row) => row.type === "creditNote")).toBe(true);
+
+  const [applied] = await api.allocation.apply({
+    orgSlug: organization.slug,
+    sourceDocumentId: note.id,
+    targetDocumentId: next.id,
+    amount: "100.00",
+  });
+
+  const allocation = required(applied, "credit note allocation");
+
+  const operator = await createTestUser("note-allocation-operator");
+  await joinOrganization(operator, organization.id, "operator");
+
+  const restrictedInvoice = await clientFor(operator).invoice.get({
+    orgSlug: organization.slug,
+    invoiceId: next.id,
+  });
+
+  expect(restrictedInvoice.outstandingPaise).toBe(0n);
+  expect(restrictedInvoice.allocations).toEqual([]);
+
+  const entries = await db
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.orgId, organization.id),
+        eq(journalEntries.documentId, allocation.id),
+        eq(journalEntries.documentType, "allocation"),
+      ),
+    );
+
+  expect(entries).toEqual([]);
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: allocation.id,
+    reason: "Reopen credit",
+  });
+
+  const entriesAfterReverse = await db
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.orgId, organization.id),
+        eq(journalEntries.documentId, allocation.id),
+        eq(journalEntries.documentType, "allocation"),
+      ),
+    );
+
+  expect(entriesAfterReverse).toEqual([]);
+  expect(
+    (
+      await api.party.openItems({
+        orgSlug: organization.slug,
+        partyId: party.id,
+        side: "receivable",
+      })
+    ).rows,
+  ).toContainEqual(expect.objectContaining({ id: next.id, outstandingPaise: 10_000n }));
+});
+
+test("a missing party cannot be used for settlement pickers", async () => {
+  const partyId = crypto.randomUUID();
+  await expectORPCCode(
+    api.party.openItems({
+      orgSlug: organization.slug,
+      partyId,
+      side: "payable",
+    }),
+    "NOT_FOUND",
+  );
+  await expectORPCCode(
+    api.party.openCredits({
+      orgSlug: organization.slug,
+      partyId,
+      side: "receivable",
+    }),
+    "NOT_FOUND",
+  );
 });
