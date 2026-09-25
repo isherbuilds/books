@@ -38,6 +38,8 @@ const LABELS = { against: "Against", advance: "Advance", direct: "Direct" } as c
 
 const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
+  // Seeds the new payment's party; kept apart from the `partyId` list filter.
+  payeeId: z.uuid().optional().catch(undefined),
   q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   from: z.iso.date().optional().catch(undefined),
@@ -46,12 +48,12 @@ const paymentSearch = z.object({
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
 });
 
-type Filters = Omit<z.infer<typeof paymentSearch>, "create">;
+type Filters = Omit<z.infer<typeof paymentSearch>, "create" | "payeeId">;
 
 export const Route = createFileRoute("/$orgSlug/payments")({
   head: () => ({ meta: [{ title: "Payments · Accly Books" }] }),
   validateSearch: paymentSearch,
-  loaderDeps: ({ search: { create: _create, ...filters } }) => filters,
+  loaderDeps: ({ search: { create: _create, payeeId: _payeeId, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, params: { orgSlug }, deps }) => {
     await queryClient.infiniteQuery(paymentListOptions(orgSlug, deps)).catch(() => {});
   },
@@ -86,7 +88,7 @@ function PaymentOverlay({
 
 function PaymentsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, ...filters } = Route.useSearch();
+  const { create, payeeId, ...filters } = Route.useSearch();
   const { q, partyId, from, to, state, settlementKind } = filters;
   const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -156,7 +158,13 @@ function PaymentsRoute() {
       label: LABELS[settlementKind],
       remove: () => setFilters({ settlementKind: undefined }),
     });
-  const openCreate = () => void navigate({ search: (previous) => ({ ...previous, create: true }) });
+
+  // A party-filtered list seeds that party as the payee; the filter itself stays apart.
+  const openCreate = () =>
+    void navigate({
+      search: (previous) => ({ ...previous, create: true, payeeId: previous.partyId }),
+    });
+
   usePaletteActions(
     canPost ? [{ id: "payment:new", label: "New payment", group: "action", run: openCreate }] : [],
   );
@@ -164,7 +172,7 @@ function PaymentsRoute() {
   const closeOverlay = () =>
     void navigate({
       replace: true,
-      search: (previous) => ({ ...previous, create: undefined }),
+      search: (previous) => ({ ...previous, create: undefined, payeeId: undefined }),
     }).then(() => newTrigger.current?.focus());
 
   const empty =
@@ -249,7 +257,7 @@ function PaymentsRoute() {
           rowLink={(payment) => ({
             to: "/$orgSlug/payments/$paymentId",
             params: { orgSlug, paymentId: payment.id },
-            search: (previous) => ({ ...previous, create: undefined }),
+            search: (previous) => ({ ...previous, create: undefined, payeeId: undefined }),
           })}
           renderCard={(payment) => <PaymentCard payment={payment} />}
           query={payments}
@@ -262,7 +270,7 @@ function PaymentsRoute() {
       </PageBody>
       {date.popover}
       {canPost && create ? (
-        <PaymentOverlay orgSlug={orgSlug} today={today} partyId={partyId} onClose={closeOverlay} />
+        <PaymentOverlay orgSlug={orgSlug} today={today} partyId={payeeId} onClose={closeOverlay} />
       ) : null}
     </>
   );

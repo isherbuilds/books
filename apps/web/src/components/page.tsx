@@ -157,8 +157,9 @@ export function SearchInput({
   trailing?: ReactNode;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  // The list re-renders after each pause, not after each keystroke.
-  const apply = useDebouncedCallback((text: string) => onQueryChange(text.trim()), delay);
+  // The list re-renders after each pause, not after each keystroke. The pause reads
+  // the box when it ends, so a Clear during the pause is not undone by older text.
+  const apply = useDebouncedCallback(() => onQueryChange(input.current?.value.trim() ?? ""), delay);
 
   // Clear, Back, or a palette link changes the URL; the box follows, but never
   // while the operator types in it.
@@ -187,13 +188,13 @@ export function SearchInput({
           "pl-8",
           trailing !== undefined && "pr-8 [&::-webkit-search-cancel-button]:appearance-none",
         )}
-        onChange={(event) => apply.schedule(event.currentTarget.value)}
+        onChange={apply.schedule}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing) return;
 
           if (event.key === "Enter") {
             event.preventDefault();
-            apply.now(event.currentTarget.value);
+            apply.now();
           }
 
           // Esc clears the text only; filters never clear on Esc.
@@ -201,7 +202,7 @@ export function SearchInput({
             event.preventDefault();
             event.stopPropagation();
             event.currentTarget.value = "";
-            apply.now("");
+            apply.now();
           }
         }}
       />

@@ -242,7 +242,7 @@ test("opening correction enforces the cutover lock and corrects historical balan
   expect(isolatedOpening.number).toMatch(/^OB\d{2}-\d{2}\/1$/);
 });
 
-test("opening balance refuses a second posted document, control accounts, and CA posting", async () => {
+test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
   const fixture = await createAccountingFixture(founder, "opening-balance-refusals");
   const { cash, openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
   const claim = { orgSlug: fixture.organization.slug };
@@ -255,6 +255,11 @@ test("opening balance refuses a second posted document, control accounts, and CA
       { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
     ],
   };
+
+  await expectReason(
+    fixture.api.openingBalance.post({ ...validInput, documentDate: "2999-01-01" }),
+    "OPENING_BALANCE_DATE_FUTURE",
+  );
 
   const posted = await fixture.api.openingBalance.post(validInput);
   await expectORPCCode(fixture.api.openingBalance.post(validInput), "CONFLICT");

@@ -227,6 +227,12 @@ export function ReceiptForm({
     if (values.settlementKind === "against") {
       if (!values.partyId) return;
 
+      if (!openItems.isSuccess || openItems.isFetching) {
+        form.setError("allocations", { message: "Wait for the open documents to load" });
+
+        return;
+      }
+
       const { selected, allocatedPaise, rowErrors, tableError } = checkAllocations(
         values.allocations,
         openRows,
