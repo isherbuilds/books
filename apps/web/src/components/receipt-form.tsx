@@ -20,7 +20,13 @@ import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 
@@ -40,6 +46,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
+import { openItemsOptions } from "@/lib/pickers";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
@@ -175,21 +182,22 @@ export function ReceiptForm({
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
 
-  const openItems = useQuery(
-    orpc.party.openItems.queryOptions({
-      input:
-        settlementKind === "against" && partyId
-          ? { orgSlug, partyId, side: "receivable" }
-          : skipToken,
-    }),
+  const openItems = useInfiniteQuery(
+    openItemsOptions(
+      settlementKind === "against" && partyId
+        ? { orgSlug, partyId, side: "receivable" }
+        : skipToken,
+    ),
   );
 
   const loadedRows: OpenDocument[] =
-    openItems.data?.rows.map((row) => ({
-      ...row,
-      label: row.type === "invoice" ? "Invoice" : "Payment",
-      openPaise: row.outstandingPaise,
-    })) ?? [];
+    openItems.data?.pages
+      .flatMap((page) => page.rows)
+      .map((row) => ({
+        ...row,
+        label: row.type === "invoice" ? "Invoice" : "Payment",
+        openPaise: row.outstandingPaise,
+      })) ?? [];
 
   // The seeded Invoice can sit past the loaded page of open items. Keep it selectable
   // from its own record; the server still refuses it if it has since been settled. A
@@ -198,7 +206,7 @@ export function ReceiptForm({
     invoice !== undefined &&
     isPositiveMoney(invoice.outstandingPaise) &&
     partyId === invoice.partyId &&
-    openItems.data?.hasMore === true &&
+    openItems.hasNextPage &&
     !loadedRows.some((row) => row.id === invoice.id);
 
   const openRows: OpenDocument[] = seedMissing

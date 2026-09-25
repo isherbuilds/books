@@ -18,7 +18,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AllocationsSection } from "@/components/allocations-section";
-import { ApplyCreditSheet } from "@/components/apply-credit-sheet";
+import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
 import { BillTdsRows } from "@/components/bill-form";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
@@ -384,7 +384,7 @@ function BillSheetRoute() {
         onConfirm={(reason) => amend.mutate({ orgSlug, billId, reason })}
       />
       {applyOpen && bill.partyId ? (
-        <ApplyCreditSheet
+        <ApplyCreditDialog
           orgSlug={orgSlug}
           side="payable"
           target={{

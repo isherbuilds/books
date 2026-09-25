@@ -68,6 +68,14 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     time. Receipts, files and the audit log use `useInfiniteQuery` on a keyset
     cursor with server filters. Only the `LoadMore` button grows a list;
     nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+    The open-item and credit pickers (`party.openItems`, `party.openCredits`)
+    follow the same rule: 25 rows oldest first, then `LoadMore`, so no fixed
+    count hides a document. Apply credit is a compact Dialog over the record
+    Sheet: a credit combobox searched by number on the server, with a Load
+    more option last; an amount defaulting to the smaller of the credit's
+    unapplied amount and the claim's outstanding; and the outstanding after
+    the apply. The allocation grid has no search, because a narrowed grid
+    would hide amounts already typed against other rows.
 11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
     `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
     Receipt also the method, and focuses the first Link Field. Tab moves
@@ -120,7 +128,7 @@ financial rollback are not adopted.
      `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
      `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-credit-sheet.tsx`, the `DocumentForm` adoption in
+     `components/apply-credit-dialog.tsx`, the `DocumentForm` adoption in
      `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through
@@ -165,7 +173,7 @@ financial rollback are not adopted.
      implemented. Import remains open: template download, upload, row errors
      listed, nothing written on any error.
      Payment offers Against only to roles that can read Bills and Notes; its
-     Credit Note refund picker filters on the server before the 200-row limit.
+     Credit Note refund picker filters on the server before the page.
      Sheet-hosted document forms use `DocumentForm` with the four posting
      states and a list route with the same shell, `DataTable` and record Sheet.
      A document with a line grid uses the page surface. Settings forms use the
