@@ -405,10 +405,18 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
       orgSlug: beta.slug,
       itemId: alphaItem.id,
       updatedAt: alphaItem.updatedAt.toISOString(),
-      active: false,
       name: "Shared Service",
       unitPrice: "5.00",
       incomeAccountId: betaIncome.id,
+    }),
+    "CONFLICT",
+  );
+  await expectORPCCode(
+    api.item.setActive({
+      orgSlug: beta.slug,
+      itemId: alphaItem.id,
+      updatedAt: alphaItem.updatedAt.toISOString(),
+      active: false,
     }),
     "CONFLICT",
   );
@@ -693,10 +701,16 @@ const GUARDED_CALLS = {
       ...claim,
       itemId: crypto.randomUUID(),
       updatedAt: new Date().toISOString(),
-      active: true,
       name: "Intrusion",
       unitPrice: "1.00",
       incomeAccountId: crypto.randomUUID(),
+    }),
+  "item.setActive": (api, claim) =>
+    api.item.setActive({
+      ...claim,
+      itemId: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      active: false,
     }),
   "item.taxRates": (api, claim) => api.item.taxRates({ ...claim }),
   "invoice.saveDraft": (api, claim) =>

@@ -1,10 +1,8 @@
 import { formatDecimal, NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
-import { Checkbox } from "@accly/ui/components/checkbox";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -49,7 +47,6 @@ const itemSchema = z.object({
   unitPrice: z.string().regex(NON_NEGATIVE_MONEY_PATTERN, "Enter a valid amount"),
   incomeAccountId: z.string().min(1, "Choose an income account"),
   taxCode: z.string(),
-  active: z.boolean(),
 });
 
 type ItemFormValues = z.input<typeof itemSchema>;
@@ -64,7 +61,6 @@ function defaults(item: ItemListRow | undefined, seedName: string | undefined): 
     unitPrice: item ? formatDecimal(item.unitPricePaise) : "",
     incomeAccountId: item?.incomeAccountId ?? "",
     taxCode: item?.taxCode ?? "",
-    active: item?.active ?? true,
   };
 }
 
@@ -143,7 +139,19 @@ function ItemForm({
     }),
   );
 
-  const saving = create.isPending || update.isPending;
+  // The mobile list renders cards without the table's row menu, so the toggle lives here.
+  const setActive = useMutation(
+    orpc.item.setActive.mutationOptions({
+      onSuccess: async () => {
+        await invalidateItems(queryClient, orgSlug);
+        toast.success(item?.active ? "Item marked inactive" : "Item marked active");
+        onClose();
+      },
+      onError: handleError,
+    }),
+  );
+
+  const saving = create.isPending || update.isPending || setActive.isPending;
 
   const onSubmit = form.handleSubmit((values) => {
     // Sent as held: choosing a non-taxable account clears it, and the server owns the
@@ -160,13 +168,7 @@ function ItemForm({
     if (item) {
       if (editToken === null) throw new Error("Editing an item without a captured edit token");
 
-      update.mutate({
-        orgSlug,
-        itemId: item.id,
-        updatedAt: editToken,
-        active: values.active,
-        ...fields,
-      });
+      update.mutate({ orgSlug, itemId: item.id, updatedAt: editToken, ...fields });
     } else {
       create.mutate({ orgSlug, ...fields });
     }
@@ -303,28 +305,29 @@ function ItemForm({
                 )}
               />
             ) : null}
-            {item ? (
-              <FormField
-                control={form.control}
-                name="active"
-                render={({ field }) => (
-                  <FormItem className="grid-cols-[auto_1fr] items-start gap-x-2">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="grid gap-1">
-                      <FormLabel>Active</FormLabel>
-                      <FormDescription>
-                        Inactive items stay on posted documents and leave the pickers.
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            ) : null}
           </SheetBody>
 
-          <SheetFooter>
+          <SheetFooter className={item ? "justify-between" : undefined}>
+            {item ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  if (editToken === null)
+                    throw new Error("Editing an item without a captured edit token");
+
+                  setActive.mutate({
+                    orgSlug,
+                    itemId: item.id,
+                    updatedAt: editToken,
+                    active: !item.active,
+                  });
+                }}
+              >
+                {item.active ? "Mark inactive" : "Mark active"}
+              </Button>
+            ) : null}
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel

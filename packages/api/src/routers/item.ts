@@ -147,11 +147,10 @@ export const itemRouter = {
     orgInput.extend({
       itemId: z.uuid(),
       updatedAt: z.iso.datetime({ precision: 3 }),
-      active: z.boolean(),
       ...itemFields,
     }),
   ).handler(async ({ context, input }) => {
-    const { orgSlug: _claim, itemId, updatedAt, active, ...fields } = input;
+    const { orgSlug: _claim, itemId, updatedAt, ...fields } = input;
     const today = businessDate(new Date(), await orgTimeZone(context.scope.orgId));
 
     return db
@@ -160,7 +159,7 @@ export const itemRouter = {
 
         const [updated] = await tx
           .update(items)
-          .set({ ...values, active, updatedAt: nextEditToken(items.updatedAt) })
+          .set({ ...values, updatedAt: nextEditToken(items.updatedAt) })
           .where(
             and(
               eq(items.orgId, context.scope.orgId),
@@ -177,6 +176,35 @@ export const itemRouter = {
         return updated;
       })
       .catch(itemNameTaken);
+  }),
+
+  // Separate from update so marking inactive skips itemValues: restoring must not check
+  // the income account, and an Item on an ended tax code must still be able to leave.
+  setActive: orgProcedure(
+    { item: ["update"] },
+    orgInput.extend({
+      itemId: z.uuid(),
+      updatedAt: z.iso.datetime({ precision: 3 }),
+      active: z.boolean(),
+    }),
+  ).handler(async ({ context, input }) => {
+    const [updated] = await db
+      .update(items)
+      .set({ active: input.active, updatedAt: nextEditToken(items.updatedAt) })
+      .where(
+        and(
+          eq(items.orgId, context.scope.orgId),
+          eq(items.id, input.itemId),
+          eq(items.updatedAt, new Date(input.updatedAt)),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new ORPCError("CONFLICT", { message: "This item changed after you opened it." });
+    }
+
+    return updated;
   }),
 
   // The rates an Item may take today; an Invoice resolves its own date's rate at post.
