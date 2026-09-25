@@ -28,6 +28,8 @@ import {
   type AllocationTarget,
 } from "./allocations";
 import { assertPeriodOpen } from "./locks";
+import { sumPaise } from "./money";
+import { roundOff } from "./tax";
 import { financialYearOf, postNumbered } from "./numbering";
 import { reversePartyLedgerLines, writePartyLedgerLine } from "./party-ledger";
 import { recordEntry, reverseEntries, type DocumentPosting } from "./posting";
@@ -82,8 +84,46 @@ export type PostDocumentInput = {
   draft: { id: string; version: number } | null;
 };
 
-function sumPaise(rows: readonly { amountPaise: bigint }[]): bigint {
-  return rows.reduce((sum, row) => sum + row.amountPaise, 0n);
+/** A claim's taxable value, taxes, round-off and total, from its lines. */
+export function documentTotals(lines: readonly PostDocumentLine[]) {
+  const taxablePaise = sumPaise(lines.map((line) => line.amountPaise));
+  const cgstPaise = sumPaise(lines.map((line) => line.cgstPaise));
+  const sgstPaise = sumPaise(lines.map((line) => line.sgstPaise));
+  const igstPaise = sumPaise(lines.map((line) => line.igstPaise));
+  const grossPaise = taxablePaise + cgstPaise + sgstPaise + igstPaise;
+  const roundOffPaise = roundOff(grossPaise);
+
+  return {
+    taxablePaise,
+    cgstPaise,
+    sgstPaise,
+    igstPaise,
+    roundOffPaise,
+    totalPaise: grossPaise + roundOffPaise,
+  };
+}
+
+/**
+ * A purchase's posting legs: eligible GST goes to input tax, and ineligible GST is
+ * cost on the line's own account. Bills and debit notes share it.
+ */
+export function purchaseLegs(lines: readonly PostDocumentLine[]) {
+  const eligible = lines.filter((line) => line.itcEligible);
+
+  return {
+    lines: lines.flatMap((line) => {
+      if (!line.accountId) throw impossible("a purchase line has no account");
+
+      const amountPaise =
+        line.amountPaise +
+        (line.itcEligible ? 0n : line.cgstPaise + line.sgstPaise + line.igstPaise);
+
+      return amountPaise > 0n ? [{ accountId: line.accountId, amountPaise }] : [];
+    }),
+    cgstPaise: sumPaise(eligible.map((line) => line.cgstPaise)),
+    sgstPaise: sumPaise(eligible.map((line) => line.sgstPaise)),
+    igstPaise: sumPaise(eligible.map((line) => line.igstPaise)),
+  };
 }
 
 export function accountLine(
@@ -112,6 +152,27 @@ export function accountLine(
     sgstPaise: 0n,
     igstPaise: 0n,
   };
+}
+
+/** A saved Invoice's or Bill's taxable value and GST components, from its stored lines. */
+export function taxTotals(
+  lines: readonly {
+    amountPaise: bigint;
+    cgstPaise: bigint;
+    sgstPaise: bigint;
+    igstPaise: bigint;
+  }[],
+) {
+  const totals = { taxablePaise: 0n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n };
+
+  for (const line of lines) {
+    totals.taxablePaise += line.amountPaise;
+    totals.cgstPaise += line.cgstPaise;
+    totals.sgstPaise += line.sgstPaise;
+    totals.igstPaise += line.igstPaise;
+  }
+
+  return totals;
 }
 
 /** A posted document's number; posting assigns it, so a missing one breaks an invariant. */
@@ -396,7 +457,7 @@ export async function writeDraft(
     if (input.tdsSectionId) {
       const deduction = {
         tdsSectionId: input.tdsSectionId,
-        basePaise: input.lines.reduce((sum, line) => sum + line.amountPaise, 0n),
+        basePaise: sumPaise(input.lines.map((line) => line.amountPaise)),
         amountPaise: posting.tdsPaise,
       };
 
@@ -468,7 +529,7 @@ export async function postDocument(
     adjusted: boolean,
     settledPaise: bigint,
   ) => {
-    if (adjusted && sumPaise(allocated) !== settledPaise) {
+    if (adjusted && sumPaise(allocated.map((row) => row.amountPaise)) !== settledPaise) {
       throw badRequest(
         "ADJUSTMENT_UNALLOCATED",
         "Allocate the full settlement including adjustments.",
@@ -523,7 +584,8 @@ export async function postDocument(
           amountPaise: -posting.amountPaise,
         };
       } else if (posting.settlementKind === "against") {
-        const settledPaise = posting.amountPaise + sumPaise(posting.adjustments);
+        const settledPaise =
+          posting.amountPaise + sumPaise(posting.adjustments.map((row) => row.amountPaise));
 
         ledger = { partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise };
         pairs = settles(posting.allocations);
@@ -555,7 +617,8 @@ export async function postDocument(
         }));
         requiredSourceType = "creditNote";
       } else if (posting.settlementKind === "against") {
-        const settledPaise = posting.amountPaise + sumPaise(posting.writeOffs);
+        const settledPaise =
+          posting.amountPaise + sumPaise(posting.writeOffs.map((row) => row.amountPaise));
 
         ledger = { partyId: posting.partyId, side: "payable", amountPaise: settledPaise };
         pairs = settles(posting.allocations);
@@ -588,7 +651,6 @@ export async function postDocument(
   if (!firstLine) throw impossible(`document ${id} has no lines`);
 
   await recordEntry(tx, scope, {
-    kind: "post",
     document: { id, posting },
     entryDate: input.documentDate,
     narration: input.narration ?? firstLine.description,
@@ -727,20 +789,28 @@ export async function reverseDocument(
       ),
     );
 
+  const [postEntry] = await tx
+    .select({ entryId: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.orgId, scope.orgId),
+        eq(journalEntries.documentType, cancelled.type),
+        eq(journalEntries.documentId, documentId),
+        eq(journalEntries.kind, "post"),
+      ),
+    );
+
+  if (!postEntry) throw impossible(`document ${documentId} is missing its post journal entry`);
+
   await reverseEntries(
     tx,
     scope,
-    unreversedAllocationEntries.map((entry) => entry.entryId),
+    [...unreversedAllocationEntries.map((entry) => entry.entryId), postEntry.entryId],
     { entryDate, narration: reason },
   );
 
   await reversePartyLedgerLines(tx, scope.orgId, documentId, entryDate);
-  await recordEntry(tx, scope, {
-    kind: "reverse",
-    document: { id: documentId, type: cancelled.type },
-    entryDate,
-    narration: reason,
-  });
 
   return cancelled;
 }

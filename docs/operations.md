@@ -81,7 +81,7 @@ goes with the release. A configuration or workflow change reruns only its gate.
    the gap.
 2. Every account has the least role it needs, and the role map is walked with
    the pilot owner.
-3. Organization, bank account, payment method, time zone and prefix settings
+3. Organization, bank account, payment method and prefix settings
    match real records.
 4. The CA has approved classifications, printed fields, the chart templates,
    the call 16 receipt table and the TDS seed. Printers have produced every

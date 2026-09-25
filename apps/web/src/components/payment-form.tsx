@@ -17,9 +17,14 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
-import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
@@ -30,6 +35,7 @@ import {
   reportRowErrors,
   type OpenDocument,
 } from "@/components/allocation-table";
+import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
@@ -41,8 +47,9 @@ import { invalidateCashState } from "@/lib/domain-invalidation";
 import { positiveAmount } from "@/lib/form-schema";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
+import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
-import { partyPickerOptions } from "@/lib/parties";
+import { partyPickerOptions, usePartyName } from "@/lib/parties";
 
 const schema = z
   .object({
@@ -50,7 +57,7 @@ const schema = z
     partyName: z.string(),
     amount: positiveAmount,
     paymentMethodId: z.string().min(1, "Choose a payment method"),
-    settlementKind: z.enum(["direct", "advance", "against"]),
+    settlementKind: z.enum(["advance", "against", "direct"]),
     exposureSide: z.enum(["payable", "receivable"]),
     allocations: z.record(z.string(), z.string()),
     expenseAccountId: z.string().nullable(),
@@ -127,7 +134,8 @@ const defaults = (today: string, partyId: string | null, paymentMethodId = ""): 
   partyName: "",
   amount: "",
   paymentMethodId,
-  settlementKind: "direct",
+  // The receipt's default and order, so both money screens open the same way.
+  settlementKind: "advance",
   exposureSide: "payable",
   allocations: {},
   expenseAccountId: null,
@@ -174,39 +182,37 @@ export function PaymentForm({
   const spendAccounts = accounts.data && postableAccounts(accounts.data, ["expense", "asset"]);
   const expenseAccounts = accounts.data && postableAccounts(accounts.data, ["expense"]);
 
-  const items = useQuery(
-    orpc.party.openItems.queryOptions({
-      input:
-        settlementKind === "against" && exposureSide === "payable" && partyId
-          ? { orgSlug, partyId, side: "payable" }
-          : skipToken,
-    }),
+  const items = useInfiniteQuery(
+    openItemsOptions(
+      settlementKind === "against" && exposureSide === "payable" && partyId
+        ? { orgSlug, partyId, side: "payable" }
+        : skipToken,
+    ),
   );
 
-  const credits = useQuery(
-    orpc.party.openCredits.queryOptions({
-      input:
-        settlementKind === "against" && exposureSide === "receivable" && partyId
-          ? { orgSlug, partyId, side: "receivable", type: "creditNote" }
-          : skipToken,
-    }),
+  const credits = useInfiniteQuery(
+    openCreditsOptions(
+      settlementKind === "against" && exposureSide === "receivable" && partyId
+        ? { orgSlug, partyId, side: "receivable", type: "creditNote" }
+        : skipToken,
+    ),
   );
 
   const openQuery = exposureSide === "payable" ? items : credits;
 
   const openRows: OpenDocument[] =
     exposureSide === "payable"
-      ? (items.data?.rows.map((row) => ({
-          ...row,
-          label: "Bill",
-          openPaise: row.outstandingPaise,
-        })) ?? [])
-      : (credits.data?.rows.map((row) => ({
-          ...row,
-          label: "Credit note",
-          dueDate: null,
-          openPaise: row.unappliedPaise,
-        })) ?? []);
+      ? (items.data?.pages
+          .flatMap((page) => page.rows)
+          .map((row) => ({ ...row, label: "Bill", openPaise: row.outstandingPaise })) ?? [])
+      : (credits.data?.pages
+          .flatMap((page) => page.rows)
+          .map((row) => ({
+            ...row,
+            label: "Credit note",
+            dueDate: null,
+            openPaise: row.unappliedPaise,
+          })) ?? []);
 
   const sections = useQuery(
     orpc.payment.tdsSections.queryOptions({
@@ -216,13 +222,12 @@ export function PaymentForm({
 
   const section = sections.data?.find((item) => item.id === tdsSectionId);
 
-  useEffect(() => {
-    if (!initialPartyId || !parties.data) return;
-    const selected = parties.data.find((party) => party.id === initialPartyId);
+  const initialPartyName = usePartyName(orgSlug, initialPartyId, parties.data?.rows);
 
-    if (selected && form.getValues("partyId") === initialPartyId)
-      form.setValue("partyName", selected.name);
-  }, [initialPartyId, parties.data, form]);
+  useEffect(() => {
+    if (initialPartyName && form.getValues("partyId") === initialPartyId)
+      form.setValue("partyName", initialPartyName);
+  }, [initialPartyId, initialPartyName, form]);
 
   const post = useMutation(
     orpc.payment.post.mutationOptions({
@@ -415,7 +420,7 @@ export function PaymentForm({
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
         footer={
-          <PostBar onClose={onClose} closeLabel="Cancel">
+          <PostBar onClose={onClose} closeLabel="Close">
             <Button type="submit">
               {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
               <Kbd>⌘↵</Kbd>
@@ -426,6 +431,7 @@ export function PaymentForm({
         <DocumentPartyField
           orgSlug={orgSlug}
           label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
+          role={exposureSide === "payable" ? "vendor" : "customer"}
           clearable={settlementKind === "direct"}
           onPartyChange={() => form.setValue("allocations", {})}
         />
@@ -471,9 +477,11 @@ export function PaymentForm({
                   variant="outline"
                   aria-label="Settlement kind"
                 >
-                  <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
                   <ToggleGroupItem value="advance">Advance</ToggleGroupItem>
-                  {canSettle ? <ToggleGroupItem value="against">Against</ToggleGroupItem> : null}
+                  {canSettle ? (
+                    <ToggleGroupItem value="against">Against open items</ToggleGroupItem>
+                  ) : null}
+                  <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
                 </ToggleGroup>
               </FormControl>
               <FormMessage />
@@ -580,30 +588,7 @@ export function PaymentForm({
             )}
           />
         ) : null}
-        <RegisteredFormField
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference</FormLabel>
-              <FormControl>
-                <Input {...field} maxLength={120} autoComplete="off" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <RegisteredFormField
-          name="narration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Narration</FormLabel>
-              <FormControl>
-                <Textarea {...field} maxLength={500} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ReferenceNarrationFields />
         <RegisteredFormField
           name="documentDate"
           render={({ field }) => (

@@ -33,6 +33,7 @@ function AccountName({ account }: { account: AccountRow }) {
       <span className="truncate font-medium" title={account.name}>
         {account.name}
       </span>
+      {account.active ? null : <Badge variant="muted">Inactive</Badge>}
     </span>
   );
 }
@@ -63,26 +64,6 @@ export const ACCOUNT_COLUMNS = [
     meta: { className: "w-32" },
     cell: ({ getValue }) => ACCOUNT_TYPE_LABELS[getValue()],
   }),
-  col.accessor("supplyClass", {
-    header: "Supply class",
-    enableSorting: false,
-    meta: { className: "hidden w-32 lg:table-cell" },
-    cell: ({ getValue }) => {
-      const supplyClass = getValue();
-
-      return <TextOrDash value={supplyClass ? SUPPLY_CLASS_LABELS[supplyClass] : null} />;
-    },
-  }),
-  col.accessor("active", {
-    header: "Status",
-    enableSorting: false,
-    meta: { className: "hidden w-24 lg:table-cell" },
-    cell: ({ getValue }) => (
-      <Badge variant={getValue() ? "secondary" : "muted"}>
-        {getValue() ? "Active" : "Archived"}
-      </Badge>
-    ),
-  }),
 ];
 
 export function AccountCard({ account }: { account: AccountRow }) {
@@ -95,9 +76,6 @@ export function AccountCard({ account }: { account: AccountRow }) {
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
         <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
         <span className="min-w-0 truncate">{account.parentName ?? "Root ledger"}</span>
-        <Badge variant={account.active ? "secondary" : "muted"}>
-          {account.active ? "Active" : "Archived"}
-        </Badge>
       </div>
       {account.supplyClass ? (
         <p className="text-muted-foreground">

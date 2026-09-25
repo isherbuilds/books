@@ -21,10 +21,18 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   proprietorship, partnership, llp, company, trust, society), `pan`, optional
   `gstin`, `stateCode` and `financialYearStart`. The start month names every
   financial year and number series, so it is fixed once any document is
-  numbered (`FINANCIAL_YEAR_FIXED`).
+  numbered (`FINANCIAL_YEAR_FIXED`). `timeZone` is set at creation
+  (`Asia/Kolkata` by default) and has no settings field: every Organization is
+  Indian.
 - **Party**: role flags (descriptive only), optional `gstin` and `pan`, and an
   address `stateCode`. `party.update` replaces all fields, with the loaded
-  `updatedAt` as its token.
+  `updatedAt` as its token. With a GSTIN, the server derives `stateCode` and
+  `pan` from it (characters 1–2 and 3–12); a state or PAN sent beside it must
+  match. Forms show State and PAN only while GSTIN is empty. The
+  Organization's own identity follows the same rule. Roles never gate a
+  document, but pickers rank the document's role first (customer on Invoices
+  and Receipts, vendor on Bills and payable Payments), and a party created
+  inline from one starts with that role.
 - **Account**: `type`, `parentId` and an optional `systemKey`. Income accounts
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
   Interest is `exempt`; `notASupply` covers donations, grants, dividends,
@@ -34,7 +42,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   system account, or converts a posting account into a group.
 - **Item**: an Organization-unique `name` through `normalizedName`, optional
   `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
-  `active` flag. `taxCode` is required exactly when the income Account is
+  `active` flag. The form never preselects the income Account: its supply class
+  decides the tax treatment. `taxCode` is required exactly when the income Account is
   `taxable`.
 - **Tax Rate**: `code`, `name`, an integer `rateBasisPoints` from 0 to 10,000,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited, and
@@ -95,10 +104,16 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    10-paise line at 5% rounds each 2.5% half to zero, while one 5%
    calculation would round to a paise. That is intended. `roundOff` rounds
    gross to the rupee and posts the signed difference to the `roundOff`
-   Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`), and a
-   registered Organization cannot put a `taxable` account line on an Invoice
-   (`TAXABLE_ACCOUNT_LINE`): taxable supplies are Items, which carry the dated
-   rate.
+   Account. A zero-total Invoice is refused (`INVOICE_ZERO_TOTAL`). **Invoice
+   lines are Items only**: the Item carries the income Account and the dated
+   rate, and the line may override its description and price. No Items are
+   seeded. A one-off charge uses a generic Item (for example "Professional
+   fees") that the owner or accountant creates once, as in ERPNext and Zoho
+   Books; operators do not gain `item` `create` (call 10).
+   Decided 2026-09-25 (#10): ERPNext's Sales Invoice Item requires an
+   `item_code` and only the Item Manager role creates Items; Zoho Books'
+   invoice API requires `item_id` on every line. `TAXABLE_ACCOUNT_LINE`
+   remains for Journals.
 6. **Print class**: an Invoice with any line carrying a Tax Rate prints Tax
    Invoice; otherwise it prints Bill of Supply, which covers exempt and nil
    lines and every line of an unregistered Organization. A Receipt prints
@@ -229,7 +244,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 1. **Spine, Party, templates, money.** Implemented: the settings row, chart
    templates, Parties with a namesake check and one GSTIN per Organization (an
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
-   rows then `MASTER_LIST_LIMIT`, money accounts and methods.
+   rows then `MASTER_LIST_LIMIT` (parties search the server instead), money
+   accounts and methods.
 2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
    no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
@@ -252,7 +268,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
    Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
-   otherwise it prints Bill of Supply. CA acceptance of the GST seed is open.
+   otherwise it prints Bill of Supply. `invoice.get` and `bill.get` return
+   `totals` (taxable, CGST, SGST and IGST) summed on the server, which the
+   detail, the draft editor and the PDF show. CA acceptance of the GST seed is
+   open.
 
    `postDocument` takes a lines array and `draft: { id, version } | null`.
    Receipt and Payment pass one `accountLine`. `invoice.saveDraft` and
@@ -334,7 +353,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `narration`. 1–100 account lines
      `{ accountId, description, amount, taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
      leaf. `taxCode` resolves to the rate effective on the Bill date; an invalid
-     code is `TAX_CODE_INVALID`. `amount` is the taxable value.
+     code is `TAX_CODE_INVALID`. The form ticks `itcEligible` on a new line, as
+     Zoho Books and India Compliance treat input tax as eligible unless marked
+     (revisit with the CA). `amount` is the taxable value.
      Tax is `computeTax` with intra-state when the Party `stateCode` equals
      the place of supply. `itcEligible` is forced false when the Organization
      has no `gstin`. TDS is `computeTds` on the taxable total at the Bill (the
@@ -400,9 +421,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and amend (`CONFLICT`, naming the notes).
    - **Pickers.** `party.openItems({ partyId, side })` returns targets with
      outstanding (`{ id, type, number, documentDate, dueDate, outstandingPaise }`)
-     and `party.openCredits({ partyId, side, type? })` returns sources with unapplied
-     credit (`{ id, type, number, documentDate, unappliedPaise }`); both the
-     200 oldest and `hasMore`. The optional credit `type` filters before the limit;
+     and `party.openCredits({ partyId, side, type?, q? })` returns sources with unapplied
+     credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
+     page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
+     next page passes the last row's id as `cursor`, so no row is out of reach.
+     The optional credit `type` and the number search `q` filter before the page;
      reading credits requires the Note read grant. They replace `invoice.openInvoices` and
      `receipt.unapplied`. `allocation.apply` takes
      `{ sourceDocumentId, targetDocumentId, amount }`.
@@ -425,7 +448,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      lines, never `advanceSupply`. The TDS register includes Bills.
    - **Invoice PDF** at `/api/$orgSlug/invoices/$invoiceId/pdf`, as the
      Receipt PDF: `invoice.get`, the print snapshot and the stored lines. The
-     title is "Invoice" until the CA approves print classes (Product).
+     title is "Invoice" until the CA approves print classes (Product). It ends
+     with "For" the legal name over an Authorised signatory line (CGST rule
+     46(q)). Line HSN/SAC meets rule 46, so there is no HSN summary table; the
+     GSTR-1 register carries that summary. One PDF link opens it inline; the
+     browser viewer prints and saves.
    - **Web.** Bills and Payments under Purchases; Credit and Debit Notes
      under a Notes list; Bill pages as the Invoice (line grid); the Payment
      form a Sheet; a note is a page picked from its source record. The
@@ -496,7 +523,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
 7. **Import.** Open. One Excel template imports masters, opening balances and
    opening items (open documents with `source` `opening`, original due dates,
    no journal lines of their own, summing to each Party's balance), all or
-   nothing.
+   nothing. This template is the only path for Party opening balances, as
+   ERPNext's Opening Invoice Creation Tool: no per-Party opening field or form,
+   before or with this slice. Until it ships, a cutover leaves Party balances
+   out.
 8. **Chart of accounts.** Implemented. Owner and accountant manage posting leaves across
    Assets, Liabilities, Equity, Income and Expenses. Templates establish the
    groups and protected control accounts.
@@ -536,9 +566,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      supply class and status. New account picks its parent from a
      `NativeSelect` grouped by type (a type's top level or an existing group),
      then Name, and GST supply class for income. For editors, each row opens its
-     Rename Sheet (`?edit=`); Archive/Restore is a button in that Sheet for posting
-     leaves, as Items. Read-only rows have no edit link. Banking's Add account
-     opens that same Sheet.
+     Rename Sheet (`?edit=`); Mark inactive / Mark active is a button in that
+     Sheet for posting leaves, and the status reads Active or Inactive, as for
+     Parties and Items. Read-only rows have no edit link. Banking's Add account
+     opens that same Sheet in Banking under Bank Accounts, then continues to Add
+     payment method with the new account chosen.
    - Acceptance: an accountant creates `Tuition Fees` (income, `exempt`) and
      `Sibling Discount` (expense); the first appears in the Item income
      picker and the second in the Journal account picker; a rename shows on
@@ -633,7 +665,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `packages/api/src/core/allocations.ts`,
      `packages/api/src/routers/journal.ts`, `allocation.ts`, `party.ts`,
      `receipt.ts`, `apps/web/src/components/journal-form.tsx`,
-     `apply-credit-sheet.tsx`,
+     `apply-credit-dialog.tsx`,
      `apps/web/src/routes/$orgSlug/journals_.$journalId.tsx`. Touches:
      `apps/web/src/routes/$orgSlug/invoices/$invoiceId.tsx` (the Sheet's name
      and query), `apps/web/src/lib/domain-invalidation.ts`,
@@ -649,7 +681,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    debit for a party (the Rahul side of a transfer, a charge with no Invoice)
    is settleable: Receipt `against` and `allocation.apply` may target it.
    `party.openItems({ partyId, side: "receivable" })` already lists Invoices;
-   9b adds Journal debits with outstanding, 200 oldest and `hasMore`, with
+   9b adds Journal debits with outstanding, in the same oldest-first pages, with
    `dueDate` null for a Journal. Invoice list open and overdue filters stay
    Invoice-only. A Journal with active allocations targeting it refuses cancel
    (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's
@@ -748,7 +780,7 @@ slice 9.
   `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
   History's highest identity id per kind supplies the latest reason and setter
   to the settings screen, not a posting-time lookup. `lock_exceptions` stores
-  `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy/revokeReason }`;
+  `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy }`;
   active means not revoked and not expired on the database clock.
   Every posting, cancellation and allocation reads settings once `FOR SHARE` (or stronger)
   inside its transaction, before document locks. `lock.set` and
@@ -762,7 +794,9 @@ slice 9.
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
   ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
-  `CONFLICT`); all three mutations audited. Web: Settings > Opening balance
+  `CONFLICT`); all three mutations audited. Revoke takes no reason, only a
+  confirmation: an exception expires by itself, and Zoho Books asks only for
+  confirmation to end a partial unlock. Web: Settings > Opening balance
   (form when none is posted, record with Cancel when one is) and Settings >
   Locks (both locks with Change, exceptions with Grant and Revoke); forms show
   `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
@@ -816,6 +850,27 @@ slice 9.
   the worked examples below.
 - **GSTR-1 Table 13.** Gate: a CA asks.
 - **Account-scoped lock exceptions.** Gate: a CA states the rule.
+- **A filed-return record.** The CA moves the tax lock with `lock.set` when a
+  return is filed; that is how locks follow filed returns. A "mark GSTR-1 or
+  3B filed" action, as in Zoho Books or India Compliance's
+  `restrict_changes_after_gstr_1`, arrives with GST return preparation.
+- **GST treatment on Party** (registered, composition, SEZ, overseas,
+  unregistered, consumer). Today a GSTIN decides B2B. Gate: the first SEZ,
+  export or composition Party, together with the GSTR-1 tables and LUT rules
+  that need it. The backfill is derivable from `gstin`.
+- **Payment mode apart from the money account.** A Payment Method is ERPNext's
+  Mode of Payment with its default account. Gate: the combined picker misses
+  the [speed gate](./client-patterns.md#speed-gate-h4), or a pilot user picks
+  a receipt-only method on a Payment.
+- **An Invoice Write Off action.** A bad debt is a slice 9a Journal: Dr
+  `Bad Debts Written Off`, Cr `receivables` allocated to the Invoice. Gate:
+  the CA writes off Invoices every month after slice 9a.
+- **Identity beyond one registration.** Document currency, a GSTIN per
+  document (several registrations under one PAN) and accounting dimensions
+  are nullable columns added with their own spec, so no backfill waits on
+  them. Gates: multi-currency's spec; a pilot Organization with a second
+  GSTIN; cost centres as in the Journal table.
+- **A time-zone setting.** Gate: the first Organization outside India.
 - **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
 - **Billing without General Accounting.** Gate: a hospital customer keeps
@@ -847,3 +902,20 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
    cutover with open Invoices and an advance for one Party; a TPA settlement
    net of TDS with a disallowance; a dealer receipt net of TDS and a bank
    charge; a school caution deposit; an IPD deposit.
+2. **Payment mode versus money account.** A Payment Method binds one name to
+   one account, and Receipt, Payment and a paid-now Invoice share one active
+   list, so a receipt-only card machine appears on Payment. ERPNext (Mode of
+   Payment plus Paid From/To) and Zoho Books (Payment Mode plus Deposit
+   To/Paid Through) keep the two apart. Candidate: a cash/bank account plus a
+   small mode list, with the likely account preselected. Measure it against
+   the combined picker on the [speed gate](./client-patterns.md#speed-gate-h4)
+   before any schema change.
+
+ERPNext v15 and Zoho Books India reference check, 2026-09-24 (evidence in Git
+history): both use the same document-first sequence and separate sales,
+purchase, money, Journal, opening and settlement flows as the slices above.
+Their reports, cutover import and party Journals match slices 6, 7 and 9, and
+their TDS thresholds, deposit challans, card clearing and bank reconciliation
+match the Deferred gates. The check validates workflow shape only, not pilot
+speed, TDS correctness or a real cutover; the worked examples above remain the
+test.

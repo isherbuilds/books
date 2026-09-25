@@ -20,7 +20,7 @@ function NewInvoiceRoute() {
 
   return (
     <>
-      <PageHeader title="New invoice" description="Create a draft or post this invoice." />
+      <PageHeader title="New invoice" />
       <InvoiceForm
         orgSlug={orgSlug}
         today={today}

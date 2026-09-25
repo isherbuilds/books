@@ -3,11 +3,10 @@ import { LOCK_KINDS, type LockKind } from "@accly/db/schema/period-locks";
 import { Button } from "@accly/ui/components/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { ReasonDialog } from "@/components/confirm-dialog";
+import { useConfirm } from "@/components/confirm-dialog";
 import { LockDialog } from "@/components/lock-dialog";
 import { LockExceptionDialog } from "@/components/lock-exception-dialog";
 import { ListSection, ListState, PageBody, PageHeader } from "@/components/page";
@@ -43,7 +42,7 @@ function LocksRoute() {
   const lockState = useQuery(lockStateOptions(orgSlug));
   const canSet = useCan(orgSlug, { lock: ["set"] });
   const canGrantException = useCan(orgSlug, { lock: ["grantException"] });
-  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
   const locks = lockState.data;
   const exceptions = locks?.exceptions ?? [];
 
@@ -52,15 +51,10 @@ function LocksRoute() {
       onSuccess: async () => {
         await invalidateLockState(queryClient, orgSlug);
         toast.success("Exception revoked");
-        setRevokeId(null);
       },
       onError: (error) =>
         handleWriteError(error, {
-          settle: () => {
-            setRevokeId(null);
-
-            return invalidateLockState(queryClient, orgSlug);
-          },
+          settle: () => invalidateLockState(queryClient, orgSlug),
           fallback: "Could not revoke the exception",
           uncertain: "The result is uncertain. Check the exceptions before revoking it again.",
         }),
@@ -125,21 +119,23 @@ function LocksRoute() {
                           ? formatBusinessDate(lock.lockedThrough)
                           : "Not locked"}
                       </dd>
-                      <dt className="text-muted-foreground">Reason</dt>
-                      <dd className="min-w-0 break-words">{lock?.reason ?? "—"}</dd>
-                      <dt className="text-muted-foreground">Set by</dt>
-                      <dd className="min-w-0 break-words">
-                        {lock ? (
-                          <>
+                      {lock?.reason ? (
+                        <>
+                          <dt className="text-muted-foreground">Reason</dt>
+                          <dd className="min-w-0 break-words">{lock.reason}</dd>
+                        </>
+                      ) : null}
+                      {lock ? (
+                        <>
+                          <dt className="text-muted-foreground">Set by</dt>
+                          <dd className="min-w-0 break-words">
                             <p>{lock.setBy.name}</p>
                             <p className="text-muted-foreground">
                               {formatDateTime(lock.setAt, timeZone)}
                             </p>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </dd>
+                          </dd>
+                        </>
+                      ) : null}
                     </dl>
                   </div>
                 );
@@ -167,7 +163,15 @@ function LocksRoute() {
                           disabled={
                             revoke.isPending && revoke.variables.exceptionId === exception.id
                           }
-                          onClick={() => setRevokeId(exception.id)}
+                          onClick={() =>
+                            confirm({
+                              title: "Revoke exception?",
+                              description:
+                                "This member will no longer be able to post on or before the books lock.",
+                              confirmLabel: "Revoke exception",
+                              run: () => revoke.mutate({ orgSlug, exceptionId: exception.id }),
+                            })
+                          }
                         >
                           Revoke
                         </Button>
@@ -203,20 +207,7 @@ function LocksRoute() {
       ) : grant && canGrantException ? (
         <LockExceptionDialog orgSlug={orgSlug} onClose={closeDialog} />
       ) : null}
-      <ReasonDialog
-        open={revokeId !== null}
-        pending={revoke.isPending}
-        title="Revoke exception?"
-        description="This member will no longer be able to post on or before the books lock."
-        placeholder="Why is this exception being revoked?"
-        keepLabel="Keep exception"
-        confirmLabel="Revoke exception"
-        pendingLabel="Revoking…"
-        onClose={() => setRevokeId(null)}
-        onConfirm={(reason) => {
-          if (revokeId) revoke.mutate({ orgSlug, exceptionId: revokeId, reason });
-        }}
-      />
+      {confirmDialog}
     </>
   );
 }

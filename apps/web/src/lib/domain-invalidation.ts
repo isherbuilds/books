@@ -35,6 +35,7 @@ export async function invalidateSettlementState(
     queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.balances.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.openItems.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
       queryKey: orpc.party.openCredits.key({ input: { orgSlug } }),
@@ -144,7 +145,7 @@ export async function invalidateMembership(
   ]);
 }
 
-// `member.me` carries the time zone every page formats with, and `journal.accounts`
+// `member.me` carries the financial year the period presets use, and `journal.accounts`
 // follows the GSTIN: a registered organization cannot journal taxable income.
 export async function invalidateSettings(
   queryClient: QueryInvalidator,

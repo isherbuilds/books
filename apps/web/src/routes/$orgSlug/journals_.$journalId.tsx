@@ -21,10 +21,13 @@ import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { loadRouteQuery, handleWriteError } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
+import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/journals_/$journalId")({
   remountDeps: ({ params }) => ({ journalId: params.journalId }),
   loader: async ({ context: { queryClient }, params: { orgSlug, journalId } }) => {
+    await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
+
     const journal = await loadRouteQuery(
       queryClient.query(orpc.journal.get.queryOptions({ input: { orgSlug, journalId } })),
     );
@@ -112,7 +115,9 @@ function JournalPage() {
             {journal.reference}
           </DetailRow>
           <DetailRow label="Narration">
-            <span className="whitespace-pre-wrap break-words">{journal.narration}</span>
+            {journal.narration ? (
+              <span className="whitespace-pre-wrap break-words">{journal.narration}</span>
+            ) : null}
           </DetailRow>
           {journal.cancelledAt ? (
             <DetailRow label="Cancelled">{formatDate(journal.cancelledAt, timeZone)}</DetailRow>
@@ -121,7 +126,7 @@ function JournalPage() {
 
         <Separator />
 
-        <PostedLines lines={journal.lines} totalPaise={journal.totalPaise} />
+        <PostedLines lines={journal.lines} />
       </PageBody>
 
       <ReasonDialog

@@ -26,13 +26,13 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import type { UseQueryResult } from "@tanstack/react-query";
+import type { UseInfiniteQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { LineGrid } from "@/components/document-form";
-import { ErrorNote } from "@/components/page";
+import { ErrorNote, LoadMore } from "@/components/page";
 
 /** An open claim or credit a settlement can allocate to, with what is still open on it. */
 export type OpenDocument = {
@@ -208,7 +208,8 @@ function AllocationTotals({
 }
 
 /**
- * The oldest open documents of a party with an amount field each, then the totals.
+ * A party's open documents, oldest first with Load more, each with an amount field,
+ * then the totals. Amounts are keyed by document, so they survive loading more pages.
  * Fill enters what is left of the settlement, capped at what is open on the row.
  */
 export function AllocationTable({
@@ -223,8 +224,16 @@ export function AllocationTable({
   title: string;
   openHeading: string;
   query: Pick<
-    UseQueryResult<{ hasMore: boolean }>,
-    "isPending" | "isError" | "isSuccess" | "isFetching" | "error" | "data"
+    UseInfiniteQueryResult,
+    | "isPending"
+    | "isError"
+    | "isSuccess"
+    | "isFetching"
+    | "error"
+    | "isFetchNextPageError"
+    | "hasNextPage"
+    | "isFetchingNextPage"
+    | "fetchNextPage"
   >;
   rows: readonly OpenDocument[];
   adjustmentsName: AdjustmentsName | null;
@@ -267,7 +276,7 @@ export function AllocationTable({
             <LineGrid title={title}>
               {query.isPending ? (
                 <p className="text-muted-foreground">Loading open documents…</p>
-              ) : query.isError ? (
+              ) : query.isError && !query.isFetchNextPageError ? (
                 <ErrorNote title="Could not load open documents" error={query.error} />
               ) : rows.length === 0 ? (
                 <p className="text-muted-foreground">No open documents.</p>
@@ -334,11 +343,7 @@ export function AllocationTable({
                 </Table>
               )}
               {query.isSuccess && !query.isFetching ? <UnavailableAllocations rows={rows} /> : null}
-              {query.data?.hasMore ? (
-                <p className="text-muted-foreground">
-                  Showing the oldest 200 documents. Settle later ones from their record.
-                </p>
-              ) : null}
+              <LoadMore query={query} shown={rows.length} />
             </LineGrid>
             <FormMessage />
           </FormItem>

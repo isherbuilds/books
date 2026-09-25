@@ -5,7 +5,10 @@ import { defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organi
 //
 // The roles and their grants are the accounting core's (docs/specs/accounting-core.md,
 // call 10): owner, accountant, ca and operator.
-const DOCUMENT_ACTIONS = ["read", "create", "post", "cancel"] as const;
+// Only Invoices and Bills have drafts, so only they have `create`.
+const DRAFTABLE_ACTIONS = ["read", "create", "post", "cancel"] as const;
+
+const DOCUMENT_ACTIONS = ["read", "post", "cancel"] as const;
 
 export const ac = createAccessControl({
   ...defaultStatements,
@@ -14,8 +17,8 @@ export const ac = createAccessControl({
   member: ["create", "read", "update", "delete"],
   receipt: DOCUMENT_ACTIONS,
   payment: DOCUMENT_ACTIONS,
-  invoice: DOCUMENT_ACTIONS,
-  bill: DOCUMENT_ACTIONS,
+  invoice: DRAFTABLE_ACTIONS,
+  bill: DRAFTABLE_ACTIONS,
   note: DOCUMENT_ACTIONS,
   journal: DOCUMENT_ACTIONS,
   openingBalance: DOCUMENT_ACTIONS,
@@ -37,8 +40,8 @@ export const ac = createAccessControl({
 export const operator = ac.newRole({
   ...memberAc.statements,
   member: ["read"],
-  receipt: ["read", "create", "post"],
-  payment: ["read", "create", "post"],
+  receipt: ["read", "post"],
+  payment: ["read", "post"],
   invoice: ["read", "create", "post"],
   party: ["read"],
   account: ["read"],
@@ -51,13 +54,13 @@ export const operator = ac.newRole({
 export const accountant = ac.newRole({
   ...memberAc.statements,
   member: ["read"],
-  receipt: ["read", "create", "post", "cancel"],
-  payment: ["read", "create", "post", "cancel"],
+  receipt: ["read", "post", "cancel"],
+  payment: ["read", "post", "cancel"],
   invoice: ["read", "create", "post", "cancel"],
   bill: ["read", "create", "post", "cancel"],
-  note: ["read", "create", "post", "cancel"],
-  journal: ["read", "create", "post", "cancel"],
-  openingBalance: ["read", "create", "post", "cancel"],
+  note: ["read", "post", "cancel"],
+  journal: ["read", "post", "cancel"],
+  openingBalance: ["read", "post", "cancel"],
   allocation: ["apply", "reverse"],
   party: ["create", "read", "update"],
   account: ["create", "read", "update"],
@@ -99,13 +102,13 @@ export const ca = ac.newRole({
 export const owner = ac.newRole({
   ...ownerAc.statements,
   member: ["create", "read", "update", "delete"],
-  receipt: ["read", "create", "post", "cancel"],
-  payment: ["read", "create", "post", "cancel"],
+  receipt: ["read", "post", "cancel"],
+  payment: ["read", "post", "cancel"],
   invoice: ["read", "create", "post", "cancel"],
   bill: ["read", "create", "post", "cancel"],
-  note: ["read", "create", "post", "cancel"],
-  journal: ["read", "create", "post", "cancel"],
-  openingBalance: ["read", "create", "post", "cancel"],
+  note: ["read", "post", "cancel"],
+  journal: ["read", "post", "cancel"],
+  openingBalance: ["read", "post", "cancel"],
   allocation: ["apply", "reverse"],
   party: ["create", "read", "update"],
   account: ["create", "read", "update"],

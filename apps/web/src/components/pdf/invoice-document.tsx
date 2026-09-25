@@ -1,4 +1,4 @@
-import { ZERO_MONEY, formatMoney, isZeroMoney } from "@accly/api/core/money";
+import { formatMoney, isZeroMoney } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { PrintSnapshot } from "@accly/db/schema/documents";
@@ -24,27 +24,15 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
 
   if (!party) throw new Error("An invoice document requires a buyer in its print snapshot");
 
-  let hasDiscount = false;
-  let hasSplitTax = false;
-  let hasIgst = false;
-  let taxable = ZERO_MONEY;
-  let cgst = ZERO_MONEY;
-  let sgst = ZERO_MONEY;
-  let igst = ZERO_MONEY;
-
-  for (const line of data.lines) {
-    hasDiscount ||= !isZeroMoney(line.discountPaise);
-    hasSplitTax ||= !isZeroMoney(line.cgstPaise) || !isZeroMoney(line.sgstPaise);
-    hasIgst ||= !isZeroMoney(line.igstPaise);
-    taxable += line.amountPaise;
-    cgst += line.cgstPaise;
-    sgst += line.sgstPaise;
-    igst += line.igstPaise;
-  }
+  // The server sums the document; a column shows only when some line carries it.
+  const { taxablePaise, cgstPaise, sgstPaise, igstPaise } = data.totals;
+  const hasDiscount = data.lines.some((line) => !isZeroMoney(line.discountPaise));
+  const hasSplitTax = !isZeroMoney(cgstPaise) || !isZeroMoney(sgstPaise);
+  const hasIgst = !isZeroMoney(igstPaise);
 
   const placeOfSupply = data.placeOfSupplyStateCode
     ? `${INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode} (${data.placeOfSupplyStateCode})`
-    : "—";
+    : null;
 
   return (
     <PrintedDocument
@@ -53,29 +41,20 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       number={data.number}
       cancelled={data.state === "cancelled"}
     >
-      <section style={{ display: "flex", gap: 20, marginBottom: 18 }}>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>Seller</SectionHeading>
-          <div style={{ fontWeight: 700 }}>{organization.legalName}</div>
-          <div>{organization.address}</div>
-          {organization.gstin ? <div>GSTIN {organization.gstin}</div> : null}
-          <div>PAN {organization.pan}</div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>Buyer</SectionHeading>
-          <div style={{ fontWeight: 700 }}>{party.name}</div>
-          <div>{party.address}</div>
-          {party.gstin ? <div>GSTIN {party.gstin}</div> : null}
-          {party.pan ? <div>PAN {party.pan}</div> : null}
-        </div>
+      <section style={{ marginBottom: 18 }}>
+        <SectionHeading>Buyer</SectionHeading>
+        <div style={{ fontWeight: 700 }}>{party.name}</div>
+        <div>{party.address}</div>
+        {party.gstin ? <div>GSTIN {party.gstin}</div> : null}
+        {party.pan ? <div>PAN {party.pan}</div> : null}
       </section>
 
       <section style={{ marginBottom: 18 }}>
         <DetailRow label="Date">{formatBusinessDate(data.documentDate)}</DetailRow>
-        <DetailRow label="Due date">
-          {data.dueDate ? formatBusinessDate(data.dueDate) : "—"}
-        </DetailRow>
-        <DetailRow label="Place of supply">{placeOfSupply}</DetailRow>
+        {data.dueDate ? (
+          <DetailRow label="Due date">{formatBusinessDate(data.dueDate)}</DetailRow>
+        ) : null}
+        {placeOfSupply ? <DetailRow label="Place of supply">{placeOfSupply}</DetailRow> : null}
       </section>
 
       <section>
@@ -143,16 +122,39 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       <TotalPanel label="Total" amountPaise={data.totalPaise}>
         {isZeroMoney(data.discountPaise) ? null : (
           <>
-            <TotalRow label="Subtotal" amountPaise={taxable + data.discountPaise} />
+            <TotalRow label="Subtotal" amountPaise={taxablePaise + data.discountPaise} />
             <TotalRow label="Discount" amountPaise={-data.discountPaise} />
           </>
         )}
-        <TotalRow label="Taxable" amountPaise={taxable} />
-        {hasSplitTax ? <TotalRow label="CGST" amountPaise={cgst} /> : null}
-        {hasSplitTax ? <TotalRow label="SGST" amountPaise={sgst} /> : null}
-        {hasIgst ? <TotalRow label="IGST" amountPaise={igst} /> : null}
+        <TotalRow label="Taxable" amountPaise={taxablePaise} />
+        {hasSplitTax ? <TotalRow label="CGST" amountPaise={cgstPaise} /> : null}
+        {hasSplitTax ? <TotalRow label="SGST" amountPaise={sgstPaise} /> : null}
+        {hasIgst ? <TotalRow label="IGST" amountPaise={igstPaise} /> : null}
         <TotalRow label="Round-off" amountPaise={data.roundOffPaise} />
       </TotalPanel>
+
+      {/* CGST Rules, rule 46(q): the supplier or an authorised representative signs. */}
+      <section
+        style={{
+          breakInside: "avoid",
+          marginLeft: "auto",
+          marginTop: 24,
+          textAlign: "right",
+          width: 300,
+        }}
+      >
+        <div>For {organization.legalName}</div>
+        <div
+          style={{
+            borderTop: `1px solid ${colors.border}`,
+            color: colors.muted,
+            marginTop: 40,
+            paddingTop: 4,
+          }}
+        >
+          Authorised signatory
+        </div>
+      </section>
     </PrintedDocument>
   );
 }

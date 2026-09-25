@@ -7,6 +7,24 @@ export type AccountListRow = Awaited<ReturnType<AppRouterClient["account"]["list
 /** A chart row with the facts the chart page derives from its neighbours. */
 export type AccountRow = AccountListRow & { isGroup: boolean; parentName: string | null };
 
+/** The chart with each row's group flag and parent name, for the chart page and its Sheet. */
+export function deriveAccountRows(accounts: AccountListRow[]): AccountRow[] {
+  const byId = new Map<string, AccountListRow>();
+  const groupIds = new Set<string>();
+
+  for (const account of accounts) {
+    byId.set(account.id, account);
+
+    if (account.parentId) groupIds.add(account.parentId);
+  }
+
+  return accounts.map((account) => ({
+    ...account,
+    isGroup: groupIds.has(account.id),
+    parentName: account.parentId ? (byId.get(account.parentId)?.name ?? null) : null,
+  }));
+}
+
 /** The plain chart query, primed by the accounts route loader. */
 export function accountListOptions(orgSlug: string) {
   return {

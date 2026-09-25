@@ -192,7 +192,7 @@ export const lockRouter = {
 
   revokeException: orgProcedure(
     { lock: ["grantException"] },
-    orgInput.extend({ exceptionId: z.uuid(), reason }),
+    orgInput.extend({ exceptionId: z.uuid() }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
@@ -204,7 +204,6 @@ export const lockRouter = {
         .set({
           revokedAt: sql`statement_timestamp()`,
           revokedBy: scope.userId,
-          revokeReason: input.reason,
         })
         .where(
           and(
@@ -228,7 +227,7 @@ export const lockRouter = {
       actorId: scope.userId,
       orgId: scope.orgId,
       target: `lockException:${input.exceptionId}`,
-      meta: { exceptionId: input.exceptionId, reason: input.reason },
+      meta: { exceptionId: input.exceptionId },
     });
 
     return row;

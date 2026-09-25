@@ -1,11 +1,11 @@
 import {
+  deriveOrganizationIdentity,
   documentPrefix,
-  pan,
+  gstinParts,
   optionalGstin,
-  indianStateCode,
+  optionalPan,
+  optionalStateCode,
   indianPinCode,
-  validateGstinIdentity,
-  timeZone,
 } from "@accly/api/lib/schemas";
 import type { SettingsFields } from "@accly/api/routers/settings";
 import {
@@ -23,10 +23,10 @@ import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useFormState } from "react-hook-form";
+import { useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
+import { MONTH_OPTIONS, OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettings } from "@/lib/domain-invalidation";
@@ -56,11 +56,6 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   component: SettingsRoute,
 });
 
-const TIME_ZONE_OPTIONS: Option[] = Intl.supportedValuesOf("timeZone").map((code) => ({
-  code,
-  name: code,
-}));
-
 const formSchema = z
   .object({
     legalName: z
@@ -68,9 +63,9 @@ const formSchema = z
       .trim()
       .min(1, "Enter the legal name")
       .max(200, "Keep the legal name under 200 characters"),
-    pan,
+    pan: optionalPan,
     gstin: optionalGstin.unwrap(),
-    stateCode: indianStateCode,
+    stateCode: optionalStateCode,
     addressLine1: z
       .string()
       .trim()
@@ -88,7 +83,6 @@ const formSchema = z
       .refine((raw) => raw.trim() !== "", "Enter a number")
       .transform(Number)
       .pipe(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
-    timeZone,
     invoicePrefix: documentPrefix,
     billPrefix: documentPrefix,
     receiptPrefix: documentPrefix,
@@ -97,7 +91,7 @@ const formSchema = z
     debitNotePrefix: documentPrefix,
     journalPrefix: documentPrefix,
   })
-  .superRefine(validateGstinIdentity);
+  .transform(deriveOrganizationIdentity);
 
 function toFormValues(settings: SettingsFields) {
   return {
@@ -108,21 +102,6 @@ function toFormValues(settings: SettingsFields) {
   };
 }
 
-const MONTH_OPTIONS: Option[] = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-].map((name, index) => ({ code: String(index + 1), name }));
-
 function SettingsRoute() {
   const { orgSlug } = Route.useParams();
   const settings = useQuery(orpc.settings.get.queryOptions({ input: { orgSlug } }));
@@ -131,7 +110,7 @@ function SettingsRoute() {
     <>
       <PageHeader
         title="Organization"
-        description="Legal identity, time zone, and document numbering for this organization"
+        description="Legal identity and document numbering for this organization"
       />
       <SettingsTabs orgSlug={orgSlug} />
       <PageBody className="max-w-2xl">
@@ -152,12 +131,8 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
   const router = useRouter();
   const form = useZodForm(formSchema, { defaultValues: toFormValues(defaults) });
   const { isDirty } = useFormState({ control: form.control });
-
-  // Keep a stored zone selectable even when this browser's canonical list omits it.
-  const timeZoneOptions =
-    defaults.timeZone && !TIME_ZONE_OPTIONS.some((option) => option.code === defaults.timeZone)
-      ? [{ code: defaults.timeZone, name: defaults.timeZone }, ...TIME_ZONE_OPTIONS]
-      : TIME_ZONE_OPTIONS;
+  // The server derives State and PAN from a GSTIN, so they show only without one.
+  const gstin = useWatch({ control: form.control, name: "gstin" });
 
   const update = useMutation(
     orpc.settings.update.mutationOptions({
@@ -165,7 +140,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
         form.reset(toFormValues(saved));
         toast.success("Settings saved");
         // Awaited: the org layout loader holds `member.me`, so open pages would keep
-        // the old time zone until staleTime lapses.
+        // the old financial year until staleTime lapses.
         await invalidateSettings(queryClient, orgSlug);
         await router.invalidate();
       },
@@ -209,27 +184,6 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <RegisteredFormField
-                name="pan"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PAN</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        required
-                        className="font-mono uppercase"
-                        maxLength={10}
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        placeholder="ABCDE1234F"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <RegisteredFormField
                 name="gstin"
                 render={({ field }) => (
                   <FormItem>
@@ -243,12 +197,45 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                         autoCapitalize="characters"
                         spellCheck={false}
                         placeholder="27ABCDE1234F1Z5"
+                        onChange={(event) => {
+                          void field.onChange(event);
+                          const parts = gstinParts(event.currentTarget.value);
+
+                          if (!parts) return;
+
+                          form.setValue("stateCode", parts.stateCode, { shouldDirty: true });
+                          form.setValue("pan", parts.pan, { shouldDirty: true });
+                        }}
                       />
                     </FormControl>
+                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {gstin.trim() === "" ? (
+                <RegisteredFormField
+                  name="pan"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>PAN</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          required
+                          className="font-mono uppercase"
+                          maxLength={10}
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          placeholder="ABCDE1234F"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
             </div>
             <RegisteredFormField
               name="addressLine1"
@@ -287,29 +274,31 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="stateCode"
-                render={({ field, fieldState }) => (
-                  <FormItem>
-                    <FormLabel>State code</FormLabel>
-                    <FormControl>
-                      <OptionField
-                        required
-                        options={STATE_OPTIONS}
-                        noun="states"
-                        showCode
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Choose a state"
-                        inputRef={field.ref}
-                        aria-invalid={fieldState.invalid}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {gstin.trim() === "" ? (
+                <FormField
+                  control={form.control}
+                  name="stateCode"
+                  render={({ field, fieldState }) => (
+                    <FormItem>
+                      <FormLabel>State code</FormLabel>
+                      <FormControl>
+                        <OptionField
+                          required
+                          options={STATE_OPTIONS}
+                          noun="states"
+                          showCode
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          placeholder="Choose a state"
+                          inputRef={field.ref}
+                          aria-invalid={fieldState.invalid}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
               <RegisteredFormField
                 name="pinCode"
                 render={({ field }) => (
@@ -332,31 +321,6 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="timeZone"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormLabel>Time zone</FormLabel>
-                  <FormControl>
-                    <OptionField
-                      options={timeZoneOptions}
-                      noun="time zones"
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Choose a time zone"
-                      inputRef={field.ref}
-                      aria-invalid={fieldState.invalid}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Sets the local date used for numbering and reports. Changing it applies to new
-                    records; existing ones keep their date.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </section>
 
           <section className="flex flex-col gap-3">

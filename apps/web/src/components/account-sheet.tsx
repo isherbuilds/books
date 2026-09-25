@@ -85,7 +85,7 @@ function RenameAccountForm({
     orpc.account.setActive.mutationOptions({
       onSuccess: async () => {
         await invalidateAccountState(queryClient, orgSlug);
-        toast.success(account.active ? "Account archived" : "Account restored");
+        toast.success(account.active ? "Account marked inactive" : "Account marked active");
         onClose();
       },
       onError: (error) => toast.error(errorMessage(error, "Could not update the account")),
@@ -127,7 +127,7 @@ function RenameAccountForm({
                   setActive.mutate({ orgSlug, accountId: account.id, active: !account.active })
                 }
               >
-                {account.active ? "Archive" : "Restore"}
+                {account.active ? "Mark inactive" : "Mark active"}
               </Button>
             ) : null}
             <Button type="button" variant="outline" onClick={onClose}>
@@ -144,17 +144,35 @@ function RenameAccountForm({
 function CreateAccountForm({
   orgSlug,
   accounts,
+  defaultParent,
+  parentIds,
+  onCreated,
   onClose,
 }: {
   orgSlug: string;
   accounts: AccountRow[];
+  defaultParent: string;
+  parentIds: string[] | undefined;
+  onCreated: (account: { id: string }) => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const groups = accounts.filter((account) => account.active && account.isGroup);
+
+  const groups = accounts.filter(
+    (account) =>
+      account.active &&
+      account.isGroup &&
+      (parentIds === undefined || parentIds.includes(account.id)),
+  );
+
+  // A restricted list offers only the named groups, so no type is offered at top level.
+  const types =
+    parentIds === undefined
+      ? ACCOUNT_TYPES
+      : ACCOUNT_TYPES.filter((type) => groups.some((account) => account.type === type));
 
   const form = useZodForm(createSchema, {
-    defaultValues: { parent: "", name: "" },
+    defaultValues: { parent: defaultParent, name: "" },
   });
 
   const parent = useWatch({ control: form.control, name: "parent" });
@@ -164,10 +182,10 @@ function CreateAccountForm({
 
   const create = useMutation(
     orpc.account.create.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (created) => {
         await invalidateAccountState(queryClient, orgSlug);
         toast.success("Account added");
-        onClose();
+        onCreated(created);
       },
       onError: (error) =>
         applyOrpcFieldError(
@@ -209,9 +227,9 @@ function CreateAccountForm({
                       <option value="" disabled>
                         Choose a parent ledger
                       </option>
-                      {ACCOUNT_TYPES.map((type) => (
+                      {types.map((type) => (
                         <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-                          <option value={type}>Top level</option>
+                          {parentIds === undefined ? <option value={type}>Top level</option> : null}
                           {groups
                             .filter((account) => account.type === type)
                             .map((account) => (
@@ -288,11 +306,20 @@ export function AccountSheet({
   orgSlug,
   account,
   accounts,
+  defaultParent = "",
+  parentIds,
+  onCreated,
   onClose,
 }: {
   orgSlug: string;
   account?: AccountRow;
   accounts: AccountRow[];
+  /** The parent a new account starts under: an account type or a group id. */
+  defaultParent?: string;
+  /** Limits a new account's parent to these groups, with no top-level choice. */
+  parentIds?: string[];
+  /** Runs after a create instead of `onClose`, for a caller that continues setup. */
+  onCreated?: (account: { id: string }) => void;
   onClose: () => void;
 }) {
   const saving = useIsMutating({ mutationKey: orpc.account.key({ type: "mutation" }) }) > 0;
@@ -312,7 +339,14 @@ export function AccountSheet({
       {account ? (
         <RenameAccountForm orgSlug={orgSlug} account={account} onClose={onClose} />
       ) : (
-        <CreateAccountForm orgSlug={orgSlug} accounts={accounts} onClose={onClose} />
+        <CreateAccountForm
+          orgSlug={orgSlug}
+          accounts={accounts}
+          defaultParent={defaultParent}
+          parentIds={parentIds}
+          onCreated={onCreated ?? onClose}
+          onClose={onClose}
+        />
       )}
     </FormSheet>
   );

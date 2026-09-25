@@ -86,6 +86,7 @@ function OrgIdentity({ name }: { name: string }) {
 
 function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
   const organizations = useMembership(activeOrgSlug, (membership) => membership.organizations);
+  const founder = useMembership(activeOrgSlug, (membership) => membership.founder);
   const path = useSectionPath();
   const section = sectionIn(path) ?? "/$orgSlug";
 
@@ -136,7 +137,11 @@ function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem render={<Link to="/join" />}>Join organization</DropdownMenuItem>
-            <DropdownMenuItem render={<Link to="/create" />}>Create organization</DropdownMenuItem>
+            {founder ? (
+              <DropdownMenuItem render={<Link to="/create" />}>
+                Create organization
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -6,7 +6,7 @@ import type { RouterClient } from "@orpc/server";
 import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
-import { CancelledBadge, struck } from "@/components/document-columns";
+import { CancelledBadge, SETTLEMENT_KIND_LABELS, struck } from "@/components/document-columns";
 
 type PaymentRow = Awaited<ReturnType<RouterClient<AppRouter>["payment"]["list"]>>["rows"][number];
 
@@ -15,9 +15,7 @@ const col = createColumnHelper<typeof DATA_TABLE_FEATURES, PaymentRow>();
 function paymentKind(payment: PaymentRow): string {
   if (payment.exposureSide === "receivable") return "Refund";
 
-  if (payment.settlementKind === "against") return "Against bills";
-
-  return payment.settlementKind === "advance" ? "Advance" : "Direct";
+  return SETTLEMENT_KIND_LABELS[payment.settlementKind ?? "direct"];
 }
 
 export const PAYMENT_COLUMNS = [

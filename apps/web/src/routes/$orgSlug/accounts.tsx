@@ -19,7 +19,7 @@ import {
   OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
-import { accountListOptions, type AccountListRow, type AccountRow } from "@/lib/accounts";
+import { accountListOptions, deriveAccountRows } from "@/lib/accounts";
 import { filterLinkItems } from "@/lib/link-rows";
 import { useCan } from "@/lib/membership";
 import { focusRowLink } from "@/lib/row-focus";
@@ -53,7 +53,7 @@ function AccountsRoute() {
   const newTrigger = useRef<HTMLButtonElement>(null);
   const canCreate = useCan(orgSlug, { account: ["create"] });
   const canUpdate = useCan(orgSlug, { account: ["update"] });
-  const accounts = useQuery({ ...accountListOptions(orgSlug), select: deriveRows });
+  const accounts = useQuery({ ...accountListOptions(orgSlug), select: deriveAccountRows });
   const allAccounts = accounts.data ?? [];
   const typed = type ? allAccounts.filter((account) => account.type === type) : allAccounts;
 
@@ -100,30 +100,18 @@ function AccountsRoute() {
       ]
     : [];
 
-  const empty =
-    q !== undefined || type !== undefined ? (
-      <TableEmpty
-        title="No accounts match"
-        description="Try another search or clear the filters."
-        action={
-          <Button size="xs" variant="outline" onClick={clearFilters}>
-            Clear filters
-          </Button>
-        }
-      />
-    ) : (
-      <TableEmpty
-        title="No accounts yet"
-        description="Accounts in your chart appear here."
-        action={
-          canCreate ? (
-            <Button size="xs" variant="outline" onClick={openCreate}>
-              New account
-            </Button>
-          ) : undefined
-        }
-      />
-    );
+  // Every organization starts with a chart, so only a filter can empty the list.
+  const empty = (
+    <TableEmpty
+      title="No accounts match"
+      description="Try another search or clear the filters."
+      action={
+        <Button size="xs" variant="outline" onClick={clearFilters}>
+          Clear filters
+        </Button>
+      }
+    />
+  );
 
   return (
     <>
@@ -199,21 +187,4 @@ function AccountsRoute() {
       ) : null}
     </>
   );
-}
-
-function deriveRows(accounts: AccountListRow[]): AccountRow[] {
-  const byId = new Map<string, AccountListRow>();
-  const groupIds = new Set<string>();
-
-  for (const account of accounts) {
-    byId.set(account.id, account);
-
-    if (account.parentId) groupIds.add(account.parentId);
-  }
-
-  return accounts.map((account) => ({
-    ...account,
-    isGroup: groupIds.has(account.id),
-    parentName: account.parentId ? (byId.get(account.parentId)?.name ?? null) : null,
-  }));
 }

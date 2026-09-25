@@ -1,3 +1,4 @@
+import { formatMoney } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { Button } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
@@ -87,11 +88,12 @@ function OpeningBalanceRoute() {
             <dl className="grid max-w-2xl gap-3">
               <DetailRow label="As at">{formatBusinessDate(document.documentDate)}</DetailRow>
               <DetailRow label="Posted on">{formatDate(document.postedAt, timeZone)}</DetailRow>
+              <DetailRow label="Total">{formatMoney(document.totalPaise)}</DetailRow>
             </dl>
 
             <Separator />
 
-            <PostedLines lines={document.lines} totalPaise={document.totalPaise} />
+            <PostedLines lines={document.lines} />
           </div>
         </PageBody>
       ) : openingBalance.isPending ? (

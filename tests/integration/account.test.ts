@@ -177,8 +177,22 @@ test("an income account cannot be archived while an active item uses it", async 
     "ACCOUNT_IN_USE",
   );
 
-  await accountantApi.item.setActive({ orgSlug, itemId: item.id, active: false });
+  const inactive = await accountantApi.item.setActive({
+    orgSlug,
+    itemId: item.id,
+    updatedAt: item.updatedAt.toISOString(),
+    active: false,
+  });
+
   await accountantApi.account.setActive({ orgSlug, accountId: income.id, active: false });
+
+  // Restoring an Item does not check its account.
+  await accountantApi.item.setActive({
+    orgSlug,
+    itemId: item.id,
+    updatedAt: inactive.updatedAt.toISOString(),
+    active: true,
+  });
 });
 
 test("the chart protects system accounts, posting leaves and money leaves in use", async () => {
