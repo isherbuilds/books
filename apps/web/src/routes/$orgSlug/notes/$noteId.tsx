@@ -55,10 +55,8 @@ function NoteSheetRoute() {
   const note = useSuspenseQuery(noteDetailOptions(orgSlug, noteId)).data;
   const [cancelOpen, setCancelOpen] = useState(false);
 
-  const canCancel =
-    useCan(orgSlug, { note: ["cancel"] }) &&
-    note.state === "posted" &&
-    note.allocations.every((allocation) => allocation.reversed);
+  // Cancelling a note reverses the allocations it sources, so none has to be reversed first.
+  const canCancel = useCan(orgSlug, { note: ["cancel"] }) && note.state === "posted";
 
   const canRefund =
     useCan(orgSlug, { payment: ["post"] }) &&

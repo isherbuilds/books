@@ -295,6 +295,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                     <FormLabel>State code</FormLabel>
                     <FormControl>
                       <OptionField
+                        required
                         options={STATE_OPTIONS}
                         noun="states"
                         showCode

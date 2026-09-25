@@ -159,6 +159,14 @@ export function PaymentForm({
   const date = useWatch({ control: form.control, name: "documentDate" });
   const tdsSectionId = useWatch({ control: form.control, name: "tdsSectionId" });
   const writeOffFields = useFieldArray({ control: form.control, name: "writeOffs" });
+
+  // Write-offs and the fee belong to settling bills; leaving that mode drops them.
+  const clearPayableExtras = () => {
+    writeOffFields.remove();
+    form.setValue("feeAccountId", null);
+    form.setValue("feeAmount", "");
+  };
+
   const canSettle = useCan(orgSlug, { bill: ["read"], note: ["read"] });
   const parties = useQuery(partyPickerOptions(orgSlug));
 
@@ -455,7 +463,7 @@ export function PaymentForm({
                   value={[field.value]}
                   onValueChange={(next) => {
                     if (next[0] === "direct" || next[0] === "advance" || next[0] === "against") {
-                      if (next[0] !== "against") writeOffFields.remove();
+                      if (next[0] !== "against") clearPayableExtras();
                       field.onChange(next[0]);
                     }
                   }}
@@ -487,7 +495,7 @@ export function PaymentForm({
                     value={[field.value]}
                     onValueChange={(next) => {
                       if (next[0] === "payable" || next[0] === "receivable") {
-                        if (next[0] === "receivable") writeOffFields.remove();
+                        if (next[0] === "receivable") clearPayableExtras();
                         field.onChange(next[0]);
                         form.setValue("allocations", {});
                       }

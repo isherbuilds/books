@@ -25,6 +25,7 @@ import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { billListOptions } from "@/lib/bills";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
+import { requireOrgPermission } from "@/lib/route-permission";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyListOptions } from "@/lib/parties";
@@ -51,6 +52,7 @@ export const Route = createFileRoute("/$orgSlug/bills")({
   validateSearch: billSearch,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
+    await requireOrgPermission(queryClient, orgSlug, { bill: ["read"] });
     await queryClient.infiniteQuery(billListOptions(orgSlug, deps)).catch(() => {});
   },
   component: BillsRoute,

@@ -43,7 +43,7 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
   }
 
   const placeOfSupply = data.placeOfSupplyStateCode
-    ? (INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode)
+    ? `${INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode} (${data.placeOfSupplyStateCode})`
     : "—";
 
   return (

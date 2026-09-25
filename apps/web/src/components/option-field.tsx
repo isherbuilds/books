@@ -25,6 +25,7 @@ export function OptionField({
   id,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
+  required,
 }: {
   options: Option[];
   noun: string;
@@ -37,6 +38,7 @@ export function OptionField({
   id?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
+  required?: boolean;
 }) {
   return (
     <LinkField
@@ -53,6 +55,7 @@ export function OptionField({
       id={id}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
+      aria-required={required}
     />
   );
 }

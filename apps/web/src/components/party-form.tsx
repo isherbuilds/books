@@ -389,6 +389,7 @@ function PartyForm({
                       <FormLabel>State</FormLabel>
                       <FormControl>
                         <OptionField
+                          required
                           options={STATE_OPTIONS}
                           noun="states"
                           showCode

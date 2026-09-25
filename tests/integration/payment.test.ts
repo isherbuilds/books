@@ -385,6 +385,12 @@ test("against payment settles a bill with write-off and fee, and reversal reopen
     api.payment.post({ ...paymentInput, tdsSectionId: section1024.id } as PaymentPostInput),
     "BAD_REQUEST",
   );
+
+  // An operator posts payments but cannot read bills, so it cannot settle one.
+  const operator = await createTestUser("payable-operator");
+  await joinOrganization(operator, organization.id, "operator");
+  await expectORPCCode(clientFor(operator).payment.post(paymentInput), "FORBIDDEN");
+
   const payment = await api.payment.post(paymentInput);
 
   const detail = await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id });

@@ -213,7 +213,8 @@ function PaymentSheetRoute() {
             ) : null}
           </SheetBody>
           <SheetFooter>
-            {payment.unappliedPaise !== null &&
+            {!cancelled &&
+            payment.unappliedPaise !== null &&
             isPositiveMoney(payment.unappliedPaise) &&
             canReadBills ? (
               <Link

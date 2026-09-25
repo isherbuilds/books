@@ -26,7 +26,7 @@ per entity.
   drafts, Bills, Payments, Credit and Debit Notes, Receipts with allocations,
   Journals, the Opening Balance, period locks with exceptions, the chart of
   accounts, money accounts and payment methods, day book, TDS register and
-  GST registers XLSX (API only).
+  GST registers XLSX.
 - **Next**: the open [accounting-core slices](./specs/accounting-core.md#slices)
   (6, 7 and 9). Runtime and CA acceptance status is in the
   [work registry](./README.md#work-lifecycle).

@@ -89,6 +89,11 @@ function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
   const path = useSectionPath();
   const section = sectionIn(path) ?? "/$orgSlug";
 
+  // Credit and Debit notes share a register; the type filter keeps the switch on the same one.
+  const noteType = useLocation({
+    select: ({ search }) => ("type" in search ? search.type : undefined),
+  });
+
   const name =
     organizations.find((org) => org.slug === activeOrgSlug)?.name ?? "Unknown organization";
 
@@ -111,7 +116,15 @@ function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
             {organizations.map((org) => (
               <DropdownMenuItem
                 key={org.id}
-                render={<Link to={section} params={{ orgSlug: org.slug }} />}
+                render={
+                  <Link
+                    to={section}
+                    params={{ orgSlug: org.slug }}
+                    search={
+                      section === "/$orgSlug/notes" && noteType ? { type: noteType } : undefined
+                    }
+                  />
+                }
                 aria-current={org.slug === activeOrgSlug ? "page" : undefined}
                 className={org.slug === activeOrgSlug ? "font-medium" : undefined}
               >

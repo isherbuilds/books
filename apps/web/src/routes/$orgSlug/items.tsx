@@ -191,7 +191,7 @@ function ItemsRoute() {
               ? (item) => ({
                   to: "/$orgSlug/items",
                   params: { orgSlug },
-                  search: { edit: item.id },
+                  search: { q, edit: item.id },
                 })
               : undefined
           }

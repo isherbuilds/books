@@ -221,8 +221,9 @@ bundled fonts and aligned numerals.
 - Single-choice pickers use `LinkField`; a fixed list (states, legal types,
   months, time zones) goes through `OptionField`. `NativeSelect` stays only
   where `<optgroup>` grouping carries meaning (chart parent, payment-method
-  account) and for the Reports period preset, which shows a non-selectable
-  Custom state.
+  account), for the Reports period preset, which shows a non-selectable
+  Custom state, and for the Receipt's "Advance for" supply, which opens on a
+  disabled "Choose supply" prompt.
 - A Sheet moves only by its 150 ms opacity and slide transition; list and
   keyboard actions stay static.
 - Transient notifications sit at the top center with an explicit close button,

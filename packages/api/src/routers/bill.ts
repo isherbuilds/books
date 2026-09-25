@@ -119,8 +119,8 @@ async function resolveBill(
     throw badRequest("TAX_CODE_INVALID", "Choose a GST rate effective on the bill date.");
   }
 
-  const [section] = input.tdsSectionId
-    ? await executor
+  const sectionQuery = input.tdsSectionId
+    ? executor
         .select({ id: tdsSections.id, rateBasisPoints: tdsSections.rateBasisPoints })
         .from(tdsSections)
         .where(
@@ -131,6 +131,11 @@ async function resolveBill(
           ),
         )
         .limit(1)
+    : null;
+
+  // Posting holds the section's dates and rate stable until `tds_deductions` commits.
+  const [section] = sectionQuery
+    ? await (executor === db ? sectionQuery : sectionQuery.for("share"))
     : [];
 
   if (input.tdsSectionId && !section) {

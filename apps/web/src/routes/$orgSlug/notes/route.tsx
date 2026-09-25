@@ -22,6 +22,7 @@ import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { rangeLabel, type SearchRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
+import { requireOrgPermission } from "@/lib/route-permission";
 import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/$orgSlug/notes")({
   validateSearch: noteSearch,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
+    await requireOrgPermission(queryClient, orgSlug, { note: ["read"] });
     await queryClient.infiniteQuery(noteListOptions(orgSlug, deps)).catch(() => {});
   },
   component: NotesRoute,
@@ -181,7 +183,7 @@ function NotesRoute() {
             params: { orgSlug, noteId: note.id },
             search: (previous) => previous,
           })}
-          renderCard={(note) => <NoteCard note={note} orgSlug={orgSlug} />}
+          renderCard={(note) => <NoteCard note={note} />}
           query={notes}
           errorTitle="Could not load notes"
           empty={

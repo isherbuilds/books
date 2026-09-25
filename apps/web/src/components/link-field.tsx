@@ -37,6 +37,7 @@ type LinkFieldProps<T> = {
   id?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
+  "aria-required"?: boolean;
 };
 
 // Design §9: the empty row says what would be here.
@@ -72,6 +73,7 @@ export function LinkField<T>({
   id,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
+  "aria-required": ariaRequired,
 }: LinkFieldProps<T>) {
   const status: LinkStatus = listQuery.isPending
     ? "pending"
@@ -201,7 +203,10 @@ export function LinkField<T>({
           autoComplete: "off",
           "aria-invalid": ariaInvalid,
           "aria-describedby": ariaDescribedBy,
+          "aria-required": ariaRequired,
           onKeyDown: handleKeyDown,
+          // Uncommitted text never stands in for the stored value.
+          onBlur: () => setQuery(selectedLabel),
         }}
       />
     </ClientOnly>

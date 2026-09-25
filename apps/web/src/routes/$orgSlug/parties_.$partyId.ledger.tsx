@@ -110,24 +110,28 @@ function PartyLedger() {
             return {
               to: "/$orgSlug/invoices/$invoiceId",
               params: { orgSlug, invoiceId: line.documentId },
+              search: { partyId },
             };
 
           if (line.documentType === "bill")
             return {
               to: "/$orgSlug/bills/$billId",
               params: { orgSlug, billId: line.documentId },
+              search: { partyId },
             };
 
           if (line.documentType === "payment")
             return {
               to: "/$orgSlug/payments/$paymentId",
               params: { orgSlug, paymentId: line.documentId },
+              search: { partyId },
             };
 
           if (line.documentType === "creditNote" || line.documentType === "debitNote")
             return {
               to: "/$orgSlug/notes/$noteId",
               params: { orgSlug, noteId: line.documentId },
+              search: { partyId },
             };
 
           return {

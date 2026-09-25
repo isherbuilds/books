@@ -20,7 +20,7 @@ export const DOCUMENT_STATE_LABELS = {
 
 const SETTLEMENT_LABELS = { paid: "Paid", partPaid: "Part paid", unpaid: "Unpaid" } as const;
 
-const ALERT = "border-status-alert-border bg-status-alert-surface text-status-alert";
+const ALERT = "ring-status-alert-border bg-status-alert-surface text-status-alert";
 
 /** A posted Invoice or Bill shows how far it is settled; a draft or cancelled one, its state. */
 export function ClaimStatus({
@@ -46,7 +46,7 @@ export function ClaimStatus({
         variant="outline"
         className={
           claim.settlementStatus === "paid"
-            ? "border-status-clear-border bg-status-clear-surface text-status-clear"
+            ? "ring-status-clear-border bg-status-clear-surface text-status-clear"
             : ALERT
         }
       >

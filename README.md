@@ -7,7 +7,7 @@ storage.
 
 ## Start locally
 
-Prerequisites are Bun (the version pinned in `package.json`), Node 24 for the
+Prerequisites are Bun (the version pinned in `package.json`), Node 24+ for the
 local HTTPS proxy, and Docker. See [Development](./docs/development.md#start-locally).
 
 ```sh

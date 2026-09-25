@@ -26,7 +26,7 @@ export function PageHeader({
       <MobileMenu />
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h1 className="shrink-0 text-sm font-medium">{title}</h1>
+          <h1 className="truncate text-sm font-medium">{title}</h1>
           {description && (
             <p className="hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
               {description}

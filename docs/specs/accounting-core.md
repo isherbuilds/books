@@ -331,8 +331,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      (the supplier's invoice date), required `reference` (the supplier's
      invoice number, 1–40), optional `dueDate`, `placeOfSupplyStateCode`
      (defaults to the Organization state), optional `tdsSectionId`,
-     `narration`. 1–100 account lines `{ accountId, description, amount,
-taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
+     `narration`. 1–100 account lines
+     `{ accountId, description, amount, taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
      leaf. `taxCode` resolves to the rate effective on the Bill date; an invalid
      code is `TAX_CODE_INVALID`. `amount` is the taxable value.
      Tax is `computeTax` with intra-state when the Party `stateCode` equals
@@ -388,8 +388,8 @@ taxCode?, hsnSac?, itcEligible }`: an active non-system expense or asset
      `amountPaise` stays the taxable value after discount. A discount above
      the subtotal is `DISCOUNT_EXCEEDS_SUBTOTAL`; a zero total stays
      `INVOICE_ZERO_TOTAL`.
-   - **Counter sale.** `invoice.post` takes optional `settle: {
-paymentMethodId, reference? }` and, in the same transaction, posts an
+   - **Counter sale.** `invoice.post` takes optional
+     `settle: { paymentMethodId, reference? }` and, in the same transaction, posts an
      `against` Receipt for the Invoice total allocated to it. The Invoice
      numbers before the Receipt. Needs `invoice:post` and `receipt:post`.
    - **Cancel and copy.** `invoice.amend` and `bill.amend` take
@@ -404,8 +404,8 @@ paymentMethodId, reference? }` and, in the same transaction, posts an
      credit (`{ id, type, number, documentDate, unappliedPaise }`); both the
      200 oldest and `hasMore`. The optional credit `type` filters before the limit;
      reading credits requires the Note read grant. They replace `invoice.openInvoices` and
-     `receipt.unapplied`. `allocation.apply` takes `{ sourceDocumentId,
-targetDocumentId, amount }`.
+     `receipt.unapplied`. `allocation.apply` takes
+     `{ sourceDocumentId, targetDocumentId, amount }`.
      Invoice and Payment details omit related Note or Bill metadata for a role
      without that document's read grant.
    - **GST registers** (`export.gstOutwardXlsx`, `export.gstInwardXlsx`,

@@ -14,7 +14,7 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
@@ -147,13 +147,16 @@ export function BillForm({
   const canPost = useCan(orgSlug, { bill: ["post"] });
   const canReadPayment = useCan(orgSlug, { payment: ["read"] });
   const form = useZodForm(billSchema, { defaultValues: defaults(today, draft) });
-  const documentDate = useWatch({ control: form.control, name: "documentDate" });
+  const watchedDate = useWatch({ control: form.control, name: "documentDate" });
+  // Date-scoped pickers wait for a complete date rather than query a half-typed one.
+  const documentDate = z.iso.date().safeParse(watchedDate).success ? watchedDate : undefined;
   const settings = useQuery(orpc.settings.get.queryOptions({ input: { orgSlug } }));
 
-  const sections = useQuery({
-    ...orpc.payment.tdsSections.queryOptions({ input: { orgSlug, date: documentDate } }),
-    enabled: canReadPayment,
-  });
+  const sections = useQuery(
+    orpc.payment.tdsSections.queryOptions({
+      input: canReadPayment && documentDate ? { orgSlug, date: documentDate } : skipToken,
+    }),
+  );
 
   const registered = Boolean(settings.data?.gstin);
 
@@ -405,7 +408,7 @@ export function BillForm({
             </FormItem>
           )}
         />
-        <BillLines orgSlug={orgSlug} registered={registered} />
+        <BillLines orgSlug={orgSlug} registered={registered} documentDate={documentDate} />
         <section className="grid gap-2 border-y border-border py-3">
           <h3 className="text-muted-foreground">Saved totals</h3>
           {draft ? (

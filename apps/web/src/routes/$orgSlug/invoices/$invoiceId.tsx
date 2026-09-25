@@ -73,7 +73,7 @@ function InvoiceSheetRoute() {
   const canPostNote = useCan(orgSlug, { note: ["post"] }) && invoice.state === "posted";
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"] }) &&
+    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
     isPositiveMoney(invoice.outstandingPaise);

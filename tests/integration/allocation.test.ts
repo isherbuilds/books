@@ -780,6 +780,15 @@ test("an unapplied credit note settles another invoice without an allocation jou
       })
     ).rows,
   ).toContainEqual(expect.objectContaining({ id: next.id, outstandingPaise: 10_000n }));
+  expect(
+    (
+      await api.party.openCredits({
+        orgSlug: organization.slug,
+        partyId: party.id,
+        side: "receivable",
+      })
+    ).rows,
+  ).toContainEqual(expect.objectContaining({ id: note.id, unappliedPaise: 10_000n }));
 });
 
 test("a missing party cannot be used for settlement pickers", async () => {

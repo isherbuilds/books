@@ -49,14 +49,14 @@ const PERIOD_REPORTS: readonly { key: PeriodReport; label: string; detail: strin
 ];
 
 // The server returns the workbook as a File; a detached anchor saves it under the
-// name the server chose, and the object URL is released at once.
+// name the server chose. The object URL is released after the download has started.
 function save(file: File) {
   const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = file.name;
   anchor.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function ReportsRoute() {

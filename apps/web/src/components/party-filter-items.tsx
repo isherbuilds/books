@@ -29,6 +29,7 @@ export function PartyFilterItems({
       onCheckedChange={(checked) => onChange(checked ? party.id : undefined)}
     >
       {party.name}
+      {party.active ? null : <span className="text-muted-foreground">Inactive</span>}
     </DropdownMenuCheckboxItem>
   ));
 }

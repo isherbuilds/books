@@ -178,7 +178,13 @@ function AttentionList({
 
 function CashAndBank({ orgSlug }: { orgSlug: string }) {
   const groups = useQuery({ ...moneyBalanceOptions(orgSlug), select: groupMoneyAccounts });
-  const rows = groups.data ?? [];
+
+  // An archived account still shows while money sits in it.
+  const rows = (groups.data ?? []).flatMap((group) =>
+    group.leaves
+      .filter((account) => account.active || !isZeroMoney(account.balancePaise))
+      .map((account) => ({ ...account, groupName: group.name })),
+  );
 
   return (
     <ListSection
@@ -198,20 +204,15 @@ function CashAndBank({ orgSlug }: { orgSlug: string }) {
           empty="No money accounts yet"
         >
           <ul className="divide-y">
-            {rows.flatMap((group) =>
-              group.leaves
-                // An archived account still shows while money sits in it.
-                .filter((account) => account.active || !isZeroMoney(account.balancePaise))
-                .map((account) => (
-                  <li key={account.id} className="flex h-9 items-center gap-3 px-3">
-                    <span className="min-w-0 flex-1 truncate">{account.name}</span>
-                    <span className="text-muted-foreground">{group.name}</span>
-                    <span className="w-32 text-right text-xs font-medium tabular-nums">
-                      {formatMoney(account.balancePaise)}
-                    </span>
-                  </li>
-                )),
-            )}
+            {rows.map((account) => (
+              <li key={account.id} className="flex h-9 items-center gap-3 px-3">
+                <span className="min-w-0 flex-1 truncate">{account.name}</span>
+                <span className="text-muted-foreground">{account.groupName}</span>
+                <span className="w-32 text-right text-xs font-medium tabular-nums">
+                  {formatMoney(account.balancePaise)}
+                </span>
+              </li>
+            ))}
           </ul>
         </ListState>
       </div>

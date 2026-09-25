@@ -71,7 +71,7 @@ function BillSheetRoute() {
     useCan(orgSlug, { bill: ["cancel"] }) && bill.state === "posted" && allocationsReversed;
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"] }) &&
+    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
     bill.state === "posted" &&
     bill.partyId !== null &&
     isPositiveMoney(bill.outstandingPaise);

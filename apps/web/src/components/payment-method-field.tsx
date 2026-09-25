@@ -30,7 +30,9 @@ export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
     methods.data?.[0];
 
   useEffect(() => {
-    if (preferred && !getValues("paymentMethodId")) setValue("paymentMethodId", preferred.id);
+    if (preferred && !getValues("paymentMethodId")) {
+      setValue("paymentMethodId", preferred.id, { shouldValidate: true });
+    }
   }, [preferred, getValues, setValue]);
 
   return (

@@ -2,9 +2,10 @@
 
 ## Start locally
 
-You need the Bun version `packageManager` pins in `package.json`, and Docker.
-Portless runs through its Node shebang so its HTTPS proxy can issue certificates
-for nested `.localhost` names. Do not force its CLI to run with Bun. Other tools
+You need the Bun version `packageManager` pins in `package.json`, Node 24 or
+later (Portless declares `node >=24`), and Docker. `portless proxy start` runs
+through its Node shebang so its HTTPS proxy can issue certificates for nested
+`.localhost` names; do not force that command to run with Bun. Other tools
 with a `node` shebang (Vite, tsc, tsdown, Astro, drizzle-kit, Turborepo, oxlint)
 run as `bun --bun <tool>` in the package scripts. A new script that calls one
 follows suit.

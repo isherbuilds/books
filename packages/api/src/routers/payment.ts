@@ -25,7 +25,7 @@ import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
 import { effectiveOn } from "../core/tax-schedule";
-import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import {
   dateOnly,
   orderedPeriod,
@@ -91,6 +91,14 @@ export const paymentRouter = {
     const { scope } = context;
     const { settlementKind } = input;
     const tdsSectionId = "tdsSectionId" in input ? input.tdsSectionId : undefined;
+
+    // Settling a claim needs read access to it: bills for a payable, credit notes for a refund.
+    if (settlementKind === "against") {
+      requirePermission(
+        scope,
+        input.exposureSide === "payable" ? { bill: ["read"] } : { note: ["read"] },
+      );
+    }
 
     if (
       settlementKind === "against" &&
@@ -381,7 +389,8 @@ export const paymentRouter = {
         allocations: canReadRelated ? allocations : null,
         adjustments,
         tds: tds ?? null,
-        unappliedPaise: credit?.unappliedPaise ?? null,
+        // A cancelled payment keeps its capacity row but settles nothing.
+        unappliedPaise: credit ? (detail.state === "posted" ? credit.unappliedPaise : 0n) : null,
       };
     },
   ),

@@ -30,13 +30,14 @@ if (!Number.isInteger(SAMPLE_COUNT) || SAMPLE_COUNT < 1) {
   throw new Error("PERF_SAMPLES must be a positive integer");
 }
 
-// The label says whether the route's data could already be cached in this sample.
+// `cached` marks a step whose route data is already cached in this sample; the
+// speed gate applies to those steps only.
 const steps = [
-  { path: `/${ORG_SLUG}/parties`, label: "parties (cold)" },
-  { path: `/${ORG_SLUG}/invoices`, label: "invoices (cold)" },
-  { path: `/${ORG_SLUG}/settings`, label: "settings (cold, redirects)" },
-  { path: `/${ORG_SLUG}/receipts`, label: "receipts (fresh cache)" },
-  { path: `/${ORG_SLUG}/parties`, label: "parties (fresh cache)" },
+  { path: `/${ORG_SLUG}/parties`, label: "parties (cold)", cached: false },
+  { path: `/${ORG_SLUG}/invoices`, label: "invoices (cold)", cached: false },
+  { path: `/${ORG_SLUG}/settings`, label: "settings (cold, redirects)", cached: false },
+  { path: `/${ORG_SLUG}/receipts`, label: "receipts (fresh cache)", cached: true },
+  { path: `/${ORG_SLUG}/parties`, label: "parties (fresh cache)", cached: true },
 ];
 
 const browserEnv = {
@@ -207,7 +208,7 @@ console.log(report);
 
 // The client-pattern speed gate requires a navigation interaction to paint within
 // 200 ms. Cached revisits isolate browser navigation from network and route chunks.
-for (const result of summary.filter((step) => step.label.includes("fresh cache"))) {
+for (const result of summary.filter((_, position) => steps[position]!.cached)) {
   if (result.committedMedianMs > 200) {
     throw new Error(`${result.label} exceeded the 200 ms navigation budget`);
   }

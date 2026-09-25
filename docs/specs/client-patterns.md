@@ -120,8 +120,8 @@ financial rollback are not adopted.
      `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
      `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-credit-sheet.tsx`, adoption in `receipt-form.tsx`, and
-     `lib/domain-invalidation.ts`.
+     `components/apply-credit-sheet.tsx`, the `DocumentForm` adoption in
+     `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
    - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through
      `AllocationsSection` (the other document linked by type, Reverse while

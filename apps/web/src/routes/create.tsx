@@ -236,6 +236,7 @@ function CreateOrganizationForm() {
                     <FormLabel>Legal type</FormLabel>
                     <FormControl>
                       <OptionField
+                        required
                         options={LEGAL_TYPE_OPTIONS}
                         noun="legal types"
                         value={field.value}
@@ -347,6 +348,7 @@ function CreateOrganizationForm() {
                     <FormLabel>State code</FormLabel>
                     <FormControl>
                       <OptionField
+                        required
                         options={STATE_OPTIONS}
                         noun="states"
                         showCode

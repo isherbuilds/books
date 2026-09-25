@@ -448,6 +448,7 @@ export function PaletteTrigger({ className, onOpen }: { className: string; onOpe
   return (
     <button
       type="button"
+      aria-haspopup="dialog"
       className={cn(className, "bg-muted text-muted-foreground")}
       onClick={() => {
         // The mobile menu closes itself, or it stays open under the palette.

@@ -20,14 +20,15 @@ test("full credit takes exact remaining tax while partial lines round together",
         },
         ...[0, 1].map(() => ({
           source: {
-            taxablePaise: 10n,
+            taxablePaise: 20n,
             cgstPaise: 1n,
             sgstPaise: 1n,
             igstPaise: 0n,
             rateBasisPoints: 500,
           },
           prior: { taxablePaise: 0n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n },
-          amountPaise: 5n,
+          // 0.25 paise per component on each line: only joint rounding reaches 1 paise.
+          amountPaise: 10n,
         })),
       ],
     }),
@@ -35,8 +36,8 @@ test("full credit takes exact remaining tax while partial lines round together",
     ok: true,
     lines: [
       { taxablePaise: 1n, cgstPaise: 1n, sgstPaise: 1n, igstPaise: 0n },
-      { taxablePaise: 5n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n },
-      { taxablePaise: 5n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n },
+      { taxablePaise: 10n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n },
+      { taxablePaise: 10n, cgstPaise: 1n, sgstPaise: 1n, igstPaise: 0n },
     ],
   });
 });

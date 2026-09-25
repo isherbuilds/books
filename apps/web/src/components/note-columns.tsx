@@ -103,7 +103,7 @@ export const NOTE_COLUMNS = [
   }),
 ];
 
-export function NoteCard({ note, orgSlug }: { note: NoteListRow; orgSlug: string }) {
+export function NoteCard({ note }: { note: NoteListRow }) {
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -117,15 +117,8 @@ export function NoteCard({ note, orgSlug }: { note: NoteListRow; orgSlug: string
         {formatBusinessDay(note.documentDate)}
       </p>
       <p className="flex items-center justify-between gap-2 text-muted-foreground">
-        {note.againstDocumentId ? (
-          <NoteSourceLink
-            orgSlug={orgSlug}
-            noteType={note.type}
-            source={{ id: note.againstDocumentId, number: note.againstNumber }}
-          />
-        ) : (
-          <span>—</span>
-        )}
+        {/* The whole card is a link, so the source is plain text here, never a nested anchor. */}
+        <span className="font-mono">{note.againstNumber ?? "—"}</span>
         <span className="tabular-nums">Unapplied {formatMoney(note.unappliedPaise)}</span>
       </p>
     </>

@@ -11,7 +11,7 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { z } from "zod";
@@ -26,7 +26,10 @@ import { orpc } from "@/lib/orpc";
 export const lineSchema = z.object({
   accountId: z.string().min(1, "Choose an expense or asset account"),
   description: z.string().trim().min(1, "Enter a description").max(200),
-  hsnSac: z.string().trim().max(20),
+  hsnSac: z
+    .string()
+    .trim()
+    .regex(/^(\d{4,8})?$/, "Use a 4 to 8 digit HSN/SAC code"),
   amount: positiveAmount,
   taxCode: z.string(),
   itcEligible: z.boolean(),
@@ -204,7 +207,16 @@ function BillLineRow({
 }
 
 /** The bill's line grid: one expense or asset line per row. */
-export function BillLines({ orgSlug, registered }: { orgSlug: string; registered: boolean }) {
+export function BillLines({
+  orgSlug,
+  registered,
+  documentDate,
+}: {
+  orgSlug: string;
+  registered: boolean;
+  /** A valid bill date, or `undefined` while the field is being edited. */
+  documentDate: string | undefined;
+}) {
   const form = useFormContext<{ lines: BillLine[] }>();
   const linesField = useFieldArray({ control: form.control, name: "lines" });
 
@@ -214,7 +226,11 @@ export function BillLines({ orgSlug, registered }: { orgSlug: string; registered
   );
 
   const rates = useListState<TaxRate[]>(
-    useQuery(orpc.item.taxRates.queryOptions({ input: { orgSlug } })),
+    useQuery(
+      orpc.item.taxRates.queryOptions({
+        input: documentDate ? { orgSlug, date: documentDate } : skipToken,
+      }),
+    ),
   );
 
   return (

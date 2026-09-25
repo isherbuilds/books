@@ -19,7 +19,7 @@ import { z } from "zod";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { ItemSheet, type SavedItem } from "@/components/item-sheet";
 import { LinkField } from "@/components/link-field";
-import { incomeAccountOptions } from "@/lib/accounts";
+import { incomeAccountOptions, postableAccounts } from "@/lib/accounts";
 import { positiveAmount } from "@/lib/form-schema";
 import { itemListOptions, type ItemListRow } from "@/lib/items";
 import { useListState, type ListState } from "@/lib/list-state";
@@ -43,6 +43,8 @@ function itemMaster(rows: ItemListRow[]): ItemMaster {
 }
 
 type IncomeAccount = Awaited<ReturnType<AppRouterClient["account"]["list"]>>[number];
+
+const invoiceAccounts = (rows: IncomeAccount[]) => postableAccounts(rows, ["income"]);
 
 export const lineSchema = z
   .object({
@@ -307,7 +309,10 @@ export function InvoiceLines({ orgSlug }: { orgSlug: string }) {
     useQuery({ ...itemListOptions(orgSlug), select: itemMaster }),
   );
 
-  const accounts = useListState<IncomeAccount[]>(useQuery(incomeAccountOptions(orgSlug)));
+  const accounts = useListState<IncomeAccount[]>(
+    useQuery({ ...incomeAccountOptions(orgSlug), select: invoiceAccounts }),
+  );
+
   const canCreateItem = useCan(orgSlug, { item: ["create"] });
   const full = linesField.fields.length >= 100;
 
