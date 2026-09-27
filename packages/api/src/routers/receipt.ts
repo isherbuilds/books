@@ -57,7 +57,7 @@ const postInput = z.discriminatedUnion("settlementKind", [
     settlementKind: z.literal("against"),
     partyId: z.uuid(),
     allocations: z
-      .array(z.strictObject({ invoiceId: z.uuid(), amount: positiveMoney }))
+      .array(z.strictObject({ documentId: z.uuid(), amount: positiveMoney }))
       .min(1)
       .max(50),
     advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
@@ -164,7 +164,7 @@ export async function postReceipt(
       amountPaise: input.amount,
     };
   } else if (settlementKind === "against") {
-    lineDescription = "Receipt against invoices";
+    lineDescription = "Receipt against open items";
     affectsTax = false;
     posting = {
       paymentMethodId: input.paymentMethodId,
@@ -175,7 +175,7 @@ export async function postReceipt(
       accountId: null,
       amountPaise: input.amount,
       allocations: input.allocations.map((allocation) => ({
-        documentId: allocation.invoiceId,
+        documentId: allocation.documentId,
         amountPaise: allocation.amount,
       })),
       adjustments: adjustments.map(({ amount, ...adjustment }) => ({
@@ -306,7 +306,7 @@ export const receiptRouter = {
         allocationsOf(db, orgId, input.receiptId, "source"),
         adjustmentLinesOf(orgId, input.receiptId),
         db
-          .select({ unappliedPaise: settlementPaise(orgId, "source").balancePaise })
+          .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
           .from(documents)
           .where(and(eq(documents.orgId, orgId), eq(documents.id, input.receiptId))),
       ]);

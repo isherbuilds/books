@@ -23,13 +23,13 @@ import {
 } from "@/components/entry-lines";
 import { PartySheet } from "@/components/party-form";
 import { useZodForm } from "@/hooks/use-zod-form";
-import { invalidateJournalState } from "@/lib/domain-invalidation";
+import { invalidateJournalState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { journalAccountOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 
 const journalSchema = z.object({
   documentDate: z.iso.date(),
@@ -44,6 +44,10 @@ const SERVER_FIELDS = {
   ACCOUNT_INVALID: "lines",
   TAXABLE_ACCOUNT_LINE: "lines",
   PARTY_INVALID: "lines",
+  PARTY_REQUIRED: "lines",
+  ALLOCATION_TARGET_INVALID: "lines",
+  ALLOCATION_EXCEEDS_OUTSTANDING: "lines",
+  ALLOCATION_EXCEEDS_SOURCE: "lines",
   LOCKED: "documentDate",
 } satisfies Record<string, FieldPath<JournalFormValues>>;
 
@@ -87,19 +91,59 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
           },
           fallback: "Could not post the journal",
           uncertain: "The result is uncertain. Check the journal list before entering it again.",
-          refuse: () =>
-            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal"),
+          refuse: async () => {
+            applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
+
+            const reason = errorReason(error);
+
+            if (
+              reason === "ALLOCATION_TARGET_INVALID" ||
+              reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
+            ) {
+              await invalidateSettlementState(queryClient, orgSlug);
+            }
+          },
         }),
     }),
   );
 
   const submit = form.handleSubmit((values) => {
+    if (!accounts.data) {
+      form.setError("lines", { message: "Wait for the accounts to load" });
+
+      return;
+    }
+
+    const accountById = new Map(accounts.data.map((account) => [account.id, account]));
+
+    for (const [index, line] of values.lines.entries()) {
+      if (accountById.get(line.accountId)?.systemKey !== "receivables") continue;
+
+      if (!line.partyId) {
+        form.setError(
+          `lines.${index}.partyId`,
+          { message: "Choose a party" },
+          { shouldFocus: true },
+        );
+
+        return;
+      }
+    }
+
     post.mutate({
       orgSlug,
       documentDate: values.documentDate,
       narration: values.narration,
       reference: values.reference || undefined,
-      lines: entryLinesInput(values.lines),
+      lines: entryLinesInput(values.lines).map((line, index) => {
+        const entered = values.lines[index];
+
+        const allocations = Object.entries(entered.allocations)
+          .filter(([, amount]) => amount !== "")
+          .map(([invoiceId, amount]) => ({ invoiceId, amount }));
+
+        return allocations.length ? { ...line, allocations } : line;
+      }),
     });
   });
 

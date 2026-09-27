@@ -68,23 +68,26 @@ A new org-scoped domain follows the
   `queryOptions`, and loaders never pass data down as props. Membership comes
   from `useMembership` through `membershipOptions`, stale after five minutes;
   member and settings edits invalidate it.
-- The browser client batches calls made in the same tick into one `/rpc`
-  request (`BatchLinkPlugin`, `BatchHandlerPlugin`). The calls share one
-  context, so the session and membership resolve once per batch.
+- The browser client batches same-tick non-`export` calls into one `/rpc`
+  request (`BatchLinkPlugin`, `BatchHandlerPlugin`). `export` calls travel
+  separately. Batched calls share one context, so the session and membership
+  resolve once per batch.
 - A gated route checks in its loader every grant it needs to submit
   (`requireOrgPermission`), and redirects. `useCan` hides actions on readable
   pages.
-- `/` and `/login` call `redirectSignedInHome` in `beforeLoad`. A member goes to
-  the first organization by name; anyone else goes to `/join`. A validated
-  `redirect` on `/login` wins. The organization home is `/$orgSlug/receipts`.
+- In development, `/` serves the site preview. In production, `/` redirects
+  to `/login`. On `/login`, `redirectSignedInHome` sends a signed-in member
+  to the first organization's `/$orgSlug` Home and anyone without an
+  organization to `/join`. A validated `redirect` on `/login` wins.
 - A tabbed record keeps shared chrome in its layout route. Declare context
   shared by sibling routes outside the route tree: TanStack Start splits route
   files into chunks with separate context objects.
 - Every query key includes `orgSlug`. Growing lists use full keysets and select
   `limit + 1` base rows through a tenant-leading index before joins. Never use
   `OFFSET`.
-- Live lists poll every 10 s (stale after 5 s), refetch only page one, and pause
-  in background tabs. There is no WebSocket or SSE.
+- Live lists poll every 10 s (stale after 5 s) and refetch on focus only
+  while page one is the only loaded page. Both stop after Load more; polling
+  also pauses in background tabs. There is no WebSocket or SSE.
 
 Query, form and invalidation rules are in
 [Development](./development.md#react-and-forms).
@@ -109,7 +112,7 @@ Query, form and invalidation rules are in
   no retry.
 - Every name keeps the case it was typed in, because names print on legal
   documents. Master uniqueness compares `normalizedName` (NFKC, lowercase,
-  letters and digits only), or `lower(name)` for accounts.
+  Unicode letters, combining marks and numbers), or `lower(name)` for accounts.
 - One `organization_settings` row per Organization holds identity, address,
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.

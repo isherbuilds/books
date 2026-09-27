@@ -71,21 +71,30 @@ export async function postableAccounts(
 /**
  * Journal lines may name active leaves of any account type, including money
  * leaves. Non-system leaves and the TDS payable/receivable, round-off and opening
- * equity system accounts are allowed; new system keys are refused by default.
- * Registered organizations cannot journal taxable supply accounts. Unresolved ids
- * are omitted from the result.
+ * equity system accounts are allowed; Journals also admit receivables while
+ * Opening Balances do not. New system keys are refused by default. Registered
+ * organizations cannot journal taxable supply accounts. Unresolved ids are omitted.
  */
 export async function journalAccounts(
   executor: DbTransaction | typeof db,
   orgId: string,
-  options: { gstin: string | null; ids?: readonly string[] },
-): Promise<Array<{ id: string; code: string; name: string; supplyClass: SupplyClass | null }>> {
+  options: { gstin: string | null; ids?: readonly string[]; controls: boolean },
+): Promise<
+  Array<{
+    id: string;
+    code: string;
+    name: string;
+    supplyClass: SupplyClass | null;
+    systemKey: string | null;
+  }>
+> {
   const query = executor
     .select({
       id: accounts.id,
       code: accounts.code,
       name: accounts.name,
       supplyClass: accounts.supplyClass,
+      systemKey: accounts.systemKey,
     })
     .from(accounts)
     .where(
@@ -93,7 +102,13 @@ export async function journalAccounts(
         eq(accounts.orgId, orgId),
         options.ids ? inArray(accounts.id, [...options.ids]) : undefined,
         eq(accounts.active, true),
-        or(isNull(accounts.systemKey), inArray(accounts.systemKey, [...JOURNAL_SYSTEM_KEYS])),
+        or(
+          isNull(accounts.systemKey),
+          inArray(
+            accounts.systemKey,
+            options.controls ? [...JOURNAL_SYSTEM_KEYS, "receivables"] : [...JOURNAL_SYSTEM_KEYS],
+          ),
+        ),
         options.gstin
           ? or(isNull(accounts.supplyClass), ne(accounts.supplyClass, "taxable"))
           : undefined,

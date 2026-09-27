@@ -414,7 +414,7 @@ export async function seedDemo(): Promise<void> {
       documentDate: daysFromToday(-2),
       reference: `${MARK}-COLLECTION`,
       amount: "10000.00",
-      allocations: [{ invoiceId: localInvoice, amount: "10000.00" }],
+      allocations: [{ documentId: localInvoice, amount: "10000.00" }],
     }),
   );
   await ensureDocument(orgId, "receipt", `${MARK}-INTEREST`, () =>

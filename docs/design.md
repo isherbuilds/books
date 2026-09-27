@@ -81,7 +81,7 @@ A page that writes `rounded-*` builds a shell, or its component lacks a variant.
 ## 5. Colour
 
 The palette is the Edernal Books design system, defined once in `globals.css`:
-ink on warm paper, never pure white, no blue anywhere. The console and the public
+slate ink on soft neutral paper, never pure white. The console and the public
 site read the same tokens. Use theme tokens only: `bg-background`, `bg-card`,
 `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`,
 `bg-primary`, `text-destructive` and the state tokens below. Palette utilities do

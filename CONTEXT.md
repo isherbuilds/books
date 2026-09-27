@@ -10,6 +10,7 @@ Canonical terms for Accly Books. Use them exactly in code, navigation and docs. 
 - **Payment Method**: a named way money moves, bound to one money account.
 - **Item**: a thing sold or bought, with HSN or SAC and a tax class.
 - **Document**: the write model. Receipt (money in), Payment (money out), Invoice (sale), Bill (purchase), Credit Note, Debit Note, Journal (manual; Contra when every line is a money account), Opening Balance. States: draft, posted, cancelled.
+- **Opening item** (planned, slice 7): a Party's balance at cutover, imported bill by bill. An Opening Claim is a legacy invoice or bill still unpaid; an Opening Credit is money received or paid on account and not yet matched. It writes party exposure only; its Opening Balance carries the control-account legs.
 - **Journal Entry / Journal Line**: the derived, append-only ledger. A reverse entry cancels a post entry; nothing is edited.
 - **Party Ledger Line / Allocation**: receivable or payable exposure per document and the append-only matching of documents.
 - **Exposure Side**: `receivable` or `payable`, the control a Document settles against; independent of cash direction, so a customer refund stays on the receivable side.

@@ -45,17 +45,37 @@ export type OpenDocument = {
   openPaise: bigint;
 };
 
-// The fields of a Receipt or Payment form this table reads and writes. Adjustments
-// (fees, write-offs, TDS) add to what the settlement can allocate.
 type AllocationValues = {
+  allocations: Record<string, string>;
+  lines: { allocations: Record<string, string> }[];
+};
+
+type SettlementValues = {
   amount: string;
   allocations: Record<string, string>;
 } & Partial<Record<"adjustments" | "writeOffs", { amount: string }[]>>;
 
+type AllocationPath = "allocations" | `lines.${number}.allocations`;
+
 type AdjustmentsName = "adjustments" | "writeOffs";
 
-const sumEntered = (amounts: readonly string[]) =>
+export const sumEntered = (amounts: readonly string[]) =>
   amounts.reduce((total, amount) => total + enteredPaise(amount), ZERO_MONEY);
+
+export function settlementRemaining(
+  amount: string,
+  allocations: Record<string, string>,
+  adjustments: readonly { amount: string }[],
+  documentId: string,
+) {
+  return (
+    enteredPaise(amount) +
+    sumEntered(adjustments.map((row) => row.amount)) -
+    sumEntered(
+      Object.entries(allocations).flatMap(([id, value]) => (id === documentId ? [] : [value])),
+    )
+  );
+}
 
 /**
  * The typed amounts that allocate to open documents, the refusals for the rest, and a
@@ -126,9 +146,15 @@ export function reportRowErrors(
   return rowErrors.length > 0;
 }
 
-function UnavailableAllocations({ rows }: { rows: readonly OpenDocument[] }) {
+function UnavailableAllocations({
+  rows,
+  allocationPath,
+}: {
+  rows: readonly OpenDocument[];
+  allocationPath: AllocationPath;
+}) {
   const form = useFormContext<AllocationValues>();
-  const allocations = useWatch({ control: form.control, name: "allocations" });
+  const allocations = useWatch({ control: form.control, name: allocationPath });
   const openIds = new Set(rows.map((row) => row.id));
 
   const unavailableIds = Object.entries(allocations)
@@ -146,8 +172,8 @@ function UnavailableAllocations({ rows }: { rows: readonly OpenDocument[] }) {
         variant="outline"
         onClick={() => {
           for (const id of unavailableIds) {
-            form.setValue(`allocations.${id}`, "");
-            form.clearErrors(`allocations.${id}`);
+            form.setValue(`${allocationPath}.${id}`, "");
+            form.clearErrors(`${allocationPath}.${id}`);
           }
         }}
       >
@@ -158,7 +184,7 @@ function UnavailableAllocations({ rows }: { rows: readonly OpenDocument[] }) {
 }
 
 /** Allocated and remaining, subscribed apart from the rows so typing re-renders only this. */
-function AllocationTotals({
+export function SettlementAllocationTotals({
   adjustmentsName,
   advanceRemainder,
   advanceField,
@@ -167,7 +193,7 @@ function AllocationTotals({
   advanceRemainder: boolean;
   advanceField?: ReactNode;
 }) {
-  const { control } = useFormContext<AllocationValues>();
+  const { control } = useFormContext<SettlementValues>();
   const amount = useWatch({ control, name: "amount" });
   const allocations = useWatch({ control, name: "allocations" });
   const adjustments = useWatch({ control, name: adjustmentsName ?? "adjustments" });
@@ -218,9 +244,9 @@ export function AllocationTable({
   openHeading,
   query,
   rows,
-  adjustmentsName,
-  advanceRemainder,
-  advanceField,
+  name,
+  remainingFor,
+  children,
 }: {
   title: string;
   openHeading: string;
@@ -237,29 +263,17 @@ export function AllocationTable({
     | "fetchNextPage"
   >;
   rows: readonly OpenDocument[];
-  adjustmentsName: AdjustmentsName | null;
-  advanceRemainder: boolean;
-  advanceField?: ReactNode;
+  name: AllocationPath;
+  remainingFor: (documentId: string) => bigint;
+  children: ReactNode;
 }) {
   const form = useFormContext<AllocationValues>();
 
   const fill = (row: OpenDocument) => {
-    const allocations = form.getValues("allocations");
-
-    const others = sumEntered(
-      Object.entries(allocations).flatMap(([id, amount]) => (id === row.id ? [] : [amount])),
-    );
-
-    const capacity =
-      enteredPaise(form.getValues("amount")) +
-      (adjustmentsName
-        ? sumEntered((form.getValues(adjustmentsName) ?? []).map((adjustment) => adjustment.amount))
-        : ZERO_MONEY);
-
-    const remainder = capacity - others;
+    const remainder = remainingFor(row.id);
 
     form.setValue(
-      `allocations.${row.id}`,
+      `${name}.${row.id}`,
       remainder > ZERO_MONEY
         ? formatDecimal(remainder < row.openPaise ? remainder : row.openPaise)
         : "",
@@ -271,7 +285,7 @@ export function AllocationTable({
     <>
       <FormField
         control={form.control}
-        name="allocations"
+        name={name}
         render={() => (
           <FormItem>
             <LineGrid title={title}>
@@ -308,7 +322,7 @@ export function AllocationTable({
                         </TableCell>
                         <TableCell className="w-36">
                           <RegisteredFormField
-                            name={`allocations.${row.id}`}
+                            name={`${name}.${row.id}`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="sr-only">Amount for {row.number}</FormLabel>
@@ -336,18 +350,16 @@ export function AllocationTable({
                   </TableBody>
                 </Table>
               )}
-              {query.isSuccess && !query.isFetching ? <UnavailableAllocations rows={rows} /> : null}
+              {query.isSuccess && !query.isFetching ? (
+                <UnavailableAllocations rows={rows} allocationPath={name} />
+              ) : null}
               <LoadMore query={query} shown={rows.length} />
             </LineGrid>
             <FormMessage />
           </FormItem>
         )}
       />
-      <AllocationTotals
-        adjustmentsName={adjustmentsName}
-        advanceRemainder={advanceRemainder}
-        advanceField={advanceField}
-      />
+      {children}
     </>
   );
 }

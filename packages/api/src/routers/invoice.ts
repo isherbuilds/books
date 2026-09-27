@@ -373,7 +373,7 @@ export const invoiceRouter = {
           paymentMethodId: payment.paymentMethodId,
           reference: payment.reference,
           amount: payment.amount,
-          allocations: [{ invoiceId: posted.id, amount: payment.amount }],
+          allocations: [{ documentId: posted.id, amount: payment.amount }],
         };
 
         receipts.push({
@@ -410,7 +410,7 @@ export const invoiceRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
       const canReadNotes = authorize(context.scope.roles, { note: ["read"] });
-      const { capacityPaise, balancePaise } = settlementPaise(orgId, "target");
+      const { capacityPaise, balancePaise } = settlementPaise(orgId, "target", null);
 
       // The version token and the data it protects return from one consistent read:
       // an editor must never receive version 2's token beside version 1's lines.

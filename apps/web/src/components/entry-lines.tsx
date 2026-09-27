@@ -20,9 +20,11 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { cn } from "@accly/ui/lib/utils";
 import { Trash2Icon } from "lucide-react";
-import { useFieldArray, useFormContext, Watch } from "react-hook-form";
+import { skipToken, useInfiniteQuery } from "@tanstack/react-query";
+import { useFieldArray, useFormContext, useWatch, Watch } from "react-hook-form";
 import { z } from "zod";
 
+import { AllocationTable, sumEntered, type OpenDocument } from "@/components/allocation-table";
 import { AmountInput } from "@/components/amount-input";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
@@ -30,6 +32,7 @@ import { PartyLinkField } from "@/components/party-link-field";
 import { useListState, type ListState } from "@/lib/list-state";
 import type { PartyPicker } from "@/lib/parties";
 import { positiveAmount } from "@/lib/form-schema";
+import { openItemsOptions } from "@/lib/pickers";
 
 // Blank is the untouched side of a debit/credit pair.
 const entryAmountSchema = z.literal("").or(positiveAmount);
@@ -45,6 +48,7 @@ const entryLineSchema = z
     partyId: z.string().nullable(),
     partyName: z.string(),
     description: z.string().trim().max(200, "Description must be 200 characters or fewer"),
+    allocations: z.record(z.string(), entryAmountSchema),
   })
   .superRefine((line, context) => {
     if ((line.debit === "") === (line.credit === "")) {
@@ -94,6 +98,7 @@ export const blankEntryLine = (): EntryLineValues => ({
   partyId: null,
   partyName: "",
   description: "",
+  allocations: {},
 });
 
 type EntryLineInput = {
@@ -126,6 +131,91 @@ const ENTRY_GRID_WITH_PARTY =
 
 const ENTRY_GRID_WITHOUT_PARTY = "md:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_14rem_2rem]";
 
+function journalPartyAmounts(lines: readonly EntryLineValues[], index: number) {
+  const selected = lines[index];
+
+  if (!selected) return { capacity: ZERO_MONEY, allocated: ZERO_MONEY };
+
+  let capacity = ZERO_MONEY;
+  let allocated = ZERO_MONEY;
+
+  for (const line of lines) {
+    if (line.accountId !== selected.accountId || line.partyId !== selected.partyId) continue;
+
+    capacity += enteredPaise(line.credit) - enteredPaise(line.debit);
+
+    if (line.credit) allocated += sumEntered(Object.values(line.allocations));
+  }
+
+  return { capacity: capacity > ZERO_MONEY ? capacity : ZERO_MONEY, allocated };
+}
+
+function JournalAllocationTotals({ index }: { index: number }) {
+  const { control } = useFormContext<{ lines: EntryLineValues[] }>();
+  const lines = useWatch({ control, name: "lines" });
+  const { capacity, allocated } = journalPartyAmounts(lines, index);
+  const remaining = capacity - allocated;
+
+  return (
+    <dl className="grid gap-1 border-t border-border pt-2">
+      <div className="flex items-baseline justify-between gap-4">
+        <dt className="text-muted-foreground">Party allocated</dt>
+        <dd className="tabular-nums">{formatMoney(allocated)}</dd>
+      </div>
+      <div className="flex items-baseline justify-between gap-4 font-medium">
+        <dt>{remaining < ZERO_MONEY ? "Over by" : "Remaining to allocate"}</dt>
+        <dd className="tabular-nums">
+          {formatMoney(remaining < ZERO_MONEY ? -remaining : remaining)}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+function JournalInvoiceAllocations({ orgSlug, index }: { orgSlug: string; index: number }) {
+  const form = useFormContext<{ lines: EntryLineValues[] }>();
+  const partyId = useWatch({ control: form.control, name: `lines.${index}.partyId` });
+  const credit = useWatch({ control: form.control, name: `lines.${index}.credit` });
+  const showInvoices = credit !== "" && !!partyId;
+
+  const openItems = useInfiniteQuery(
+    openItemsOptions(
+      showInvoices ? { orgSlug, partyId, side: "receivable", type: "invoice" } : skipToken,
+    ),
+  );
+
+  const invoices: OpenDocument[] =
+    openItems.data?.pages.flatMap((page) =>
+      page.rows.map((row) => ({
+        ...row,
+        label: "Invoice",
+        openPaise: row.outstandingPaise,
+      })),
+    ) ?? [];
+
+  if (!showInvoices) return null;
+
+  return (
+    <div className="col-span-2 md:col-span-full">
+      <AllocationTable
+        title="Open invoices"
+        openHeading="Outstanding"
+        query={openItems}
+        rows={invoices}
+        name={`lines.${index}.allocations`}
+        remainingFor={(documentId) => {
+          const allocations = form.getValues(`lines.${index}.allocations`);
+          const { capacity, allocated } = journalPartyAmounts(form.getValues("lines"), index);
+
+          return capacity - allocated + enteredPaise(allocations[documentId] ?? "");
+        }}
+      >
+        <JournalAllocationTotals index={index} />
+      </AllocationTable>
+    </div>
+  );
+}
+
 function EntryLineFields({
   orgSlug,
   gridTemplate,
@@ -149,6 +239,10 @@ function EntryLineFields({
   remove: (index: number) => void;
 }) {
   const form = useFormContext<{ lines: EntryLineValues[] }>();
+  const accountId = useWatch({ control: form.control, name: `lines.${index}.accountId` });
+
+  const receivables =
+    accounts.data?.find((account) => account.id === accountId)?.systemKey === "receivables";
 
   return (
     <fieldset
@@ -174,7 +268,10 @@ function EntryLineFields({
                 getLabel={(account) => account.name}
                 getCode={(account) => account.code}
                 value={accounts.data?.find((account) => account.id === field.value) ?? null}
-                onSelect={(account) => field.onChange(account?.id ?? null)}
+                onSelect={(account) => {
+                  if (account?.id !== field.value) form.setValue(`lines.${index}.allocations`, {});
+                  field.onChange(account?.id ?? null);
+                }}
                 placeholder="Choose an account"
                 inputRef={field.ref}
                 autoFocus={autoFocus}
@@ -204,7 +301,9 @@ function EntryLineFields({
           name={`lines.${index}.partyId`}
           render={({ field }) => (
             <FormItem className="col-span-2 md:col-span-1">
-              <FormLabel className="md:sr-only">Party (optional)</FormLabel>
+              <FormLabel className="md:sr-only">
+                {receivables ? "Party (required)" : "Party (optional)"}
+              </FormLabel>
               <FormControl>
                 <PartyLinkField
                   orgSlug={orgSlug}
@@ -215,6 +314,7 @@ function EntryLineFields({
                       : null
                   }
                   onSelect={(party) => {
+                    if (party?.id !== field.value) form.setValue(`lines.${index}.allocations`, {});
                     field.onChange(party?.id ?? null);
                     form.setValue(`lines.${index}.partyName`, party?.name ?? "");
                   }}
@@ -223,7 +323,9 @@ function EntryLineFields({
                   inputRef={field.ref}
                 />
               </FormControl>
-              <FormDescription className="sr-only">Shown in the day book only.</FormDescription>
+              <FormDescription className={receivables ? undefined : "sr-only"}>
+                {receivables ? "Changes what this party owes" : "Shown in the day book only."}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -252,6 +354,8 @@ function EntryLineFields({
 
                         if (event.target.value) {
                           form.setValue(`lines.${index}.${other}`, "", { shouldValidate: true });
+
+                          if (side === "debit") form.setValue(`lines.${index}.allocations`, {});
                         }
                       }}
                     />
@@ -263,6 +367,7 @@ function EntryLineFields({
           );
         })}
       </div>
+      {receivables ? <JournalInvoiceAllocations orgSlug={orgSlug} index={index} /> : null}
 
       <Button
         type="button"

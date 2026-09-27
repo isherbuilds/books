@@ -24,8 +24,10 @@ import { z } from "zod";
 
 import {
   AllocationTable,
+  SettlementAllocationTotals,
   checkAllocations,
   reportRowErrors,
+  settlementRemaining,
   type OpenDocument,
 } from "@/components/allocation-table";
 import { AmountInput } from "@/components/amount-input";
@@ -500,9 +502,21 @@ export function PaymentForm({
             openHeading={exposureSide === "payable" ? "Outstanding" : "Unapplied"}
             query={openQuery}
             rows={openRows}
-            adjustmentsName={exposureSide === "payable" ? "writeOffs" : null}
-            advanceRemainder={exposureSide === "payable"}
-          />
+            name="allocations"
+            remainingFor={(documentId) =>
+              settlementRemaining(
+                form.getValues("amount"),
+                form.getValues("allocations"),
+                exposureSide === "payable" ? form.getValues("writeOffs") : [],
+                documentId,
+              )
+            }
+          >
+            <SettlementAllocationTotals
+              adjustmentsName={exposureSide === "payable" ? "writeOffs" : null}
+              advanceRemainder={exposureSide === "payable"}
+            />
+          </AllocationTable>
         ) : null}
         {settlementKind === "against" && exposureSide === "payable" ? (
           <>

@@ -40,6 +40,7 @@ export async function invalidateSettlementState(
     queryClient.invalidateQueries({ queryKey: orpc.payment.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.journal.get.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.balances.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.openItems.key({ input: { orgSlug } }) }),
@@ -68,17 +69,15 @@ export async function invalidateCashState(
   ]);
 }
 
-// Journals move account balances without writing the party ledger.
+// Journals also move party balances, open credits/items, and invoice outstanding.
 export async function invalidateJournalState(
   queryClient: QueryInvalidator,
   orgSlug: string,
 ): Promise<void> {
   await Promise.all([
+    invalidateSettlementState(queryClient, orgSlug),
     queryClient.invalidateQueries({
       queryKey: orpc.journal.list.key({ input: { orgSlug } }),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: orpc.journal.get.key({ input: { orgSlug } }),
     }),
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),

@@ -275,6 +275,7 @@ export const partyRouter = {
     orgInput.extend({
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
+      type: z.literal("invoice").optional(),
       cursor: z.uuid().optional(),
       limit: pageLimit,
     }),
@@ -290,7 +291,7 @@ export const partyRouter = {
     orgInput.extend({
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
-      type: z.enum(["receipt", "creditNote", "payment", "debitNote"]).optional(),
+      type: z.enum(["receipt", "creditNote", "payment", "debitNote", "journal"]).optional(),
       q: searchQuery,
       cursor: z.uuid().optional(),
       limit: pageLimit,

@@ -17,14 +17,26 @@ import {
   documentPageFields,
   entryLineFields,
   orderedPeriod,
+  positiveMoney,
   reason,
   settlementPostFields,
 } from "../lib/schemas";
-import { cancelDocument, documentListWhere, orgSettings, pageOf } from "../lib/settlements";
+import {
+  allocationsOf,
+  cancelDocument,
+  documentListWhere,
+  orgSettings,
+  pageOf,
+} from "../lib/settlements";
 
 const lineSchema = z.strictObject({
   ...entryLineFields,
   partyId: z.uuid().optional(),
+  allocations: z
+    .array(z.strictObject({ invoiceId: z.uuid(), amount: positiveMoney }))
+    .min(1)
+    .max(50)
+    .optional(),
 });
 
 const postInput = z
@@ -50,7 +62,13 @@ export const journalRouter = {
         documentDate: input.documentDate,
         narration: input.narration,
         reference: input.reference ?? null,
-        lines: input.lines,
+        lines: input.lines.map((line) => ({
+          ...line,
+          allocations: line.allocations?.map(({ invoiceId, amount }) => ({
+            documentId: invoiceId,
+            amountPaise: amount,
+          })),
+        })),
       });
     });
 
@@ -98,12 +116,16 @@ export const journalRouter = {
       if (!header) throw new ORPCError("NOT_FOUND", { message: "Journal not found." });
 
       // Only after the type check: a non-journal document's lines carry no entry side.
-      const lines = await entryLinesOf(orgId, header.id);
+      const [lines, allocations] = await Promise.all([
+        entryLinesOf(orgId, header.id),
+        allocationsOf(db, orgId, header.id, "source"),
+      ]);
 
       return {
         ...header,
         number: postedNumber(header.number, header.id),
         lines,
+        allocations,
       };
     },
   ),
@@ -155,7 +177,9 @@ export const journalRouter = {
     const { orgId } = context.scope;
     const settings = await orgSettings(orgId);
 
-    return capMasterList(await journalAccounts(db, orgId, { gstin: settings.gstin }));
+    return capMasterList(
+      await journalAccounts(db, orgId, { gstin: settings.gstin, controls: true }),
+    );
   }),
 
   cancel: orgProcedure(

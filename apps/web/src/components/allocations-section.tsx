@@ -76,6 +76,16 @@ function DocumentLink({ orgSlug, allocation }: { orgSlug: string; allocation: Al
           {number}
         </Link>
       );
+    case "journal":
+      return (
+        <Link
+          to="/$orgSlug/journals/$journalId"
+          params={{ orgSlug, journalId: id }}
+          className={LINK}
+        >
+          {number}
+        </Link>
+      );
     default:
       return <span className="font-mono">{number}</span>;
   }

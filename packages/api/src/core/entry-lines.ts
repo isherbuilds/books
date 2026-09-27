@@ -8,6 +8,8 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { journalAccounts } from "../lib/accounts";
 import { badRequest, impossible } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
+import type { AllocationTarget } from "./allocations";
+import type { SystemAccountKey } from "./chart-templates";
 import { accountLine, postDocument } from "./documents";
 
 type EntryLine = {
@@ -16,6 +18,7 @@ type EntryLine = {
   amount: bigint;
   description?: string;
   partyId?: string;
+  allocations?: readonly AllocationTarget[];
 };
 
 type PostEntryLinesInput = {
@@ -39,12 +42,13 @@ export async function postEntryLines(
   const resolvedAccounts = await journalAccounts(tx, scope.orgId, {
     gstin: null,
     ids: accountIds,
+    controls: input.type === "journal",
   });
 
   if (resolvedAccounts.length !== accountIds.length) {
     throw badRequest(
       "ACCOUNT_INVALID",
-      "Choose active leaf accounts; party control and GST accounts are posted by documents.",
+      "Choose active leaf accounts; unsupported party control and GST accounts are posted by documents.",
     );
   }
 
@@ -74,6 +78,21 @@ export async function postEntryLines(
 
   const accountById = new Map(resolvedAccounts.map((account) => [account.id, account]));
 
+  for (const line of input.lines) {
+    const systemKey = accountById.get(line.accountId)?.systemKey;
+
+    if (systemKey === "receivables" && !line.partyId) {
+      throw badRequest("PARTY_REQUIRED", "Choose a party for each receivables line.");
+    }
+
+    if (line.allocations?.length && (systemKey !== "receivables" || line.side !== "credit")) {
+      throw badRequest(
+        "ALLOCATION_TARGET_INVALID",
+        "Only receivables credit lines can allocate invoices.",
+      );
+    }
+  }
+
   const amountPaise = input.lines.reduce(
     (total, line) => (line.side === "debit" ? total + line.amount : total),
     0n,
@@ -91,9 +110,13 @@ export async function postEntryLines(
     };
   });
 
+  // SAFETY: journalAccounts resolved every line (checked above) and admits only null or
+  // system keys from JOURNAL_SYSTEM_KEYS plus `receivables`, all SystemAccountKey values.
   const journalLines = input.lines.map((line) => ({
     accountId: line.accountId,
     partyId: input.type === "journal" ? (line.partyId ?? null) : null,
+    systemKey: accountById.get(line.accountId)!.systemKey as SystemAccountKey | null,
+    allocations: line.allocations ?? [],
     side: line.side,
     amountPaise: line.amount,
   }));
@@ -129,6 +152,7 @@ export async function entryLinesOf(orgId: string, documentId: string) {
       accountId: accounts.id,
       accountName: accounts.name,
       accountCode: accounts.code,
+      accountSystemKey: accounts.systemKey,
       side: documentLines.entrySide,
       partyId: documentLines.partyId,
       partyName: parties.name,

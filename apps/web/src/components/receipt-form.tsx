@@ -30,8 +30,10 @@ import { z } from "zod";
 
 import {
   AllocationTable,
+  SettlementAllocationTotals,
   checkAllocations,
   reportRowErrors,
+  settlementRemaining,
   type OpenDocument,
 } from "@/components/allocation-table";
 import { AmountInput } from "@/components/amount-input";
@@ -194,7 +196,7 @@ export function ReceiptForm({
       .flatMap((page) => page.rows)
       .map((row) => ({
         ...row,
-        label: row.type === "invoice" ? "Invoice" : "Payment",
+        label: row.type === "invoice" ? "Invoice" : row.type === "journal" ? "Journal" : "Payment",
         openPaise: row.outstandingPaise,
       })) ?? [];
 
@@ -355,7 +357,7 @@ export function ReceiptForm({
         ...common,
         settlementKind: "against",
         partyId: values.partyId,
-        allocations: selected.map(({ id, amount }) => ({ invoiceId: id, amount })),
+        allocations: selected.map(({ id, amount }) => ({ documentId: id, amount })),
         adjustments,
         advanceSupply: values.advanceSupply ?? undefined,
       });
@@ -420,7 +422,7 @@ export function ReceiptForm({
           label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
           role="customer"
           clearable={settlementKind === "direct"}
-          // Allocations belong to the party's invoices.
+          // Allocations belong to the party's open items.
           onPartyChange={() => form.setValue("allocations", {})}
         />
 
@@ -507,10 +509,22 @@ export function ReceiptForm({
               openHeading="Outstanding"
               query={openItems}
               rows={openRows}
-              adjustmentsName="adjustments"
-              advanceRemainder
-              advanceField={advanceSupplyField}
-            />
+              name="allocations"
+              remainingFor={(documentId) =>
+                settlementRemaining(
+                  form.getValues("amount"),
+                  form.getValues("allocations"),
+                  form.getValues("adjustments"),
+                  documentId,
+                )
+              }
+            >
+              <SettlementAllocationTotals
+                adjustmentsName="adjustments"
+                advanceRemainder
+                advanceField={advanceSupplyField}
+              />
+            </AllocationTable>
           </>
         ) : null}
 

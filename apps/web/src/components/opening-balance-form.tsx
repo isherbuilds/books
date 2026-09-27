@@ -1,4 +1,5 @@
 import { Button } from "@accly/ui/components/button";
+import type { AppRouterClient } from "@accly/api/routers/index";
 import {
   Form,
   FormControl,
@@ -44,6 +45,9 @@ const SERVER_FIELDS = {
   OPENING_BALANCE_DATE_FUTURE: "documentDate",
 } satisfies Record<string, FieldPath<OpeningBalanceFormValues>>;
 
+const withoutReceivables = (rows: Awaited<ReturnType<AppRouterClient["journal"]["accounts"]>>) =>
+  rows.filter((account) => account.systemKey !== "receivables");
+
 export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
   const queryClient = useQueryClient();
   const { today } = useOrgDateTime();
@@ -54,7 +58,11 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
     defaultValues: { documentDate: "", lines: [blankEntryLine(), blankEntryLine()] },
   });
 
-  const accounts = useQuery(journalAccountOptions(orgSlug));
+  // Opening Balance refuses control accounts; `journal.accounts` admits receivables for Journals.
+  const accounts = useQuery({
+    ...journalAccountOptions(orgSlug),
+    select: withoutReceivables,
+  });
 
   const post = useMutation(
     orpc.openingBalance.post.mutationOptions({

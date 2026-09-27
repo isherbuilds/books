@@ -145,6 +145,8 @@ export type DebitNotePosting = Omit<BillPosting, "type" | "tdsPaise"> & {
 type JournalLinePosting = {
   accountId: string;
   partyId: string | null;
+  systemKey: SystemAccountKey | null;
+  allocations: readonly AllocationTarget[];
   side: EntrySide;
   amountPaise: bigint;
 };

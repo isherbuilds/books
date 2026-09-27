@@ -72,23 +72,23 @@ before writing, so a rerun completes a partial seed without duplicates.
 
 ## Commands
 
-| Command                      | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| `bun run dev`                | Services, migrations, all apps                       |
-| `bun run dev:status`         | Read-only service and migration check                |
-| `bun run check-types`        | Type-check packages and `tests/`                     |
-| `bunx oxlint`                | Non-writing lint check                               |
-| `bunx oxfmt --check .`       | Non-writing repository format check                  |
-| `bun run check`              | Run oxlint, then write formatting                    |
-| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test`  |
-| `bun run build`              | Production-build all workspaces                      |
-| `bun run db:up`              | Start PostgreSQL and SeaweedFS                       |
-| `bun run db:generate`        | Generate a migration from the schema                 |
-| `bun run db:migrate`         | Apply migrations                                     |
-| `bun run db:seed -- --reset` | Reset and seed; deletes local data                   |
-| `bun run db:seed:volume`     | 100,000 receipts per seeded organization by default  |
-| `bun run db:seed:demo`       | Add or complete the practical Cedar Components cases |
-| `bun run db:studio`          | Drizzle Studio                                       |
+| Command                      | Purpose                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `bun run dev`                | Services, migrations, all apps                                              |
+| `bun run dev:status`         | Read-only service and migration check                                       |
+| `bun run check-types`        | Type-check packages and `tests/`                                            |
+| `bunx oxlint`                | Non-writing lint check                                                      |
+| `bunx oxfmt --check .`       | Non-writing repository format check                                         |
+| `bun run check`              | Run oxlint, then write formatting                                           |
+| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test`                         |
+| `bun run build`              | Production-build all workspaces                                             |
+| `bun run db:up`              | Start PostgreSQL and SeaweedFS                                              |
+| `bun run db:generate`        | Generate a migration from the schema                                        |
+| `bun run db:migrate`         | Apply migrations                                                            |
+| `bun run db:seed -- --reset` | Reset and seed; deletes local data                                          |
+| `bun run db:seed:volume`     | 100,000 receipts each for Meridian Traders and Ridgeview Academy by default |
+| `bun run db:seed:demo`       | Add or complete the practical Cedar Components cases                        |
+| `bun run db:studio`          | Drizzle Studio                                                              |
 
 `benchmark:server`, `benchmark:rpc`, `benchmark:browser` and
 `benchmark:navigation` measure a running build. `benchmark:browser` times hard

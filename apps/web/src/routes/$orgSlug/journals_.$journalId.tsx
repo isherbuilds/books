@@ -9,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AllocationsSection } from "@/components/allocations-section";
 import { struck } from "@/components/document-columns";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
@@ -126,6 +127,7 @@ function JournalPage() {
         <Separator />
 
         <PostedLines lines={journal.lines} />
+        <AllocationsSection orgSlug={orgSlug} allocations={journal.allocations} />
       </PageBody>
 
       <ReasonDialog

@@ -362,7 +362,7 @@ export const paymentRouter = {
           .limit(1),
         settles && !isRefund
           ? db
-              .select({ unappliedPaise: settlementPaise(orgId, "source").balancePaise })
+              .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
               .from(documents)
               .where(and(eq(documents.orgId, orgId), eq(documents.id, input.paymentId)))
           : Promise.resolve([]),

@@ -42,10 +42,10 @@ HMS's settlement:
    with what is still owed. "Fill ₹X" completes the last line. "Over by ₹X"
    blocks posting. With no line, the invoice is a credit sale; this replaces
    the Pay later / Paid now toggle.
-6. **MRP.** Optional on an Item. When the item has one, the line shows
-   "MRP ₹X · N% off" under Rate, or a warning when Rate is above MRP. The PDF
-   gets an MRP column only when a line has one. With no MRP, nothing changes
-   anywhere, so general users do not see it.
+6. **MRP.** Optional on an Item. The line compares quantity × MRP with the
+   server's discounted, tax-inclusive line gross. It shows "MRP ₹X · N% off"
+   or an Above MRP warning. The PDF gets an MRP column only when a line has one.
+   With no MRP, general users see no hint or column.
 
 ## User stories
 
@@ -76,10 +76,11 @@ HMS's settlement:
   transaction value (CGST Act s. 15), and "N% off" is display only.
 - **`invoice.quote`** (new, `invoice: ["create"]`). It takes the invoice
   input without `draft`, runs `resolveInvoice` and writes nothing. It returns
-  `{ lines: [{ rateBasisPoints }], discountPaise,
+  `{ lines: [{ rateBasisPoints, grossPaise }], discountPaise,
 taxablePaise, cgstPaise, sgstPaise, igstPaise, roundOffPaise, totalPaise }`,
-  lines in request order; the editor computes each line's quantity times rate
-  itself. Its refusals are `resolveInvoice`'s own reasons. This follows
+  lines in request order. The editor computes each line's quantity times rate
+  itself; `grossPaise` is the discounted, tax-inclusive line amount. Its
+  refusals are `resolveInvoice`'s own reasons. This follows
   HMS's server quote (`WalkInQuote`) instead of calculating in the browser,
   because the rate depends on the invoice date through the tax schedule.
 - **Quote timing.** The form sends only complete lines (item, whole quantity
