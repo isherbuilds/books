@@ -18,6 +18,8 @@ export const money = z.string().regex(NON_NEGATIVE_MONEY_PATTERN).transform(pars
 
 export const positiveMoney = money.refine((value) => value > 0n);
 
+export const MAX_INVOICE_QUANTITY = 1_000_000;
+
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
 
@@ -168,7 +170,7 @@ export const invoiceFields = {
       z.object({
         kind: z.literal("item"),
         itemId: z.uuid(),
-        quantity: z.number().int().min(1).max(1_000_000),
+        quantity: z.number().int().min(1).max(MAX_INVOICE_QUANTITY),
         unitPrice: money.optional(),
         description: z.string().trim().max(200).optional(),
       }),
