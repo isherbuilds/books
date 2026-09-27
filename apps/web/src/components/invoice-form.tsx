@@ -330,6 +330,7 @@ export function InvoiceForm({
     quote.isFetching ||
     quote.isError ||
     quoteRequestValue !== debouncedRequest;
+
   const current = stale ? undefined : quoted;
 
   const lineQuotes: Array<InvoiceLineQuote | undefined> = [];

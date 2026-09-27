@@ -61,7 +61,9 @@ const creditLabel = (type: Credit["type"]) =>
       ? "Debit Note"
       : type === "payment"
         ? "Payment"
-        : "Receipt";
+        : type === "journal"
+          ? "Journal"
+          : "Receipt";
 
 const applyCreditSchema = z.object({
   amount: positiveAmount,

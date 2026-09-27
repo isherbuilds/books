@@ -3,12 +3,14 @@ import { allocations } from "@accly/db/schema/allocations";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
+import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
 import {
   and,
   asc,
   desc,
   eq,
+  exists,
   gte,
   gt,
   ilike,
@@ -222,7 +224,7 @@ export async function discardDraft(
 export async function listClaims(orgId: string, type: Claim, input: ClaimListInput) {
   // `overdue` compares due dates with today, so the time zone is read first.
   const today = businessDate(new Date(), await orgTimeZone(orgId));
-  const { capacityPaise, balancePaise } = settlementPaise(orgId, "target");
+  const { capacityPaise, balancePaise } = settlementPaise(orgId, "target", null);
 
   const page = await db
     .select({
@@ -378,9 +380,10 @@ function afterPickerCursor(orgId: string, cursor: string | undefined) {
 /** One page of the claims still open for the party and side, oldest first. */
 export async function openItems(
   orgId: string,
-  input: PickerPage & { partyId: string; side: "receivable" | "payable" },
+  input: PickerPage & { partyId: string; side: "receivable" | "payable"; type?: "invoice" },
+  canReadJournals: boolean,
 ) {
-  const outstandingPaise = settlementPaise(orgId, "target").balancePaise;
+  const outstandingPaise = settlementPaise(orgId, "target", input.partyId).balancePaise;
 
   const rows = await db
     .select({
@@ -395,11 +398,33 @@ export async function openItems(
     .where(
       and(
         eq(documents.orgId, orgId),
-        eq(documents.partyId, input.partyId),
+        or(
+          eq(documents.partyId, input.partyId),
+          and(
+            eq(documents.type, "journal"),
+            exists(
+              db
+                .select({ id: partyLedgerLines.id })
+                .from(partyLedgerLines)
+                .where(
+                  and(
+                    eq(partyLedgerLines.orgId, orgId),
+                    eq(partyLedgerLines.documentId, documents.id),
+                    eq(partyLedgerLines.partyId, input.partyId),
+                    eq(partyLedgerLines.kind, "post"),
+                    eq(partyLedgerLines.side, "receivable"),
+                    gt(partyLedgerLines.amountPaise, 0n),
+                  ),
+                ),
+            ),
+          ),
+        ),
         eq(documents.state, "posted"),
+        input.type ? eq(documents.type, input.type) : undefined,
         input.side === "receivable"
           ? or(
               eq(documents.type, "invoice"),
+              canReadJournals ? eq(documents.type, "journal") : undefined,
               and(
                 eq(documents.type, "payment"),
                 eq(documents.settlementKind, "against"),
@@ -429,11 +454,11 @@ export async function openCredits(
   input: PickerPage & {
     partyId: string;
     side: "receivable" | "payable";
-    type?: "receipt" | "creditNote" | "payment" | "debitNote";
+    type?: "receipt" | "creditNote" | "payment" | "debitNote" | "journal";
     q?: string;
   },
 ) {
-  const unappliedPaise = settlementPaise(orgId, "source").balancePaise;
+  const unappliedPaise = settlementPaise(orgId, "source", input.partyId).balancePaise;
 
   const rows = await db
     .select({
@@ -447,11 +472,32 @@ export async function openCredits(
     .where(
       and(
         eq(documents.orgId, orgId),
-        eq(documents.partyId, input.partyId),
+        or(
+          eq(documents.partyId, input.partyId),
+          and(
+            eq(documents.type, "journal"),
+            exists(
+              db
+                .select({ id: partyLedgerLines.id })
+                .from(partyLedgerLines)
+                .where(
+                  and(
+                    eq(partyLedgerLines.orgId, orgId),
+                    eq(partyLedgerLines.documentId, documents.id),
+                    eq(partyLedgerLines.partyId, input.partyId),
+                    eq(partyLedgerLines.kind, "post"),
+                    eq(partyLedgerLines.side, "receivable"),
+                    lt(partyLedgerLines.amountPaise, 0n),
+                  ),
+                ),
+            ),
+          ),
+        ),
         eq(documents.state, "posted"),
         input.type ? eq(documents.type, input.type) : undefined,
         input.side === "receivable"
           ? or(
+              eq(documents.type, "journal"),
               eq(documents.type, "creditNote"),
               and(
                 eq(documents.type, "receipt"),

@@ -23,6 +23,7 @@ import type { Scope } from "../lib/procedures/factory";
 import {
   activeAllocationsOf,
   applyAllocations,
+  lockDocuments,
   settlementPaise,
   type AllocationPair,
   type AllocationTarget,
@@ -493,12 +494,12 @@ export async function postDocument(
     input,
   );
 
-  // The party-ledger line and the allocations this posting makes. A direct settlement,
-  // a Journal and an Opening Balance make neither.
-  let ledger: { partyId: string; side: "receivable" | "payable"; amountPaise: bigint } | null =
-    null;
+  // A Journal can carry one receivables movement for each party; other documents
+  // carry at most one party-ledger movement.
+  const ledgers: { partyId: string; side: "receivable" | "payable"; amountPaise: bigint }[] = [];
 
   let pairs: AllocationPair[] = [];
+  let journalPairs: Map<string, Map<string, bigint>> | null = null;
   let requiredSourceType: "creditNote" | undefined;
 
   const settles = (targets: readonly AllocationTarget[]) =>
@@ -524,27 +525,32 @@ export async function postDocument(
 
   switch (posting.type) {
     case "invoice":
-      ledger = { partyId: posting.partyId, side: "receivable", amountPaise: posting.amountPaise };
+      ledgers.push({
+        partyId: posting.partyId,
+        side: "receivable",
+        amountPaise: posting.amountPaise,
+      });
       break;
     case "bill":
-      ledger = {
+      ledgers.push({
         partyId: posting.partyId,
         side: "payable",
         amountPaise: -(posting.amountPaise - posting.tdsPaise),
-      };
+      });
       break;
     case "creditNote":
     case "debitNote": {
-      ledger =
+      ledgers.push(
         posting.type === "creditNote"
           ? { partyId: posting.partyId, side: "receivable", amountPaise: -posting.amountPaise }
-          : { partyId: posting.partyId, side: "payable", amountPaise: posting.amountPaise };
+          : { partyId: posting.partyId, side: "payable", amountPaise: posting.amountPaise },
+      );
 
       // `note.post` locked the source; the note settles what remains of it.
       if (!input.againstDocumentId) throw impossible(`${posting.type} ${id} has no source`);
 
       const [source] = await tx
-        .select({ outstandingPaise: settlementPaise(scope.orgId, "target").balancePaise })
+        .select({ outstandingPaise: settlementPaise(scope.orgId, "target", null).balancePaise })
         .from(documents)
         .where(and(eq(documents.orgId, scope.orgId), eq(documents.id, input.againstDocumentId)));
 
@@ -563,16 +569,16 @@ export async function postDocument(
 
     case "receipt":
       if (posting.settlementKind === "advance") {
-        ledger = {
+        ledgers.push({
           partyId: posting.partyId,
           side: "receivable",
           amountPaise: -posting.amountPaise,
-        };
+        });
       } else if (posting.settlementKind === "against") {
         const settledPaise =
           posting.amountPaise + sumPaise(posting.adjustments.map((row) => row.amountPaise));
 
-        ledger = { partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise };
+        ledgers.push({ partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise });
         pairs = settles(posting.allocations);
         assertFullyAllocated(pairs, posting.adjustments.length > 0, settledPaise);
       }
@@ -594,7 +600,11 @@ export async function postDocument(
 
       if (posting.exposureSide === "receivable") {
         // A refund pays out credit notes; the router checked the amounts match.
-        ledger = { partyId: posting.partyId, side: "receivable", amountPaise: posting.amountPaise };
+        ledgers.push({
+          partyId: posting.partyId,
+          side: "receivable",
+          amountPaise: posting.amountPaise,
+        });
         pairs = posting.sources.map(({ documentId, amountPaise }) => ({
           sourceDocumentId: documentId,
           targetDocumentId: id,
@@ -605,31 +615,87 @@ export async function postDocument(
         const settledPaise =
           posting.amountPaise + sumPaise(posting.writeOffs.map((row) => row.amountPaise));
 
-        ledger = { partyId: posting.partyId, side: "payable", amountPaise: settledPaise };
+        ledgers.push({ partyId: posting.partyId, side: "payable", amountPaise: settledPaise });
         pairs = settles(posting.allocations);
         assertFullyAllocated(pairs, posting.writeOffs.length > 0, settledPaise);
       } else {
-        ledger = { partyId: posting.partyId, side: "payable", amountPaise: posting.amountPaise };
+        ledgers.push({
+          partyId: posting.partyId,
+          side: "payable",
+          amountPaise: posting.amountPaise,
+        });
       }
 
       break;
+    case "journal": {
+      const byParty = new Map<string, bigint>();
+      journalPairs = new Map();
+
+      for (const line of posting.lines) {
+        if (line.systemKey !== "receivables") continue;
+
+        if (!line.partyId) throw impossible(`journal ${id} has a receivables line without a party`);
+        byParty.set(
+          line.partyId,
+          (byParty.get(line.partyId) ?? 0n) +
+            (line.side === "debit" ? line.amountPaise : -line.amountPaise),
+        );
+
+        if (line.allocations.length > 0) {
+          const partyPairs = journalPairs.get(line.partyId) ?? new Map<string, bigint>();
+
+          for (const target of line.allocations) {
+            partyPairs.set(
+              target.documentId,
+              (partyPairs.get(target.documentId) ?? 0n) + target.amountPaise,
+            );
+          }
+
+          journalPairs.set(line.partyId, partyPairs);
+        }
+      }
+
+      for (const [partyId, amountPaise] of byParty) {
+        if (amountPaise !== 0n) ledgers.push({ partyId, side: "receivable", amountPaise });
+      }
+
+      break;
+    }
   }
 
-  if (ledger)
+  for (const line of ledgers)
     await writePartyLedgerLine(tx, scope.orgId, {
-      ...ledger,
+      ...line,
       documentId: id,
       kind: "post",
       entryDate: input.documentDate,
     });
 
-  if (pairs.length > 0)
+  if (journalPairs) {
+    const targetIds = [...journalPairs.values()].flatMap((targets) => [...targets.keys()]);
+
+    // Lock every target in id order before the per-party applies take their own locks.
+    if (targetIds.length > 0) await lockDocuments(tx, scope.orgId, targetIds);
+
+    for (const [partyId, targets] of journalPairs)
+      await applyAllocations(tx, scope, {
+        pairs: [...targets].map(([targetDocumentId, amountPaise]) => ({
+          sourceDocumentId: id,
+          targetDocumentId,
+          amountPaise,
+        })),
+        draftDocumentId: id,
+        entryDate: input.documentDate,
+        partyId,
+      });
+  } else if (pairs.length > 0) {
     await applyAllocations(tx, scope, {
       pairs,
       draftDocumentId: id,
       entryDate: input.documentDate,
       requiredSourceType,
     });
+  }
 
   const [firstLine] = input.lines;
 

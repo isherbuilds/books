@@ -56,10 +56,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    registry, customizer or F-keys until H4 fails.
 7. **Palette**: a cmdk `Command` (`shouldFilter={false}`) in the Base UI
    `Dialog`, opened by Mod+K or the sidebar trigger. Groups: route actions,
-   navigation, Organization switch, cached Parties, and Receipts from
-   `receipt.list({ q })` debounced 200 ms. `rankCommands` ranks groups by best
-   match and caps Parties and Receipts at eight rows. Cancel opens the reason
-   dialog. Query keys carry `orgSlug`.
+   navigation, Organization switch, Parties and Documents. The palette searches
+   Invoices, Receipts, Bills, Payments and Notes after a 200 ms debounce.
+   `rankCommands` ranks groups by best match and caps Parties and Documents
+   at eight rows each. Cancel opens the reason dialog. Query keys carry `orgSlug`.
 8. **Overlays by URL.** List routes take `create` only for Sheet-hosted forms,
    and record Sheets take `edit`. For record Sheets, the list is a layout route
    with an `Outlet`, and the record is its child (`receipts/$receiptId.tsx`).
@@ -68,7 +68,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    `parties_.$partyId` owns editing. Its Transactions tab lists every Invoice,
    Bill, Note, Receipt and Payment naming the party (`party.transactions`, one
    keyset page of 25 at a time, only the types the member may read), as Zoho's
-   contact page does. Journals link to `/journals/new`, and a
+   contact page does. A Journal names parties on its lines, not its header, so
+   it appears on the party's Statement and open items, not on Transactions. Journals link to `/journals/new`, and a
    journal record is a page at `/journals/$journalId`. Invoices link to
    `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
    Invoice record stays a Sheet.
@@ -91,8 +92,9 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     A dated page opened without dates moves to its default period in the URL
     (`requirePeriod`): this month for Invoices, Bills, Receipts and Payments;
     this financial year for Notes, Journals and a party's Transactions and
-    Ledger. All time is an explicit `?all=true`. Search text or a party filter
-    makes a register a lookup, so it keeps the whole history. A register row
+    Ledger. All time is an explicit `?all=true`. Search text or a Party
+    filter opened without dates skips the default period and shows all history;
+    existing date filters stay active. A register row
     carries only what its columns, card, palette entry and cursor read;
     everything else is one click away in the record Sheet. Search still
     matches the reference and narration on the server.
@@ -160,8 +162,11 @@ financial rollback are not adopted.
    - Interfaces: `DocumentForm`, `PostBar` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through
      `AllocationsSection` (the other document linked by type, Reverse while
-     active); the Receipt and Payment forms allocate through
-     `AllocationTable` and its pure `checkAllocations`; `PaymentMethodField`
+     active); the Receipt, Payment and Journal forms allocate through
+     `AllocationTable` and its pure `checkAllocations`. The table takes the
+     form path, a `remainingFor` callback and its totals as children, never a
+     mode prop: a new caller brings its own capacity rule and totals, and the
+     shared grid stays unchanged. `PaymentMethodField`
      picks the method in the Invoice, Receipt and Payment forms;
      `DocumentTotals` shows an Invoice's or Bill's totals and `ClaimStatus`
      its settlement. Each write invalidates the set for what it moved:
@@ -197,8 +202,8 @@ financial rollback are not adopted.
      section Link Field), Bill (lines with `itcEligible`, an optional TDS
      section, due date, and the Invoice settlement display and cancellation
      flow), and Credit and Debit Notes against a source Document are
-     implemented. Import remains open: template download, upload, row errors
-     listed, nothing written on any error.
+     implemented. Import remains open as accounting-core slice 7c: template
+     download, upload, row errors listed, nothing written on any error.
      Payment offers Against only to roles that can read Bills and Notes; its
      Credit Note refund picker filters on the server before the page.
      Sheet-hosted document forms use `DocumentForm` with the four posting

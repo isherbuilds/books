@@ -1,8 +1,9 @@
 # Spec: Accounting core
 
-Status: slices 1–3, 4a, 4b-i, 4b-ii, 5 (Journal, Opening Balance, locks)
-and 8 (chart of accounts) are implemented. Slices 6–7 and 9 (party Journals)
-are open; remaining runtime and CA acceptance work is in the work registry.
+Status: slices 1–3, 4a, 4b-i, 4b-ii, 5 (Journal, Opening Balance, locks),
+8 (chart of accounts) and 9 (party Journals, 9a and 9b) are implemented.
+Slices 6 (reports, 6a–6d) and 7 (import, 7a–7c) are open and specified;
+remaining runtime and CA acceptance work is in the work registry.
 Authority: the founder's decisions. `docs/research` and Git keep the evidence
 behind them.
 
@@ -70,7 +71,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 - **Party Ledger Line**: exposure per document, party and side, positive when
   the Party owes the Organization. An Invoice, a non-direct Receipt and an
   advance Payment write one; from slice 9 a Journal writes one per party and
-  side it touches.
+  side it touches; from slice 7 each opening item writes one, dated the cutover.
 - **TDS Section**: a Form 140 `code` (Income-tax Act 2025), `rateBasisPoints`,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited. The
   database refuses a duplicate (org, code, start); the writer keeps ranges
@@ -136,8 +137,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 8. **External posting is post-MVP.** References, digests, deduplication,
    ingestion and API keys arrive together.
 9. **Reports.** Accounting reports read journal lines. P&L and balance sheet
-   come from Statement Definitions. Each report states its range, and
-   `unclosed` until period close exists.
+   come from Statement Definitions: account `type` and the chart's group tree
+   (slice 6). Each report states its range, and prints "period not closed"
+   until period close exists.
 10. **Roles.** `owner`: everything. `accountant`: masters, every document,
     allocations, reports, exports. `ca`: reads everything, exports, sets locks
     and exceptions, never posts. `operator`: creates and posts Receipt, Payment
@@ -201,8 +203,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     from its `receivables` lines, never from net control exposure. Slice 9a
     admits only `receivables` to Journals, so the two agree until another
     control account is admitted with its own settlement rule.
-    Sources hold a credit: `advance` and `against` Receipts, and from slice 9a
-    a Journal with a `receivables` credit. Targets hold a debit: Invoices, and
+    Sources hold a credit: `advance` and `against` Receipts, from slice 9a
+    a Journal with a `receivables` credit, and from slice 7 an `openingCredit`.
+    Targets hold a debit: Invoices, from slice 7 an `openingClaim`, and
     from slice 9b a Journal with a `receivables` debit. A `direct` Receipt
     credits income, holds no exposure and is neither
     (`ALLOCATION_SOURCE_INVALID`). Active means an apply without a reverse.
@@ -268,8 +271,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    CGST, SGST or IGST credits. Positive round-off is a credit; negative
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
-   Account is not `notASupply`. Any line with a Tax Rate prints Tax Invoice;
-   otherwise it prints Bill of Supply. `invoice.get` and `bill.get` return
+   Account is not `notASupply`. The returned `printClass` is `taxInvoice` when
+   any line has a Tax Rate, otherwise `billOfSupply`; it does not change the
+   PDF title (see Invoice PDF below). `invoice.get` and `bill.get` return
    `totals` (taxable, CGST, SGST and IGST) summed on the server, which the
    detail, the draft editor and the PDF show. CA acceptance of the GST seed is
    open.
@@ -403,11 +407,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      settling adjustments allocates its whole capacity, so no advance
      remainder mixes with a write-off (`ADJUSTMENT_UNALLOCATED`). Adjustments
      are stored as account lines with `adjustmentKind`.
-   - **Header discount** (Invoice). Optional `discount`, or `discountPercent`
+   - **Header discount** (Invoice). Optional `discount` or `discountPercent`
      (up to two decimals, above 0 and at most 100, half-up to the paisa on the
-     subtotal; a percentage takes precedence), splits pro rata over
-     each line's pre-discount value, half-up. Correct rounding on the first
-     largest line, then other lines in input order if needed, so every line's
+     subtotal) splits pro rata over each line's pre-discount value, half-up.
+     Supplying both is `BAD_REQUEST` (`DISCOUNT_CONFLICT`). Rounding starts on the
+     largest line, then follows input order if needed, so every line's
      discount stays between zero and its pre-discount value. A line stores its `discountPaise`, and
      `amountPaise` stays the taxable value after discount. A discount above
      the subtotal is `DISCOUNT_EXCEEDS_SUBTOTAL`; a zero total stays
@@ -420,9 +424,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      (`SETTLEMENT_EXCEEDS_TOTAL`). The Invoice numbers before its Receipts, in
      line order. Needs `invoice:post` and `receipt:post`
      ([invoice editor](./invoice-editor.md)).
-   - **Cancel and copy.** `invoice.amend` and `bill.amend` take
-     `{ id, reason }`, cancel under the normal rules and return a new draft
-     copying the header and lines with `amendedFromId`. Need `cancel` and
+   - **Cancel and copy.** `invoice.amend` takes `{ invoiceId, reason }` and
+     `bill.amend` takes `{ billId, reason }`. Each cancels under the normal
+     rules and returns a new draft copying the header and lines with
+     `amendedFromId`. Need `cancel` and
      `create` on the type. Audited.
      An Invoice or Bill with any posted note against it refuses both cancel
      and amend (`CONFLICT`, naming the notes).
@@ -508,9 +513,256 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
        row `FOR KEY SHARE`, so `file.delete` waits; a duplicate insert returns
        `CONFLICT` (`a716b6c:packages/api/src/routers/opd.ts:933-1003`).
-6. **Reports.** Open. Trial balance, ledger, party statement, day book, P&L and
-   balance sheet in JSON, XLSX and PDF. The trial balance equals a direct sum.
-   One year runs in p95 under 100 ms at 100,000 lines.
+6. **Reports.** Open, in four parts; 6a is the proof slice for the shared
+   report path and the latency budget, so it goes first. Trial balance,
+   account ledger, day book, P&L and balance sheet are Accounting reports
+   (call 15) over journal lines joined to their journal entries; the party
+   statement is the Billing report `party.statement` already serves. Each report
+   has one query and builder in the API; its JSON procedure, XLSX export and
+   PDF all read that builder's result shape, so the three formats show the
+   same figures. ERPNext, Zoho Books and TallyPrime
+   were checked for the shapes below
+   ([reference](../research/reports-and-import-references-2026-09-27.md)).
+   The shared contract:
+
+   - **Dates.** Inclusive `from` and `to` (`orderedPeriod`), or one `asOf`,
+     in the Organization's calendar. Activity is dated by
+     `journal_entries.entryDate`. A cancelled document's post and reverse
+     entries each count on their own date; no Accounting report filters on
+     `documents.state`, so a closed month never changes when a later
+     cancellation posts. A period's opening is the sum of every line dated
+     before `from`, the Opening Balance entry included; there is no opening
+     flag.
+   - **Amounts.** bigint paise through the procedure, as `party.statement`
+     returns them; rupee numbers only in XLSX cells (Development);
+     `formatMoney` on screen and in PDF. A debit and credit pair is two
+     non-negative columns; a balance is one signed figure shown Dr or Cr.
+   - **Accounts.** Every account with a non-zero opening or a line in range
+     appears, archived ones included and marked Inactive; a row whose
+     opening, debits and credits are all zero is dropped. Rows sort by
+     account code.
+   - **Size.** Summary reports (trial balance, P&L, balance sheet) have one
+     row per account and no bound. Detail reports (account ledger, day book,
+     party statement) take a server-chosen line limit: 5,000 for JSON and
+     PDF, 100,000 for XLSX, which calls the builder itself, never the capped
+     procedure. The query fetches limit + 1 lines and, above the limit, the
+     call is `BAD_REQUEST` `REPORT_TOO_LARGE` with "choose a shorter period";
+     nothing is truncated. `party.statement` keeps its 5,000 bound and takes
+     the code. There is no pagination: a CA reads a whole period.
+   - **Permissions.** Accounting reports need `report:readFinancial` (owner,
+     accountant, ca). XLSX adds `export:read`. A PDF route calls the JSON
+     procedure, so it needs the same grant. The party statement keeps
+     `{ party: read, report: read }`; its XLSX adds `export:read`.
+   - **Header.** Each result carries a `ReportHeader`: `organization:
+{ legalName, gstin: string | null }` and `timeZone` from
+     `organization_settings`, the range as requested, and `generatedAt` (an
+     instant). XLSX rows 1–4 hold the legal name, the report title, the range
+     and "Generated <date and time in the Organization zone> · period not
+     closed" (call 9), then the header row. The PDF prints the same header on
+     every page, a repeating table header and page numbers; `pdf-render.tsx`
+     today repeats only the footer, so 6a extends it without changing the
+     Receipt and Invoice PDFs.
+   - **Statement definition** (call 9). The P&L and balance sheet take their
+     sections from account `type` and their grouping from the chart's
+     `parentId` tree; there is no mapping table. Their titles are "Profit and
+     loss" and "Balance sheet"; neither claims Schedule III (Deferred).
+   - **Where.** `report.{trialBalance,profitAndLoss,balanceSheet,accountLedger,dayBook}`
+     in `packages/api/src/routers/report.ts`; SQL in
+     `packages/api/src/lib/reports.ts`; pure builders in
+     `packages/api/src/core/reports.ts`. XLSX in `export.*Xlsx`. PDF at
+     `/api/$orgSlug/reports/<report>/pdf?…` through `pdfResponse`, as the
+     Invoice PDF. Web pages at `/$orgSlug/reports/<report>` (flat route files
+     `reports_.<report>.tsx`) with a period control from `date-presets`, the
+     table, and Download XLSX and PDF. Report tables may scroll sideways
+     (Design §8). `/$orgSlug/reports` becomes the index: each report the
+     member may read, then the existing GST and TDS registers, each gated by
+     its own grant.
+
+   **6a. Trial balance and latency proof.**
+   - `report.trialBalance({ from, to })` returns
+     `{ organization, from, to, rows, totals }`; a row is
+     `{ accountId, code, name, type, parentName, active, openingDebitPaise, openingCreditPaise, debitPaise, creditPaise, closingDebitPaise, closingCreditPaise }`
+     and `totals` holds the six sums. Rows are posting leaves; `parentName`
+     names the group, as the chart shows it. Opening `O` is
+     `sum(debit - credit)` before `from`, shown Dr when positive; closing is
+     `O + debit - credit`, shown the same way. One report reads one database
+     snapshot: the two grouped aggregates run in one read-only Repeatable Read
+     transaction, as `invoice.get` does (legacy below). Opening, period and closing totals each balance;
+     an unbalanced total is an invariant failure (`impossible`, a 500), never a
+     difference row.
+   - `export.trialBalanceXlsx({ from, to })` adds a totals row. PDF at
+     `/api/$orgSlug/reports/trial-balance/pdf?from=&to=`. Page
+     `/$orgSlug/reports/trial-balance`, default this financial year; desktop
+     columns Code, Account, Opening, Debit, Credit, Closing; mobile cards show
+     Account, Opening and Closing.
+   - **Latency.** `scripts/benchmark-rpc.ts` gains a `trial_balance` scenario:
+     the last 365 days for Meridian Traders after `bun run db:seed:volume`
+     (about 200,000 journal lines, twice the target volume). Target p95 under
+     100 ms on native PostgreSQL. Record the numbers and
+     `EXPLAIN (ANALYZE, BUFFERS)` in the work registry. If the existing
+     `journal_entries_org_date_idx` and `journal_lines_org_entry_idx` miss,
+     try in order: an index `journal_lines (org_id, entry_id) include
+(account_id, debit, credit)`; then `entry_date` copied onto
+     `journal_lines` from the entry being written, by both `recordEntry` and
+     `reverseEntries` (lines are immutable; a reversal line takes the
+     reversal's date), with an index
+     `(org_id, account_id, entry_date) include (debit, credit)`. Schema
+     changes follow rule 4. The period-close snapshot stays Deferred unless
+     both miss.
+   - Acceptance, on one proprietorship Organization. April is the first month
+     of the financial year before the one containing the run date, and 31
+     March is the day before it. Opening Balance on
+     31 March (`Cash in Hand` 50,000 Dr, `Capital Account` 50,000 Cr); an
+     exempt Invoice to Priya for 10,000 on 10 April; a Receipt `against` it
+     for 4,000 on 12 April, into `Cash in Hand`; a Journal Dr `Sibling
+Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
+     on 28 April, cancelled during the test, so `reverseDocument` dates its
+     reversal the run date. The April trial balance shows `Cash in Hand`
+     opening 50,000 Dr and closing 53,500 Dr, and the Journal's lines; the
+     trial balance for today shows only its reversal; every account's
+     closing equals `sum(debit) - sum(credit)` through `to`, computed directly
+     in the test; the XLSX totals row equals the JSON totals; the PDF answers
+     `application/pdf`; an operator is `FORBIDDEN`. The benchmark p95 is
+     recorded under 100 ms.
+   - Verify: new `tests/integration/report.test.ts` (the acceptance as one
+     happy path, the operator refusal as the failure path); new
+     `tests/unit/reports.test.ts` for `buildTrialBalance` (Dr/Cr netting,
+     zero-row drop); the `GUARDED_CALLS` table; `bun run check-types`;
+     `bun run benchmark:rpc` at volume; the page at 1440 and 390 px in both
+     themes.
+   - Depends on: none. Owns: `packages/api/src/routers/report.ts`,
+     `packages/api/src/lib/reports.ts`, `packages/api/src/core/reports.ts`,
+     `apps/web/src/lib/report-pdf.tsx`,
+     `apps/web/src/routes/api.$orgSlug.reports.trial-balance.pdf.ts`,
+     `apps/web/src/routes/$orgSlug/reports_.trial-balance.tsx`,
+     `tests/integration/report.test.ts`, `tests/unit/reports.test.ts`.
+     Touches (coordinator-owned): `packages/api/src/routers/index.ts`,
+     `packages/api/src/routers/export.ts`,
+     `apps/web/src/routes/$orgSlug/reports.tsx`, `apps/web/src/lib/pdf-render.tsx`,
+     `tests/integration/tenancy.test.ts`, `scripts/benchmark-rpc.ts`, and,
+     only if the index fallback runs, `packages/db/src/schema/journal-lines.ts`
+     and `packages/api/src/core/posting.ts`.
+   - Interfaces: `accountActivity(orgId, range)` in `lib/reports.ts`, where
+     `range` is `{ before: string } | { from: string; to: string } | { through: string }`,
+     returns `{ accountId, debitPaise, creditPaise }[]` for 6b.
+     `reportHeader(orgId, range)` returns
+     `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from?: string; to?: string } | { asOf: string }; generatedAt: Date }`.
+     `reportTooLarge(limit)` in `lib/reports.ts` builds the
+     `REPORT_TOO_LARGE` error for 6c and 6d. `ReportPdf` in `report-pdf.tsx`
+     takes `{ header, title, columns, rows, totals }`;
+     `reportXlsx(header, title, columns, rows, totals?)` in `export.ts`
+     writes the four header rows.
+
+   **6b. P&L and balance sheet.**
+   - `report.profitAndLoss({ from, to })`: Income (credit less debit) and
+     Expenses (debit less credit) for the period, each a tree of groups with
+     subtotals and leaves; zero leaves and empty groups are dropped.
+     `netProfitPaise` is income less expenses; a negative figure is a loss.
+   - `report.balanceSheet({ asOf })`: Assets (debit less credit), Liabilities
+     and Equity (credit less debit), cumulative through `asOf`, as trees.
+     Equity adds two computed rows because no year-end close posts
+     (Deferred): "Profit and loss, current year" (income less expenses from
+     the start of the financial year containing `asOf` through `asOf`) and
+     "Profit and loss, earlier years" (everything before it). Opening Balance
+     lines on income or expense leaves count in the row of the financial year
+     containing the cutover. A negative balance stays in its section as a
+     negative figure (an overdrawn bank is a negative asset); nothing is
+     reclassified. Assets must equal liabilities plus equity plus both rows,
+     or the call is an invariant failure.
+   - XLSX `export.profitAndLossXlsx` and `export.balanceSheetXlsx` indent
+     groups; PDF and pages as 6a at `profit-and-loss` (default this financial
+     year) and `balance-sheet` (default today).
+   - Acceptance, on the 6a fixture plus a `direct` Payment of 3,000 to an
+     expense on 20 April: April P&L shows income 10,000, expenses 3,500 (the
+     payment and the Journal) and net profit 6,500; the balance sheet at 30
+     April balances with a current-year row of 6,500; a posting dated in the
+     previous financial year lands in the earlier-years row; the P&L for a
+     whole financial year equals the balance sheet's current-year row on its
+     last day. `profit_and_loss` and `balance_sheet` benchmark scenarios over
+     365 days record p95 under 100 ms at volume.
+   - Verify: `tests/integration/report.test.ts` extended (the acceptance as
+     one path); `tests/unit/reports.test.ts` for the tree subtotals and the
+     balance check; `GUARDED_CALLS`; `bun run check-types`; the benchmark;
+     both pages at 1440 and 390 px in both themes.
+   - Depends on: 6a. Owns:
+     `apps/web/src/routes/$orgSlug/reports_.profit-and-loss.tsx`,
+     `apps/web/src/routes/$orgSlug/reports_.balance-sheet.tsx`,
+     `apps/web/src/routes/api.$orgSlug.reports.profit-and-loss.pdf.ts`,
+     `apps/web/src/routes/api.$orgSlug.reports.balance-sheet.pdf.ts`.
+     Touches: the 6a-owned report modules and tests and the
+     coordinator-owned files.
+   - Interfaces: a statement node is
+     `{ accountId, code, name, amountPaise, children }`; groups carry their
+     subtotal in `amountPaise`.
+
+   **6c. Account ledger and day book.**
+   - `report.accountLedger({ accountId, from, to })` takes any account of the
+     Organization, archived and system accounts included; a group is
+     `BAD_REQUEST` `ACCOUNT_INVALID`, and a foreign id is `NOT_FOUND`, checked
+     in parallel with the lines (legacy below). It returns `openingPaise`,
+     `lines` of
+     `{ entryId, entryDate, kind, documentId, documentType, number, narration, partyName, debitPaise, creditPaise, balancePaise }`
+     ordered by entry date, entry id and line id, and `closingPaise`;
+     balances are signed, debit positive. A `reverse` row reads "Reversal of
+     <number>". An allocation entry (document type `allocation`) shows
+     "Allocation" and no link.
+   - `report.dayBook({ from, to, documentType? })` returns entries
+     `{ entryId, entryDate, kind, documentId, documentType, number, narration, lines: [{ accountCode, accountName, partyName, debitPaise, creditPaise }] }`
+     ordered by entry date, then `postedAt`, then id, with debit and credit
+     totals; the size bound counts lines. `number` is `string | null`: an
+     allocation entry shows number null, narration "Allocation" and no link,
+     as in the ledger, and `documentType` may filter on `allocation`.
+     `export.dayBookXlsx` changes from
+     `{ date }` to `{ from, to, documentType? }` and reads this result; the
+     Reports index's one-day card becomes the Day book page. Clean cutover:
+     no single-date form stays.
+   - Web: `/$orgSlug/reports/account-ledger?accountId=&from=&to=`, with an
+     account combobox over `account.list` (archived included); a trial
+     balance row links to it for the same period. `/$orgSlug/reports/day-book`,
+     default today. Document numbers link to their records, as the party
+     Ledger does.
+   - Acceptance, on the 6a fixture: the `Cash in Hand` ledger for April opens
+     at 50,000 Dr, shows the Receipt (4,000 Dr) and the Journal (500 Cr) and
+     closes at 53,500 Dr; for today it shows the reversal. The day book for
+     today lists the reversal with totals equal to the Journal's. The
+     ledger builder called with `limit: 1` for 28 April through today is
+     `REPORT_TOO_LARGE`, and with `limit: 100` returns the Journal line and
+     its reversal.
+   - Verify: `tests/integration/report.test.ts` extended; the day book test
+     in `tests/integration/receipt.test.ts` moves to the range input;
+     `GUARDED_CALLS`; `bun run check-types`; both pages in the app at 1440 and
+     390 px in both themes.
+   - Depends on: 6a. Owns: `apps/web/src/routes/$orgSlug/reports_.account-ledger.tsx`,
+     `apps/web/src/routes/$orgSlug/reports_.day-book.tsx`, and their two PDF
+     routes. Touches: the 6a-owned report modules and tests,
+     `tests/integration/receipt.test.ts`, and the coordinator-owned files.
+   - Interfaces: the ledger and day book builders take `{ limit }` so the
+     procedure and XLSX pass 5,000 and 100,000.
+
+   **6d. Party statement exports.**
+   - `party.statement` gains the `ReportHeader` and
+     `party: { name, gstin, address, stateCode }` and throws
+     `REPORT_TOO_LARGE` above 5,000 lines. Its `from` and `to` stay optional:
+     the Ledger tab's All time omits both, and the exports accept the same.
+     `export.partyStatementXlsx({ partyId, from?, to? })` (100,000 lines) and
+     a PDF at `/api/$orgSlug/parties/$partyId/statement/pdf?from=&to=`
+     (either parameter may be absent): header, the Party block, opening, rows
+     with running balance, closing. The party Ledger tab gains Download XLSX
+     and PDF for its selected period.
+   - Acceptance: Priya's April statement from the 6a fixture shows the
+     Invoice, the Receipt and a closing balance of 6,000 in JSON, XLSX and
+     PDF; a foreign `partyId` is `NOT_FOUND`.
+   - Verify: `tests/integration/report.test.ts` extended; `GUARDED_CALLS`;
+     `bun run check-types`; the Ledger tab at 1440 and 390 px in both themes.
+   - Depends on: 6a (header, PDF layout and `reportTooLarge`).
+     Owns: `apps/web/src/routes/api.$orgSlug.parties.$partyId.statement.pdf.ts`.
+     Touches: `packages/api/src/routers/party.ts`,
+     `apps/web/src/routes/$orgSlug/parties_.$partyId.ledger.tsx`, and the
+     coordinator-owned files.
+
+   6b, 6c and 6d depend only on 6a but share `report.ts`, `lib/reports.ts`,
+   `core/reports.ts`, `export.ts`, `reports.tsx`, the report tests and
+   `tenancy.test.ts`: run them in order, or give one owner those files.
    - Legacy reference (a716b6c):
      - Trial balance: two grouped aggregates over journal lines (opening before
        `from`, activity in the period), opening netted into Dr or Cr, all-zero
@@ -521,7 +773,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
        returns several figures, such as outstanding and overdue
        (`a716b6c:packages/api/src/routers/billing-worklist.ts:113-122`).
      - Period bound: `maxDays` applies only to reports whose row count grows
-       with the period (`a716b6c:packages/api/src/routers/report.ts:41-73`).
+       with the period (`a716b6c:packages/api/src/routers/report.ts:41-73`);
+       this spec bounds detail reports by lines instead.
      - Party statement: check the Party is in scope in parallel with the lines,
        so a foreign id is `NOT_FOUND`, not an empty statement
        (`a716b6c:packages/api/src/routers/customer.ts:54-66`).
@@ -531,13 +784,277 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      - Charts: the rules were Design §11 (`a716b6c:docs/design.md:378-391`); a
        trend gap-fills in SQL with `generate_series`
        (`a716b6c:packages/api/src/routers/dashboard.ts:96-110`).
-7. **Import.** Open. One Excel template imports masters, opening balances and
-   opening items (open documents with `source` `opening`, original due dates,
-   no journal lines of their own, summing to each Party's balance), all or
-   nothing. This template is the only path for Party opening balances, as
-   ERPNext's Opening Invoice Creation Tool: no per-Party opening field or form,
-   before or with this slice. Until it ships, a cutover leaves Party balances
-   out.
+
+7. **Import.** Open, in three parts. One XLSX workbook creates masters and,
+   optionally, the Opening Balance with the party opening items that make up
+   its control balances, all or nothing. It is the only path for Party opening
+   balances: there is no per-Party opening field or form, before or with this
+   slice, and until 7a ships a cutover leaves Party balances out. A masters-only
+   workbook imports at any time; a workbook with a trial balance or opening
+   items imports while no Opening Balance is posted. ERPNext's Opening
+   Invoice Creation Tool keeps bill-wise due dates but posts each opening
+   invoice to a temporary account, and ERPNext, Zoho Books and TallyPrime all
+   import partially; this contract keeps the due dates, derives the control
+   legs from the items and writes nothing on any error
+   ([reference](../research/reports-and-import-references-2026-09-27.md)).
+
+   - **Opening items.** Two document types. An `openingClaim` is a legacy
+     invoice or bill still unpaid, a target; an `openingCredit` is money
+     received or paid on account and not yet matched, a source. Each has
+     `partyId`, `exposureSide`, `documentDate` (the legacy date, on or before
+     the cutover), `dueDate` (claims only, optional), `reference` (the legacy
+     number, required, 1–40) and `totalPaise` above zero. A number series is
+     keyed by document type, so claims number from the fixed `OC` prefix and
+     credits from the fixed `OA` prefix, in the legacy date's financial year
+     (`OC25-26/4`, `OA25-26/1`). It has no lines or print snapshot, `affectsTax` false and no
+     journal entry. It writes one party ledger `post` line dated the cutover
+     (the Opening Balance `documentDate`), signed as the 4b-ii table:
+     receivable claim +, receivable credit −, payable claim −, payable credit
+     +. Dating every exposure at the cutover keeps the party statements
+     summing to the control accounts on every date. The database requires
+     `partyId` and `exposureSide` on both types.
+   - **Control legs.** The trial balance's `receivables` and `payables` rows
+     are checks, not postings: the Opening Balance posted by an import takes
+     every other trial balance row as a line, then adds `receivables` once at
+     the receivable net (claims less credits; Dr when positive, else Cr) and
+     `payables` once at the payable net (claims less credits; Cr when
+     positive, else Dr), omitting a zero net. These legs carry no party and
+     write no party ledger lines; they pass through an import-only path that
+     admits the two controls without `PARTY_REQUIRED`, derived from the
+     items, never typed. `openingBalance.post` and Journals keep their rules.
+     `customerAdvances` and `supplierAdvances` stay refused: an opening credit
+     sits on the control account, as a 9a Journal credit does, and is not an
+     advance (no `advanceSupply`).
+   - **Settlement.** `roleOf(document, position)` returns a document's side
+     for the position it may take, else null: an `openingClaim` only as a
+     target and an `openingCredit` only as a source; capacity is the absolute `post`
+     line (`settlementPaise`'s non-Journal branch). Applying or reversing from
+     an opening credit writes no entry: it is already on the control account.
+     Receipt `against` may target receivable claims, Payment `against`
+     payable claims, and Apply credit may pair an opening credit with an
+     Invoice, a Bill or a claim of its side. Receipt `allocations` already
+     take `documentId` (slice 9b); payable Payment `allocations.billId`
+     renames to `documentId`, with every API, web and test caller; the
+     refund's `creditNoteId` stays. Clean cutover. Journal line
+     `allocations.invoiceId` keeps its name: a Journal credit allocates only
+     to Invoices (`applyAllocations`), never to an opening claim.
+     `party.openItems` and `party.openCredits` list the items with the others,
+     oldest first, and their rows gain `reference` (nullable). A note cannot
+     name an opening claim (it has no lines). Refunding an opening credit by
+     Payment is Deferred with unused advances.
+   - **Cancel.** Items cancel only with their Opening Balance.
+     `openingBalance.cancel` also reverses every posted item's party ledger
+     line on the cutover date (the original-cutover rule, call 7) and marks
+     each `cancelled`, in one transaction; it refuses with `CONFLICT`, naming
+     the documents, while any item has an active allocation. There is no
+     per-item cancel.
+   - **Where they show.** The party statement ("Opening invoice", "Opening
+     bill", "Opening credit" by side and type, unlinked), the party
+     Transactions tab for a reader of `openingBalance`, the Receipt and
+     Payment open-item grids, Apply credit, and Settings > Opening balance,
+     where `openingBalance.get` gains `items` of
+     `{ id, type, number, partyName, exposureSide, reference, documentDate, dueDate, totalPaise, balancePaise }`.
+     Invoice and Bill lists, their open and overdue filters, and the GST and
+     TDS registers are unchanged.
+   - **Workbook.** One `.xlsx` of at most 5 MiB: `readImportWorkbook` checks
+     `file.size` before parsing, and a larger file is `BAD_REQUEST`
+     `FILE_TOO_LARGE`. Sheets in this order, each
+     with its header on row 1 and data from row 2; every sheet but `Read me`
+     may be empty:
+
+     | Sheet           | Columns (\* required)                                                                                  | Rules                                                                                     |
+     | --------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+     | `Read me`       | Instructions; `B1` holds the template version `1`                                                      | Another version is `TEMPLATE_VERSION`                                                     |
+     | `Opening`       | Opening date\*                                                                                         | One row; required when either of the last two sheets has rows; not in the future          |
+     | `Accounts`      | Name\*, Parent\*, GST supply class                                                                     | Parent is a group's code or name or a type (Assets, …); `account.create` rules            |
+     | `Parties`       | Name\*, Roles\*, GSTIN, PAN, State code, Address, City, PIN code, Email, Phone                         | Roles comma-separated; `party.create` rules, GSTIN derivation included                    |
+     | `Items`         | Name\*, Income account\*, Unit price\*, HSN/SAC, Unit, Tax code                                        | `item.create` rules; Unit price may be zero                                               |
+     | `Trial balance` | Account\*, Debit, Credit                                                                               | Exactly one amount above zero; Opening Balance account rules, except the two control rows |
+     | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\* | Unique by Party, Side, Type and Reference; Due date on claims only, not before Date       |
+
+     A cell is text, a number or a date. `readImportWorkbook` reads each
+     cell's `type` from `sheet.cells` (a `formula`, `error` or `richText` cell
+     is `CELL_INVALID`) and its value from `sheet.rows`. A money cell is text
+     matching the `money` pattern, or a number: a negative number is
+     `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within 1e-6 of an
+     integer, is that many paise, else `AMOUNT_INVALID` ("two decimal places
+     at most"; Excel stores pasted sums as `1234.5600000000002`). Text with a
+     thousands separator is refused. A date cell arrives as a `Date` at UTC
+     midnight and converts with `toISOString().slice(0, 10)`; a date may also be
+     `YYYY-MM-DD` text. Unknown sheets or columns are refused. A sheet holds
+     at most 5,000 data rows (`MASTER_LIST_LIMIT`): `readXlsx` reads with
+     `maxRows` of 5,002 (header plus one row over), and a 5,001st data row is
+     `SHEET_TOO_LARGE`. `maxRows` alone skips the rest silently, so nothing
+     is ever truncated.
+
+   - **Opening Balance accounts.** Trial balance rows resolve through
+     `journalAccounts` with `controls` false, plus the two control rows: a GST
+     or advance account row is `ACCOUNT_INVALID`, and a `taxable` income row
+     on a registered Organization is `TAXABLE_ACCOUNT_LINE`. A legacy GST or
+     advance balance goes to a leaf the CA names in `Accounts` (for example
+     `GST payable at cutover` under Current Liabilities) and is cleared by
+     Journal; a mid-year cutover carries year-to-date income and expense rows
+     into their leaves, taxable income into such a leaf. An imported GST
+     balance on a GST system account could never be cleared, since no Journal
+     or Payment may name one. Open question 1 records both. The 100-line cap
+     of `openingBalance.post` belongs to the form; the import's Opening
+     Balance is bounded by the sheet's 5,000 rows.
+
+   - **Resolution.** An account reference is an existing active account's
+     code, else its name (case-insensitive), else an `Accounts` row's name. A
+     Party reference is a normalized name matched against `Parties` rows and
+     existing Parties; no match or more than one is an error. The import never
+     updates a master: a name that already exists is an error
+     (`PARTY_NAME_COLLISION` without the namesake confirmation,
+     `ACCOUNT_NAME_TAKEN`, `ITEM_NAME_TAKEN`), as is `PARTY_GSTIN_TAKEN`.
+   - **Balances.** Trial balance debits equal credits (`TRIAL_BALANCE_UNEQUAL`).
+     Whenever the trial balance or opening items sheet has rows, each control
+     row's signed net must equal its derived net (`OPENING_ITEMS_MISMATCH`,
+     naming both figures); a missing control row and an empty items sheet
+     each count as zero, so a control balance without items is refused. Party
+     balances are therefore checked at their control, as a CA ties AR and AP
+     to the legacy trial balance. Control rows name the accounts by code or
+     name (`1300 Accounts Receivable`, `2000 Accounts Payable` in the
+     templates).
+   - **Errors.** `{ sheet, row, column, code, message }`, with the Excel row
+     number, or `row` and `column` null for a workbook or balance error,
+     sorted by sheet order and row; the first 500 are returned with the total
+     count.
+   - **Procedures** (`import` router; grant
+     `{ account: create, party: create, item: create, openingBalance: post }`,
+     which owner and accountant hold). `import.template()` returns the empty
+     workbook as a File. `import.check({ file })` returns
+     `{ errors, errorCount, summary }` and writes nothing; it exists because
+     committed masters cannot be deleted, shares `validateImport` with
+     `commit` and stores nothing. `import.commit({ file })`
+     reads settings `FOR UPDATE` (as the Opening Balance post does), runs the
+     same validation inside one transaction, then writes accounts, parties,
+     items, the Opening Balance with its control legs and the opening items,
+     in that order. Any error is `BAD_REQUEST` `IMPORT_INVALID` with
+     `data: { errors, errorCount }` and rolls everything back; a posted
+     Opening Balance with a non-empty trial balance or items sheet is
+     `CONFLICT`. `summary` is
+     `{ accounts, parties, items, trialBalanceRows, openingClaims, openingCredits, debitPaise, creditPaise, receivablesPaise, payablesPaise }`.
+     One audit row `import.commit` carries the summary, never row data.
+     `import.template`, `import.check` and `import.commit` stay out of oRPC
+     batching, as exports do (`apps/web/src/lib/orpc.ts`): a batch cannot
+     carry a File either way.
+   - **Shared writers.** `createParty(tx, orgId, fields)` and
+     `createAccount(tx, orgId, input)` move out of their routers, which call
+     them; items reuse `itemValues`. Each keeps its advisory locks, code
+     generation and error codes.
+
+   **7a. Opening items, control legs and settlement** (riskiest: the ledger
+   invariant).
+   - Scope: the two document types (schema, `documents_type_check`, the
+     party and side check, the `OC` and `OA` series), their posting and cancellation,
+     the control legs, the settlement and picker rules, the Payment
+     `documentId` rename, statement labels, `openingBalance.get` items and
+     their list on Settings > Opening balance, and `import.commit` reading
+     the `Read me`, `Opening`, `Trial balance` and `Opening items` sheets.
+   - Acceptance, on a proprietorship Organization with Parties Priya and
+     Mehta Traders created first: a workbook with opening date 31 March
+     2026; trial balance `Cash in Hand` 20,000 Dr, `Accounts Receivable`
+     8,000 Dr, `Accounts Payable` 5,000 Cr, `Capital Account` 23,000 Cr; items
+     Priya claim `INV-88` 10,000 dated 10 February due 12 March, Priya credit
+     `ADV-3` 2,000, Mehta payable claim `B-17` 5,000 due 30 April. After
+     commit: for every account on the sheet, `sum(debit) - sum(credit)` over
+     its journal lines equals the sheet (computed in the test; 7a does not
+     depend on 6a's `report.trialBalance`); Priya's
+     statement is 8,000 and Mehta's −5,000; Priya's open items list `INV-88`
+     at 10,000 due 12 March and her open credits `ADV-3` at 2,000; applying
+     `ADV-3` leaves 8,000 outstanding and writes no journal entry; a Receipt
+     `against` `INV-88` for 8,000 and a Payment `against` `B-17` for 5,000
+     settle both; the Opening Balance refuses cancel while any of those
+     allocations is active; after the Receipt and Payment are cancelled
+     (reversing their allocations) and the `ADV-3` application is reversed, it
+     cancels and every party and control balance is zero. Failure path: the same workbook with
+     `Accounts Receivable` 7,000 (and `Capital Account` 22,000, so it still
+     balances) is `IMPORT_INVALID` (`OPENING_ITEMS_MISMATCH`) and
+     leaves the document, party ledger and journal counts unchanged; a
+     second commit while the Opening Balance is posted is `CONFLICT`.
+   - Verify: new `tests/integration/import.test.ts` (the workbook built with
+     `writeXlsx`); `tests/integration/allocation.test.ts` and
+     `payment.test.ts` for the Payment rename; `GUARDED_CALLS`;
+     `bun run db:generate` and the baseline rule 4; `bun run check-types`;
+     Settings > Opening balance in the app at 1440 and 390 px in both themes.
+   - Depends on: none. Shares `core/allocations.ts`, `lib/settlements.ts`,
+     `routers/receipt.ts`, `routers/payment.ts` and the Receipt and Payment
+     forms with 9b, which is implemented: 7a extends its target rule
+     (a Journal debit is a receivable target for its party).
+   - Owns: `packages/db/src/schema/documents.ts`,
+     `packages/api/src/core/opening-items.ts` (new: post and reverse),
+     `packages/api/src/core/entry-lines.ts` (control legs),
+     `packages/api/src/routers/opening-balance.ts`,
+     `packages/api/src/routers/import.ts` (new),
+     `packages/api/src/lib/import-workbook.ts` (new: read and validate),
+     `packages/api/src/core/allocations.ts` (`roleOf`),
+     `packages/api/src/lib/settlements.ts` (pickers),
+     `packages/api/src/routers/receipt.ts`,
+     `packages/api/src/routers/payment.ts`,
+     `apps/web/src/components/receipt-form.tsx`,
+     `apps/web/src/components/payment-form.tsx`,
+     `apps/web/src/components/allocation-table.tsx`,
+     `apps/web/src/routes/$orgSlug/settings/opening-balance.tsx`,
+     `tests/integration/import.test.ts`. Touches:
+     `packages/api/src/routers/party.ts` (labels, Transactions),
+     `packages/api/src/routers/index.ts`, `apps/web/src/lib/orpc.ts`,
+     `tests/integration/tenancy.test.ts`.
+   - Interfaces: `postOpening(tx, scope, { documentDate, lines, items })`
+     in `core/opening-items.ts` posts the Opening Balance with control legs
+     and the items; `items` are
+     `{ partyId, side, type: "openingClaim" | "openingCredit", reference, documentDate, dueDate, amountPaise }`.
+     Items do not go through `postDocument`, which requires lines, records an
+     entry and dates the ledger line by `documentDate`. `postOpening` posts
+     the Opening Balance through `postEntryLines` on the import-only path,
+     then for each item inserts a `documents` row as `draft` with `partyId`,
+     `exposureSide`, `reference`, `dueDate` and `totalPaise`, writes its one
+     `post` party ledger line with `entryDate` the Opening Balance
+     `documentDate` (the row `settlementPaise` reads), and calls
+     `postNumbered`. The period lock is checked once, for the Opening Balance
+     on the cutover date. `openingBalance.cancel` checks active allocations on
+     the items' ids before `reverseDocument` changes any state.
+     `readImportWorkbook(bytes)` returns parsed sheets and cell errors;
+     `validateImport(tx | db, orgId, workbook)` returns
+     `{ errors, errorCount, summary, plan }`, and `commit` writes `plan`.
+     Picker rows gain `reference: string | null`.
+
+   **7b. Masters, template and check.**
+   - Scope: the `Accounts`, `Parties` and `Items` sheets with the
+     resolution rules; `import.template` and `import.check`; the shared
+     writers extracted and used by their routers.
+   - Acceptance: a workbook creating `Tuition Fees` (income, `exempt`), Priya
+     (customer, State code 27) and an Item on `Tuition Fees`, plus the 7a
+     balances naming Priya, checks clean and commits in one call; the
+     template round-trips through `import.check` with no errors. Failure
+     path: the same workbook with Priya's name already taken and an Item on
+     an unknown account returns both errors with sheet, row and column from
+     `import.check`, and `import.commit` writes nothing.
+   - Verify: `tests/integration/import.test.ts` extended;
+     `tests/integration/account.test.ts` and the party tests unchanged and
+     green after the extraction; `GUARDED_CALLS`; `bun run check-types`.
+   - Depends on: 7a. Owns: `packages/api/src/lib/import-workbook.ts`,
+     `packages/api/src/routers/import.ts`, `tests/integration/import.test.ts`.
+     Touches: `packages/api/src/routers/party.ts`, `account.ts`, `item.ts`
+     and the new `packages/api/src/core/masters.ts` for `createParty` and
+     `createAccount`.
+
+   **7c. Import page.**
+   - Settings > Import (`routes/$orgSlug/settings/import.tsx`, the owner
+     client-patterns names): Download template; choose a file; Check lists
+     the errors (Sheet, Row, Column, Message, with the total when above 500)
+     or the summary (counts, trial balance totals, receivable and payable
+     nets). Import is enabled only after a clean Check of the chosen file;
+     choosing another file clears it. Success shows the summary with links to
+     Opening balance and Parties and invalidates the master, settlement and
+     settings queries. Visible to members holding the import grant.
+   - Acceptance: the 7b workbook imports from the page; a workbook with one
+     bad row shows its error and imports nothing.
+   - Verify: `bun run check-types`; the page exercised in the app at 1440 and
+     390 px in both themes, including the error table.
+   - Depends on: 7b. Owns: `apps/web/src/routes/$orgSlug/settings/import.tsx`.
+     Touches: the settings navigation and `apps/web/src/lib/domain-invalidation.ts`.
+
 8. **Chart of accounts.** Implemented. Owner and accountant manage posting leaves across
    Assets, Liabilities, Equity, Income and Expenses. Templates establish the
    groups and protected control accounts.
@@ -573,13 +1090,14 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      treatment from it. A wrong class is archived and recreated.
    - Every new organization's core template includes `6810 Discount Allowed`
      and `6820 Bad Debts Written Off` for slice 9.
-   - Web: Accounting > Chart of accounts lists code, name, type, parent ledger,
-     supply class and status. New account picks its parent from a
-     `NativeSelect` grouped by type (a type's top level or an existing group),
-     then Name, and GST supply class for income. For editors, each row opens its
-     Rename Sheet (`?edit=`); Mark inactive / Mark active is a button in that
-     Sheet for posting leaves, and the status reads Active or Inactive, as for
-     Parties and Items. Read-only rows have no edit link. Banking's Add account
+   - Web: Accounting > Chart of accounts shows desktop columns Name, Parent
+     ledger, Code and Type. Mobile cards also show the GST supply class when
+     present. Only archived rows show an Inactive badge. New account picks its
+     parent from a `NativeSelect` grouped by type (a type's top level or an
+     existing group), then Name, and GST supply class for income. For editors,
+     each row opens its Rename Sheet (`?edit=`); Mark inactive / Mark active is
+     a button in that Sheet for posting leaves, as for Parties and Items.
+     Read-only rows have no edit link. Banking's Add account
      opens that same Sheet in Banking under Bank Accounts, then continues to Add
      payment method with the new account chosen.
    - Acceptance: an accountant creates `Tuition Fees` (income, `exempt`) and
@@ -600,7 +1118,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `apps/web/src/components/account-columns.tsx`.
    - Interfaces: `account.create` returns the inserted row. Slice 9's picker
      reads `journal.accounts`.
-9. **Party Journals.** Open, in two parts, after slice 8. A Journal line on a
+9. **Party Journals.** In two parts, after slice 8; both are implemented. A Journal line on a
    party control account carries a required Party and writes the party ledger,
    so the sum of party statements equals the control account by construction.
    ERPNext's `Party Type` and `Party` on a Journal Entry row and Tally's party
@@ -608,7 +1126,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    keep their document (Invoice header discount and Credit Note in 4b-ii,
    Receipt `against`), and the form says so.
 
-   **9a. Receivables lines and Journal credits.**
+   **9a. Receivables lines and Journal credits.** Implemented. CA acceptance
+   is open.
    - `journalAccounts` takes `controls: boolean` and, when true, adds the
      `receivables` control account with its `systemKey`; Opening Balance
      passes `false`. `payables`, `customerAdvances` and `supplierAdvances`
@@ -630,7 +1149,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      Invoice of that line's party, at most 50 per line, and the total across a
      party's lines at most that party's net `receivables` credit in the
      Journal (a debit and a credit on the same party net first; a total above
-     the net is `BAD_REQUEST`). Posting writes the allocation rows with the
+     the net is `BAD_REQUEST` `ALLOCATION_EXCEEDS_SOURCE`, and `allocations` on
+     a debit or on any other account is `ALLOCATION_TARGET_INVALID`). Posting writes the allocation rows with the
      Journal as source and no journal entry. The unallocated rest is an
      unapplied credit on `receivables`: not an advance, no `advanceSupply`, no
      `customerAdvances`.
@@ -639,19 +1159,20 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `receivables` credit for the target's party (call 17), the same quantity
      posting capped against, and admits a posted Journal with such a credit.
      Applying or reversing from a Journal writes no entry.
-     `party.openCredits({ partyId, side: "receivable" })` already lists
-     receivable credits; 9a adds Journals with unapplied credit for the party
-     alongside Receipts, with the same 200-oldest limit and `hasMore`.
+     `party.openCredits({ partyId, side: "receivable", type? })` lists
+     Journals with unapplied credit for the party alongside Receipts and
+     Credit Notes, in the same 25-row keyset pages with `hasMore`; `type`
+     accepts `journal`.
    - Cancel: `reverseDocument` already reverses party ledger lines; a Journal
      cancel appends reverse rows for its active allocations with no entry, as
      Receipt cancel does.
-   - Web: the Journal line's Party field turns required when the account is a
-     control account, with the hint "Changes what this party owes"; a
-     `receivables` credit line shows the Receipt form's open invoices grid.
-     Journal detail lists party lines and allocations with Reverse, as Invoice
-     detail does. The party Ledger links a Journal line to its record as it
-     links Receipts. Apply credit already lists `party.openCredits`; 9a adds
-     Journal credits to that sheet.
+   - Web: the Journal line's Party field turns required when the account is
+     `receivables`, with the hint "Changes what this party owes"; a
+     `receivables` credit line shows the Receipt form's open invoices grid
+     (the shared `AllocationTable`). Journal detail lists lines with their
+     party and the shared Allocations section with Reverse. The party Ledger
+     links a Journal line to its record as it links Receipts. Apply credit
+     lists Journal credits. The Opening Balance picker hides `receivables`.
    - Acceptance, with Priya owing a ₹10,000 Invoice: a Journal
      Dr `Sibling Discount` 500 / Cr `receivables` (Priya) 500 allocated to
      that Invoice leaves outstanding 9,500, statement balance 9,500, one day
@@ -688,24 +1209,28 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and adds Journal rows for the receivable side:
      `{ id, type: "journal", number, documentDate, unappliedPaise }`.
 
-   **9b. Journal debits as open items.** A Journal netting to a `receivables`
-   debit for a party (the Rahul side of a transfer, a charge with no Invoice)
-   is settleable: Receipt `against` and `allocation.apply` may target it.
-   `party.openItems({ partyId, side: "receivable" })` already lists Invoices;
-   9b adds Journal debits with outstanding, in the same oldest-first pages, with
+   **9b. Journal debits as open items.** Implemented. CA acceptance is open.
+   A Journal netting to a `receivables` debit for a party (the Rahul side of
+   a transfer, a charge with no Invoice) is a settlement target for that
+   party: its capacity is its positive `post` party ledger line for the
+   party, and its outstanding counts only applies from sources of that party.
+   Receipt `against` and `allocation.apply` from a Receipt or Credit Note may
+   target it; a Journal credit still targets Invoices only, and a Journal
+   with no debit for the source's party is `ALLOCATION_TARGET_INVALID`.
+   Receipt `allocations` take `{ documentId, amount }`.
+   `party.openItems({ partyId, side: "receivable" })` lists Journal debits
+   with Invoices and refund Payments, in the same oldest-first pages, with
    `dueDate` null for a Journal. Invoice list open and overdue filters stay
-   Invoice-only. A Journal with active allocations targeting it refuses cancel
-   (`CONFLICT`, naming the sources), as an Invoice does. The Receipt form's
-   grid is titled Open items and shows type and number.
+   Invoice-only. A Journal with active allocations targeting it refuses
+   cancel (`CONFLICT`, naming the sources), as an Invoice does. The Receipt
+   form's Open items grid shows type and number.
    - Acceptance: after the sibling transfer, a Receipt `against` Rahul settles
      the 2,000 Journal debit; Rahul's balance and `receivables` both fall by
-     2,000; the Journal refuses cancel until that allocation is reversed.
-   - Verify: as 9a. Depends on: 9a. Owns:
-     `packages/api/src/core/allocations.ts` (target rule),
-     `packages/api/src/routers/party.ts`, `invoice.ts`, `receipt.ts`,
-     `apps/web/src/components/receipt-form.tsx`. Interfaces: `party.openItems`
-     rows are
-     `{ id, type: "invoice" | "journal", number, documentDate, dueDate, outstandingPaise }`.
+     2,000; the Journal refuses cancel until that allocation is reversed; a
+     Receipt against Priya cannot target it. Covered by
+     `tests/integration/journal.test.ts`.
+   - Interfaces: `party.openItems` rows are
+     `{ id, type: "invoice" | "payment" | "journal", number, documentDate, dueDate, outstandingPaise }`.
 
 ## Journal, Opening Balance and locks (slice 5)
 
@@ -729,8 +1254,8 @@ slice 9.
   (`receivables`, `payables`, `customerAdvances`, `supplierAdvances`) are
   refused; slice 9a admits `receivables` with a required Party and keeps the
   other three refused. Opening Balance
-  keeps refusing them. Thus `affectsTax` is false, and before slice 9 the
-  Journal writes no party ledger lines. The batch predicate `journalAccounts`
+  keeps refusing them. Thus `affectsTax` is false, and a Journal writes party
+  ledger lines only for its `receivables` lines. The batch predicate `journalAccounts`
   runs inside the posting transaction after a `FOR SHARE` read of
   `organization_settings`, so a concurrent GSTIN change cannot let a taxable
   line through. It is beside `postableAccounts` in `lib/accounts.ts` and reuses
@@ -773,14 +1298,15 @@ slice 9.
   (partial unique index `documents_org_opening_balance_idx`; a second post is
   `CONFLICT` until the first is cancelled; the post takes the settings row
   `FOR UPDATE` so concurrent posts serialize), fixed `OB` prefix
-  (`OB26-27/1`), `documentDate` is the cutover, narration `Opening balances`,
+  (`OB26-27/1`), `documentDate` is the "as at" date, the day before the first
+  operational entry, narration `Opening balances`,
   lines as the Journal minus party; the control accounts stay refused. A complete balanced
   trial balance needs no `openingEquity` line; any opening-equity amount is an
   explicit line the user enters, never a silent plug.
   `affectsTax` false, no party ledger lines. Cancellation via `reverseDocument`
-  posts an opposite entry on the original cutover and checks that date's lock;
+  posts an opposite entry on the original `documentDate` and checks that date's lock;
   refusal rolls back the cancellation. The original and reversal remain
-  auditable. A replacement can use the same cutover, subject to normal posting
+  auditable. A replacement can use the same date, subject to normal posting
   locks; there is no separate replacement-after-reversal cutoff.
   `openingBalance.get` returns the posted document or null.
 - **Locks.** `organization_settings.lockedThrough` and `taxLockedThrough` own
@@ -884,6 +1410,20 @@ slice 9.
 - **A time-zone setting.** Gate: the first Organization outside India.
 - **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
+- **Statutory statements** (Schedule III layout, current and non-current
+  split, notes). Slice 6 prints management statements from the chart. Gate: a
+  CA asks for statutory accounts from Accly.
+- **Comparative and monthly report columns, ageing buckets, cash-basis
+  reports.** Gate: a pilot CA asks for one.
+- **Report pagination or streaming** beyond the slice 6 line bounds. Gate: a
+  detail report hits `REPORT_TOO_LARGE` on a period a CA needs.
+- **Import updating existing masters, and Payment Method import.** Gate: a
+  second cutover for one Organization, or a pilot with more than a handful of
+  methods.
+- **GST and advance-account balances at cutover.** The Opening Balance refuses
+  GST accounts (slice 5), and slice 7 folds customer and supplier advances into
+  opening credits on the control accounts. Gate: the CA's answer to Open
+  question 1.
 - **Billing without General Accounting.** Gate: a hospital customer keeps
   Tally, or the hospital system joins this repository.
 - **Patient-to-Party link.** Gate: one shared Billing interaction proved from
@@ -912,7 +1452,13 @@ valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
    Receipt shared by two Invoices, one allocation reversed, then cancelled; a
    cutover with open Invoices and an advance for one Party; a TPA settlement
    net of TDS with a disallowance; a dealer receipt net of TDS and a bank
-   charge; a school caution deposit; an IPD deposit.
+   charge; a school caution deposit; an IPD deposit. From slices 6 and 7: the
+   management P&L and balance sheet layout, with unclosed profit split into
+   current and earlier years; opening customer advances and supplier
+   on-account payments presented as opening credits on `receivables` and
+   `payables`, not on the advance accounts; and how GST ledger balances at
+   cutover enter the books while the Opening Balance refuses GST accounts.
+   None of these blocks building slices 6 and 7; each blocks CA acceptance.
 2. **Payment mode versus money account.** A Payment Method binds one name to
    one account, and Receipt, Payment and a paid-now Invoice share one active
    list, so a receipt-only card machine appears on Payment. ERPNext (Mode of

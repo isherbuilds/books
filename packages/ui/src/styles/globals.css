@@ -18,20 +18,20 @@
 }
 
 :root {
-  /* The Edernal Books palette, from the Books design system: ink on warm paper,
-     never pure white, no blue. Its one owner is this file; the public site and
+  /* The Edernal Books palette: slate ink on soft neutral paper,
+     never pure white. Its one owner is this file; the public site and
      the console both read it. Colour means state: `stamp` (violet) is settled,
      `warn` is due or pending, `danger` is overdue or an error, and each always
      travels with a word. */
-  --paper: #fafaf7;
+  --paper: #f8f9f9;
   --surface: #ffffff;
-  --sunken: #f1f0ea;
-  --ink: #0b0b0a;
-  --ink-muted: #5a5953;
-  --on-ink: #fafaf7;
-  --line: #e6e4dd;
-  --line-2: #d9d7cf;
-  --line-strong: #8c8a82;
+  --sunken: #eff1f0;
+  --ink: #0e1219;
+  --ink-muted: #565d62;
+  --on-ink: #f9faf9;
+  --line: #e3e5e4;
+  --line-2: #d2d6d6;
+  --line-strong: #7f858c;
   --stamp: #6c2a9e;
   --stamp-soft: #f3ecf7;
   --warn: #8a5300;

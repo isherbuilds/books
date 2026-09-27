@@ -8,7 +8,7 @@ import { and, asc, eq, exists, inArray, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
-import type { Scope } from "../lib/procedures/factory";
+import { requirePermission, type Scope } from "../lib/procedures/factory";
 import { formatMoney } from "./money";
 import { recordEntry, reverseEntries } from "./posting";
 
@@ -56,33 +56,66 @@ export function allocationReversed(orgId: string) {
 }
 
 /**
- * A document's settlement capacity and what is left of it, as correlated scalars on the
- * enclosing `documents` row. Every settling document names one Party and posts one
- * party-ledger line for it (a unique index), so capacity is that line's absolute
- * amount, read by index; the balance subtracts active applies through the allocation
- * index for `role`. Grouped joins would aggregate the whole organization before a party
- * filter or a page limit applies. A document with lines for two parties (a slice 9a
- * Journal) makes the scalar fail loudly until this read takes the party.
+ * Correlated, index-backed settlement capacity. A Journal is a source for a party
+ * it credits and a target for one it debits, and counts only that party's
+ * allocations; other documents use their header party. Pass null only when the
+ * enclosing query excludes Journals.
  */
-export function settlementPaise(orgId: string, role: "source" | "target") {
-  const documentId =
-    role === "source" ? allocations.sourceDocumentId : allocations.targetDocumentId;
+export function settlementPaise(orgId: string, role: "source" | "target", partyId: string | null) {
+  const [own, other] =
+    role === "source"
+      ? [allocations.sourceDocumentId, allocations.targetDocumentId]
+      : [allocations.targetDocumentId, allocations.sourceDocumentId];
+
+  const journalAmount =
+    role === "source"
+      ? sql`-${partyLedgerLines.amountPaise}`
+      : sql`${partyLedgerLines.amountPaise}`;
 
   const capacity = sql`coalesce((${db
-    .select({ amount: sql`abs(${partyLedgerLines.amountPaise})` })
+    .select({
+      amount: sql`case when ${documents.type} = 'journal'
+        then greatest(${journalAmount}, 0)
+        else abs(${partyLedgerLines.amountPaise}) end`,
+    })
     .from(partyLedgerLines)
     .where(
       and(
         eq(partyLedgerLines.orgId, orgId),
         eq(partyLedgerLines.documentId, documents.id),
+        eq(partyLedgerLines.partyId, partyId ?? documents.partyId),
         eq(partyLedgerLines.kind, "post"),
       ),
     )}), 0)`;
 
+  const counterpart = alias(documents, "allocation_counterpart");
+
   const applied = db
     .select({ amount: sql`coalesce(sum(${allocations.amountPaise}), 0)` })
     .from(allocations)
-    .where(and(activeApply(orgId), eq(documentId, documents.id)));
+    .where(
+      and(
+        activeApply(orgId),
+        eq(own, documents.id),
+        partyId
+          ? or(
+              sql`${documents.type} <> 'journal'`,
+              exists(
+                db
+                  .select({ id: counterpart.id })
+                  .from(counterpart)
+                  .where(
+                    and(
+                      eq(counterpart.orgId, orgId),
+                      eq(counterpart.id, other),
+                      eq(counterpart.partyId, partyId),
+                    ),
+                  ),
+              ),
+            )
+          : undefined,
+      ),
+    );
 
   return {
     capacityPaise: sql<bigint>`${capacity}::bigint`.mapWith(BigInt),
@@ -116,7 +149,11 @@ export async function activeAllocationsOf(
 }
 
 // NO KEY UPDATE: inserts take KEY SHARE on both named documents.
-async function lockDocuments(tx: DbTransaction, orgId: string, documentIds: readonly string[]) {
+export async function lockDocuments(
+  tx: DbTransaction,
+  orgId: string,
+  documentIds: readonly string[],
+) {
   return tx
     .select({
       id: documents.id,
@@ -132,26 +169,29 @@ async function lockDocuments(tx: DbTransaction, orgId: string, documentIds: read
     .for("no key update");
 }
 
-function roleOf(document: LockedDocument): { side: Side; role: "source" | "target" } | null {
+function roleOf(document: LockedDocument, position: "source" | "target"): Side | null {
   switch (document.type) {
     case "invoice":
-      return { side: "receivable", role: "target" };
+      return position === "target" ? "receivable" : null;
     case "bill":
-      return { side: "payable", role: "target" };
+      return position === "target" ? "payable" : null;
     case "creditNote":
-      return { side: "receivable", role: "source" };
+      return position === "source" ? "receivable" : null;
     case "debitNote":
-      return { side: "payable", role: "source" };
+      return position === "source" ? "payable" : null;
     case "receipt":
-      return document.exposureSide === "receivable" && document.settlementKind !== "direct"
-        ? { side: "receivable", role: "source" }
+      return position === "source" &&
+        document.exposureSide === "receivable" &&
+        document.settlementKind !== "direct"
+        ? "receivable"
         : null;
+    case "journal":
+      return "receivable";
     case "payment":
-      return document.settlementKind !== "direct" && document.exposureSide
-        ? {
-            side: document.exposureSide,
-            role: document.exposureSide === "payable" ? "source" : "target",
-          }
+      return document.settlementKind !== "direct" &&
+        document.exposureSide &&
+        (document.exposureSide === "payable" ? position === "source" : position === "target")
+        ? document.exposureSide
         : null;
     default:
       return null;
@@ -180,6 +220,7 @@ export async function applyAllocations(
     draftDocumentId: string | null;
     entryDate: string;
     requiredSourceType?: "creditNote";
+    partyId?: string;
   },
 ): Promise<{ id: string; amountPaise: bigint }[]> {
   const keys = args.pairs.map((pair) => `${pair.sourceDocumentId}:${pair.targetDocumentId}`);
@@ -194,18 +235,30 @@ export async function applyAllocations(
 
   const locked = await lockDocuments(tx, scope.orgId, ids);
   const byId = new Map(locked.map((document) => [document.id, document]));
-  const firstSource = byId.get(args.pairs[0]!.sourceDocumentId);
-  const firstRole = firstSource && roleOf(firstSource);
-  const partyId = firstSource?.partyId;
 
-  if (!firstRole || firstRole.role !== "source" || !partyId) {
+  // A Journal is settled only by someone who may read it, whichever path names it.
+  if (locked.some((document) => document.type === "journal"))
+    requirePermission(scope, { journal: ["read"] });
+
+  const firstSource = byId.get(args.pairs[0]!.sourceDocumentId);
+  const firstTarget = byId.get(args.pairs[0]!.targetDocumentId);
+
+  if (!firstTarget)
+    throw badRequest(
+      "ALLOCATION_TARGET_INVALID",
+      "Choose a posted target for the same party and side.",
+    );
+  const side = firstSource && roleOf(firstSource, "source");
+
+  const partyId =
+    firstSource?.type === "journal" ? (args.partyId ?? firstTarget.partyId) : firstSource?.partyId;
+
+  if (!side || !partyId) {
     throw badRequest(
       "ALLOCATION_SOURCE_INVALID",
       "Choose a posted settlement source with a party.",
     );
   }
-
-  const side = firstRole.side;
 
   for (const pair of args.pairs) {
     const source = byId.get(pair.sourceDocumentId);
@@ -213,9 +266,8 @@ export async function applyAllocations(
 
     if (
       !source ||
-      roleOf(source)?.role !== "source" ||
-      roleOf(source)?.side !== side ||
-      source.partyId !== partyId ||
+      roleOf(source, "source") !== side ||
+      (source.type !== "journal" && source.partyId !== partyId) ||
       (source.state !== "posted" &&
         !(source.state === "draft" && source.id === args.draftDocumentId)) ||
       (args.requiredSourceType && source.type !== args.requiredSourceType)
@@ -228,9 +280,9 @@ export async function applyAllocations(
 
     if (
       !target ||
-      roleOf(target)?.role !== "target" ||
-      roleOf(target)?.side !== side ||
-      target.partyId !== partyId ||
+      (source.type === "journal" && target.type !== "invoice") ||
+      roleOf(target, "target") !== side ||
+      (target.type !== "journal" && target.partyId !== partyId) ||
       (target.state !== "posted" &&
         !(target.state === "draft" && target.id === args.draftDocumentId))
     ) {
@@ -243,20 +295,40 @@ export async function applyAllocations(
 
   const sourceIds = new Set(args.pairs.map((pair) => pair.sourceDocumentId));
   const targetIds = new Set(args.pairs.map((pair) => pair.targetDocumentId));
+  const sourceSettlement = settlementPaise(scope.orgId, "source", partyId);
+  const targetSettlement = settlementPaise(scope.orgId, "target", partyId);
 
   // Read after the locks, so no concurrent apply changes a balance before the insert.
   const balances = await tx
     .select({
       id: documents.id,
-      source: settlementPaise(scope.orgId, "source").balancePaise,
-      target: settlementPaise(scope.orgId, "target").balancePaise,
+      source: sourceSettlement.balancePaise,
+      sourceCapacity: sourceSettlement.capacityPaise,
+      target: targetSettlement.balancePaise,
+      targetCapacity: targetSettlement.capacityPaise,
     })
     .from(documents)
     .where(and(eq(documents.orgId, scope.orgId), inArray(documents.id, ids)));
 
-  const left = new Map(
-    balances.map((row) => [row.id, sourceIds.has(row.id) ? row.source : row.target]),
-  );
+  const left = new Map<string, bigint>();
+
+  for (const row of balances) {
+    // A Journal is a source only for a party it credits.
+    if (sourceIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.sourceCapacity <= 0n)
+      throw badRequest(
+        "ALLOCATION_SOURCE_INVALID",
+        "Choose a posted source for the same party and side.",
+      );
+
+    // A Journal is a target only for a party it debits.
+    if (targetIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.targetCapacity <= 0n)
+      throw badRequest(
+        "ALLOCATION_TARGET_INVALID",
+        "Choose a posted target for the same party and side.",
+      );
+
+    left.set(row.id, sourceIds.has(row.id) ? row.source : row.target);
+  }
 
   for (const pair of args.pairs) {
     left.set(pair.sourceDocumentId, left.get(pair.sourceDocumentId)! - pair.amountPaise);
@@ -364,7 +436,7 @@ export async function reverseAllocation(
 
   const source = locked.find((document) => document.id === apply.sourceDocumentId);
 
-  if (!source?.partyId) throw impossible(`allocation ${allocationId} has a source without a party`);
+  if (!source) throw impossible(`allocation ${allocationId} has no source`);
 
   const [reversed] = await tx
     .insert(allocations)
@@ -392,7 +464,10 @@ export async function reverseAllocation(
   } else {
     const side = allocationEntrySide(source);
 
-    if (side)
+    if (side) {
+      if (!source.partyId)
+        throw impossible(`allocation ${allocationId} has a source without a party`);
+
       await recordEntry(tx, scope, {
         document: {
           id: allocationId,
@@ -407,6 +482,7 @@ export async function reverseAllocation(
         entryDate,
         narration,
       });
+    }
   }
 
   return { id: reversed.id, amountPaise: apply.amountPaise };

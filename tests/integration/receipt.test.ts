@@ -355,7 +355,7 @@ test("receipt fee and customer TDS settle the invoice with four journal legs", a
     amount: "95.00",
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
-    allocations: [{ invoiceId: invoice.id, amount: "100.00" }],
+    allocations: [{ documentId: invoice.id, amount: "100.00" }],
     adjustments: [
       { kind: "fee", accountId: expenseAccount.id, amount: "2.00" },
       { kind: "tds", amount: "3.00" },

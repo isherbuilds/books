@@ -491,6 +491,36 @@ test("one client keeps Items, Invoices, Receipts, Journals, and Allocations isol
     "PARTY_INVALID",
   );
 
+  const betaReceivables = required(
+    betaAccounts.find(({ systemKey }) => systemKey === "receivables"),
+    "beta receivables account",
+  );
+
+  const betaDiscount = await api.account.create({
+    orgSlug: beta.slug,
+    parent: { type: "expense" },
+    name: "Cross-org discount",
+  });
+
+  await expectReason(
+    api.journal.post({
+      orgSlug: beta.slug,
+      documentDate: "2026-04-01",
+      narration: "Foreign invoice allocation",
+      lines: [
+        { accountId: betaDiscount.id, side: "debit", amount: "1.00" },
+        {
+          accountId: betaReceivables.id,
+          partyId: betaParty.id,
+          side: "credit",
+          amount: "1.00",
+          allocations: [{ invoiceId: alphaInvoice.id, amount: "1.00" }],
+        },
+      ],
+    }),
+    "ALLOCATION_TARGET_INVALID",
+  );
+
   const [alphaUnappliedAfter, betaUnappliedAfter] = await Promise.all([
     api.party.openCredits({ orgSlug: alpha.slug, partyId: alphaParty.id, side: "receivable" }),
     api.party.openCredits({ orgSlug: beta.slug, partyId: betaParty.id, side: "receivable" }),
@@ -764,7 +794,12 @@ const GUARDED_CALLS = {
   "party.openItems": (api, claim) =>
     api.party.openItems({ ...claim, partyId: crypto.randomUUID(), side: "receivable" }),
   "party.openCredits": (api, claim) =>
-    api.party.openCredits({ ...claim, partyId: crypto.randomUUID(), side: "payable" }),
+    api.party.openCredits({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      side: "receivable",
+      type: "journal",
+    }),
   "party.transactions": (api, claim) =>
     api.party.transactions({ ...claim, partyId: crypto.randomUUID() }),
   "bill.saveDraft": (api, claim) =>

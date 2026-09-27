@@ -235,7 +235,7 @@ export const noteRouter = {
         .select({
           ...getTableColumns(documents),
           type: noteTypeColumn,
-          unappliedPaise: settlementPaise(orgId, "source").balancePaise,
+          unappliedPaise: settlementPaise(orgId, "source", null).balancePaise,
         })
         .from(documents)
         .where(
@@ -293,7 +293,7 @@ export const noteRouter = {
         partyName: printedPartyName,
         againstDocumentId: documents.againstDocumentId,
         againstNumber: against.number,
-        unappliedPaise: settlementPaise(orgId, "source").balancePaise,
+        unappliedPaise: settlementPaise(orgId, "source", null).balancePaise,
       })
       .from(documents)
       .leftJoin(against, and(eq(against.orgId, orgId), eq(against.id, documents.againstDocumentId)))

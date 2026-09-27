@@ -21,11 +21,29 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 6–7 and
-  9 (party lines on Journals, Journal credits and debits as allocation
-  sources and targets), CA acceptance of every implemented slice, and the
-  slice 2 posting p95 on native PostgreSQL at `db:seed:volume`. Slices 1–5
-  and 8 are implemented; their open runtime checks are listed below.
+- **Cooler light palette**: Verification. The public page renders at desktop and
+  phone widths; the contrast test and production build pass. Check an authenticated
+  console page in light and dark after the local migration records match this
+  checkout and the web and API services start.
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 6
+  (reports: 6a trial balance and the latency proof first, then 6b–6d) and 7
+  (import: 7a opening items first, then 7b–7c) are specified and open. Also
+  open: CA acceptance of every implemented slice, and the slice 2 posting
+  p95 on native PostgreSQL at `db:seed:volume`. Slices 1–5, 8 and 9 are
+  implemented; their open runtime checks are listed below. Slice 9a's
+  Journal form, record, Apply credit and party Ledger link passed at 1440
+  and 390 px in both themes; open: the Opening Balance picker without
+  `receivables`, the Journal Invoice picker after a reversed refund and Fill
+  against a party's net credit at desktop and mobile widths in both themes,
+  Journal recovery after a selected Invoice closes, and Receipt and Payment
+  Fill/totals after the allocation grid refactor,
+  and `party.openCredits` with Journal credits under "Settlement reads at
+  volume". Slice 9b is covered by the journal
+  integration test; open: the Receipt form's Open items grid listing a
+  Journal debit, posting against it, and the Receipt Sheet's Journal
+  allocation link at 1440 and 390 px in both themes (the local database
+  needs a reset to match the migration baseline first), and
+  `party.openItems` with Journal debits under "Settlement reads at volume".
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as
   a released credit distinct from an advance, before any tax workflow reads
@@ -46,7 +64,13 @@ Check UI items in the running app on desktop and mobile, in both themes.
   the page. Open: the unfiltered Invoice, Bill and Note register pages, the
   open and overdue filters and both pickers on 100,000 Invoices and Bills
   with allocations; decide then whether the pickers need an
-  `(org, party, document date, id)` index.
+  `(org, party, document date, id)` index. Since slice 9 both pickers also
+  admit Journals through `exists` on `party_ledger_lines`, an `OR` arm that
+  the party index cannot serve, so its cost grows with the organization's
+  Journals. `db:seed:volume` seeds none, so measure with Journals seeded. If
+  the arm is slow, drive both pickers from `party_ledger_lines_org_party_idx`
+  (every settling document has one `post` line per party; the sign gives
+  source or target) instead of adding an index.
 - **[Keyboard focus](./design.md)**: Verification. One global rounded ring
   with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
   the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
@@ -76,8 +100,8 @@ Check UI items in the running app on desktop and mobile, in both themes.
   select an open Invoice in a Receipt and an open Bill in a Payment, settle each
   from the other session, then refresh the form's open rows. Confirm each form
   shows Clear unavailable, clears the hidden amount and error, and can submit
-  a new allocation. The seeded Organizations have no posted Invoices or Bills,
-  so the running-app check could not exercise this transition.
+  a new allocation. Use the seeded Cedar Components organization, which has
+  posted Invoices and Bills; the running-app check remains open.
 - **Limits rule ([#17](https://github.com/isherbuilds/books/issues/17))**:
   Verification. Members pages 25 at a time with Load more, keeps `q` in the
   URL and renders cards on mobile; Link Fields show at most six rows, including

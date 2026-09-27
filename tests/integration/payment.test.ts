@@ -536,7 +536,7 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
     amount: "100.00",
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
-    allocations: [{ invoiceId: invoice.id, amount: "100.00" }],
+    allocations: [{ documentId: invoice.id, amount: "100.00" }],
   });
 
   const invoiceDetail = await api.invoice.get({
@@ -599,6 +599,7 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
       amountPaise: 10_000n,
     }),
   );
+
   const operator = await createTestUser("refund-operator");
   await joinOrganization(operator, organization.id, "operator");
 
@@ -619,6 +620,30 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
   expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
     0n,
   );
+
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: required(detail.allocations?.[0], "refund allocation").id,
+    reason: "Reopen refund",
+  });
+
+  const laterInvoice = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: customer.id,
+    documentDate: "2026-09-13",
+    placeOfSupplyStateCode: "27",
+    lines: [{ kind: "item", itemId: item.id, quantity: 1, unitPrice: "100.00" }],
+  });
+
+  const picker = { orgSlug: organization.slug, partyId: customer.id, side: "receivable" as const };
+
+  expect((await api.party.openItems({ ...picker, limit: 1 })).rows).toEqual([
+    expect.objectContaining({ id: refund.id, type: "payment" }),
+  ]);
+  expect(await api.party.openItems({ ...picker, type: "invoice", limit: 1 })).toEqual({
+    rows: [expect.objectContaining({ id: laterInvoice.id, type: "invoice" })],
+    hasMore: false,
+  });
 });
 
 test("posting refuses an archived party", async () => {

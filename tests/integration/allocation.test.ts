@@ -140,8 +140,8 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
     allocations: [
-      { invoiceId: firstInvoice.id, amount: "6000.00" },
-      { invoiceId: secondInvoice.id, amount: "3000.00" },
+      { documentId: firstInvoice.id, amount: "6000.00" },
+      { documentId: secondInvoice.id, amount: "3000.00" },
     ],
     advanceSupply: "exempt",
   });
@@ -564,7 +564,7 @@ test("an against receipt names what its unallocated remainder is received for", 
     partyId: party.id,
     amount: "1000.00",
     paymentMethodId: bankTransfer.id,
-    allocations: [{ invoiceId: invoice.id, amount: "600.00" }],
+    allocations: [{ documentId: invoice.id, amount: "600.00" }],
   };
 
   await expectReason(api.receipt.post(receipt), "ADVANCE_SUPPLY_REQUIRED");
@@ -829,6 +829,123 @@ test("an unapplied credit note settles another invoice without an allocation jou
       })
     ).rows,
   ).toContainEqual(expect.objectContaining({ id: note.id, unappliedPaise: 10_000n }));
+});
+
+test("an unapplied receivables Journal credit settles an invoice without an allocation entry", async () => {
+  const claim = { orgSlug: organization.slug };
+
+  const discount = await api.account.create({
+    ...claim,
+    parent: { type: "expense" },
+    name: `Sibling Discount ${uniqueSuffix()}`,
+  });
+
+  const invoice = await postInvoice("10000.00");
+  const balanceBefore = (await api.party.statement({ ...claim, partyId: party.id })).closingPaise;
+
+  const journal = await api.journal.post({
+    ...claim,
+    documentDate: "2026-09-12",
+    narration: "Unallocated sibling discount",
+    lines: [
+      { accountId: discount.id, side: "debit", amount: "500.00" },
+      { accountId: receivables.id, partyId: party.id, side: "credit", amount: "500.00" },
+    ],
+  });
+
+  expect((await api.invoice.get({ ...claim, invoiceId: invoice.id })).outstandingPaise).toBe(
+    1_000_000n,
+  );
+  expect(
+    (
+      await api.party.openCredits({
+        ...claim,
+        partyId: party.id,
+        side: "receivable",
+        type: "journal",
+      })
+    ).rows,
+  ).toContainEqual(
+    expect.objectContaining({ id: journal.id, type: "journal", unappliedPaise: 50_000n }),
+  );
+  expect((await api.party.statement({ ...claim, partyId: party.id })).closingPaise).toBe(
+    balanceBefore - 50_000n,
+  );
+
+  const [applied] = await api.allocation.apply({
+    ...claim,
+    sourceDocumentId: journal.id,
+    targetDocumentId: invoice.id,
+    amount: "500.00",
+  });
+
+  const allocation = required(applied, "journal credit allocation");
+  expect((await api.invoice.get({ ...claim, invoiceId: invoice.id })).outstandingPaise).toBe(
+    950_000n,
+  );
+  expect(
+    (
+      await api.party.openCredits({
+        ...claim,
+        partyId: party.id,
+        side: "receivable",
+        type: "journal",
+      })
+    ).rows.some(({ id }) => id === journal.id),
+  ).toBe(false);
+
+  await api.allocation.reverse({
+    ...claim,
+    allocationId: allocation.id,
+    reason: "Reopen the credit",
+  });
+  expect((await api.invoice.get({ ...claim, invoiceId: invoice.id })).outstandingPaise).toBe(
+    1_000_000n,
+  );
+  expect(
+    (
+      await api.party.openCredits({
+        ...claim,
+        partyId: party.id,
+        side: "receivable",
+        type: "journal",
+      })
+    ).rows,
+  ).toContainEqual(expect.objectContaining({ id: journal.id, unappliedPaise: 50_000n }));
+
+  const entries = await db
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.orgId, organization.id),
+        eq(journalEntries.documentId, allocation.id),
+        eq(journalEntries.documentType, "allocation"),
+      ),
+    );
+
+  expect(entries).toEqual([]);
+
+  const [active] = await api.allocation.apply({
+    ...claim,
+    sourceDocumentId: journal.id,
+    targetDocumentId: invoice.id,
+    amount: "500.00",
+  });
+
+  await api.journal.cancel({ ...claim, journalId: journal.id, reason: "Undo discount" });
+  expect((await api.invoice.get({ ...claim, invoiceId: invoice.id })).outstandingPaise).toBe(
+    1_000_000n,
+  );
+  expect((await api.party.statement({ ...claim, partyId: party.id })).closingPaise).toBe(
+    balanceBefore,
+  );
+  expect((await api.journal.get({ ...claim, journalId: journal.id })).allocations).toContainEqual(
+    expect.objectContaining({
+      id: required(active, "active journal allocation").id,
+      reversed: true,
+    }),
+  );
 });
 
 test("a missing party cannot be used for settlement pickers", async () => {

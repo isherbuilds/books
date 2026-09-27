@@ -29,9 +29,30 @@ const balanced: JournalPosting = {
   type: "journal",
   amountPaise: 10_000n,
   lines: [
-    { accountId: "cash", partyId: null, side: "debit", amountPaise: 6_000n },
-    { accountId: "bank", partyId: "party-1", side: "debit", amountPaise: 4_000n },
-    { accountId: "income", partyId: null, side: "credit", amountPaise: 10_000n },
+    {
+      accountId: "cash",
+      partyId: null,
+      side: "debit",
+      amountPaise: 6_000n,
+      systemKey: null,
+      allocations: [],
+    },
+    {
+      accountId: "bank",
+      partyId: "party-1",
+      side: "debit",
+      amountPaise: 4_000n,
+      systemKey: null,
+      allocations: [],
+    },
+    {
+      accountId: "income",
+      partyId: null,
+      side: "credit",
+      amountPaise: 10_000n,
+      systemKey: null,
+      allocations: [],
+    },
   ],
 };
 

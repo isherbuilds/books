@@ -274,7 +274,7 @@ export const billRouter = {
   get: orgProcedure({ bill: ["read"] }, orgInput.extend({ billId: z.uuid() })).handler(
     async ({ context, input }) => {
       const { orgId } = context.scope;
-      const { capacityPaise, balancePaise } = settlementPaise(orgId, "target");
+      const { capacityPaise, balancePaise } = settlementPaise(orgId, "target", null);
 
       const [snapshot, timeZone] = await Promise.all([
         db.transaction(
