@@ -204,10 +204,19 @@ function JournalInvoiceAllocations({ orgSlug, index }: { orgSlug: string; index:
         rows={invoices}
         name={`lines.${index}.allocations`}
         remainingFor={(documentId) => {
-          const allocations = form.getValues(`lines.${index}.allocations`);
-          const { capacity, allocated } = journalPartyAmounts(form.getValues("lines"), index);
+          const lines = form.getValues("lines");
+          const own = enteredPaise(lines[index]?.allocations[documentId] ?? "");
+          const { capacity, allocated } = journalPartyAmounts(lines, index);
 
-          return capacity - allocated + enteredPaise(allocations[documentId] ?? "");
+          // Sibling lines may allocate the same invoice; its outstanding is shared.
+          const invoiceLeft =
+            (invoices.find((row) => row.id === documentId)?.openPaise ?? ZERO_MONEY) -
+            sumEntered(lines.map((line) => line.allocations[documentId] ?? "")) +
+            own;
+
+          const partyLeft = capacity - allocated + own;
+
+          return partyLeft < invoiceLeft ? partyLeft : invoiceLeft;
         }}
       >
         <JournalAllocationTotals index={index} />

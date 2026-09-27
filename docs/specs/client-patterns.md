@@ -68,7 +68,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    `parties_.$partyId` owns editing. Its Transactions tab lists every Invoice,
    Bill, Note, Receipt and Payment naming the party (`party.transactions`, one
    keyset page of 25 at a time, only the types the member may read), as Zoho's
-   contact page does. Journals link to `/journals/new`, and a
+   contact page does. A Journal names parties on its lines, not its header, so
+   it appears on the party's Statement and open items, not on Transactions. Journals link to `/journals/new`, and a
    journal record is a page at `/journals/$journalId`. Invoices link to
    `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
    Invoice record stays a Sheet.

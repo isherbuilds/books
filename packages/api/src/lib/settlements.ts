@@ -381,6 +381,7 @@ function afterPickerCursor(orgId: string, cursor: string | undefined) {
 export async function openItems(
   orgId: string,
   input: PickerPage & { partyId: string; side: "receivable" | "payable"; type?: "invoice" },
+  canReadJournals: boolean,
 ) {
   const outstandingPaise = settlementPaise(orgId, "target", input.partyId).balancePaise;
 
@@ -423,7 +424,7 @@ export async function openItems(
         input.side === "receivable"
           ? or(
               eq(documents.type, "invoice"),
-              eq(documents.type, "journal"),
+              canReadJournals ? eq(documents.type, "journal") : undefined,
               and(
                 eq(documents.type, "payment"),
                 eq(documents.settlementKind, "against"),

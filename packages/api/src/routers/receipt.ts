@@ -1,4 +1,5 @@
 import { db, type DbTransaction } from "@accly/db";
+import { authorize } from "@accly/auth/access";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
@@ -303,7 +304,15 @@ export const receiptRouter = {
 
       const [detail, allocations, adjustments, [credit]] = await Promise.all([
         settlementDetail(orgId, "receipt", input.receiptId),
-        allocationsOf(db, orgId, input.receiptId, "source"),
+        allocationsOf(
+          db,
+          orgId,
+          input.receiptId,
+          "source",
+          authorize(context.scope.roles, { journal: ["read"] })
+            ? undefined
+            : ["invoice", "payment"],
+        ),
         adjustmentLinesOf(orgId, input.receiptId),
         db
           .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })

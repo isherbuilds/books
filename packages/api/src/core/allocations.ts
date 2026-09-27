@@ -8,7 +8,7 @@ import { and, asc, eq, exists, inArray, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
-import type { Scope } from "../lib/procedures/factory";
+import { requirePermission, type Scope } from "../lib/procedures/factory";
 import { formatMoney } from "./money";
 import { recordEntry, reverseEntries } from "./posting";
 
@@ -235,6 +235,11 @@ export async function applyAllocations(
 
   const locked = await lockDocuments(tx, scope.orgId, ids);
   const byId = new Map(locked.map((document) => [document.id, document]));
+
+  // A Journal is settled only by someone who may read it, whichever path names it.
+  if (locked.some((document) => document.type === "journal"))
+    requirePermission(scope, { journal: ["read"] });
+
   const firstSource = byId.get(args.pairs[0]!.sourceDocumentId);
   const firstTarget = byId.get(args.pairs[0]!.targetDocumentId);
 
@@ -290,13 +295,15 @@ export async function applyAllocations(
 
   const sourceIds = new Set(args.pairs.map((pair) => pair.sourceDocumentId));
   const targetIds = new Set(args.pairs.map((pair) => pair.targetDocumentId));
+  const sourceSettlement = settlementPaise(scope.orgId, "source", partyId);
   const targetSettlement = settlementPaise(scope.orgId, "target", partyId);
 
   // Read after the locks, so no concurrent apply changes a balance before the insert.
   const balances = await tx
     .select({
       id: documents.id,
-      source: settlementPaise(scope.orgId, "source", partyId).balancePaise,
+      source: sourceSettlement.balancePaise,
+      sourceCapacity: sourceSettlement.capacityPaise,
       target: targetSettlement.balancePaise,
       targetCapacity: targetSettlement.capacityPaise,
     })
@@ -306,6 +313,13 @@ export async function applyAllocations(
   const left = new Map<string, bigint>();
 
   for (const row of balances) {
+    // A Journal is a source only for a party it credits.
+    if (sourceIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.sourceCapacity <= 0n)
+      throw badRequest(
+        "ALLOCATION_SOURCE_INVALID",
+        "Choose a posted source for the same party and side.",
+      );
+
     // A Journal is a target only for a party it debits.
     if (targetIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.targetCapacity <= 0n)
       throw badRequest(

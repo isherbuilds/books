@@ -400,6 +400,27 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
     }),
   );
 
+  // An operator may post receipts but not read journals: none is offered or settled.
+  const operator = await createTestUser("journal-operator");
+  await joinOrganization(operator, fixture.organization.id, "operator");
+  expect(
+    (
+      await clientFor(operator).party.openItems({ ...claim, partyId: rahul.id, side: "receivable" })
+    ).rows.some(({ id }) => id === transfer.id),
+  ).toBe(false);
+  await expectORPCCode(
+    clientFor(operator).receipt.post({
+      ...claim,
+      settlementKind: "against",
+      partyId: rahul.id,
+      amount: "2000.00",
+      paymentMethodId: paymentMethod.id,
+      documentDate: "2026-09-12",
+      allocations: [{ documentId: transfer.id, amount: "2000.00" }],
+    }),
+    "FORBIDDEN",
+  );
+
   await expectReason(
     fixture.api.receipt.post({
       ...claim,
@@ -444,12 +465,18 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
   );
 
   expect(conflict.message).toContain(receipt.number);
-  const receiptDetail = await fixture.api.receipt.get({ ...claim, receiptId: receipt.id });
+
+  // The journal record shows the receipt that blocks its cancellation.
+  const journalDetail = await fixture.api.journal.get({ ...claim, journalId: transfer.id });
 
   const allocation = required(
-    receiptDetail.allocations.find(({ otherDocumentId }) => otherDocumentId === transfer.id),
+    journalDetail.allocations.find(({ otherDocumentId }) => otherDocumentId === receipt.id),
     "Rahul journal settlement",
   );
+
+  expect(
+    (await clientFor(operator).receipt.get({ ...claim, receiptId: receipt.id })).allocations,
+  ).toEqual([]);
 
   await fixture.api.allocation.reverse({
     ...claim,

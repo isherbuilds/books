@@ -585,8 +585,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and `totals` holds the six sums. Rows are posting leaves; `parentName`
      names the group, as the chart shows it. Opening `O` is
      `sum(debit - credit)` before `from`, shown Dr when positive; closing is
-     `O + debit - credit`, shown the same way. Two grouped aggregates run in
-     parallel (legacy below). Opening, period and closing totals each balance;
+     `O + debit - credit`, shown the same way. One report reads one database
+     snapshot: the two grouped aggregates run in one read-only Repeatable Read
+     transaction, as `invoice.get` does (legacy below). Opening, period and closing totals each balance;
      an unbalanced total is an invariant failure (`impossible`, a 500), never a
      difference row.
    - `export.trialBalanceXlsx({ from, to })` adds a totals row. PDF at

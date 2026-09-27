@@ -116,16 +116,19 @@ export const journalRouter = {
       if (!header) throw new ORPCError("NOT_FOUND", { message: "Journal not found." });
 
       // Only after the type check: a non-journal document's lines carry no entry side.
-      const [lines, allocations] = await Promise.all([
+      // A Journal credits one party and debits another, so it is both a source and a
+      // target. An active target allocation blocks cancel, so the record shows it.
+      const [lines, applied, received] = await Promise.all([
         entryLinesOf(orgId, header.id),
         allocationsOf(db, orgId, header.id, "source"),
+        allocationsOf(db, orgId, header.id, "target"),
       ]);
 
       return {
         ...header,
         number: postedNumber(header.number, header.id),
         lines,
-        allocations,
+        allocations: [...applied, ...received],
       };
     },
   ),

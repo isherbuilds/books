@@ -283,7 +283,11 @@ export const partyRouter = {
     if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
     await requireParty(context.scope.orgId, input.partyId);
 
-    return openItems(context.scope.orgId, input);
+    return openItems(
+      context.scope.orgId,
+      input,
+      authorize(context.scope.roles, { journal: ["read"] }),
+    );
   }),
 
   openCredits: orgProcedure(
