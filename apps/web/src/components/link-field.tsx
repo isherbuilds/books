@@ -6,7 +6,7 @@ import { Combobox } from "@accly/ui/components/combobox";
 import { Input } from "@accly/ui/components/input";
 import { ClientOnly } from "@tanstack/react-router";
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import { isCreateItem, linkRows, type CreateItem } from "@/lib/link-rows";
 import { errorReason } from "@/lib/orpc-error";
@@ -101,7 +101,10 @@ export function LinkField<T>({
         : "error";
 
   const selectedLabel = value ? getLabel(value) : "";
-  const [query, setQuery] = useState(() => selectedLabel);
+  // Text typed since the last commit; null shows the committed value, so an external
+  // selection change (reset, post-and-next) shows at once.
+  const [typed, setTyped] = useState<string | null>(null);
+  const query = typed ?? selectedLabel;
   const [open, setOpen] = useState(false);
   const highlighted = useRef<T | CreateItem | undefined>(undefined);
   const canCreate = onCreate !== undefined && status === "ready" && complete;
@@ -119,8 +122,10 @@ export function LinkField<T>({
   });
 
   const changeQuery = (text: string) => {
-    setQuery(text);
-    onSearch?.(text === selectedLabel ? "" : text.trim());
+    const untouched = text === selectedLabel;
+
+    setTyped(untouched ? null : text);
+    onSearch?.(untouched ? "" : text.trim());
   };
 
   const choose = (item: T | CreateItem) => {
@@ -133,7 +138,7 @@ export function LinkField<T>({
       return;
     }
 
-    setQuery(getLabel(item));
+    setTyped(null);
     onSelect(item);
     setOpen(false);
   };
@@ -155,10 +160,6 @@ export function LinkField<T>({
       onSelect(null);
     }
   };
-
-  // External selection changes (reset, post-and-next) rewrite the visible text.
-  const selectedKey = value ? getKey(value) : "";
-  useEffect(() => setQuery(selectedLabel), [selectedKey, selectedLabel]);
 
   return (
     <ClientOnly
@@ -196,7 +197,7 @@ export function LinkField<T>({
 
           return (
             <>
-              <CheckIcon className="invisible size-3.5 shrink-0 group-data-selected/combobox-item:visible" />
+              <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
               <span className="min-w-0 truncate">{getLabel(item)}</span>
               {description ? (
                 <span className="min-w-0 flex-1 truncate text-muted-foreground">{description}</span>

@@ -41,7 +41,9 @@ function matchScore(item: PaletteItem, query: string): number {
 
   if (item.keywords?.some((keyword) => keyword.toLowerCase().includes(query))) return 1;
 
-  return 0;
+  // A document row is the server's own match for this text (number, party, reference
+  // or narration), so it never drops out.
+  return item.group === "document" ? 1 : 0;
 }
 
 type RankedSection = {

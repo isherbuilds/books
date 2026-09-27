@@ -82,7 +82,7 @@ function SkipLink() {
         main.focus();
         main.scrollIntoView();
       }}
-      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-sm"
+      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-base focus:font-medium focus:shadow-sm"
     >
       Skip to main content
     </a>

@@ -4,15 +4,20 @@ import type { AppRouterClient } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { cn } from "@accly/ui/lib/utils";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, type LinkOptions } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { z } from "zod";
 
 import { DATA_TABLE_FEATURES, DataTable, TextOrDash } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { CancelledBadge, struck } from "@/components/document-columns";
-import { LoadMore } from "@/components/page";
+import { PeriodMenu } from "@/components/date-range-filter";
+import { ListToolbar, LoadMore } from "@/components/page";
+import type { SearchRange } from "@/lib/date-presets";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { orpc } from "@/lib/orpc";
+import { partyDocumentLink } from "@/lib/parties";
+import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 type TransactionRow = Awaited<ReturnType<AppRouterClient["party"]["transactions"]>>["rows"][number];
 
@@ -25,16 +30,26 @@ const TYPE_LABELS: Record<TransactionRow["type"], string> = {
   payment: "Payment",
 };
 
-const transactionListOptions = (orgSlug: string, partyId: string) =>
+const transactionListOptions = (orgSlug: string, partyId: string, range: DateBounds) =>
   orpc.party.transactions.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, partyId, cursor }),
+    input: (cursor: string | undefined) => ({ orgSlug, partyId, ...range, cursor }),
     initialPageParam: undefined,
     getNextPageParam: (last) => (last.hasMore ? last.rows.at(-1)?.id : undefined),
   });
 
+const transactionSearch = z.object({
+  ...periodSearch,
+});
+
+type DateBounds = Omit<z.infer<typeof transactionSearch>, "all">;
+
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/transactions")({
-  loader: async ({ context: { queryClient }, params: { orgSlug, partyId } }) => {
-    await queryClient.infiniteQuery(transactionListOptions(orgSlug, partyId)).catch(() => {});
+  validateSearch: transactionSearch,
+  beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
+    requirePeriod(queryClient, orgSlug, location, search, "this-year"),
+  loaderDeps: ({ search: { all: _all, ...range } }) => range,
+  loader: async ({ context: { queryClient }, deps, params: { orgSlug, partyId } }) => {
+    await queryClient.prefetchInfiniteQuery(transactionListOptions(orgSlug, partyId, deps));
   },
   component: PartyTransactions,
 });
@@ -44,7 +59,7 @@ function TransactionNumber({ row }: { row: TransactionRow }) {
   return (
     <>
       <span className={cn("font-mono", struck(row.state))}>{row.number ?? "—"}</span>
-      {row.state === "draft" ? <Badge variant="outline">Draft</Badge> : null}
+      {row.state === "draft" ? <Badge variant="warn">Draft</Badge> : null}
       <CancelledBadge state={row.state} />
     </>
   );
@@ -76,7 +91,7 @@ const TRANSACTION_COLUMNS = [
   }),
   col.accessor("totalPaise", {
     header: "Amount",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original } }) => (
       <span className={cn("tabular-nums", struck(original.state))}>
         {formatMoney(original.totalPaise)}
@@ -102,70 +117,47 @@ function TransactionCard({ row }: { row: TransactionRow }) {
   );
 }
 
-// Each record opens over its own register filtered to this party, so Back and the
-// list behind the Sheet stay on this party's documents.
-function transactionLink(orgSlug: string, partyId: string, row: TransactionRow): LinkOptions {
-  switch (row.type) {
-    case "invoice":
-      return {
-        to: "/$orgSlug/invoices/$invoiceId",
-        params: { orgSlug, invoiceId: row.id },
-        search: { partyId },
-      };
-    case "bill":
-      return {
-        to: "/$orgSlug/bills/$billId",
-        params: { orgSlug, billId: row.id },
-        search: { partyId },
-      };
-    case "creditNote":
-    case "debitNote":
-      return {
-        to: "/$orgSlug/notes/$noteId",
-        params: { orgSlug, noteId: row.id },
-        search: { partyId },
-      };
-    case "receipt":
-      return {
-        to: "/$orgSlug/receipts/$receiptId",
-        params: { orgSlug, receiptId: row.id },
-        search: { partyId },
-      };
-    case "payment":
-      return {
-        to: "/$orgSlug/payments/$paymentId",
-        params: { orgSlug, paymentId: row.id },
-        search: { partyId },
-      };
-  }
-}
-
 function PartyTransactions() {
   const { orgSlug, partyId } = Route.useParams();
+  const { all: _all, ...range } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const transactions = useInfiniteQuery({
-    ...transactionListOptions(orgSlug, partyId),
+    ...transactionListOptions(orgSlug, partyId, range),
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
   const rows = transactions.data?.pages.flatMap((page) => page.rows) ?? [];
 
+  const setSearch = (next: SearchRange) =>
+    void navigate({ replace: true, search: (previous) => ({ ...previous, ...next }) });
+
   return (
     <>
+      <ListToolbar>
+        <PeriodMenu range={range} onChange={setSearch} />
+      </ListToolbar>
       <DataTable
         columns={TRANSACTION_COLUMNS}
         data={rows}
         getRowId={(row) => row.id}
         meta={{ orgSlug }}
-        rowLink={(row) => transactionLink(orgSlug, partyId, row)}
+        rowLink={(row) => partyDocumentLink(orgSlug, partyId, row.type, row.id)}
         renderCard={(row) => <TransactionCard row={row} />}
         query={transactions}
         errorTitle="Could not load transactions"
         empty={
-          <TableEmpty
-            title="No transactions yet"
-            description="Invoices, bills, notes, receipts and payments for this party appear here, newest first."
-          />
+          range.from || range.to ? (
+            <TableEmpty
+              title="No transactions in this period"
+              description="Choose a longer period or All time to see older documents."
+            />
+          ) : (
+            <TableEmpty
+              title="No transactions yet"
+              description="Invoices, bills, notes, receipts and payments for this party appear here, newest first."
+            />
+          )
         }
       />
       <LoadMore query={transactions} shown={rows.length} />

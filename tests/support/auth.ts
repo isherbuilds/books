@@ -58,7 +58,7 @@ const ORGANIZATION_ADDRESS = {
   legalType: "company",
   pan: "ABCDE1234F",
   stateCode: "27",
-  addressLine1: "1 Test Street",
+  address: "1 Test Street",
   city: "Pune",
   pinCode: "411001",
 } as const;

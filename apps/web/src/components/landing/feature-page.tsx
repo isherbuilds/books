@@ -1,28 +1,19 @@
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { ArrowRightIcon } from "lucide-react";
 
-import { LandingClosing } from "./closing";
-import { LandingFaq } from "./faq";
-import { FEATURES } from "./features";
-import { HeroActions } from "./hero";
-import { LandingNav } from "./nav";
+import { CtaBand } from "./cta-band";
+import { PageHero } from "./page-hero";
 import { ProductWindow, type Region, type ShotName } from "./product-window";
-import { Wash } from "./wash";
 
-/* One module's page: the argument the landing page has no room for. Hero, the
-   real screen whole, three zooms each carrying one claim, the FAQ entries that
-   module attracts, the other modules, then the shared closing.
-
-   The deep panel treatment — a washed stage with the window floating on it and
-   a text column beside it — lives here now; the landing page indexes these
-   pages with cards. */
+/* One module's page: the real screen whole, then three zooms each carrying one
+   claim. */
 
 /* The list screen entire. */
 const CAPTURE: Region = { x: 0, y: 0, w: 1440, h: 900 };
 
 export function FeaturePage({
   shot,
-  eyebrow,
+  kicker,
   title,
   lead,
   windowTitle,
@@ -30,127 +21,69 @@ export function FeaturePage({
   crops,
 }: {
   shot: ShotName;
-  eyebrow: string;
+  kicker: string;
   title: string;
-  lead: ReactNode;
+  lead: string;
   /* The window-chrome label, `"<Section> · Meridian Traders"`, on every window. */
   windowTitle: string;
-  /* The full capture is informative and is described; each crop repeats the
-     claim printed beside it and is hidden from assistive technology. */
+  /* The full capture is described; each crop repeats the claim printed beside it
+     and is hidden from assistive technology. */
   captureAlt: string;
   /* A crop zooms the list shot unless it names another, such as the record. */
   crops: { shot?: ShotName; region: Region; claim: string; body: string }[];
 }) {
-  const siblings = FEATURES.filter((feature) => feature.shot !== shot);
-
   return (
-    <div className="min-h-svh overflow-x-clip bg-background text-foreground">
-      <LandingNav />
-      <main id="main" tabIndex={-1} className="flex flex-col">
-        <section className="relative mx-auto flex w-full max-w-[84rem] flex-col items-center gap-6 px-6 pt-20">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute top-[-6rem] bottom-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden"
-          >
-            <Wash className="opacity-70" />
-            <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-background" />
-          </div>
-          <p className="text-sm text-muted-foreground">{eyebrow}</p>
-          <h1 className="max-w-3xl text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-center sm:text-5xl">
-            {title}
-          </h1>
-          <p className="max-w-lg text-lg text-muted-foreground text-pretty sm:text-center">
-            {lead}
-          </p>
-          <HeroActions />
+    <>
+      <PageHero
+        kicker={kicker}
+        title={title}
+        actions={
+          <Link to="/early-access" className="btn">
+            Get early access <ArrowRightIcon />
+          </Link>
+        }
+      >
+        {lead}
+      </PageHero>
 
-          {/* The screen whole, as the hero shows the dashboard: a phone visitor
-              is evaluating desk software and gets the honest small picture. */}
-          <div className="relative w-full overflow-hidden rounded-xl p-4 lg:p-6">
-            <Wash />
-            <ProductWindow
-              name={shot}
-              region={CAPTURE}
-              alt={captureAlt}
-              title={windowTitle}
-              className="relative"
-            />
-          </div>
-        </section>
+      <div className="wrap">
+        <div className="rounded-[22px] bg-(--sunken) p-[clamp(12px,3vw,36px)]">
+          <ProductWindow name={shot} region={CAPTURE} alt={captureAlt} title={windowTitle} />
+        </div>
 
-        <section className="mx-auto flex w-full max-w-[84rem] flex-col gap-6 px-4 pt-16 sm:px-6">
-          {crops.map((crop, i) => {
-            const textRight = i % 2 === 1;
-
-            return (
-              <div
-                key={crop.claim}
-                className={`grid items-center gap-4 rounded-xl bg-muted p-2 sm:p-3 lg:gap-6 ${
-                  textRight
-                    ? "lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]"
-                    : "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.75fr)]"
-                }`}
-              >
-                <div
-                  className={`flex flex-col gap-3 px-4 py-4 sm:px-6 sm:py-6 ${
-                    textRight ? "lg:order-2" : ""
-                  }`}
-                >
-                  <h2 className="text-2xl font-medium tracking-tight text-balance">{crop.claim}</h2>
-                  <p className="text-base text-muted-foreground text-pretty">{crop.body}</p>
-                </div>
-
-                {/* On a phone the window is cropped rather than shrunk: rendered
-                    at 44rem and anchored left so the frame clips the overflow. A
-                    table squeezed into a 320px column argues nothing. */}
-                <div className="relative grid justify-items-start overflow-hidden rounded-xl p-4 sm:min-h-[24rem] sm:place-items-center sm:p-10 lg:min-h-[32rem] lg:p-14">
-                  <Wash />
-                  <ProductWindow
-                    name={crop.shot ?? shot}
-                    region={crop.region}
-                    alt=""
-                    title={windowTitle}
-                    className="relative w-[44rem] max-w-none sm:w-full"
-                  />
-                </div>
+        <div className="mt-[clamp(64px,8vw,104px)] flex flex-col gap-[clamp(64px,8vw,104px)]">
+          {crops.map((crop, i) => (
+            <div
+              key={crop.claim}
+              className={`grid items-center gap-[clamp(28px,5vw,64px)] ${
+                i % 2
+                  ? "min-[861px]:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]"
+                  : "min-[861px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
+              }`}
+            >
+              <div className={`reveal flex flex-col gap-3.5 ${i % 2 ? "min-[861px]:order-2" : ""}`}>
+                <h2 className="text-[clamp(26px,2.8vw,36px)] leading-[1.1] font-[620] tracking-[-0.03em]">
+                  {crop.claim}
+                </h2>
+                <p className="text-[16.5px] leading-[1.65] text-(--ink-muted)">{crop.body}</p>
               </div>
-            );
-          })}
-        </section>
+              {/* On a phone the window is cropped rather than shrunk: a table
+                  squeezed into a 320px column argues nothing. */}
+              <div className="reveal grid justify-items-start overflow-hidden rounded-[22px] bg-(--sunken) p-[clamp(16px,3vw,36px)] min-[640px]:place-items-center">
+                <ProductWindow
+                  name={crop.shot ?? shot}
+                  region={crop.region}
+                  alt=""
+                  title={windowTitle}
+                  className="w-[44rem] max-w-none min-[640px]:w-full"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        <LandingFaq feature={shot} />
-
-        {/* The other modules: the buyer reading about invoices sees that the
-            documents and the parties are the same system, not a point solution. */}
-        <section
-          aria-labelledby="also"
-          className="mx-auto flex w-full max-w-[84rem] flex-col gap-6 px-4 pt-20 sm:px-6 sm:pt-28"
-        >
-          <h2 id="also" className="text-sm text-muted-foreground">
-            One system. Also in it:
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {siblings.map((feature) => (
-              <Link
-                key={feature.to}
-                to={feature.to}
-                className="group flex gap-4 rounded-xl border border-border p-4 transition-colors duration-100 ease-out hover:bg-muted"
-              >
-                <feature.icon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">{feature.label}</span>
-                  <span className="text-xs text-muted-foreground">{feature.blurb}</span>
-                  <span className="text-sm underline-offset-4 [@media(hover:hover)_and_(pointer:fine)]:group-hover:underline">
-                    See it →
-                  </span>
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <LandingClosing />
-      </main>
-    </div>
+      <CtaBand />
+    </>
   );
 }

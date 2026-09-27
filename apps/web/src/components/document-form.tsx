@@ -1,4 +1,5 @@
 import { Button } from "@accly/ui/components/button";
+import { Kbd } from "@accly/ui/components/kbd";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { useId, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
 import { get, useFormState, type Control, type FieldPath, type FieldValues } from "react-hook-form";
@@ -8,7 +9,8 @@ import { get, useFormState, type Control, type FieldPath, type FieldValues } fro
 const ownEvent = (event: SyntheticEvent<HTMLFormElement>) =>
   event.target instanceof Node && event.currentTarget.contains(event.target);
 
-const FOCUSABLE = 'input, select, textarea, [tabindex]:not([tabindex="-1"])';
+// Base UI buttons carry `tabindex="0"`; Enter must reach fields, never a button.
+const FOCUSABLE = 'input, select, textarea, [tabindex]:not([tabindex="-1"]):not(button)';
 
 // Spec §5: Enter moves to the next field, never to a button (Tab still reaches them). A
 // Link Field with its popup open owns the key (it commits the highlighted match), so
@@ -23,6 +25,18 @@ function focusNext(form: HTMLFormElement, current: HTMLElement) {
 
   next?.focus();
 }
+
+// A text field or a Base UI checkbox moves on; a checkbox's own Enter would click the
+// form's default button, so it must not reach it. A textarea keeps its newline, a
+// button its activation, and a Link Field with its popup open commits its match.
+function movesOnEnter(target: EventTarget): target is HTMLElement {
+  if (target instanceof HTMLInputElement) return target.getAttribute("aria-expanded") !== "true";
+
+  return target instanceof HTMLElement && target.getAttribute("role") === "checkbox";
+}
+
+// A page-hosted form stops at a readable width; a Sheet is narrower already.
+const COLUMN = "mx-auto w-full max-w-4xl";
 
 /** Mod+Enter submits; plain Enter moves to the next field and never submits. */
 export function DocumentForm({
@@ -50,10 +64,7 @@ export function DocumentForm({
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
           event.currentTarget.requestSubmit();
-        } else if (
-          event.target instanceof HTMLInputElement &&
-          event.target.getAttribute("aria-expanded") !== "true"
-        ) {
+        } else if (movesOnEnter(event.target)) {
           event.preventDefault();
           focusNext(event.currentTarget, event.target);
         }
@@ -61,57 +72,45 @@ export function DocumentForm({
       className="flex min-h-0 flex-1 flex-col"
     >
       <fieldset disabled={pending} className="contents">
-        <SheetBody className="gap-3 text-xs">{children}</SheetBody>
+        <SheetBody className="text-sm">
+          <div className={`${COLUMN} grid gap-3`}>{children}</div>
+        </SheetBody>
         {footer}
       </fieldset>
     </form>
   );
 }
 
+/** A form's footer: Close, any extra actions, then the submit button when `post` is given. */
 export function PostBar({
   onClose,
-  closeLabel,
+  closeLabel = "Close",
+  post,
+  postLabel = "Post",
   children,
 }: {
   onClose: () => void;
-  closeLabel: string;
-  children: ReactNode;
-}) {
-  return (
-    <SheetFooter>
-      <Button type="button" variant="ghost" onClick={onClose}>
-        {closeLabel}
-      </Button>
-      {children}
-    </SheetFooter>
-  );
-}
-
-/** What a document form shows once it posted: the number, Done, and Post and next. */
-export function PostedView({
-  number,
-  onDone,
-  onNext,
-  children,
-}: {
-  number: string;
-  onDone: () => void;
-  onNext: () => void;
+  closeLabel?: string;
+  /** The post mutation's state; omit it when the viewer cannot post. */
+  post?: { isPending: boolean; isError: boolean };
+  postLabel?: string;
   children?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <SheetBody className="grid place-content-center gap-3 text-center text-xs">
-        <p className="text-muted-foreground">Posted</p>
-        <p className="font-mono text-sm font-medium">{number}</p>
-        {children}
-      </SheetBody>
-      <PostBar onClose={onDone} closeLabel="Done">
-        <Button type="button" onClick={onNext}>
-          Post and next
+    <SheetFooter>
+      <div className={`${COLUMN} flex flex-wrap items-center justify-end gap-2`}>
+        <Button type="button" variant="ghost" onClick={onClose}>
+          {closeLabel}
         </Button>
-      </PostBar>
-    </div>
+        {children}
+        {post ? (
+          <Button type="submit">
+            {post.isPending ? "Posting…" : post.isError ? "Post again" : postLabel}
+            <Kbd>⌘↵</Kbd>
+          </Button>
+        ) : null}
+      </div>
+    </SheetFooter>
   );
 }
 
@@ -123,6 +122,7 @@ export function FieldArrayError<TFieldValues extends FieldValues>({
   name: FieldPath<TFieldValues>;
 }) {
   const { errors } = useFormState({ control, name, exact: true });
+
   // A `superRefine` on the array lands on `root`; a `min`/`max` issue on the field itself.
   const message: unknown = get(errors, `${name}.root.message`) ?? get(errors, `${name}.message`);
 
@@ -150,7 +150,8 @@ export function LineGrid({
         {title}
       </h3>
       {children}
-      {actions}
+      {/* A block wrapper, so the grid does not stretch the button across the row. */}
+      {actions ? <div>{actions}</div> : null}
     </section>
   );
 }

@@ -44,7 +44,7 @@ type ComboboxProps<T> = {
 };
 
 const ITEM_CLASS =
-  "group/combobox-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-2 text-xs outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50";
+  "group/combobox-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50";
 
 const TRAILING_BUTTON =
   "flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground";
@@ -166,7 +166,7 @@ function Combobox<T>({
           <ComboboxPrimitive.Popup
             data-slot="combobox-content"
             className={cn(
-              "z-50 w-(--anchor-width) max-w-(--available-width) overflow-hidden rounded-md bg-popover text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none",
+              "z-50 w-(--anchor-width) max-w-(--available-width) overflow-hidden rounded-md bg-popover text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none",
               emptyContent == null && "data-empty:hidden",
             )}
           >

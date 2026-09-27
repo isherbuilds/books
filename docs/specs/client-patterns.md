@@ -38,10 +38,16 @@ shortcuts. Each interaction (select Party, add line, post) paints within
 3. **Plain mutations.** After a lost response, the operator checks the list
    before re-entry.
 4. **Posting state** (`draft`, `posting`, `posted`, `rejected`) renders in
-   place. Posting disables the action and fields. Posted shows the number,
-   "Post and next", and Print when a print artifact exists. Rejected keeps the values and shows the reason.
+   place. Posting disables the action and fields. Posted is a toast with the
+   number, plus Open for a record page or Print when a print artifact exists; a
+   new document's form then clears for the next entry, and a draft or a
+   receipt against one Invoice goes on to its record or closes. Rejected keeps
+   the values and shows the reason.
    No number shows before the server returns it. Nothing is optimistic: no
    inserted row, balance or outstanding. Invalidate only after success.
+   An Invoice's totals are quoted live (`invoice.quote`, 300 ms after the last
+   change, the previous quote kept dimmed); its counter sale is up to four
+   payment lines with Split payment, Fill and Over by, adapted from HMS.
 5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
    match), except in a textarea or during IME composition. Mod+Enter posts. Esc
    closes the innermost popup, then the panel, then the overlay, one per press.
@@ -67,8 +73,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    `/invoices/new`, and a draft is edited at `/invoices/$invoiceId/edit`; the
    Invoice record stays a Sheet.
 9. **Link Field**: a `Combobox` over the cached master, with rows from
-   `linkRows` (prefix, then substring, on label and code), at most eight
-   (`LINK_ROW_LIMIT`); typing narrows to the rest. Past a party master's bound,
+   `linkRows` (prefix, then substring, on label and code). It shows at most six
+   rows on open or while the person types. Past a party master's bound,
    the typed text goes to `party.list({ q })`, debounced 200 ms. "Create
    <text>" comes last, hides on an exact match, and needs a complete list and
    the create grant. Create stacks the master's own form and returns the saved
@@ -82,6 +88,14 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     with server filters; Members keeps its search `q` in the URL, and its
     pending invitations come with the first page. Only the `LoadMore` button
     grows a list; nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+    A dated page opened without dates moves to its default period in the URL
+    (`requirePeriod`): this month for Invoices, Bills, Receipts and Payments;
+    this financial year for Notes, Journals and a party's Transactions and
+    Ledger. All time is an explicit `?all=true`. Search text or a party filter
+    makes a register a lookup, so it keeps the whole history. A register row
+    carries only what its columns, card, palette entry and cursor read;
+    everything else is one click away in the record Sheet. Search still
+    matches the reference and narration on the server.
     The open-item and credit pickers (`party.openItems`, `party.openCredits`)
     follow the same rule: 25 rows oldest first, then `LoadMore`, so no fixed
     count hides a document. Apply credit is a compact Dialog over the record
@@ -91,11 +105,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     the apply. The allocation grid has no search, because a narrowed grid
     would hide amounts already typed against other rows.
 11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
-    `LineGrid` from the Receipt form. Post-and-next keeps the date, and on a
-    Receipt also the method, and focuses the first Link Field. Tab moves
+    `LineGrid` from the Receipt form. The reset after a post keeps the date, and
+    on a Receipt also the method, and focuses the first Link Field. Tab moves
     between fields natively; plain Enter never submits, Mod+Enter posts.
-    `DocumentForm`, `PostBar` and `PostedView` use one layout in a Sheet or on
-    a page.
+    `DocumentForm` and `PostBar` use one layout in a Sheet or on a page.
 
 ## Midday adaptation
 
@@ -144,7 +157,7 @@ financial rollback are not adopted.
      `components/invoice-summary.tsx`, `components/document-form.tsx`,
      `components/apply-credit-dialog.tsx`, the `DocumentForm` adoption in
      `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
-   - Interfaces: `DocumentForm`, `PostBar`, `PostedView` and `LineGrid` own the
+   - Interfaces: `DocumentForm`, `PostBar` and `LineGrid` own the
      two proven shared seams. Every record Sheet lists allocations through
      `AllocationsSection` (the other document linked by type, Reverse while
      active); the Receipt and Payment forms allocate through

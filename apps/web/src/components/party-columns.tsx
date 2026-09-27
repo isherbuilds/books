@@ -36,7 +36,7 @@ export const PARTY_COLUMNS = [
         >
           {party.name}
         </span>
-        {party.active ? null : <Badge variant="muted">Inactive</Badge>}
+        {party.active ? null : <Badge>Inactive</Badge>}
       </>
     ),
   }),
@@ -47,9 +47,7 @@ export const PARTY_COLUMNS = [
     cell: ({ getValue }) => (
       <span className="flex gap-1 overflow-hidden">
         {getValue().map((role) => (
-          <Badge key={role} variant="muted">
-            {ROLE_LABELS[role]}
-          </Badge>
+          <Badge key={role}>{ROLE_LABELS[role]}</Badge>
         ))}
       </span>
     ),
@@ -71,7 +69,7 @@ export const PARTY_COLUMNS = [
     header: "Balance",
     sortFn: "basic",
     sortDescFirst: true,
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-balance" },
     cell: ({ row: { original: party } }) => <Balance paise={party.balancePaise} />,
   }),
   col.display({
@@ -105,7 +103,7 @@ export function PartyCard({ party }: { party: PartyRow }) {
           <span className={cn("truncate font-medium", !party.active && "text-muted-foreground")}>
             {party.name}
           </span>
-          {party.active ? null : <Badge variant="muted">Inactive</Badge>}
+          {party.active ? null : <Badge>Inactive</Badge>}
         </span>
         {party.balancePaise == null ? null : (
           <span className="shrink-0 tabular-nums">{formatBalance(party.balancePaise)}</span>

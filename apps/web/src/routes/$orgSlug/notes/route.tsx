@@ -1,36 +1,31 @@
 import { searchQuery } from "@accly/api/lib/schemas";
-import { Button } from "@accly/ui/components/button";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ContactRoundIcon } from "lucide-react";
 import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
-import { TableEmpty } from "@/components/data-table/table-empty";
+import { RegisterEmpty } from "@/components/data-table/table-empty";
 import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
   FilterMenu,
-  FilterSubmenu,
   focusSearch,
+  usePartyChip,
   type ActiveFilter,
 } from "@/components/list-filter";
-import { PartyFilterItems } from "@/components/party-filter-items";
 import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
-import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { partyListOptions } from "@/lib/parties";
+import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const noteSearch = z.object({
   q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   type: z.enum(["creditNote", "debitNote"]).optional().catch(undefined),
-  from: z.iso.date().optional().catch(undefined),
-  to: z.iso.date().optional().catch(undefined),
+  ...periodSearch,
 });
 
 type NoteFilters = z.infer<typeof noteSearch>;
@@ -38,30 +33,26 @@ type NoteFilters = z.infer<typeof noteSearch>;
 export const Route = createFileRoute("/$orgSlug/notes")({
   head: () => ({ meta: [{ title: "Notes · Accly Books" }] }),
   validateSearch: noteSearch,
-  loaderDeps: ({ search }) => search,
+  beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
+    requirePeriod(queryClient, orgSlug, location, search, "this-year"),
+  loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { note: ["read"] });
-    await queryClient.infiniteQuery(noteListOptions(orgSlug, deps)).catch(() => {});
+    await queryClient.prefetchInfiniteQuery(noteListOptions(orgSlug, deps));
   },
   component: NotesRoute,
 });
 
 function NotesRoute() {
   const { orgSlug } = Route.useParams();
-  const filters = Route.useSearch();
+  const { all: _all, ...filters } = Route.useSearch();
   const { q, partyId, type, from, to } = filters;
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
-  const canReadParties = useCan(orgSlug, { party: ["read"] });
 
   const notes = useInfiniteQuery({
     ...noteListOptions(orgSlug, filters),
     ...OPERATIONAL_INFINITE_REFETCH,
-  });
-
-  const parties = useQuery({
-    ...partyListOptions(orgSlug),
-    enabled: canReadParties && partyId !== undefined,
   });
 
   const activeRowId = useMatch({ from: "/$orgSlug/notes/$noteId", shouldThrow: false })?.params
@@ -72,30 +63,18 @@ function NotesRoute() {
   const setFilters = (patch: Partial<NoteFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
+  const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
+
   const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   const clear = () => {
     focusSearch(field, { empty: true });
-    void setFilters({
-      q: undefined,
-      partyId: undefined,
-      type: undefined,
-      from: undefined,
-      to: undefined,
-    });
+    void navigate({ replace: true, search: { all: true } });
   };
 
   const chips: ActiveFilter[] = [];
 
-  if (partyId) {
-    const party = parties.data?.rows.find((candidate) => candidate.id === partyId);
-    chips.push({
-      id: "partyId",
-      name: "Party",
-      label: party ? `Party: ${party.name}` : "One party",
-      remove: () => setFilters({ partyId: undefined }),
-    });
-  }
+  if (partyChip) chips.push(partyChip);
 
   if (date.chip) chips.push(date.chip);
 
@@ -121,15 +100,6 @@ function NotesRoute() {
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
                 {date.submenu}
-                {canReadParties ? (
-                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
-                    <PartyFilterItems
-                      orgSlug={orgSlug}
-                      partyId={partyId}
-                      onChange={(next) => void setFilters({ partyId: next })}
-                    />
-                  </FilterSubmenu>
-                ) : null}
               </FilterMenu>
             }
           />
@@ -151,22 +121,12 @@ function NotesRoute() {
           query={notes}
           errorTitle="Could not load notes"
           empty={
-            q || chips.length ? (
-              <TableEmpty
-                title="No notes match"
-                description="Try another search or clear the filters."
-                action={
-                  <Button size="xs" variant="outline" onClick={clear}>
-                    Clear filters
-                  </Button>
-                }
-              />
-            ) : (
-              <TableEmpty
-                title="No notes yet"
-                description="Credit and debit notes posted against invoices and bills appear here."
-              />
-            )
+            <RegisterEmpty
+              noun="notes"
+              filtered={q !== undefined || chips.length > 0}
+              onClear={clear}
+              description="Credit and debit notes posted against invoices and bills appear here."
+            />
           }
           activeRowId={activeRowId}
         />

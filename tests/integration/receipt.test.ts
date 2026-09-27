@@ -35,7 +35,7 @@ type ReceiptPostInput = Parameters<AppRouterClient["receipt"]["post"]>[0];
 
 type Account = typeof accounts.$inferSelect;
 
-type PaymentMethod = typeof paymentMethods.$inferSelect;
+type PaymentMethod = Awaited<ReturnType<AppRouterClient["paymentMethod"]["list"]>>[number];
 
 let founder: TestUser;
 
@@ -132,7 +132,7 @@ beforeAll(async () => {
     name: "Receipt Customer",
     roles: ["customer"],
     stateCode: "27",
-    addressLine1: "2 Customer Road",
+    address: "2 Customer Road\nUnit 4",
     city: "Pune",
     pinCode: "411001",
   });
@@ -161,6 +161,7 @@ test("advance receipt posts to customer advances, numbers, and audit", async () 
   });
   expect(typeof primaryReceipt.totalPaise).toBe("bigint");
   expect(primaryReceipt.printSnapshot?.party?.name).toBe("Receipt Customer");
+  expect(primaryReceipt.printSnapshot?.party?.address).toBe("2 Customer Road\nUnit 4, Pune 411001");
   expect(await linesOf(primaryReceipt.id)).toEqual([
     expect.objectContaining({
       kind: "account",
@@ -449,7 +450,7 @@ test("receipt detail preserves the posted party and organization print snapshot"
     name: "Renamed Customer",
     roles: ["customer"],
     stateCode: "27",
-    addressLine1: "2 Customer Road",
+    address: "2 Customer Road",
     city: "Pune",
     pinCode: "411001",
     active: true,
@@ -487,8 +488,7 @@ test("receipt detail preserves the posted party and organization print snapshot"
       gstin: originalParty.gstin ?? undefined,
       pan: originalParty.pan ?? undefined,
       stateCode: originalParty.stateCode,
-      addressLine1: originalParty.addressLine1 ?? undefined,
-      addressLine2: originalParty.addressLine2 ?? undefined,
+      address: originalParty.address ?? undefined,
       city: originalParty.city ?? undefined,
       pinCode: originalParty.pinCode ?? undefined,
       email: originalParty.email ?? undefined,
@@ -591,7 +591,6 @@ test("receipt queries filter by reference and hide cross-organization ids", asyn
   expect(result.rows).toEqual([
     expect.objectContaining({
       id: primaryReceipt.id,
-      reference: "UTR1",
       paymentMethodName: "Bank transfer",
     }),
   ]);

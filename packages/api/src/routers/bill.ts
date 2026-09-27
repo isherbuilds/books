@@ -167,6 +167,7 @@ async function resolveBill(
     unit: null,
     quantity: null,
     unitPricePaise: null,
+    mrpPaise: null,
     taxRateId: line.taxCode ? rateByCode.get(line.taxCode)!.id : null,
     itcEligible: registered && line.itcEligible,
     sourceLineId: null,

@@ -25,7 +25,7 @@ import {
   type PostDocumentLine,
 } from "../core/documents";
 import { splitDiscount } from "../core/discount";
-import { formatDecimal, sumPaise } from "../core/money";
+import { formatDecimal, percentOfPaise, sumPaise } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
 import { computeTax } from "../core/tax";
 import { ratesByCode } from "../core/tax-schedule";
@@ -38,6 +38,7 @@ import {
   invoiceFields,
   orderedPeriod,
   reason,
+  positiveMoney,
   settlementPostFields,
 } from "../lib/schemas";
 import {
@@ -75,7 +76,12 @@ async function resolveInvoice(
   scope: Scope,
   input: InvoiceFields,
   settings: typeof organizationSettings.$inferSelect,
-): Promise<{ numbering: DocumentNumbering; invoice: ResolvedInvoice }> {
+): Promise<{
+  numbering: DocumentNumbering;
+  invoice: ResolvedInvoice;
+  /** Each line's GST rate, in line order; null where no rate applies. */
+  lineRates: Array<number | null>;
+}> {
   const itemIds = [...new Set(input.lines.map((line) => line.itemId))];
 
   // A posting resolves through one transaction connection; do not queue concurrent queries.
@@ -159,14 +165,20 @@ async function resolveInvoice(
         unit: stored.item.unit,
         quantity: line.quantity,
         unitPricePaise,
+        mrpPaise: stored.item.mrpPaise,
         taxRateId: rateApplies ? rate!.id : null,
       },
       rateBasisPoints: rateApplies ? rate!.rateBasisPoints : null,
     };
   });
 
-  const discountPaise = input.discount ?? 0n;
   const subtotalPaise = sumPaise(unresolvedLines.map(({ line }) => line.amountPaise));
+
+  // A percentage is worked out on the subtotal; otherwise the amount applies.
+  const discountPaise =
+    input.discountPercent === undefined
+      ? (input.discount ?? 0n)
+      : boundedPaise(percentOfPaise(subtotalPaise, input.discountPercent));
 
   if (discountPaise > subtotalPaise) {
     throw badRequest("DISCOUNT_EXCEEDS_SUBTOTAL", "Discount cannot exceed the invoice subtotal.");
@@ -224,6 +236,7 @@ async function resolveInvoice(
   };
 
   return {
+    lineRates: unresolvedLines.map(({ rateBasisPoints }) => rateBasisPoints),
     numbering: {
       prefix: settings.invoicePrefix,
       fiscalYearStartMonth: settings.financialYearStart,
@@ -243,6 +256,8 @@ async function resolveInvoice(
         organization: organizationSnapshot(settings),
         party: partySnapshot(party),
         lines: lines.map(({ description }) => ({ description })),
+        shipTo: input.shipTo,
+        discountBasisPoints: input.discountPercent,
       },
       lines,
       posting,
@@ -250,21 +265,50 @@ async function resolveInvoice(
   };
 }
 
-const invoiceInput = orgInput
-  .extend(invoiceFields)
-  .extend({ draft: draftToken.optional() })
-  .strict();
+const quoteInput = orgInput.extend(invoiceFields).strict();
 
+const invoiceInput = quoteInput.extend({ draft: draftToken.optional() }).strict();
+
+// A counter sale takes up to four payments, one Receipt each, since a Receipt has one
+// method and so one money account. Their sum may fall short of the total, never exceed it.
 const postInput = invoiceInput.extend({
   settle: z
     .strictObject({
-      paymentMethodId: z.uuid(),
-      reference: settlementPostFields.reference,
+      payments: z
+        .array(
+          z.strictObject({
+            paymentMethodId: z.uuid(),
+            amount: positiveMoney,
+            reference: settlementPostFields.reference,
+          }),
+        )
+        .min(1)
+        .max(4),
     })
     .optional(),
 });
 
 export const invoiceRouter = {
+  // The editor's live totals come from the same resolution that posts, and write nothing.
+  quote: orgProcedure({ invoice: ["create"] }, quoteInput).handler(async ({ context, input }) => {
+    const settings = await orgSettings(context.scope.orgId);
+    const { invoice, lineRates } = await resolveInvoice(db, context.scope, input, settings);
+    const { roundOffPaise, cgstPaise, sgstPaise, igstPaise } = invoice.posting;
+    const taxablePaise = sumPaise(invoice.lines.map((line) => line.amountPaise));
+
+    return {
+      // The editor computes quantity times rate itself; only the dated rate is the server's.
+      lines: lineRates.map((rateBasisPoints) => ({ rateBasisPoints })),
+      discountPaise: invoice.discountPaise,
+      taxablePaise,
+      cgstPaise,
+      sgstPaise,
+      igstPaise,
+      roundOffPaise,
+      totalPaise: invoice.posting.amountPaise,
+    };
+  }),
+
   saveDraft: orgProcedure({ invoice: ["create"] }, invoiceInput).handler(
     async ({ context, input }) => {
       const settings = await orgSettings(context.scope.orgId);
@@ -284,31 +328,47 @@ export const invoiceRouter = {
     // A counter sale also posts a Receipt, so it needs that permission too.
     if (input.settle) requirePermission(scope, { receipt: ["post"] });
 
-    const { posted, amountPaise, receipt, receiptInput } = await db.transaction(async (tx) => {
+    const { posted, amountPaise, receipts } = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
       const { invoice } = await resolveInvoice(tx, scope, input, settings);
+
+      const payments = input.settle?.payments ?? [];
+
+      // Refused before anything is numbered or written.
+      if (sumPaise(payments.map(({ amount }) => amount)) > invoice.posting.amountPaise) {
+        throw badRequest(
+          "SETTLEMENT_EXCEEDS_TOTAL",
+          "The payments received cannot exceed the invoice total.",
+        );
+      }
 
       const posted = await postDocument(tx, scope, settings, settings.invoicePrefix, {
         ...invoice,
         draft: input.draft ?? null,
       });
 
-      const receiptInput = input.settle
-        ? {
-            orgSlug: input.orgSlug,
-            settlementKind: "against" as const,
-            documentDate: invoice.documentDate,
-            partyId: invoice.posting.partyId,
-            paymentMethodId: input.settle.paymentMethodId,
-            reference: input.settle.reference,
-            amount: invoice.posting.amountPaise,
-            allocations: [{ invoiceId: posted.id, amount: invoice.posting.amountPaise }],
-          }
-        : null;
+      // Receipts number after the Invoice, in payment order; one connection, so in sequence.
+      const receipts = [];
 
-      const receipt = receiptInput ? await postReceipt(tx, scope, settings, receiptInput) : null;
+      for (const payment of payments) {
+        const receiptInput = {
+          orgSlug: input.orgSlug,
+          settlementKind: "against" as const,
+          documentDate: invoice.documentDate,
+          partyId: invoice.posting.partyId,
+          paymentMethodId: payment.paymentMethodId,
+          reference: payment.reference,
+          amount: payment.amount,
+          allocations: [{ invoiceId: posted.id, amount: payment.amount }],
+        };
 
-      return { posted, amountPaise: invoice.posting.amountPaise, receipt, receiptInput };
+        receipts.push({
+          input: receiptInput,
+          ...(await postReceipt(tx, scope, settings, receiptInput)),
+        });
+      }
+
+      return { posted, amountPaise: invoice.posting.amountPaise, receipts };
     });
 
     audit({
@@ -319,17 +379,17 @@ export const invoiceRouter = {
       meta: { number: posted.number, amount: formatDecimal(amountPaise) },
     });
 
-    if (receipt && receiptInput) {
+    for (const receipt of receipts) {
       auditReceiptPost(
         scope,
         receipt.posted,
-        receiptInput,
+        receipt.input,
         receipt.allocatedPaise,
         receipt.advanceSupply,
       );
     }
 
-    return { ...posted, receipt: receipt?.posted ?? null };
+    return { ...posted, receipts: receipts.map((receipt) => receipt.posted) };
   }),
 
   get: orgProcedure({ invoice: ["read"] }, orgInput.extend({ invoiceId: z.uuid() })).handler(
@@ -383,11 +443,14 @@ export const invoiceRouter = {
                 kind: documentLines.kind,
                 accountId: documentLines.accountId,
                 itemId: documentLines.itemId,
+                // A blank description stores the Item's name; an editor reopens it blank.
+                itemName: items.name,
                 description: documentLines.description,
                 hsnSac: documentLines.hsnSac,
                 unit: documentLines.unit,
                 quantity: documentLines.quantity,
                 unitPricePaise: documentLines.unitPricePaise,
+                mrpPaise: documentLines.mrpPaise,
                 discountPaise: documentLines.discountPaise,
                 taxRateId: documentLines.taxRateId,
                 rateBasisPoints: taxRates.rateBasisPoints,
@@ -401,6 +464,7 @@ export const invoiceRouter = {
                 taxRates,
                 and(eq(taxRates.orgId, orgId), eq(taxRates.id, documentLines.taxRateId)),
               )
+              .leftJoin(items, and(eq(items.orgId, orgId), eq(items.id, documentLines.itemId)))
               .where(
                 and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, input.invoiceId)),
               )

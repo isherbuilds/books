@@ -18,9 +18,9 @@ import { ErrorNote } from "@/components/page";
 // the indicator instead: same 2px rule throughout, foreground colour on focus so
 // nothing shifts. `rounded-none` beats the base `:focus-visible` radius, which
 // would otherwise curl the ends of the rule up while the field is focused.
-// `text-base` below `md` keeps iOS from zooming on focus.
+// 16 px keeps iOS from zooming on focus.
 const underline =
-  "h-10 w-full rounded-none border-0 border-b-2 border-input bg-transparent px-0 text-base transition-colors duration-150 ease-out outline-none placeholder:text-muted-foreground focus:border-foreground disabled:opacity-60 aria-invalid:border-destructive md:text-sm";
+  "h-10 w-full rounded-none border-0 border-b-2 border-input bg-transparent px-0 text-base transition-colors duration-150 ease-out outline-none placeholder:text-muted-foreground focus:border-foreground disabled:opacity-60 aria-invalid:border-destructive";
 
 export function AuthField({
   name,
@@ -34,7 +34,7 @@ export function AuthField({
       name={name}
       render={({ field }) => (
         <FormItem className="gap-1">
-          <FormLabel className="text-xs font-medium tracking-wide text-muted-foreground">
+          <FormLabel className="text-sm font-medium tracking-wide text-muted-foreground">
             {label}
           </FormLabel>
           <div className="relative">
@@ -77,7 +77,7 @@ export function AuthFormFooter({ children }: { children: ReactNode }) {
   return (
     <>
       {message && <ErrorNote title={message} />}
-      <SubmitButton isSubmitting={isSubmitting} shape="pill" className="h-11 w-full text-sm">
+      <SubmitButton isSubmitting={isSubmitting} shape="pill" className="h-11 w-full text-base">
         {children}
       </SubmitButton>
     </>

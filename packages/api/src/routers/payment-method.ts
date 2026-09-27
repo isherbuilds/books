@@ -2,7 +2,7 @@ import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
@@ -40,7 +40,10 @@ export const paymentMethodRouter = {
 
     const rows = await db
       .select({
-        ...getTableColumns(paymentMethods),
+        id: paymentMethods.id,
+        name: paymentMethods.name,
+        accountId: paymentMethods.accountId,
+        active: paymentMethods.active,
         accountName: accounts.name,
         accountActive: accounts.active,
       })

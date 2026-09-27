@@ -55,11 +55,9 @@ export function PartyQuickLook({
             </div>
             <SheetDescription className="flex flex-wrap items-center gap-1">
               {party.roles.map((role) => (
-                <Badge key={role} variant="outline">
-                  {ROLE_LABELS[role]}
-                </Badge>
+                <Badge key={role}>{ROLE_LABELS[role]}</Badge>
               ))}
-              {party.active ? null : <Badge variant="muted">Inactive</Badge>}
+              {party.active ? null : <Badge>Inactive</Badge>}
             </SheetDescription>
           </SheetHeader>
 

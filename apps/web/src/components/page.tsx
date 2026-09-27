@@ -26,9 +26,9 @@ export function PageHeader({
       <MobileMenu />
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h1 className="truncate text-sm font-medium">{title}</h1>
+          <h1 className="truncate text-base font-medium">{title}</h1>
           {description && (
-            <p className="hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
+            <p className="hidden min-w-0 truncate text-sm text-muted-foreground sm:block">
               {description}
             </p>
           )}
@@ -45,7 +45,7 @@ export function PageBody({ children, className }: { children?: ReactNode; classN
     <div
       data-slot="page-body"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto text-xs print:overflow-visible",
+        "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto text-sm print:overflow-visible",
         "p-4",
         className,
       )}
@@ -75,32 +75,19 @@ export function ErrorNote({
   const body = detail ?? (error === undefined ? undefined : errorMessage(error, RETRY_HINT));
 
   return (
-    <div role="alert" className="flex flex-col gap-1 border-l-2 border-destructive pl-3 text-xs">
+    <div role="alert" className="flex flex-col gap-1 border-l-2 border-destructive pl-3 text-sm">
       <p className="font-medium">{title}</p>
       {body && <p className="text-muted-foreground">{body}</p>}
     </div>
   );
 }
 
-export function PageTabs({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: ReactNode;
-}) {
+export function PageTabs({ label, children }: { label: string; children: ReactNode }) {
   // The row, not each tab, overlaps the border by 1px: a tab hanging out of a
   // scroll container would give the strip a scrollbar of its own.
   return (
     <nav aria-label={label} className="shrink-0 border-b border-border print:hidden">
-      <div
-        className={cn(
-          "-mb-px flex min-h-10 gap-1 overflow-x-auto overflow-y-hidden px-4",
-          className,
-        )}
-      >
+      <div className="-mb-px flex min-h-10 gap-1 overflow-x-auto overflow-y-hidden px-4">
         {children}
       </div>
     </nav>
@@ -119,7 +106,7 @@ export const PageTab = createLink(function PageTabAnchor({
     <a
       ref={ref}
       className={cn(
-        "flex shrink-0 items-center border-b-2 border-transparent px-2 text-xs text-muted-foreground hover:text-foreground data-[status=active]:border-foreground data-[status=active]:font-medium data-[status=active]:text-foreground",
+        "flex shrink-0 items-center border-b-2 border-transparent px-2 text-sm text-muted-foreground hover:text-foreground data-[status=active]:border-foreground data-[status=active]:font-medium data-[status=active]:text-foreground",
         className,
       )}
       {...props}

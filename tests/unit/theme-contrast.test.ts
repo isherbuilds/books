@@ -2,82 +2,85 @@ import { expect, test } from "bun:test";
 
 const GLOBALS = new URL("../../packages/ui/src/styles/globals.css", import.meta.url);
 
-function parseNeutralTokens(block: string): Map<string, number> {
-  const out = new Map<string, number>();
-  const pattern = /(--[a-z-]+):\s*oklch\(([0-9.]+)\s+0\s+0\)\s*;/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(block)) !== null) {
-    out.set(match[1]!, Number(match[2]!));
-  }
-
-  return out;
-}
-
-// For a neutral oklch colour the OKLab->linear-sRGB matrix collapses to
-// r = g = b = L^3, so WCAG relative luminance is simply L^3.
-const luminance = (lightness: number) => lightness ** 3;
-
-const contrast = (a: number, b: number) => {
-  const hi = Math.max(luminance(a), luminance(b));
-  const lo = Math.min(luminance(a), luminance(b));
-
-  return (hi + 0.05) / (lo + 0.05);
-};
-
 // Anchored to a line start: a bare indexOf(".dark") finds the `@custom-variant`
 // declaration above and reads the wrong block.
 function blockFor(css: string, selector: string): string {
   const open = css.indexOf(`\n${selector} {`);
   expect(open, `no top-level "${selector} {" rule in globals.css`).toBeGreaterThanOrEqual(0);
-  const close = css.indexOf("}", open);
 
-  return css.slice(open, close);
+  return css.slice(open, css.indexOf("\n}", open));
 }
 
-const SURFACES = ["--background", "--card", "--muted", "--sidebar"] as const;
+// `.dark` sits on <html> beside `:root`, so its declarations override the light
+// ones and every `var()` alias resolves against the merged set.
+function tokensFor(css: string, theme: "light" | "dark"): (name: string) => string {
+  const declared = new Map<string, string>();
+  const blocks = theme === "light" ? [":root"] : [":root", ".dark"];
 
-test.each([
-  [":root", "light"],
-  [".dark", "dark"],
-])("%s: the focus ring clears 3:1 on every surface it lands on", async (selector) => {
-  const css = await Bun.file(GLOBALS).text();
-  const tokens = parseNeutralTokens(blockFor(css, selector));
+  for (const block of blocks) {
+    for (const [, name, value] of blockFor(css, block).matchAll(/(--[a-z-]+):\s*([^;]+);/g)) {
+      declared.set(name!, value!.trim());
+    }
+  }
 
-  for (const ringToken of ["--ring", "--sidebar-ring"]) {
-    const ring = tokens.get(ringToken);
-    expect(ring, `${selector} ${ringToken} must be a neutral oklch`).toBeDefined();
+  return function resolve(name): string {
+    const value = declared.get(name);
+    expect(value, `${theme} ${name} is not declared`).toBeDefined();
+    const alias = /^var\((--[a-z-]+)\)$/.exec(value!);
 
-    for (const surfaceToken of SURFACES) {
-      const surface = tokens.get(surfaceToken);
-      expect(surface, `${selector} ${surfaceToken} must be a neutral oklch`).toBeDefined();
+    return alias ? resolve(alias[1]!) : value!;
+  };
+}
 
-      const ratio = contrast(ring!, surface!);
+function luminance(hex: string): number {
+  expect(hex, "palette tokens are six-digit hex").toMatch(/^#[0-9a-f]{6}$/i);
+
+  const [r, g, b] = [1, 3, 5].map((index) => {
+    const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+}
+
+const contrast = (a: string, b: string) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+
+  return (hi! + 0.05) / (lo! + 0.05);
+};
+
+const THEMES: Array<"light" | "dark"> = ["light", "dark"];
+
+test.each(THEMES)("%s: focus rings clear 3:1 on every surface", async (theme) => {
+  const token = tokensFor(await Bun.file(GLOBALS).text(), theme);
+
+  for (const edge of ["--ring", "--sidebar-ring"]) {
+    for (const surface of ["--background", "--card", "--muted", "--sidebar"]) {
+      const ratio = contrast(token(edge), token(surface));
       expect(
         Number(ratio.toFixed(2)),
-        `${selector} ${ringToken} on ${surfaceToken} is ${ratio.toFixed(2)}:1, below the 3:1 floor`,
+        `${theme} ${edge} on ${surface} is ${ratio.toFixed(2)}:1, below the 3:1 floor`,
       ).toBeGreaterThanOrEqual(3);
     }
   }
 });
 
-test.each([
-  [":root", "light"],
-  [".dark", "dark"],
-])("%s: muted text clears 4.5:1 on every supporting surface", async (selector) => {
-  const css = await Bun.file(GLOBALS).text();
-  const tokens = parseNeutralTokens(blockFor(css, selector));
-  const foreground = tokens.get("--muted-foreground");
-  expect(foreground, `${selector} --muted-foreground must be a neutral oklch`).toBeDefined();
+test.each(THEMES)("%s: muted and state text clear 4.5:1 on every surface", async (theme) => {
+  const token = tokensFor(await Bun.file(GLOBALS).text(), theme);
 
-  for (const surfaceToken of ["--background", "--card", "--muted"]) {
-    const surface = tokens.get(surfaceToken);
-    expect(surface, `${selector} ${surfaceToken} must be a neutral oklch`).toBeDefined();
+  const pairs = [
+    ...["--background", "--card", "--muted"].map((surface) => ["--muted-foreground", surface]),
+    ["--stamp", "--stamp-soft"],
+    ["--warn", "--warn-soft"],
+    ["--danger", "--danger-soft"],
+  ];
 
-    const ratio = contrast(foreground!, surface!);
+  for (const [text, surface] of pairs) {
+    const ratio = contrast(token(text!), token(surface!));
     expect(
       Number(ratio.toFixed(2)),
-      `${selector} --muted-foreground on ${surfaceToken} is ${ratio.toFixed(2)}:1, below the 4.5:1 floor`,
+      `${theme} ${text} on ${surface} is ${ratio.toFixed(2)}:1, below the 4.5:1 floor`,
     ).toBeGreaterThanOrEqual(4.5);
   }
 });

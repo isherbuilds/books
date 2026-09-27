@@ -58,7 +58,7 @@ export function InvitationAccess({
 
   if (invitation.isPending)
     return (
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         Loading invitation…
       </p>
     );
@@ -70,8 +70,8 @@ export function InvitationAccess({
       ) : (
         <>
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-medium">Join {invitation.data.organizationName}</h2>
-            <p className="break-all text-xs text-muted-foreground">
+            <h2 className="text-base font-medium">Join {invitation.data.organizationName}</h2>
+            <p className="break-all text-sm text-muted-foreground">
               Invited as {invitation.data.email}.
             </p>
           </div>
@@ -88,7 +88,7 @@ export function InvitationAccess({
             />
           ) : (
             <Button
-              className="h-11 w-full text-sm"
+              className="h-11 w-full text-base"
               shape="pill"
               disabled={joining.isPending}
               onClick={() => joining.mutate(invitation.data.organizationSlug)}
@@ -101,7 +101,7 @@ export function InvitationAccess({
           )}
         </>
       )}
-      <Link to="/join" search={{}} className="text-xs underline underline-offset-4">
+      <Link to="/join" search={{}} className="text-sm underline underline-offset-4">
         View all invitations and organizations
       </Link>
     </div>

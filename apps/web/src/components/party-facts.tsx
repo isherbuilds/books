@@ -45,7 +45,6 @@ function Fact({
 /** Contact, tax and address facts, split by hairlines: the quick look and the Overview tab. */
 export function PartyFactSections({ party }: { party: PartyRecord }) {
   const state = INDIAN_STATES[party.stateCode];
-  const address = [party.addressLine1, party.addressLine2].filter(Boolean).join(", ");
 
   return (
     <>
@@ -78,7 +77,7 @@ export function PartyFactSections({ party }: { party: PartyRecord }) {
       <Section title="Address">
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
           <Fact label="Address" wide>
-            {address}
+            {party.address ? <span className="whitespace-pre-line">{party.address}</span> : null}
           </Fact>
           <Fact label="City">{party.city}</Fact>
           <Fact label="PIN code" mono>
@@ -130,16 +129,12 @@ export function RecentReceipts({ orgSlug, partyId }: { orgSlug: string; partyId:
                   to="/$orgSlug/receipts/$receiptId"
                   params={{ orgSlug, receiptId: receipt.id }}
                   search={{ partyId }}
-                  className="grid grid-cols-[auto_1fr_auto] items-baseline gap-3 py-2 hover:bg-muted/50"
+                  className="grid grid-cols-[auto_1fr_auto] items-baseline gap-3 px-2 py-2 hover:bg-muted/50"
                 >
                   <span className="font-mono">{receipt.number}</span>
                   <span className="min-w-0 text-muted-foreground">
                     {formatBusinessDay(receipt.documentDate)}
-                    {cancelled ? (
-                      <Badge variant="muted" className="ml-2">
-                        Cancelled
-                      </Badge>
-                    ) : null}
+                    {cancelled ? <Badge className="ml-2">Cancelled</Badge> : null}
                   </span>
                   <span className={cn("text-right tabular-nums", struck(receipt.state))}>
                     {formatMoney(receipt.totalPaise)}

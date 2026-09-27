@@ -63,7 +63,7 @@ export const Route = createFileRoute("/$orgSlug/settings/members")({
   validateSearch: z.object({ q: searchQuery.catch(undefined) }),
   loaderDeps: ({ search: { q } }) => ({ q }),
   loader: async ({ context: { queryClient }, deps: { q }, params: { orgSlug } }) => {
-    await queryClient.infiniteQuery(memberListOptions(orgSlug, q)).catch(() => {});
+    await queryClient.prefetchInfiniteQuery(memberListOptions(orgSlug, q));
   },
   component: MembersRoute,
 });
@@ -75,9 +75,7 @@ function RoleBadge({ role }: { role: string }) {
   return (
     <span className="flex flex-wrap gap-1">
       {roles.map((one) => (
-        <Badge key={one} variant={one === "owner" ? "default" : "muted"}>
-          {ROLE_LABELS[one]}
-        </Badge>
+        <Badge key={one}>{ROLE_LABELS[one]}</Badge>
       ))}
     </span>
   );
@@ -194,7 +192,7 @@ function InviteDialog({
 
               {lastLink && (
                 <div className="flex min-w-0 items-center gap-2 bg-muted p-2">
-                  <p className="min-w-0 flex-1 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-muted-foreground">
+                  <p className="min-w-0 flex-1 overflow-hidden font-mono text-sm text-ellipsis whitespace-nowrap text-muted-foreground">
                     {lastLink}
                   </p>
                   <Button
@@ -294,7 +292,7 @@ function PendingInvitation({ email, expiresAt }: { email: string; expiresAt: Dat
     <div className="min-w-0 text-muted-foreground">
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate">{email}</span>
-        <Badge variant="outline">Invited</Badge>
+        <Badge variant="warn">Invited</Badge>
       </span>
       <div className="truncate">Expires {formatDate(expiresAt, timeZone)}</div>
     </div>

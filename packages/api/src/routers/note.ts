@@ -75,9 +75,8 @@ export const noteRouter = {
     const posted = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
       const source = await noteSource(tx, scope, input.againstDocumentId, input.type);
-      const partyId = source.partyId;
+      const { partyId } = source;
 
-      if (!partyId) throw impossible(`source ${source.id} has no party`);
       const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
 
       if (documentDate < source.documentDate) {

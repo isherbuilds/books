@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type RefObject } from "react";
 
+import { DOCUMENT_STATE_LABELS } from "@/components/document-columns";
 import { useRegisteredPaletteActions } from "@/components/palette/use-palette-actions";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useMembership } from "@/lib/membership";
@@ -112,8 +113,6 @@ const CREATE_ACTIONS: readonly {
     permission: { party: ["create"] },
   },
 ];
-
-const STATE_LABELS = { draft: "Draft", posted: "Posted", cancelled: "Cancelled" } as const;
 
 const GROUP_ICONS: Record<PaletteGroup, LucideIcon> = {
   action: CornerUpRightIcon,
@@ -337,13 +336,10 @@ function PaletteBody({
             group: "document",
             icon: search.icon,
             detail: [search.kind, row.partyName].filter(Boolean).join(" · "),
-            hint: row.state === "posted" ? formatMoney(row.totalPaise) : STATE_LABELS[row.state],
-            // The server also matches the Party and the reference; the ranker must too.
-            keywords: [
-              search.kind,
-              row.partyName,
-              "reference" in row ? row.reference : null,
-            ].filter((value) => typeof value === "string"),
+            hint:
+              row.state === "posted"
+                ? formatMoney(row.totalPaise)
+                : DOCUMENT_STATE_LABELS[row.state],
             run: () => void navigate(search.open(orgSlug, row.id)),
           })),
         )

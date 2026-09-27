@@ -40,7 +40,7 @@ export function SignInForm({ email, onSuccess }: { email?: string; onSuccess?: (
           <PasswordField autoComplete="current-password" autoFocus={email !== undefined} />
           <AuthFormFooter>Sign in</AuthFormFooter>
         </FormFieldset>
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground">
           Locked out? Ask your administrator to reset your password.
         </p>
       </form>

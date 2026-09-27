@@ -119,7 +119,7 @@ export function AllocationsSection({
   return (
     <>
       <Separator />
-      <section className="grid gap-2">
+      <section className="grid grid-cols-1 gap-2">
         <h3 className="text-muted-foreground">Allocations</h3>
         <Table>
           <TableHeader>
@@ -144,7 +144,7 @@ export function AllocationsSection({
                   {formatMoney(allocation.amountPaise)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={allocation.reversed ? "muted" : "secondary"}>
+                  <Badge variant={allocation.reversed ? "neutral" : "settled"}>
                     {allocation.reversed ? "Reversed" : "Active"}
                   </Badge>
                 </TableCell>

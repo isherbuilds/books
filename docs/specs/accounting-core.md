@@ -25,8 +25,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   (`Asia/Kolkata` by default) and has no settings field: every Organization is
   Indian.
 - **Party**: role flags (descriptive only), optional `gstin` and `pan`, and an
-  address `stateCode`. `party.update` replaces all fields, with the loaded
-  `updatedAt` as its token. With a GSTIN, the server derives `stateCode` and
+  address `stateCode`. Organization and Party forms use one multiline `address`
+  field, with City and PIN code separate. `party.update` replaces all fields,
+  with the loaded `updatedAt` as its token. With a GSTIN, the server derives `stateCode` and
   `pan` from it (characters 1–2 and 3–12); a state or PAN sent beside it must
   match. Forms show State and PAN only while GSTIN is empty. The
   Organization's own identity follows the same rule. Roles never gate a
@@ -53,9 +54,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   class decides nil and exempt supplies.
 - **Money account** and **Payment Method**: see
   [Architecture](../architecture.md#money-accounts).
-- **Document** header: `number`, `series`, `financialYear`, `documentDate`,
+- **Document** header: `number`, `financialYear`, `documentDate`,
   `dueDate`, `placeOfSupplyStateCode`, `partyId`, `exposureSide`,
-  `settlementKind`, `advanceSupply`, `paymentMethodId`, `reference`, `source`,
+  `settlementKind`, `advanceSupply`, `paymentMethodId`, `reference`,
   `version` (draft token), `totalPaise`, `roundOffPaise`, `affectsTax`, and a
   print snapshot that reprints read alone. A Journal requires `narration` and leaves
   the party, method and settlement fields null.
@@ -234,7 +235,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     that Schedule III and GST advance tracking need.
 18. **Due dates.** Posted Invoices and Bills expose outstanding,
     `settlementStatus` (`paid`, `partPaid`, `unpaid`) and `overdue`. Their
-    lists filter open or overdue settlement.
+    lists take one `status` filter: a document state, or `open` / `overdue`.
 
 ## Slices
 
@@ -402,7 +403,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      settling adjustments allocates its whole capacity, so no advance
      remainder mixes with a write-off (`ADJUSTMENT_UNALLOCATED`). Adjustments
      are stored as account lines with `adjustmentKind`.
-   - **Header discount** (Invoice). Optional `discount` splits pro rata over
+   - **Header discount** (Invoice). Optional `discount`, or `discountPercent`
+     (up to two decimals, above 0 and at most 100, half-up to the paisa on the
+     subtotal; a percentage takes precedence), splits pro rata over
      each line's pre-discount value, half-up. Correct rounding on the first
      largest line, then other lines in input order if needed, so every line's
      discount stays between zero and its pre-discount value. A line stores its `discountPaise`, and
@@ -410,9 +413,13 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      the subtotal is `DISCOUNT_EXCEEDS_SUBTOTAL`; a zero total stays
      `INVOICE_ZERO_TOTAL`.
    - **Counter sale.** `invoice.post` takes optional
-     `settle: { paymentMethodId, reference? }` and, in the same transaction, posts an
-     `against` Receipt for the Invoice total allocated to it. The Invoice
-     numbers before the Receipt. Needs `invoice:post` and `receipt:post`.
+     `settle: { payments: [{ paymentMethodId, amount, reference? }] }` (1–4
+     lines) and, in the same transaction, posts one `against` Receipt per line
+     allocated to the Invoice for its amount. The sum may fall short of the
+     total, which stays outstanding, but never exceed it
+     (`SETTLEMENT_EXCEEDS_TOTAL`). The Invoice numbers before its Receipts, in
+     line order. Needs `invoice:post` and `receipt:post`
+     ([invoice editor](./invoice-editor.md)).
    - **Cancel and copy.** `invoice.amend` and `bill.amend` take
      `{ id, reason }`, cancel under the normal rules and return a new draft
      copying the header and lines with `amendedFromId`. Need `cancel` and
@@ -448,7 +455,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      lines, never `advanceSupply`. The TDS register includes Bills.
    - **Invoice PDF** at `/api/$orgSlug/invoices/$invoiceId/pdf`, as the
      Receipt PDF: `invoice.get`, the print snapshot and the stored lines. The
-     title is "Invoice" until the CA approves print classes (Product). It ends
+     title is "Invoice" until the CA approves print classes (Product). It
+     prints the Party as "Bill to" and, when the Invoice names an address of
+     delivery, "Ship to" with its state name and code (rule 46(o); the address
+     lives only in the print snapshot, see `invoice-ship-to.md`). A Tax
+     Invoice states "Reverse charge No" (rule 46(p)). It ends
      with "For" the legal name over an Authorised signatory line (CGST rule
      46(q)). Line HSN/SAC meets rule 46, so there is no HSN summary table; the
      GSTR-1 register carries that summary. One PDF link opens it inline; the

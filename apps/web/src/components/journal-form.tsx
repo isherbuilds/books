@@ -1,4 +1,3 @@
-import { Button } from "@accly/ui/components/button";
 import {
   Form,
   FormControl,
@@ -8,14 +7,14 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FieldPath } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 
-import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
+import { DocumentForm, PostBar } from "@/components/document-form";
 import {
   blankEntryLine,
   EntryLines,
@@ -68,13 +67,17 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
   const canCreateParty = useCan(orgSlug, { party: ["create"] });
   const [createParty, setCreateParty] = useState<{ index: number; seed: string } | null>(null);
 
-  // Only Post and next jumps into the first line; initial navigation keeps the
-  // router's focus flow intact. `reset` keeps the count, so the remount can tell.
+  // Only the remount after a post jumps into the first line; initial navigation keeps
+  // the router's focus flow intact. `reset` keeps the count, so the remount can tell.
   const entered = form.formState.submitCount > 0;
 
   const post = useMutation(
     orpc.journal.post.mutationOptions({
-      onSuccess: () => invalidateJournalState(queryClient, orgSlug),
+      onSuccess: async ({ number }) => {
+        await invalidateJournalState(queryClient, orgSlug);
+        toast.success(`Journal ${number} posted`);
+        form.reset(defaults(form.getValues("documentDate")), { keepSubmitCount: true });
+      },
       onError: (error) =>
         handleWriteError(error, {
           settle: () => {
@@ -100,34 +103,20 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
     });
   });
 
-  const posted = post.data;
-
-  if (posted) {
-    return (
-      <PostedView
-        number={posted.number}
-        onDone={onClose}
-        onNext={() => {
-          const { documentDate } = form.getValues();
-          form.reset(defaults(documentDate), { keepSubmitCount: true });
-          post.reset();
-        }}
-      />
-    );
-  }
-
   return (
     <Form {...form}>
       <DocumentForm
+        // Each post remounts the fields, so the next entry starts on the first field.
+        key={post.data?.id}
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
         footer={
-          <PostBar onClose={onClose} closeLabel="Back to journals">
-            <Button type="submit">
-              {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post journal"}
-              <Kbd>⌘↵</Kbd>
-            </Button>
-          </PostBar>
+          <PostBar
+            onClose={onClose}
+            closeLabel="Back to journals"
+            post={post}
+            postLabel="Post journal"
+          />
         }
       >
         <div className="grid gap-3 md:grid-cols-[12rem_16rem]">

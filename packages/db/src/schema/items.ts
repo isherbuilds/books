@@ -27,6 +27,8 @@ export const items = pgTable(
     hsnSac: text("hsn_sac"),
     unit: text("unit"),
     unitPricePaise: bigint("unit_price_paise", { mode: "bigint" }).notNull(),
+    // The printed maximum retail price, for packaged goods; display only, never a discount.
+    mrpPaise: bigint("mrp_paise", { mode: "bigint" }),
     incomeAccountId: text("income_account_id").notNull(),
     taxCode: text("tax_code"),
     active: boolean("active").notNull().default(true),
@@ -43,5 +45,6 @@ export const items = pgTable(
     uniqueIndex("items_org_normalized_name_idx").on(table.orgId, table.normalizedName),
     index("items_org_name_idx").on(table.orgId, table.name),
     check("items_unit_price_paise_check", sql`${table.unitPricePaise} >= 0`),
+    check("items_mrp_paise_check", sql`${table.mrpPaise} >= 0`),
   ],
 );

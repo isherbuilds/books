@@ -5,7 +5,7 @@ import type { PrintSnapshot } from "@accly/db/schema/documents";
 import { DetailRow, PrintedDocument, SectionHeading, TotalPanel } from "@/components/pdf/parts";
 
 /** A posted receipt: `renderReceiptPdf` refuses one without a number or snapshot. */
-export type PrintableReceipt = ReceiptDetail & { number: string; printSnapshot: PrintSnapshot };
+type PrintableReceipt = ReceiptDetail & { number: string; printSnapshot: PrintSnapshot };
 
 export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
   const { organization, party, paymentMethod, lines } = data.printSnapshot;

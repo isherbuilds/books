@@ -95,7 +95,7 @@ export const Route = createFileRoute("/$orgSlug/settings/audit")({
   head: () => ({ meta: [{ title: "Audit log · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { audit: ["read"] });
-    await queryClient.infiniteQuery(auditQuery(orgSlug)).catch(() => {});
+    await queryClient.prefetchInfiniteQuery(auditQuery(orgSlug));
   },
   component: AuditRoute,
 });
@@ -155,7 +155,7 @@ function AuditRoute() {
                           <span className="font-medium" title={entry.action}>
                             {actionLabel(entry.action)}
                           </span>
-                          {entry.denied && <Badge variant="destructive">Denied</Badge>}
+                          {entry.denied && <Badge variant="danger">Denied</Badge>}
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">

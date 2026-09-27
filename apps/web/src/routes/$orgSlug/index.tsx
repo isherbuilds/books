@@ -1,14 +1,24 @@
-import { formatMoney, isZeroMoney } from "@accly/api/core/money";
+import {
+  creditOf,
+  debitOf,
+  formatMoney,
+  formatRupees,
+  isPositiveMoney,
+  isZeroMoney,
+  sumPaise,
+} from "@accly/api/core/money";
 import { authorize, type AppPermission } from "@accly/auth/access";
 import { buttonVariants } from "@accly/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, type LinkProps } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { ListSection, ListState, PageBody, PageHeader } from "@/components/page";
-import { membershipOptions, useMembership } from "@/lib/membership";
+import { membershipOptions, useCan, useMembership } from "@/lib/membership";
 import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { BANKS_PERMISSION } from "@/lib/navigation";
+import { partyBalancesOptions } from "@/lib/parties";
 
 // Each row opens a filtered register instead of counting here: the registers already
 // answer "which ones", and a count per row would cost a query per row on every visit.
@@ -23,19 +33,19 @@ const TO_COLLECT: readonly AttentionRow[] = [
   {
     label: "Overdue invoices",
     hint: "Past due, not yet received",
-    link: { to: "/$orgSlug/invoices", search: { settlement: "overdue" } },
+    link: { to: "/$orgSlug/invoices", search: { status: "overdue", all: true } },
     permission: { invoice: ["read"] },
   },
   {
     label: "Open invoices",
     hint: "Everything customers still owe",
-    link: { to: "/$orgSlug/invoices", search: { settlement: "open" } },
+    link: { to: "/$orgSlug/invoices", search: { status: "open", all: true } },
     permission: { invoice: ["read"] },
   },
   {
     label: "Draft invoices",
     hint: "Saved, not yet posted",
-    link: { to: "/$orgSlug/invoices", search: { state: "draft" } },
+    link: { to: "/$orgSlug/invoices", search: { status: "draft", all: true } },
     permission: { invoice: ["read"] },
   },
 ];
@@ -44,19 +54,19 @@ const TO_PAY: readonly AttentionRow[] = [
   {
     label: "Overdue bills",
     hint: "Past due, not yet paid",
-    link: { to: "/$orgSlug/bills", search: { settlement: "overdue" } },
+    link: { to: "/$orgSlug/bills", search: { status: "overdue", all: true } },
     permission: { bill: ["read"] },
   },
   {
     label: "Open bills",
     hint: "Everything the organization still owes",
-    link: { to: "/$orgSlug/bills", search: { settlement: "open" } },
+    link: { to: "/$orgSlug/bills", search: { status: "open", all: true } },
     permission: { bill: ["read"] },
   },
   {
     label: "Draft bills",
     hint: "Saved, not yet posted",
-    link: { to: "/$orgSlug/bills", search: { state: "draft" } },
+    link: { to: "/$orgSlug/bills", search: { status: "draft", all: true } },
     permission: { bill: ["read"] },
   },
 ];
@@ -94,10 +104,15 @@ export const Route = createFileRoute("/$orgSlug/")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
-    // Streams: the links render at once and the balances follow.
-    if (authorize(membership.roles, BANKS_PERMISSION)) {
-      void queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {});
-    }
+    // Awaited, so the server renders the figures the client hydrates: a streamed
+    // prefetch read by `useQuery` lands before hydration and mismatches. `prefetchQuery`
+    // never throws; a failed read shows in its section.
+    await Promise.all([
+      authorize(membership.roles, BANKS_PERMISSION) &&
+        queryClient.prefetchQuery(moneyBalanceOptions(orgSlug)),
+      authorize(membership.roles, POSITION_PERMISSION) &&
+        queryClient.prefetchQuery(partyBalancesOptions(orgSlug)),
+    ]);
   },
   component: HomeRoute,
 });
@@ -132,6 +147,8 @@ function HomeRoute() {
           </div>
         )}
 
+        <Position orgSlug={orgSlug} />
+
         <div className="grid gap-4 md:grid-cols-2">
           {collect.length > 0 && (
             <AttentionList label="To collect" rows={collect} orgSlug={orgSlug} />
@@ -142,6 +159,80 @@ function HomeRoute() {
         {authorize(roles, BANKS_PERMISSION) && <CashAndBank orgSlug={orgSlug} />}
       </PageBody>
     </>
+  );
+}
+
+// `party.balances` needs both grants; the cards hide without them.
+const POSITION_PERMISSION: AppPermission = { party: ["read"], report: ["read"] };
+
+/**
+ * The owner's three figures (design system Owner Home): who owes you, whom you owe
+ * and the money in hand, in whole rupees. A party's closing balance is Dr when it
+ * owes you and Cr when you owe it, so the two sides sum separately.
+ */
+function Position({ orgSlug }: { orgSlug: string }) {
+  const showParties = useCan(orgSlug, POSITION_PERMISSION);
+  const showCash = useCan(orgSlug, BANKS_PERMISSION);
+
+  const parties = useQuery({
+    ...partyBalancesOptions(orgSlug),
+    enabled: showParties,
+    select: (rows) => ({
+      owed: sumPaise(rows.map((row) => debitOf(row.balancePaise))),
+      owe: sumPaise(rows.map((row) => creditOf(row.balancePaise))),
+      owedBy: rows.filter((row) => isPositiveMoney(debitOf(row.balancePaise))).length,
+      owedTo: rows.filter((row) => isPositiveMoney(creditOf(row.balancePaise))).length,
+    }),
+  });
+
+  const cash = useQuery({
+    ...moneyBalanceOptions(orgSlug),
+    enabled: showCash,
+    select: (accounts) => sumPaise(accounts.map((account) => account.balancePaise)),
+  });
+
+  if (!showParties && !showCash) return null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {showParties ? (
+        <>
+          <StatCard
+            label="You're owed"
+            value={parties.data && formatRupees(parties.data.owed)}
+            foot={parties.data && `${parties.data.owedBy} parties`}
+          />
+          <StatCard
+            label="You owe"
+            value={parties.data && formatRupees(parties.data.owe)}
+            foot={parties.data && `${parties.data.owedTo} parties`}
+          />
+        </>
+      ) : null}
+      {showCash ? (
+        <StatCard
+          label="Cash and bank"
+          value={cash.data === undefined ? undefined : formatRupees(cash.data)}
+          foot={
+            <Link to="/$orgSlug/banking" params={{ orgSlug }} className="hover:text-foreground">
+              Banking
+            </Link>
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function StatCard({ label, value, foot }: { label: string; value?: string; foot?: ReactNode }) {
+  return (
+    <section aria-label={label} className="grid gap-1 rounded-lg border border-border bg-card p-4">
+      <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        {label}
+      </h2>
+      <p className="text-3xl font-semibold tracking-tight tabular-nums">{value ?? "—"}</p>
+      <p className="min-h-5 text-muted-foreground">{foot}</p>
+    </section>
   );
 }
 
@@ -195,7 +286,7 @@ function CashAndBank({ orgSlug }: { orgSlug: string }) {
         </Link>
       }
     >
-      {/* Balances stream in after the page; hold one row so the box never collapses. */}
+      {/* Hold one row while balances refresh so the box does not collapse. */}
       <div className="min-h-9">
         <ListState
           query={groups}
@@ -208,7 +299,7 @@ function CashAndBank({ orgSlug }: { orgSlug: string }) {
               <li key={account.id} className="flex h-9 items-center gap-3 px-3">
                 <span className="min-w-0 flex-1 truncate">{account.name}</span>
                 <span className="text-muted-foreground">{account.groupName}</span>
-                <span className="w-32 text-right text-xs font-medium tabular-nums">
+                <span className="w-32 text-right text-sm font-medium tabular-nums">
                   {formatMoney(account.balancePaise)}
                 </span>
               </li>

@@ -166,15 +166,14 @@ test("bill splits eligible and ineligible input GST and deducts TDS from payable
 
   const listed = await api.bill.list({
     orgSlug: organization.slug,
-    settlement: "open",
+    status: "open",
     q: "SUP-0001",
   });
 
   expect(listed.rows).toContainEqual(
     expect.objectContaining({
       id: posted.id,
-      capacityPaise: 174_000n,
-      outstandingPaise: 174_000n,
+      settlementStatus: "unpaid",
     }),
   );
 });

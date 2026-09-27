@@ -12,7 +12,7 @@ import { conflict, nextEditToken } from "../lib/conflict";
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
-import { openCredits, openItems, pageOf } from "../lib/settlements";
+import { documentPeriod, openCredits, openItems, pageOf } from "../lib/settlements";
 import {
   editToken,
   deriveFromGstin,
@@ -37,8 +37,7 @@ const partyInputFields = {
   gstin: optionalGstin,
   pan: optionalPan,
   stateCode: optionalStateCode,
-  addressLine1: z.string().trim().min(1).max(200).optional(),
-  addressLine2: z.string().trim().min(1).max(200).optional(),
+  address: z.string().trim().min(1).max(500).optional(),
   city: z.string().trim().min(1).max(120).optional(),
   pinCode: indianPinCode.optional(),
   email: z.email().optional(),
@@ -100,8 +99,7 @@ function partyValues(fields: PartyFields) {
     normalizedName: normalizedName(fields.name),
     gstin: fields.gstin ?? null,
     pan: fields.pan ?? null,
-    addressLine1: fields.addressLine1 ?? null,
-    addressLine2: fields.addressLine2 ?? null,
+    address: fields.address ?? null,
     city: fields.city ?? null,
     pinCode: fields.pinCode ?? null,
     email: fields.email ?? null,
@@ -110,7 +108,7 @@ function partyValues(fields: PartyFields) {
 }
 
 // Serializes writers of one normalized name, then refuses a namesake unless the caller
-// confirmed it; the candidates let the client offer the existing Party instead.
+// confirmed it.
 async function claimPartyName(
   tx: DbTransaction,
   orgId: string,
@@ -122,7 +120,9 @@ async function claimPartyName(
     sql`select pg_advisory_xact_lock(hashtext(${orgId} || ':party:' || ${normalizedName}))`,
   );
 
-  const namesakes = await tx
+  if (allowNamesake) return;
+
+  const [namesake] = await tx
     .select({ id: parties.id })
     .from(parties)
     .where(
@@ -131,14 +131,10 @@ async function claimPartyName(
         eq(parties.normalizedName, normalizedName),
         exceptId ? ne(parties.id, exceptId) : undefined,
       ),
-    );
+    )
+    .limit(1);
 
-  if (namesakes.length > 0 && !allowNamesake) {
-    throw new ORPCError("CONFLICT", {
-      message: "A party with this name already exists.",
-      data: { reason: "PARTY_NAME_COLLISION", candidateIds: namesakes.map(({ id }) => id) },
-    });
-  }
+  if (namesake) throw conflict("PARTY_NAME_COLLISION", "A party with this name already exists.");
 }
 
 // One Party per GSTIN is an application rule, not a unique index, so it can follow GST
@@ -382,7 +378,9 @@ export const partyRouter = {
   // shows them: drafts, posted and cancelled, one keyset page at a time.
   transactions: orgProcedure(
     { party: ["read"] },
-    orgInput.extend({ partyId: z.uuid(), cursor: z.uuid().optional(), limit: pageLimit }),
+    orgInput
+      .extend({ partyId: z.uuid(), cursor: z.uuid().optional(), limit: pageLimit, ...period })
+      .superRefine(orderedPeriod),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
     await requireParty(scope.orgId, input.partyId);
@@ -410,6 +408,7 @@ export const partyRouter = {
           eq(documents.partyId, input.partyId),
           inArray(documents.type, types),
           input.cursor ? lt(documents.id, input.cursor) : undefined,
+          documentPeriod(input),
         ),
       )
       .orderBy(desc(documents.id))

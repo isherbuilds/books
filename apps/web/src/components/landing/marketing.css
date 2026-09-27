@@ -1,0 +1,740 @@
+/* The public site's one stylesheet: the few site-only tokens, the component
+   classes Tailwind expresses badly, and all marketing motion. The Books palette
+   (paper, ink, stamp, warn, danger…) lives in packages/ui globals.css and is
+   shared with the console. Layout and type live in Tailwind utilities that read
+   the tokens, e.g. `text-(--ink-muted)`. Loaded by `routes/_site.tsx` as a head
+   link, so a hard load of any public page has it in the SSR <head>.
+
+   Site-only tokens are scoped to `.site`, the public layout's root, and flip
+   under the `.dark` class next-themes writes on <html>. Class rules sit in
+   `@layer components`, so a Tailwind utility on the same element always wins. */
+
+.site {
+  --ink-2: #3a3935;
+  --faint: #8a887f;
+  --ok: #2e7d4f;
+  /* The ink band (calculator result, CTA band, call-back card) is dark in both
+     themes; only its ground lifts off the dark page. */
+  --band: #0b0b0a;
+  --band-raised: #1e1e1b;
+  --band-ink: #f4f3ee;
+  --band-muted: #a5a49c;
+  --band-line: #2a2a27;
+  --band-edge: #4a4944;
+  --band-stamp: #cba3ee;
+  --chat: #e7f0e4;
+  --bubble: #ffffff;
+  --shadow:
+    0 1px 0 rgb(11 11 10 / 0.04), 0 24px 56px -24px rgb(11 11 10 / 0.28),
+    0 0 0 1px rgb(11 11 10 / 0.07);
+  /* Sticker cut-out edge and the placeholder people: fixed illustration tones. */
+  --cut: #ffffff;
+  --p1: #d9cfc0;
+  --p2: #b9a58e;
+  --p3: #6e5b4b;
+  --hand: "Segoe Print", "Bradley Hand", "Marker Felt", cursive;
+
+  color-scheme: light;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark .site {
+  --ink-2: #d2d0c8;
+  --faint: #77766f;
+  --ok: #6fcf97;
+  --band: #161614;
+  --band-raised: #1e1e1b;
+  --chat: #1c2a1e;
+  --bubble: #232321;
+  --shadow: 0 0 0 1px rgb(244 243 238 / 0.09), 0 24px 56px -24px rgb(0 0 0 / 0.7);
+  --cut: #f4f3ee;
+
+  color-scheme: dark;
+}
+
+@layer components {
+  .site :where(h1, h2, h3) {
+    text-wrap: balance;
+  }
+  .site :where([id]) {
+    scroll-margin-top: 88px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: clamp(16px, 4vw, 40px);
+  }
+
+  /* Bracketed copy the owner still has to supply. */
+  .fill {
+    background: var(--sunken);
+    border-radius: 4px;
+    padding: 0 4px;
+    color: var(--ink);
+  }
+
+  .hand {
+    font-family: var(--hand);
+    font-weight: 600;
+    color: var(--stamp);
+    line-height: 1;
+  }
+
+  /* Buttons. `.line` is the outlined secondary; inside `.band` the primary
+     inverts to pale on ink. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 50px;
+    padding: 0 22px;
+    border-radius: 11px;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-size: 15.5px;
+    font-weight: 550;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn.sm {
+    height: 38px;
+    padding: 0 14px;
+    font-size: 14px;
+    border-radius: 9px;
+  }
+  .btn.line {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+  .btn > svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    transition: transform 0.2s;
+  }
+  .band .btn {
+    background: var(--band-ink);
+    color: var(--band);
+  }
+  .band .btn.line {
+    background: transparent;
+    color: var(--band-ink);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover {
+      opacity: 0.86;
+    }
+    .btn:hover > .lucide-arrow-right {
+      transform: translateX(2px);
+    }
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 5px;
+    white-space: nowrap;
+    background: var(--sunken);
+    color: var(--ink-2);
+  }
+  .pill.d {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .pill.w {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+  .pill.s {
+    background: var(--stamp-soft);
+    color: var(--stamp);
+  }
+
+  /* The accountant's double rule: ink over stamp. */
+  .dbl {
+    height: 9px;
+    border-top: 2px solid currentColor;
+    border-bottom: 2px solid var(--stamp);
+  }
+  .band .dbl {
+    border-bottom-color: var(--band-stamp);
+  }
+  .total td {
+    padding-block: 9px 7px;
+    font-weight: 650;
+    border-bottom: 4px double var(--stamp);
+  }
+
+  /* Sticker cut-outs: a solid edge traced by four offset shadows. */
+  .sticker {
+    display: block;
+    width: var(--w, 150px);
+    aspect-ratio: 200 / 240;
+    filter: drop-shadow(4px 0 0 var(--cut)) drop-shadow(-4px 0 0 var(--cut))
+      drop-shadow(0 4px 0 var(--cut)) drop-shadow(0 -4px 0 var(--cut))
+      drop-shadow(0 14px 18px rgb(11 11 10 / 0.22));
+    rotate: var(--r, 0deg);
+  }
+
+  .faq details {
+    border-top: 1px solid var(--line);
+  }
+  .faq details:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+  .faq summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding-block: 19px;
+    font-size: 17.5px;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+  }
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq summary::after {
+    content: "+";
+    font-size: 22px;
+    line-height: 1;
+    color: var(--ink-muted);
+    flex: none;
+    transition: rotate 0.2s ease-out;
+  }
+  .faq details[open] summary::after {
+    rotate: 45deg;
+  }
+  .faq details > p {
+    padding-bottom: 20px;
+    max-width: 44em;
+    color: var(--ink-muted);
+    line-height: 1.65;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .field small {
+    color: var(--ink-muted);
+    font-weight: 400;
+  }
+  .field :where(input, select, textarea) {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    padding: 0 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 400;
+  }
+  .field textarea {
+    padding-block: 12px;
+    min-height: 110px;
+    resize: vertical;
+  }
+  .field :where(input, select, textarea):user-invalid {
+    border-color: var(--danger);
+  }
+  .band .field :where(input, select, textarea) {
+    background: var(--band);
+    color: var(--band-ink);
+    border-color: var(--band-edge);
+  }
+  /* Long-form copy: about, privacy, contact, changelog entries. */
+  .prose {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 44em;
+    font-size: 16.5px;
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+  .prose h2 {
+    margin-top: 20px;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .prose h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .prose :where(p, li) {
+    color: var(--ink-muted);
+  }
+  .prose :where(ul, ol) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 1.25em;
+  }
+  .prose ul {
+    list-style: disc;
+  }
+  .prose ol {
+    list-style: decimal;
+  }
+  .prose strong {
+    font-weight: 550;
+    color: var(--ink);
+  }
+  .prose a {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prose em {
+    font-style: italic;
+  }
+  .prose code {
+    font-size: 0.9em;
+    background: var(--sunken);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+
+  /* "+91" joined to the mobile input. */
+  .prefix {
+    display: flex;
+  }
+  .prefix > span {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    border-right: 0;
+    border-radius: 10px 0 0 10px;
+    background: var(--sunken);
+    color: var(--ink-muted);
+    font-weight: 400;
+  }
+  .prefix > input {
+    border-radius: 0 10px 10px 0;
+  }
+  .band .prefix > span {
+    background: var(--band-raised);
+    border-color: var(--band-edge);
+    color: var(--band-muted);
+  }
+
+  /* ---------------------------------------------------------------- header */
+
+  /* The hairline appears once the page scrolls, driven by scroll position
+     rather than a scroll listener. Without scroll timelines it is always on. */
+  .site-top::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: var(--line);
+  }
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .site-top::after {
+        animation: hairline linear both;
+        animation-timeline: scroll();
+        animation-range: 0 24px;
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------- hero scene
+     One 8.1 s loop shared by every part: the reminder goes out, the customer
+     pays, the stamp lands, the figures settle, then the scene resets. Each part
+     has its own keyframes on the same clock, so no script sequences anything.
+     The markup's resting state is the final frame; that is what a visitor with
+     reduced motion, no JavaScript or an offscreen scene sees. `hero-scene.tsx`
+     only sets `data-play` to running or paused. */
+
+  .scene {
+    --loop: 8.1s;
+    --play: running;
+    position: relative;
+    height: 580px;
+    border-radius: 26px;
+    background:
+      radial-gradient(circle at 1px 1px, var(--line-2) 1px, transparent 1.4px) 0 0 / 22px 22px,
+      var(--sunken);
+  }
+  .phone {
+    position: absolute;
+    left: 3%;
+    top: 34px;
+    width: 252px;
+    height: 520px;
+    border-radius: 40px;
+    background: #0b0b0a;
+    padding: 10px;
+    box-shadow: 0 40px 80px -30px rgb(11 11 10 / 0.55);
+    z-index: 2;
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 31px;
+    background: var(--paper);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+  }
+  .card-row {
+    background: var(--surface);
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px var(--line);
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    align-items: center;
+  }
+  /* Two states stacked in one grid cell; the loop cross-fades them. */
+  .swap {
+    display: grid;
+  }
+  .swap > * {
+    grid-area: 1 / 1;
+  }
+  .scene .before {
+    opacity: 0;
+  }
+  .chat {
+    position: absolute;
+    right: 3%;
+    top: 58px;
+    width: min(270px, 47%);
+    z-index: 3;
+    background: var(--chat);
+    border-radius: 20px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .bubble {
+    max-width: 90%;
+    padding: 8px 11px;
+    border-radius: 14px;
+    line-height: 1.4;
+    background: var(--bubble);
+    box-shadow: 0 1px 1px rgb(11 11 10 / 0.08);
+  }
+  .stamp {
+    position: absolute;
+    z-index: 4;
+    /* Below the chat, clear of the phone and the owner. */
+    right: 22%;
+    top: 330px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 18px;
+    border: 3.5px solid var(--stamp);
+    border-radius: 12px;
+    color: var(--stamp);
+    background: color-mix(in srgb, var(--paper) 75%, transparent);
+    box-shadow:
+      inset 0 0 0 2px var(--paper),
+      inset 0 0 0 4px var(--stamp);
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1;
+    transform: rotate(-12deg);
+    /* Ink that did not take: a fixed noise mask. */
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.4 1.75'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .scene-note {
+    position: absolute;
+    right: 6%;
+    top: 14px;
+    font-size: 25px;
+    rotate: -5deg;
+    z-index: 3;
+  }
+  .scene-owner {
+    position: absolute;
+    right: -8px;
+    bottom: -26px;
+    z-index: 5;
+    --w: 146px;
+    --r: 4deg;
+  }
+  .scene-toggle {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    z-index: 6;
+  }
+  @media (max-width: 560px) {
+    .scene {
+      height: 470px;
+    }
+    .phone {
+      display: none;
+    }
+    .chat {
+      left: 5%;
+      right: 5%;
+      width: auto;
+      top: 56px;
+    }
+    .scene-note {
+      font-size: 22px;
+    }
+    .stamp {
+      top: auto;
+      right: auto;
+      left: 6%;
+      bottom: 28px;
+    }
+    .scene-owner {
+      --w: 104px;
+      right: -4px;
+      bottom: -18px;
+    }
+    .scene-toggle {
+      top: 12px;
+      bottom: auto;
+      left: 12px;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .scene[data-play] :is(.b1, .b2, .b3, .stamp, .scene-note, .before, .after) {
+      /* Joins the loop at its resting frame (60%), so the hydrated page does
+         not jump from the static final frame back to the start. */
+      animation: var(--loop) linear calc(var(--loop) * -0.6) infinite both var(--play);
+    }
+    .scene[data-play="paused"] {
+      --play: paused;
+    }
+    .scene[data-play] .b1 {
+      animation-name: bubble-1;
+    }
+    .scene[data-play] .b2 {
+      animation-name: bubble-2;
+    }
+    .scene[data-play] .b3 {
+      animation-name: bubble-3;
+    }
+    .scene[data-play] .stamp {
+      animation-name: stamp;
+    }
+    .scene[data-play] .scene-note {
+      animation-name: note;
+    }
+    .scene[data-play] .before {
+      animation-name: before;
+    }
+    .scene[data-play] .after {
+      animation-name: after;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scene-toggle {
+      display: none;
+    }
+  }
+
+  /* ------------------------------------------------------ page motion
+     `.rise`: a page hero's entrance, staggered by `--d`.
+     `.reveal`: fades up as it scrolls into view. `.draw`: a bar or rule
+     extends as it enters. All scroll effects run on the scroll timeline
+     only where it exists; elsewhere the content simply shows. */
+
+  @media (prefers-reduced-motion: no-preference) {
+    .rise {
+      animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0s) both;
+    }
+    @supports (animation-timeline: view()) {
+      .reveal {
+        animation: rise linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 55%;
+      }
+      .reveal:nth-child(2) {
+        animation-range: entry 8% entry 63%;
+      }
+      .reveal:nth-child(3) {
+        animation-range: entry 16% entry 71%;
+      }
+      .reveal:nth-child(n + 4) {
+        animation-range: entry 24% entry 79%;
+      }
+      .draw {
+        transform-origin: 0 50%;
+        animation: draw linear both;
+        animation-timeline: view();
+        animation-range: entry 20% cover 35%;
+      }
+    }
+  }
+}
+
+@keyframes hairline {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Bubbles at 0.9 s, 2.5 s and 4.3 s; every part fades with the scene at 7.6 s. */
+@keyframes bubble-1 {
+  0%,
+  11% {
+    opacity: 0;
+    transform: translateY(8px);
+    animation-timing-function: ease-out;
+  }
+  16%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes bubble-2 {
+  0%,
+  31% {
+    opacity: 0;
+    transform: translateY(8px);
+    animation-timing-function: ease-out;
+  }
+  36%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes bubble-3 {
+  0%,
+  53% {
+    opacity: 0;
+    transform: translateY(8px);
+    animation-timing-function: ease-out;
+  }
+  58%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The slam: in at 3.4 s, overshoot, settle, 0.5 s in all. */
+@keyframes stamp {
+  0%,
+  42% {
+    opacity: 0;
+    transform: rotate(-12deg) scale(2.2);
+    animation-timing-function: cubic-bezier(0.3, 0.8, 0.3, 1);
+  }
+  45.5% {
+    opacity: 1;
+    transform: rotate(-12deg) scale(0.94);
+  }
+  48%,
+  94% {
+    opacity: 1;
+    transform: rotate(-12deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-12deg) scale(1);
+  }
+}
+
+@keyframes note {
+  0%,
+  50% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  55%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The figures before and after the payment, swapped as the stamp lands. */
+@keyframes before {
+  0%,
+  42% {
+    opacity: 1;
+  }
+  45%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes after {
+  0%,
+  42% {
+    opacity: 0;
+  }
+  45%,
+  94% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes draw {
+  from {
+    transform: scaleX(0);
+  }
+}

@@ -29,6 +29,7 @@ import { formatFileSize, openOrgFile, uploadOrgFile } from "@/lib/org-files";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { useCan } from "@/lib/membership";
+import { requireOrgPermission } from "@/lib/route-permission";
 
 import { SettingsTabs } from "./route";
 
@@ -46,7 +47,8 @@ const filesQuery = (orgSlug: string, query: string) =>
 export const Route = createFileRoute("/$orgSlug/settings/files")({
   head: () => ({ meta: [{ title: "Files · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
-    await queryClient.infiniteQuery(filesQuery(orgSlug, "")).catch(() => {});
+    await requireOrgPermission(queryClient, orgSlug, { file: ["read"] });
+    await queryClient.prefetchInfiniteQuery(filesQuery(orgSlug, ""));
   },
   component: FilesRoute,
 });

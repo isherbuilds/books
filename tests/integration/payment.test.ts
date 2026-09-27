@@ -6,7 +6,6 @@ import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { auditLog } from "@accly/db/schema/audit";
 import { documentLines } from "@accly/db/schema/document-lines";
-import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { numberSeries } from "@accly/db/schema/number-series";
 import { SETTINGS_DEFAULTS } from "@accly/db/schema/organization-settings";
 import { tdsSections } from "@accly/db/schema/tds-sections";
@@ -30,7 +29,7 @@ type PaymentPostInput = Parameters<AppRouterClient["payment"]["post"]>[0];
 
 type Account = typeof accounts.$inferSelect;
 
-type PaymentMethod = typeof paymentMethods.$inferSelect;
+type PaymentMethod = Awaited<ReturnType<AppRouterClient["paymentMethod"]["list"]>>[number];
 
 let founder: TestUser;
 
@@ -133,7 +132,7 @@ beforeAll(async () => {
     roles: ["vendor"],
     pan: "ABCDE1234F",
     stateCode: "27",
-    addressLine1: "3 Vendor Road",
+    address: "3 Vendor Road",
     city: "Pune",
     pinCode: "411001",
   });

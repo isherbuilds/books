@@ -5,7 +5,9 @@ import { env } from "@accly/env/web";
    The prefilled line names the product so a business's first message is not
    "hi" and we are not guessing who is asking about what. */
 export const WHATSAPP_URL = `https://wa.me/${env.VITE_WHATSAPP_NUMBER}?text=${encodeURIComponent(
-  "Hi, I'd like to see Accly Books for our business.",
+  "Hi, I'd like to see Edernal Books for our business.",
 )}`;
 
 export const CONTACT_MAILTO = `mailto:${env.VITE_CONTACT_EMAIL}`;
+
+export const CONTACT_PHONE = `+${env.VITE_WHATSAPP_NUMBER}`;

@@ -5,10 +5,12 @@
    No environment access: `scripts/generate-og.ts` imports this from a plain Bun
    process. The origin is supplied by whoever calls. */
 
+/* The public site sells the product as Edernal Books; the signed-in console
+   keeps its own name in `fallbackTitle`. */
 export const siteConfig = {
-  name: "Accly Books",
+  name: "Edernal Books",
   description:
-    "Accounting software for small and mid-sized Indian businesses — parties, items, GST invoices, receipts and a ledger derived from them.",
+    "Accounting and GST software for Indian businesses. Get paid sooner, keep every rupee of input credit, and give your CA a free login. We move your books from Tally for you.",
   /* The root route's <title>: what an unlisted or non-public route ships with,
      since every public page overrides it via `pageHead`. */
   fallbackTitle: "Accly Books — accounting software for Indian businesses",
@@ -26,9 +28,36 @@ type PublicRoute = {
 export const PUBLIC_ROUTES: PublicRoute[] = [
   {
     path: "/",
-    title: "Accly Books — the books your business actually runs on",
+    title: "Edernal Books — get paid sooner. Never lose input credit.",
     description: siteConfig.description,
     ogImage: "/og/home.png",
+  },
+  {
+    path: "/tally",
+    title: "Switch from Tally",
+    description:
+      "Move your ledgers, parties and this year’s vouchers from Tally to Edernal Books, checked to the paisa.",
+    ogImage: "/og/tally.png",
+  },
+  {
+    path: "/cas",
+    title: "For CAs",
+    description:
+      "Edernal Books for chartered accountants: your clients’ books in one login, GST figures ready, no chasing exports.",
+    ogImage: "/og/cas.png",
+  },
+  {
+    path: "/pricing",
+    title: "Pricing",
+    description:
+      "Edernal Books pricing in rupees, one price per business. Free during early access.",
+    ogImage: "/og/pricing.png",
+  },
+  {
+    path: "/early-access",
+    title: "Early access",
+    description: "Ask for early access to Edernal Books. A person from our team calls you back.",
+    ogImage: "/og/early-access.png",
   },
   {
     path: "/customers",
@@ -47,26 +76,26 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
   {
     path: "/changelog",
     title: "Changelog",
-    description: "What changed in Accly Books, dated, in the order it shipped.",
+    description: "What changed in Edernal Books, dated, in the order it shipped.",
     ogImage: "/og/changelog.png",
   },
   {
     path: "/about",
     title: "About",
     description:
-      "Why Accly Books exists: accounting software for small and mid-sized Indian businesses, built with one business before it is sold to the next.",
+      "Why Edernal Books exists: accounting software for small and mid-sized Indian businesses, built with one business before it is sold to the next.",
     ogImage: "/og/about.png",
   },
   {
     path: "/contact",
     title: "Contact",
-    description: "Reach the Accly Books team on WhatsApp or by email.",
+    description: "Reach the Edernal Books team on WhatsApp or by email.",
     ogImage: "/og/contact.png",
   },
   {
     path: "/privacy",
     title: "Privacy",
-    description: "What Accly Books collects, what it does with it, and how to reach us about it.",
+    description: "What Edernal Books collects, what it does with it, and how to reach us about it.",
     ogImage: "/og/privacy.png",
   },
 ];

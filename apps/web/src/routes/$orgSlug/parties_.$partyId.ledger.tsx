@@ -1,36 +1,28 @@
 import { formatBalance } from "@accly/api/core/money";
-import { Button } from "@accly/ui/components/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuTrigger,
-} from "@accly/ui/components/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
-import { ClientOnly, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CalendarIcon, ChevronDownIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { LEDGER_COLUMNS, LedgerCard } from "@/components/ledger-columns";
-import { DateRangePopover, PresetItems } from "@/components/date-range-filter";
+import { PeriodMenu } from "@/components/date-range-filter";
 import { ListToolbar } from "@/components/page";
-import { rangeLabel, type SearchRange } from "@/lib/date-presets";
-import { useOrgDateTime } from "@/lib/org-datetime";
-import { partyStatementOptions } from "@/lib/parties";
+import type { SearchRange } from "@/lib/date-presets";
+import { partyDocumentLink, partyStatementOptions } from "@/lib/parties";
+import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const ledgerSearch = z.object({
-  from: z.iso.date().optional().catch(undefined),
-  to: z.iso.date().optional().catch(undefined),
+  ...periodSearch,
 });
 
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/ledger")({
   validateSearch: ledgerSearch,
-  loaderDeps: ({ search }) => search,
+  beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
+    requirePeriod(queryClient, orgSlug, location, search, "this-year"),
+  loaderDeps: ({ search: { all: _all, ...range } }) => range,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug, partyId } }) => {
-    await queryClient.query(partyStatementOptions(orgSlug, partyId, deps)).catch(() => {});
+    await queryClient.prefetchQuery(partyStatementOptions(orgSlug, partyId, deps));
   },
   component: PartyLedger,
 });
@@ -39,11 +31,8 @@ export const Route = createFileRoute("/$orgSlug/parties_/$partyId/ledger")({
 // Dr when the party owes the organization and Cr for an advance held.
 function PartyLedger() {
   const { orgSlug, partyId } = Route.useParams();
-  const range: SearchRange = Route.useSearch();
+  const { all: _all, ...range } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { today, financialYearStart } = useOrgDateTime();
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [customRangeOpen, setCustomRangeOpen] = useState(false);
 
   const statement = useQuery(partyStatementOptions(orgSlug, partyId, range));
   const lines = statement.data?.lines ?? [];
@@ -51,35 +40,10 @@ function PartyLedger() {
   const setSearch = (next: SearchRange) =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, ...next }) });
 
-  const label = rangeLabel(range, today, financialYearStart);
-
-  const periodTrigger = (
-    <Button ref={trigger} variant="outline">
-      <CalendarIcon data-icon="inline-start" />
-      {label}
-      <ChevronDownIcon data-icon="inline-end" />
-    </Button>
-  );
-
   return (
     <>
       <ListToolbar>
-        <ClientOnly fallback={periodTrigger}>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={periodTrigger} />
-            <DropdownMenuContent>
-              <DropdownMenuGroup>
-                <PresetItems
-                  range={range}
-                  today={today}
-                  financialYearStart={financialYearStart}
-                  onSelect={setSearch}
-                  onCustom={() => setCustomRangeOpen(true)}
-                />
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ClientOnly>
+        <PeriodMenu range={range} onChange={setSearch} />
         {statement.data ? (
           <p className="ml-auto flex items-baseline gap-4 text-muted-foreground">
             {range.from ? (
@@ -105,41 +69,7 @@ function PartyLedger() {
         data={lines}
         getRowId={(line) => line.id}
         meta={{ orgSlug }}
-        rowLink={(line) => {
-          if (line.documentType === "invoice")
-            return {
-              to: "/$orgSlug/invoices/$invoiceId",
-              params: { orgSlug, invoiceId: line.documentId },
-              search: { partyId },
-            };
-
-          if (line.documentType === "bill")
-            return {
-              to: "/$orgSlug/bills/$billId",
-              params: { orgSlug, billId: line.documentId },
-              search: { partyId },
-            };
-
-          if (line.documentType === "payment")
-            return {
-              to: "/$orgSlug/payments/$paymentId",
-              params: { orgSlug, paymentId: line.documentId },
-              search: { partyId },
-            };
-
-          if (line.documentType === "creditNote" || line.documentType === "debitNote")
-            return {
-              to: "/$orgSlug/notes/$noteId",
-              params: { orgSlug, noteId: line.documentId },
-              search: { partyId },
-            };
-
-          return {
-            to: "/$orgSlug/receipts/$receiptId",
-            params: { orgSlug, receiptId: line.documentId },
-            search: { partyId },
-          };
-        }}
+        rowLink={(line) => partyDocumentLink(orgSlug, partyId, line.documentType, line.documentId)}
         renderCard={(line) => <LedgerCard line={line} />}
         query={statement}
         errorTitle="Could not load the ledger"
@@ -153,16 +83,6 @@ function PartyLedger() {
             }
           />
         }
-      />
-
-      <DateRangePopover
-        open={customRangeOpen}
-        onOpenChange={setCustomRangeOpen}
-        anchor={trigger}
-        from={range.from}
-        to={range.to}
-        today={today}
-        onApply={setSearch}
       />
     </>
   );

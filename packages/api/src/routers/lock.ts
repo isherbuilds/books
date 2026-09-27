@@ -42,7 +42,6 @@ export const lockRouter = {
           expiresAt: lockExceptions.expiresAt,
           reason: lockExceptions.reason,
           grantedBy: { name: exceptionGranter.name },
-          createdAt: lockExceptions.createdAt,
         })
         .from(lockExceptions)
         .innerJoin(exceptionUser, eq(exceptionUser.id, lockExceptions.userId))
@@ -87,17 +86,14 @@ export const lockRouter = {
         });
       }
 
-      const [updated] = await tx
+      await tx
         .update(organizationSettings)
         .set(
           input.kind === "general"
             ? { lockedThrough: input.lockedThrough }
             : { taxLockedThrough: input.lockedThrough },
         )
-        .where(eq(organizationSettings.orgId, scope.orgId))
-        .returning({ orgId: organizationSettings.orgId });
-
-      if (!updated) throw impossible("locked organization settings disappeared");
+        .where(eq(organizationSettings.orgId, scope.orgId));
 
       const [inserted] = await tx
         .insert(periodLocks)

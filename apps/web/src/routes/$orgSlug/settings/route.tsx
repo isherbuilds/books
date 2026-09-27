@@ -1,13 +1,11 @@
 import { authorize } from "@accly/auth/access";
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { PageTab, PageTabs } from "@/components/page";
 import { useMembership } from "@/lib/membership";
 import { SETTINGS_TABS } from "@/lib/navigation";
 
-export const Route = createFileRoute("/$orgSlug/settings")({
-  component: Outlet,
-});
+export const Route = createFileRoute("/$orgSlug/settings")({});
 
 export function SettingsTabs({ orgSlug }: { orgSlug: string }) {
   const roles = useMembership(orgSlug, (membership) => membership.roles);

@@ -1,6 +1,11 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Button, buttonVariants } from "@accly/ui/components/button";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@accly/ui/components/dropdown-menu";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import {
@@ -25,6 +30,7 @@ import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
 import { RecordSheet } from "@/components/record-sheet";
+import { SheetActionsMenu } from "@/components/sheet-actions-menu";
 import { invalidateInvoiceDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { invoiceDetailOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
@@ -199,6 +205,12 @@ function InvoiceSheetRoute() {
           <DetailRow label="Place of supply" mono>
             {invoice.placeOfSupplyStateCode}
           </DetailRow>
+          {invoice.printSnapshot?.shipTo ? (
+            <DetailRow label="Ship to">
+              <span className="whitespace-pre-line">{invoice.printSnapshot.shipTo.address}</span>{" "}
+              <span className="font-mono">({invoice.printSnapshot.shipTo.stateCode})</span>
+            </DetailRow>
+          ) : null}
           <DetailRow label="Reference" mono>
             {invoice.reference}
           </DetailRow>
@@ -252,7 +264,9 @@ function InvoiceSheetRoute() {
 
         <Separator />
 
-        <section className="grid gap-2">
+        {/* One shrinkable column keeps the table's width inside its own scroller, so only
+            the lines scroll sideways, never the whole body. */}
+        <section className="grid grid-cols-1 gap-2">
           <h3 className="text-muted-foreground">Lines</h3>
           <div className="hidden md:block">
             <Table>
@@ -373,25 +387,40 @@ function InvoiceSheetRoute() {
               </Button>
             </>
           ) : null}
-          {canRecordReceipt ? (
-            <Button type="button" variant="outline" onClick={() => setReceiptOpen(true)}>
-              Record receipt
-            </Button>
-          ) : null}
-          {canApply ? (
-            <Button type="button" variant="outline" onClick={() => setApplyOpen(true)}>
-              Apply credit
-            </Button>
-          ) : null}
-          {canPostNote ? (
-            <Link
-              to="/$orgSlug/notes/new"
-              params={{ orgSlug }}
-              search={{ type: "creditNote", against: invoice.id }}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Credit note
-            </Link>
+          {canApply || canPostNote || canAmend || canCancel ? (
+            <SheetActionsMenu>
+              <DropdownMenuGroup>
+                {canApply ? (
+                  <DropdownMenuItem onClick={() => setApplyOpen(true)}>
+                    Apply credit
+                  </DropdownMenuItem>
+                ) : null}
+                {canPostNote ? (
+                  <DropdownMenuItem
+                    render={
+                      <Link
+                        to="/$orgSlug/notes/new"
+                        params={{ orgSlug }}
+                        search={{ type: "creditNote", against: invoice.id }}
+                      />
+                    }
+                  >
+                    Credit note
+                  </DropdownMenuItem>
+                ) : null}
+                {canAmend ? (
+                  <DropdownMenuItem onClick={() => setAmendOpen(true)}>Amend</DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+              {canCancel ? (
+                <>
+                  {canApply || canPostNote || canAmend ? <DropdownMenuSeparator /> : null}
+                  <DropdownMenuItem variant="destructive" onClick={() => setCancelOpen(true)}>
+                    Cancel invoice
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </SheetActionsMenu>
           ) : null}
           {invoice.state === "posted" ? (
             // The browser's PDF viewer prints and saves, so one link covers both.
@@ -404,14 +433,9 @@ function InvoiceSheetRoute() {
               PDF
             </a>
           ) : null}
-          {canAmend ? (
-            <Button type="button" variant="outline" onClick={() => setAmendOpen(true)}>
-              Amend
-            </Button>
-          ) : null}
-          {canCancel ? (
-            <Button type="button" variant="destructive" onClick={() => setCancelOpen(true)}>
-              Cancel invoice
+          {canRecordReceipt ? (
+            <Button type="button" onClick={() => setReceiptOpen(true)}>
+              Record receipt
             </Button>
           ) : null}
         </SheetFooter>

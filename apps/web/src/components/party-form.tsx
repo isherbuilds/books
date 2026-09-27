@@ -2,7 +2,6 @@
 // Adapted from apps/dashboard/src/components/forms/customer-form.tsx and sheets/customer-edit-sheet.tsx.
 import {
   deriveFromGstin,
-  gstinParts,
   indianPinCode,
   optionalGstin,
   optionalPan,
@@ -25,6 +24,7 @@ import { Input } from "@accly/ui/components/input";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { SubmitButton } from "@accly/ui/components/submit-button";
+import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ReactNode, type Ref } from "react";
@@ -32,6 +32,7 @@ import { useFormState, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { GstinField, IdInput } from "@/components/id-input";
 import { OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { FormSheet } from "@/components/form-sheet";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -71,8 +72,7 @@ const partyFormSchema = z
     gstin: optionalGstin,
     stateCode: optionalStateCode,
     pan: optionalPan,
-    addressLine1: optionalText(200, "Keep the address line under 200 characters"),
-    addressLine2: optionalText(200, "Keep the address line under 200 characters"),
+    address: optionalText(500, "Keep the address under 500 characters"),
     city: optionalText(120, "Keep the city under 120 characters"),
     pinCode: z.union([z.literal(""), indianPinCode]).transform((value) => value || undefined),
     active: z.boolean(),
@@ -90,8 +90,7 @@ function defaultValues(party: PartyRecord | undefined, seedName: string, seedRol
     gstin: party?.gstin ?? "",
     stateCode: party?.stateCode ?? "",
     pan: party?.pan ?? "",
-    addressLine1: party?.addressLine1 ?? "",
-    addressLine2: party?.addressLine2 ?? "",
+    address: party?.address ?? "",
     city: party?.city ?? "",
     pinCode: party?.pinCode ?? "",
     active: party?.active ?? true,
@@ -111,8 +110,12 @@ export function Section({
   const id = useId();
 
   return (
-    <section aria-labelledby={id} className="grid gap-3">
-      <div className="flex min-h-6 items-center justify-between gap-2">
+    // Inside a wide `@container` (the party Overview), the label takes its own column.
+    <section
+      aria-labelledby={id}
+      className="grid gap-3 @2xl:grid-cols-[10rem_minmax(0,1fr)] @2xl:gap-x-6"
+    >
+      <div className="flex min-h-6 items-center justify-between gap-2 @2xl:flex-col @2xl:items-start @2xl:justify-start">
         <h3 id={id} className="text-muted-foreground">
           {title}
         </h3>
@@ -128,7 +131,7 @@ function TextField({
   label,
   ...inputProps
 }: {
-  name: "pan" | "phone" | "email" | "addressLine1" | "addressLine2" | "city" | "pinCode";
+  name: "phone" | "email" | "city" | "pinCode";
   label: string;
 } & Omit<React.ComponentProps<typeof Input>, "name">) {
   return (
@@ -266,15 +269,6 @@ function PartyForm({
   // hidden fields take the GSTIN's values, which remain if the GSTIN is cleared.
   const gstin = useWatch({ control: form.control, name: "gstin" });
 
-  const fillFromGstin = (value: string) => {
-    const parts = gstinParts(value);
-
-    if (!parts) return;
-
-    form.setValue("stateCode", parts.stateCode, { shouldDirty: true });
-    form.setValue("pan", parts.pan, { shouldDirty: true });
-  };
-
   return (
     <Form {...form}>
       <form
@@ -372,37 +366,14 @@ function PartyForm({
             <Separator />
 
             <Section title="Tax">
-              <RegisteredFormField
-                name="gstin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>GSTIN</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="font-mono uppercase"
-                        maxLength={15}
-                        autoCapitalize="characters"
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(event) => {
-                          void field.onChange(event);
-                          fillFromGstin(event.currentTarget.value);
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <GstinField label="GSTIN" />
 
               {!gstin?.trim() ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="stateCode"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>State</FormLabel>
                         <FormControl>
@@ -415,21 +386,23 @@ function PartyForm({
                             onChange={field.onChange}
                             placeholder="Choose state"
                             inputRef={field.ref}
-                            aria-invalid={fieldState.invalid}
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <TextField
+                  <RegisteredFormField
                     name="pan"
-                    label="PAN"
-                    className="font-mono uppercase"
-                    maxLength={10}
-                    autoCapitalize="characters"
-                    autoComplete="off"
-                    spellCheck={false}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>PAN</FormLabel>
+                        <FormControl>
+                          <IdInput {...field} maxLength={10} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
               ) : null}
@@ -438,17 +411,17 @@ function PartyForm({
             <Separator />
 
             <Section title="Address">
-              <TextField
-                name="addressLine1"
-                label="Address line 1"
-                maxLength={200}
-                autoComplete="address-line1"
-              />
-              <TextField
-                name="addressLine2"
-                label="Address line 2"
-                maxLength={200}
-                autoComplete="address-line2"
+              <RegisteredFormField
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} maxLength={500} rows={3} autoComplete="street-address" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField name="city" label="City" maxLength={120} autoComplete="address-level2" />

@@ -47,6 +47,8 @@ export const documentLines = pgTable(
     unit: text("unit"),
     quantity: integer("quantity"),
     unitPricePaise: bigint("unit_price_paise", { mode: "bigint" }),
+    // The Item's MRP when the line resolved, so a reprint keeps it.
+    mrpPaise: bigint("mrp_paise", { mode: "bigint" }),
     taxRateId: text("tax_rate_id"),
     itcEligible: boolean("itc_eligible"),
     cgstPaise: bigint("cgst_paise", { mode: "bigint" }).notNull(),
@@ -102,5 +104,6 @@ export const documentLines = pgTable(
     check("document_lines_sgst_paise_check", sql`${table.sgstPaise} >= 0`),
     check("document_lines_igst_paise_check", sql`${table.igstPaise} >= 0`),
     check("document_lines_discount_paise_check", sql`${table.discountPaise} >= 0`),
+    check("document_lines_mrp_paise_check", sql`${table.mrpPaise} >= 0`),
   ],
 );

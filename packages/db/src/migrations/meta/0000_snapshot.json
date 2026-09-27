@@ -1,5 +1,5 @@
 {
-  "id": "0130f518-1a0a-4cff-8300-ed6eeec16bdc",
+  "id": "6bcade26-e3bd-41db-924c-f3cd5473eb90",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -49,6 +49,12 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "mrp_paise": {
+          "name": "mrp_paise",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         },
         "income_account_id": {
           "name": "income_account_id",
@@ -174,6 +180,10 @@
         "items_unit_price_paise_check": {
           "name": "items_unit_price_paise_check",
           "value": "\"items\".\"unit_price_paise\" >= 0"
+        },
+        "items_mrp_paise_check": {
+          "name": "items_mrp_paise_check",
+          "value": "\"items\".\"mrp_paise\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -994,6 +1004,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "mrp_paise": {
+          "name": "mrp_paise",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "tax_rate_id": {
           "name": "tax_rate_id",
           "type": "text",
@@ -1231,6 +1247,10 @@
         "document_lines_discount_paise_check": {
           "name": "document_lines_discount_paise_check",
           "value": "\"document_lines\".\"discount_paise\" >= 0"
+        },
+        "document_lines_mrp_paise_check": {
+          "name": "document_lines_mrp_paise_check",
+          "value": "\"document_lines\".\"mrp_paise\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -2188,12 +2208,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "series": {
-          "name": "series",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "financial_year": {
           "name": "financial_year",
           "type": "text",
@@ -2277,13 +2291,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'user'"
         },
         "version": {
           "name": "version",
@@ -2679,10 +2686,6 @@
           "name": "documents_advance_supply_check",
           "value": "case when \"documents\".\"type\" = 'receipt' and \"documents\".\"settlement_kind\" = 'advance' then \"documents\".\"advance_supply\" is not null when \"documents\".\"type\" = 'receipt' and \"documents\".\"settlement_kind\" = 'against' then true else \"documents\".\"advance_supply\" is null end"
         },
-        "documents_source_check": {
-          "name": "documents_source_check",
-          "value": "\"documents\".\"source\" in ('user', 'opening')"
-        },
         "documents_total_paise_check": {
           "name": "documents_total_paise_check",
           "value": "\"documents\".\"total_paise\" >= 0"
@@ -2741,17 +2744,11 @@
           "notNull": true,
           "default": 4
         },
-        "address_line_1": {
-          "name": "address_line_1",
+        "address": {
+          "name": "address",
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "address_line_2": {
-          "name": "address_line_2",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "city": {
           "name": "city",
@@ -3737,14 +3734,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "address_line_1": {
-          "name": "address_line_1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address_line_2": {
-          "name": "address_line_2",
+        "address": {
+          "name": "address",
           "type": "text",
           "primaryKey": false,
           "notNull": false

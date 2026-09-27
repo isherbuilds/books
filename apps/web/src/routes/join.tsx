@@ -25,7 +25,7 @@ function JoinOrganizationRoute() {
   const { data: session, isPending, error } = authClient.useSession();
 
   let content: ReactNode = (
-    <p role="status" className="text-xs text-muted-foreground">
+    <p role="status" className="text-sm text-muted-foreground">
       Loading your account…
     </p>
   );
@@ -95,7 +95,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
 
   if (destinations.isPending)
     return (
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-sm text-muted-foreground">
         Loading organizations…
       </p>
     );
@@ -113,8 +113,8 @@ function OrganizationPicker({ userId }: { userId: string }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-medium">Choose where to continue</h2>
-        <p className="text-xs text-muted-foreground">
+        <h2 className="text-base font-medium">Choose where to continue</h2>
+        <p className="text-sm text-muted-foreground">
           Review an invitation or open an existing organization.
         </p>
       </div>
@@ -122,7 +122,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
         <section aria-labelledby="pending-invitations" className="flex flex-col gap-2">
           <h3
             id="pending-invitations"
-            className="font-mono text-xs tracking-widest text-muted-foreground"
+            className="font-mono text-sm tracking-widest text-muted-foreground"
           >
             INVITATIONS
           </h3>
@@ -131,8 +131,8 @@ function OrganizationPicker({ userId }: { userId: string }) {
               <div key={invitation.id} className="flex items-center gap-3 py-3">
                 <MailIcon className="size-4 shrink-0 text-muted-foreground" />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <p className="truncate text-xs font-medium">{invitation.organizationName}</p>
-                  <p className="text-xs text-muted-foreground">Invited as {invitation.role}</p>
+                  <p className="truncate text-sm font-medium">{invitation.organizationName}</p>
+                  <p className="text-sm text-muted-foreground">Invited as {invitation.role}</p>
                 </div>
                 <Link
                   to="/join"
@@ -151,7 +151,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
         <section aria-labelledby="your-organizations" className="flex flex-col gap-2">
           <h3
             id="your-organizations"
-            className="font-mono text-xs tracking-widest text-muted-foreground"
+            className="font-mono text-sm tracking-widest text-muted-foreground"
           >
             YOUR ORGANIZATIONS
           </h3>
@@ -167,7 +167,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
                 })}
               >
                 <Building2Icon className="size-4 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-left text-xs">
+                <span className="min-w-0 flex-1 truncate text-left text-sm">
                   {organization.name}
                 </span>
                 <ArrowRightIcon className="size-3.5 text-muted-foreground" />
@@ -178,14 +178,14 @@ function OrganizationPicker({ userId }: { userId: string }) {
       )}
       {pending.length === 0 && organizations.length === 0 && (
         <div className="flex flex-col gap-1 border-l-2 border-border pl-3">
-          <p className="text-xs font-medium">No organization access yet</p>
-          <p className="text-xs leading-5 text-muted-foreground">
+          <p className="text-sm font-medium">No organization access yet</p>
+          <p className="text-sm leading-5 text-muted-foreground">
             Ask an administrator to invite this account, then return using the invitation link.
           </p>
         </div>
       )}
       {canCreate.data ? (
-        <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-4 text-sm text-muted-foreground">
           Founding operator?{" "}
           <Link to="/create" className="text-foreground underline underline-offset-4">
             Create an organization
@@ -210,7 +210,7 @@ function SwitchAccount({ email }: { email: string }) {
 
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-4">
-      <p className="break-all text-xs text-muted-foreground">Signed in as {email}.</p>
+      <p className="break-all text-sm text-muted-foreground">Signed in as {email}.</p>
       <Button
         variant="link"
         className="self-start px-0"

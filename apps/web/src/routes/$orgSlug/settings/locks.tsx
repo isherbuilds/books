@@ -28,7 +28,7 @@ export const Route = createFileRoute("/$orgSlug/settings/locks")({
   }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { lock: ["read"] });
-    await queryClient.query(lockStateOptions(orgSlug)).catch(() => {});
+    await queryClient.prefetchQuery(lockStateOptions(orgSlug));
   },
   component: LocksRoute,
 });
