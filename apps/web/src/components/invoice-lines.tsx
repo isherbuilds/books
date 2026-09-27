@@ -5,6 +5,7 @@ import {
   formatMoney,
   parseMoney,
 } from "@accly/api/core/money";
+import { MAX_INVOICE_QUANTITY } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,
@@ -46,6 +47,14 @@ function itemMaster(rows: ItemListRow[]): ItemMaster {
   return { rows: active, byId };
 }
 
+function validQuantity(value: string): boolean {
+  if (!/^\d+$/.test(value)) return false;
+
+  const quantity = Number(value);
+
+  return Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= MAX_INVOICE_QUANTITY;
+}
+
 // Every line is an Item; a one-off charge uses a generic Item (such as "Professional
 // fees") with its own description and price (accounting-core call 5).
 export const lineSchema = z
@@ -59,11 +68,11 @@ export const lineSchema = z
     if (!line.itemId)
       context.addIssue({ code: "custom", path: ["itemId"], message: "Choose an item" });
 
-    if (!/^\d+$/.test(line.quantity) || Number(line.quantity) < 1) {
+    if (!validQuantity(line.quantity)) {
       context.addIssue({
         code: "custom",
         path: ["quantity"],
-        message: "Quantity must be at least 1",
+        message: "Quantity must be from 1 to 1,000,000",
       });
     }
 
@@ -73,6 +82,11 @@ export const lineSchema = z
   });
 
 type InvoiceLine = z.input<typeof lineSchema>;
+
+export type InvoiceLineQuote = {
+  rateBasisPoints: number | null;
+  grossPaise: bigint;
+};
 
 type LinesForm = UseFormReturn<{ lines: InvoiceLine[] }>;
 
@@ -94,7 +108,7 @@ function setLineItem(form: LinesForm, index: number, item: SavedItem) {
 
 /** A line's quantity times rate, or null while either is incomplete. */
 export function lineAmountPaise(line: { quantity: string; unitPrice: string }): bigint | null {
-  if (!/^\d+$/.test(line.quantity) || !NON_NEGATIVE_MONEY_PATTERN.test(line.unitPrice)) return null;
+  if (!validQuantity(line.quantity) || !NON_NEGATIVE_MONEY_PATTERN.test(line.unitPrice)) return null;
 
   return BigInt(line.quantity) * parseMoney(line.unitPrice);
 }
@@ -107,16 +121,26 @@ const ROW = "md:grid-cols-[minmax(0,1fr)_5rem_8rem_16ch_1.5rem]";
 
 // Only an Item with an MRP shows this, so general items look as before. MRP is display:
 // the rate is the transaction value, and selling above MRP is a warning, not a refusal.
-function MrpHint({ mrpPaise, unitPrice }: { mrpPaise: bigint; unitPrice: string }) {
-  if (!NON_NEGATIVE_MONEY_PATTERN.test(unitPrice)) return null;
+function MrpHint({
+  mrpPaise,
+  quantity,
+  grossPaise,
+}: {
+  mrpPaise: bigint;
+  quantity: string;
+  grossPaise?: bigint;
+}) {
+  const lineMrpPaise = validQuantity(quantity) ? BigInt(quantity) * mrpPaise : null;
 
-  const pricePaise = parseMoney(unitPrice);
+  if (grossPaise === undefined || lineMrpPaise === null) {
+    return <p className="text-right text-muted-foreground">MRP {formatMoney(mrpPaise)}</p>;
+  }
 
-  if (pricePaise > mrpPaise) {
+  if (grossPaise > lineMrpPaise) {
     return <p className="text-right text-destructive">Above MRP {formatMoney(mrpPaise)}</p>;
   }
 
-  const offBasisPoints = belowBasisPoints(mrpPaise, pricePaise);
+  const offBasisPoints = belowBasisPoints(lineMrpPaise, grossPaise);
 
   return (
     <p className="text-right text-muted-foreground tabular-nums">
@@ -133,13 +157,13 @@ function InvoiceLineRow({
   canCreateItem,
   removeDisabled,
   remove,
-  rateBasisPoints,
+  quote,
 }: {
   orgSlug: string;
   index: number;
   items: ListState<ItemMaster>;
-  /** The quoted GST rate: null for no rate, undefined before a quote covers the line. */
-  rateBasisPoints: number | null | undefined;
+  /** The current server-resolved line; undefined while its quote is absent or stale. */
+  quote: InvoiceLineQuote | undefined;
   canCreateItem: boolean;
   removeDisabled: boolean;
   /** `useFieldArray`'s stable `remove`, so a row's props change only with its own index. */
@@ -153,7 +177,7 @@ function InvoiceLineRow({
 
   const facts = [
     item?.hsnSac ? `HSN/SAC ${item.hsnSac}` : null,
-    rateBasisPoints == null ? null : `GST ${percent(rateBasisPoints)}`,
+    quote?.rateBasisPoints == null ? null : `GST ${percent(quote.rateBasisPoints)}`,
     item?.unit ? `per ${item.unit}` : null,
   ].filter(Boolean);
 
@@ -220,6 +244,7 @@ function InvoiceLineRow({
                 required
                 inputMode="numeric"
                 pattern="[0-9]+"
+                maxLength={String(MAX_INVOICE_QUANTITY).length}
                 className="text-right tabular-nums"
               />
             </FormControl>
@@ -237,7 +262,11 @@ function InvoiceLineRow({
             </FormControl>
             <FormMessage />
             {item?.mrpPaise != null ? (
-              <MrpHint mrpPaise={item.mrpPaise} unitPrice={line.unitPrice} />
+              <MrpHint
+                mrpPaise={item.mrpPaise}
+                quantity={line.quantity}
+                grossPaise={quote?.grossPaise}
+              />
             ) : null}
           </FormItem>
         )}
@@ -269,13 +298,13 @@ function InvoiceLineRow({
   );
 }
 
-/** The invoice's line grid: one Item line per row. `rates` are the quoted GST rates by line. */
+/** The invoice's line grid: one Item line per row, with current server-resolved quote data. */
 export function InvoiceLines({
   orgSlug,
-  rates,
+  quotes,
 }: {
   orgSlug: string;
-  rates: ReadonlyArray<number | null | undefined>;
+  quotes: ReadonlyArray<InvoiceLineQuote | undefined>;
 }) {
   const form = useFormContext<{ lines: InvoiceLine[] }>();
   const linesField = useFieldArray({ control: form.control, name: "lines" });
@@ -320,7 +349,7 @@ export function InvoiceLines({
             canCreateItem={canCreateItem}
             removeDisabled={linesField.fields.length === 1}
             remove={linesField.remove}
-            rateBasisPoints={rates[index]}
+            quote={quotes[index]}
           />
         ))}
       </div>
