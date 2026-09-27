@@ -41,7 +41,13 @@ import { ReferenceNarrationFields } from "@/components/reference-narration-field
 import { OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { DocumentForm, PostBar } from "@/components/document-form";
 import { InvoiceTotalsPanel } from "@/components/invoice-summary";
-import { InvoiceLines, blankLine, lineAmountPaise, lineSchema } from "@/components/invoice-lines";
+import {
+  InvoiceLines,
+  blankLine,
+  lineAmountPaise,
+  lineSchema,
+  type InvoiceLineQuote,
+} from "@/components/invoice-lines";
 import {
   InvoicePayments,
   MAX_PAYMENTS,
@@ -158,6 +164,7 @@ const SERVER_FIELDS = {
   TAX_RATE_MISSING: "lines",
   INVOICE_ZERO_TOTAL: "lines",
   DISCOUNT_EXCEEDS_SUBTOTAL: "discount",
+  DISCOUNT_CONFLICT: "discount",
   PAYMENT_METHOD_INVALID: "payments",
   SETTLEMENT_EXCEEDS_TOTAL: "payments",
 } satisfies Record<string, FieldPath<InvoiceFormValues>>;
@@ -238,7 +245,7 @@ function quoteRequest(
   const lines: QuoteInput["lines"] = [];
 
   values.lines.forEach((line, index) => {
-    if (!line.itemId || lineAmountPaise(line) === null || Number(line.quantity) < 1) return;
+    if (!line.itemId || lineAmountPaise(line) === null) return;
 
     positions.push(index);
     lines.push({
@@ -318,14 +325,18 @@ export function InvoiceForm({
   const quoted = quoteRequestValue && debouncedRequest ? quote.data : undefined;
 
   // A quote for other inputs may be shown, dimmed, but never checked against or filled from.
-  const stale = quote.isPlaceholderData || quoteRequestValue !== debouncedRequest;
+  const stale =
+    quote.isPlaceholderData ||
+    quote.isFetching ||
+    quote.isError ||
+    quoteRequestValue !== debouncedRequest;
   const current = stale ? undefined : quoted;
 
-  const lineRates: Array<number | null | undefined> = [];
+  const lineQuotes: Array<InvoiceLineQuote | undefined> = [];
 
   if (current && debouncedRequest) {
     debouncedRequest.positions.forEach((position, index) => {
-      lineRates[position] = current.lines[index]?.rateBasisPoints;
+      lineQuotes[position] = current.lines[index];
     });
   }
 
@@ -718,7 +729,7 @@ export function InvoiceForm({
             </section>
           </div>
 
-          <InvoiceLines orgSlug={orgSlug} rates={lineRates} />
+          <InvoiceLines orgSlug={orgSlug} quotes={lineQuotes} />
 
           <div className="grid gap-x-8 gap-y-6 border-t border-border pt-6 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
             <div className="order-2 grid gap-3 md:order-1">
@@ -791,7 +802,7 @@ export function InvoiceForm({
                 {canSettle ? (
                   <InvoicePayments
                     orgSlug={orgSlug}
-                    totalPaise={quoted?.totalPaise ?? null}
+                    totalPaise={current?.totalPaise ?? null}
                     stale={stale}
                   />
                 ) : null}
