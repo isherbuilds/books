@@ -82,6 +82,13 @@ async function resolveInvoice(
   /** Each line's GST rate, in line order; null where no rate applies. */
   lineRates: Array<number | null>;
 }> {
+  if (input.discount !== undefined && input.discountPercent !== undefined) {
+    throw badRequest(
+      "DISCOUNT_CONFLICT",
+      "Use either a discount amount or a percentage, not both.",
+    );
+  }
+
   const itemIds = [...new Set(input.lines.map((line) => line.itemId))];
 
   // A posting resolves through one transaction connection; do not queue concurrent queries.
@@ -298,7 +305,14 @@ export const invoiceRouter = {
 
     return {
       // The editor computes quantity times rate itself; only the dated rate is the server's.
-      lines: lineRates.map((rateBasisPoints) => ({ rateBasisPoints })),
+      lines: lineRates.map((rateBasisPoints, index) => {
+        const line = invoice.lines[index]!;
+
+        return {
+          rateBasisPoints,
+          grossPaise: line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise,
+        };
+      }),
       discountPaise: invoice.discountPaise,
       taxablePaise,
       cgstPaise,
