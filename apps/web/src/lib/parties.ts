@@ -1,5 +1,6 @@
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { skipToken, useQuery } from "@tanstack/react-query";
+import type { LinkOptions } from "@tanstack/react-router";
 
 import { orpc } from "@/lib/orpc";
 
@@ -64,20 +65,16 @@ export const partyPickerOptions = (orgSlug: string, role?: PartyRole, q?: string
 });
 
 /**
- * A linked party's name. Loaded `rows` answer first; a party past the 5,000-row cap
- * or filtered out of them is read with `party.get`. Pass `rows` only when the viewer
- * may read parties: without them nothing is fetched.
+ * A linked party's name. Loaded `rows` answer first; a party past the 5,000-row cap,
+ * or with no rows given, is read with `party.get`. Pass no `partyId` when the viewer
+ * cannot read parties.
  */
-export function usePartyName(
-  orgSlug: string,
-  partyId: string | undefined,
-  rows: PartyOption[] | undefined,
-) {
+export function usePartyName(orgSlug: string, partyId: string | undefined, rows?: PartyOption[]) {
   const listed = partyId ? rows?.find((party) => party.id === partyId) : undefined;
 
   const fetched = useQuery(
     orpc.party.get.queryOptions({
-      input: partyId && rows && !listed ? { orgSlug, partyId } : skipToken,
+      input: partyId && !listed ? { orgSlug, partyId } : skipToken,
     }),
   );
 
@@ -95,8 +92,8 @@ export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
 export const partyBalancesOptions = (orgSlug: string) =>
   orpc.party.balances.queryOptions({ input: { orgSlug } });
 
-// The party page reads the whole statement for its balance and the Ledger tab reads a
-// date range; with no range both share one cache entry.
+// The party page reads the whole statement for its balance; the Ledger tab
+// requests its selected date range.
 export const partyStatementOptions = (
   orgSlug: string,
   partyId: string,
@@ -135,4 +132,61 @@ export function filterParties<T extends FilterableParty>(parties: T[], filters: 
         party.name.toLowerCase().includes(needle) ||
         party.gstin?.toLowerCase().includes(needle) === true),
   );
+}
+
+type PartyDocumentType =
+  | "invoice"
+  | "bill"
+  | "creditNote"
+  | "debitNote"
+  | "receipt"
+  | "payment"
+  | "journal"
+  | "openingBalance";
+
+// Each record opens over its own register filtered to the party, so Back and the list
+// behind the Sheet stay on that party's documents.
+export function partyDocumentLink(
+  orgSlug: string,
+  partyId: string,
+  type: PartyDocumentType,
+  id: string,
+): LinkOptions {
+  switch (type) {
+    case "invoice":
+      return {
+        to: "/$orgSlug/invoices/$invoiceId",
+        params: { orgSlug, invoiceId: id },
+        search: { partyId },
+      };
+    case "bill":
+      return {
+        to: "/$orgSlug/bills/$billId",
+        params: { orgSlug, billId: id },
+        search: { partyId },
+      };
+    case "creditNote":
+    case "debitNote":
+      return {
+        to: "/$orgSlug/notes/$noteId",
+        params: { orgSlug, noteId: id },
+        search: { partyId },
+      };
+    case "receipt":
+      return {
+        to: "/$orgSlug/receipts/$receiptId",
+        params: { orgSlug, receiptId: id },
+        search: { partyId },
+      };
+    case "payment":
+      return {
+        to: "/$orgSlug/payments/$paymentId",
+        params: { orgSlug, paymentId: id },
+        search: { partyId },
+      };
+    case "journal":
+      return { to: "/$orgSlug/journals/$journalId", params: { orgSlug, journalId: id } };
+    case "openingBalance":
+      return { to: "/$orgSlug/settings/opening-balance", params: { orgSlug } };
+  }
 }

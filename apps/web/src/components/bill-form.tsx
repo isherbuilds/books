@@ -12,7 +12,6 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
 import {
   skipToken,
@@ -27,7 +26,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { OptionField, STATE_OPTIONS } from "@/components/option-field";
-import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
+import { DocumentForm, PostBar } from "@/components/document-form";
 import { BillLines, blankLine, lineSchema } from "@/components/bill-lines";
 import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -209,11 +208,23 @@ export function BillForm({
 
   const post = useMutation(
     orpc.bill.post.mutationOptions({
-      onSuccess: async ({ id }) => {
+      onSuccess: async ({ id, number }) => {
         await invalidateSettlement();
-        toast.success("Bill posted");
 
-        if (draft) onPosted(id);
+        // A posted draft goes on to its record; a new bill clears for the next one.
+        if (draft) {
+          toast.success(`Bill ${number} posted`);
+          onPosted(id);
+
+          return;
+        }
+
+        toast.success(`Bill ${number} posted`, {
+          action: { label: "Open", onClick: () => onPosted(id) },
+        });
+        form.reset(defaults(form.getValues("documentDate"), settings.stateCode), {
+          keepSubmitCount: true,
+        });
       },
       onError: (error) =>
         onMutationError(error, "Could not post the bill", invalidateSettlement, !!draftToken),
@@ -270,40 +281,20 @@ export function BillForm({
     if (data) post.mutate(data);
   });
 
-  const posted = post.data;
-
-  if (posted)
-    return (
-      <PostedView
-        number={posted.number}
-        onDone={() => onPosted(posted.id)}
-        onNext={() => {
-          form.reset(defaults(form.getValues("documentDate"), settings.stateCode), {
-            keepSubmitCount: true,
-          });
-          post.reset();
-        }}
-      />
-    );
-
   return (
     <Form {...form}>
       <DocumentForm
+        // Each post remounts the fields, so the next entry starts on the Party field.
+        key={post.data?.id}
         pending={save.isPending || post.isPending}
         onSubmit={(event) => {
           if (canPost) void submit(event);
         }}
         footer={
-          <PostBar onClose={onClose} closeLabel="Close">
+          <PostBar onClose={onClose} post={canPost ? post : undefined}>
             {canSave ? (
               <Button type="button" variant="outline" onClick={() => void saveDraft()}>
                 {save.isPending ? "Saving…" : "Save draft"}
-              </Button>
-            ) : null}
-            {canPost ? (
-              <Button type="submit">
-                {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
-                <Kbd>⌘↵</Kbd>
               </Button>
             ) : null}
           </PostBar>
@@ -351,7 +342,7 @@ export function BillForm({
         <FormField
           control={form.control}
           name="placeOfSupplyStateCode"
-          render={({ field, fieldState }) => (
+          render={({ field }) => (
             <FormItem>
               <FormLabel>Place of supply</FormLabel>
               <FormControl>
@@ -363,7 +354,6 @@ export function BillForm({
                   onChange={field.onChange}
                   placeholder="Choose a state"
                   inputRef={field.ref}
-                  aria-invalid={fieldState.invalid}
                 />
               </FormControl>
               <FormMessage />
@@ -374,7 +364,7 @@ export function BillForm({
           <FormField
             control={form.control}
             name="tdsSectionId"
-            render={({ field, fieldState }) => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>TDS section (optional)</FormLabel>
                 <FormControl>
@@ -390,7 +380,6 @@ export function BillForm({
                     clearable
                     placeholder="Choose a TDS section"
                     inputRef={field.ref}
-                    aria-invalid={fieldState.invalid}
                   />
                 </FormControl>
                 <FormMessage />

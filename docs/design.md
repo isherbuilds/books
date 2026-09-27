@@ -31,15 +31,25 @@ and `6` (public-page blocks only). No `5`, `7`, `9` or fractions.
 
 ## 3. Type
 
-| Size                  | Where                                        |
-| --------------------- | -------------------------------------------- |
-| `text-[0.6875rem]`    | `Badge`, `TableHead`, palette group headings |
-| `text-xs`             | Body default: cells, labels, buttons, inputs |
-| `text-sm`             | Page and section titles, the palette input   |
-| `text-base`           | Dialog and Sheet titles                      |
-| `text-lg`, `text-xl`  | Public pages                                 |
-| `text-2xl`/`text-3xl` | A Document Sheet amount                      |
-| `text-4xl`/`text-5xl` | Public headlines only                        |
+The Books design system's reading scale, which is Tailwind's default scale. Nothing
+a person must read is smaller than 12 px.
+
+| Size                  | Where                                                    |
+| --------------------- | -------------------------------------------------------- |
+| `text-xs` (12/16)     | `Badge`, `TableHead` (uppercase), palette group headings |
+| `text-sm` (14/20)     | Body default: cells, labels, buttons, menus              |
+| `text-base` (16/24)   | Page and section titles; field text on phones (no zoom)  |
+| `text-lg` (18/28)     | Dialog and Sheet titles                                  |
+| `text-xl` (20/28)     | The organization at the head of a document               |
+| `text-2xl`/`text-3xl` | A Document Sheet amount                                  |
+| `text-4xl`/`text-5xl` | Public headlines only                                    |
+
+Controls keep the app's desktop sizes: buttons and inputs `h-8` (32 px), growing to
+44 px on a touch screen (`pointer-coarse:`). Table rows are 40 px; icons are
+`size-3.5` in the shell and `size-4` in buttons, at a 1.5 px stroke. Amount columns
+use `w-money` or `w-balance`, sized in digits (`ch`) so a crore figure never
+truncates. Colour and type follow the Edernal Books design system; this file owns
+behaviour, spacing and radius.
 
 - No route-level arbitrary sizes. Print sizes are the only other exception.
 - Weight carries hierarchy: `font-medium` for titles and the active row. No
@@ -56,40 +66,54 @@ and `6` (public-page blocks only). No `5`, `7`, `9` or fractions.
 
 ## 4. Radius
 
-Components own radius, derived from `--radius: 0.625rem`. Call sites never set
-it.
+Components own radius, derived from `--radius: 0.625rem`. Call sites never set it.
 
-| Radius         | Where                                     |
-| -------------- | ----------------------------------------- |
-| `rounded-md`   | Default for every `packages/ui` component |
-| `rounded-sm`   | Checkbox and `Kbd`                        |
-| `rounded-lg`   | Page-level cards in `apps/web`            |
-| `rounded-xl`   | The card shell                            |
-| `rounded-full` | `Button shape="pill"` (the sign-in CTA)   |
+| Radius         | Where                                        |
+| -------------- | -------------------------------------------- |
+| `rounded-md`   | Default for every `packages/ui` component    |
+| `rounded-sm`   | `Badge`, checkbox and `Kbd`                  |
+| `rounded-lg`   | Page-level cards and the inset content panel |
+| `rounded-xl`   | The card shell                               |
+| `rounded-full` | `Button shape="pill"` (the sign-in CTA)      |
 
 A page that writes `rounded-*` builds a shell, or its component lacks a variant.
 
 ## 5. Colour
 
-Use theme tokens only: `bg-background`, `bg-card`, `bg-muted`,
-`text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`,
-`text-destructive` and the status tokens. Palette utilities do not invert.
-Check light and dark. Light `--muted-foreground` is `oklch(0.5 0 0)` for 4.5:1
-on every surface.
+The palette is the Edernal Books design system, defined once in `globals.css`:
+ink on warm paper, never pure white, no blue anywhere. The console and the public
+site read the same tokens. Use theme tokens only: `bg-background`, `bg-card`,
+`bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`,
+`bg-primary`, `text-destructive` and the state tokens below. Palette utilities do
+not invert. Check light and dark; the theme contrast test guards muted text,
+state text and focus rings.
 
-- Colour means state, and a `Badge` always carries the word.
-  `text-destructive` marks a failure to act on.
-- Status severity: `--status-alert` (money owed, overdue), `--status-note`
-  (provisional), `--status-clear` (settled or absent) and `--status-info`
-  (neutral identity). Each has `-surface` and `-border` in both themes.
+- Colour means state, and a `Badge` always carries the word. Its variant is the
+  meaning: `settled` (stamp: paid, applied, posted), `warn` (provisional or due:
+  draft, unpaid, invited), `danger` (overdue, denied) and the default `neutral`
+  (roles, part paid, cancelled, inactive). No fifth colour, no one-off tone classes.
+- `stamp` is never a link, button or decoration colour. Primary buttons are ink.
+- Field, checkbox and outline-button borders rest on `line-2` and darken to
+  `line-strong` on hover and focus; keyboard focus draws the ink ring. A disabled
+  control keeps its surface and fades; it never turns grey.
+- A draft is `warn` (provisional).
+- Money: negatives print in brackets, `(₹4,250.00)`; balances carry Dr or Cr. A
+  document total, and a balanced journal entry, has an ink rule above and the
+  `closing-total` double stamp rule below.
+- Money fields use `AmountInput` (decimal keypad, right-aligned tabular digits; `symbol`
+  adds ₹ on a standalone field). GSTIN, PAN and codes use `IdInput`; `GstinField`
+  shows the state and PAN carried by a valid GSTIN.
+- Home leads with the owner's figures in whole rupees (`formatRupees`): owed to you,
+  owed by you and cash, from the party and money-account balances.
 - Exceptions: paper is black on white in every theme; the login panel is fixed
-  dark; the landing wash stays light and sits only behind screenshots.
+  dark.
 
 ## 6. Icons
 
-Lucide only: `size-3.5` in the shell, `size-4` inside buttons and inputs (the
-component sets it), and `size-5` or more only for empty-state art. A bare icon
-button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
+Lucide only, at a 1.5 px stroke (`globals.css`): `size-3.5` in the shell, `size-4`
+inside buttons and inputs (the component sets it), and `size-5` or more only for
+empty-state art. A bare icon button needs `aria-label`. Without a picture, use
+`Monogram` (`size-6`, and
 `tone="accent"` on `bg-card`); never hand-roll initials.
 
 ## 7. Sidebar
@@ -131,7 +155,7 @@ button needs `aria-label`. Without a picture, use `Monogram` (`size-6`, and
 They live in `apps/web/src/components/page.tsx` unless named. A new wrapper
 means a primitive lacks a prop.
 
-- `PageBody`: `p-4 gap-4 text-xs`. Every org page starts with it.
+- `PageBody`: `p-4 gap-4 text-sm`. Every org page starts with it.
 - `PageHeader`: the single pinned 48 px title band with the Sheet trigger;
   `px-3 gap-3` below `lg`, `pl-6` beside the rail.
 - `ErrorNote` is the only failed-read report. `PageTabs` is the only tab strip.
@@ -202,16 +226,26 @@ bundled fonts and aligned numerals.
 - A Page holds a line grid: an invoice, a journal or an opening balance.
 - A record Sheet uses flat sections split by `Separator`, never a `Panel`.
   Editing is `?edit=true` on the same Sheet. A record that outgrows a Sheet (a
-  Party) gets a quick look plus a tabbed page. A Document Sheet leads with its
+  Party) gets a quick look plus a tabbed page. Its Overview is a centred
+  `max-w-3xl` `@container`; past `@2xl` each section's heading takes a left
+  column. A Sheet's header already names the party, as a link, so no Party row
+  repeats it. A Document Sheet leads with its
   amount at `text-2xl tabular-nums`, struck through when cancelled.
 - Forms share header, scrolling body and footer across Dialog and Sheet, cap at
   `max-w-lg`, and use the `p-4` header and footer parts.
-- `DocumentForm`, `PostBar` and `PostedView` render the same `SheetBody` and
-  `SheetFooter` layout in a Sheet or on a page; the host does not change the
-  form.
+- `DocumentForm` and `PostBar` render the same `SheetBody` and `SheetFooter`
+  layout in a Sheet or on a page; the host does not change the form. On a page
+  the body and footer stop at one centred readable column set in `DocumentForm`.
 - Document footers render the Mod+Enter hint with `Kbd`.
 - Entry lines are a Debit/Credit grid with a header row at `md`, per-cell labels
   below `md` and a totals row under the amount columns.
+- The Invoice editor reads like the printed invoice: Bill to (the Party, its
+  address, state and GSTIN in a card) and Ship to on the left, dates and place
+  of supply on the right; then Item, Qty, Rate and Amount, with the description
+  and HSN/SAC, GST % and unit under the item; then Reference and Narration
+  beside a totals panel (Subtotal, Discount, GST, Round-off, Total) that ends in
+  the Received payment lines and Balance due. Tax and total come from the
+  server's `invoice.quote`, never a browser copy of the tax rules.
 - Forms compose `Form`, `FormItem`, `RegisteredFormField` and `FormField`. Two
   to five choices use `ToggleGroup`. A long form splits into flat sections under
   muted `h3` labels, never an accordion.
@@ -240,3 +274,41 @@ messages change state without a transition. `globals.css` handles
 
 Right-align numbers and left-align text. Money rules are in
 [Development](./development.md#code-rules).
+
+## Public site
+
+The public pages (`routes/_site/*`) sell the product as **Edernal Books**;
+the signed-in console keeps its own name. These rules do not change
+application tokens, and the console's type and motion rules above do not
+apply to them.
+
+- **Files.** `routes/_site.tsx` is the one layout: header, footer, phone CTA
+  bar, and the stylesheet as a head link so a hard load renders styled.
+  Components live in `components/landing/`; brand SVGs in `public/brand/`.
+- **Launch gate.** The site is a local preview. In production builds,
+  `_site.tsx` sends `/` to login and returns Not Found for other site routes.
+  `public-paths.ts` leaves the sitemap empty until the promised capabilities
+  and owner acceptance are complete.
+- **Tokens.** The Books palette comes from `globals.css` (§5). Site-only
+  tokens (`ink-2`, `faint`, `line-2`, the ink `band`, chat and illustration
+  tones) live on `.site` in `components/landing/marketing.css` and flip under
+  `.dark .site`. Components use them through Tailwind, e.g.
+  `text-(--ink-muted)`. Raw hex is allowed only for fixed illustration tones.
+- **Type.** The app's self-hosted Inter; no other web font. Display sizes use
+  `clamp()`: hero 42–78 px, section titles 30–48 px, body 16 px. The
+  handwritten note uses a system cursive stack.
+- **Placeholders.** Copy the owner must still supply stays in brackets and is
+  wrapped in `.fill` (`withFills()` for plain strings).
+- **Motion.** CSS only, `transform` and `opacity` only, and only under
+  `prefers-reduced-motion: no-preference`. Hero headings and key captures
+  render at full opacity; supporting copy may enter with `.rise` (500 ms,
+  staggered by `--d`). `.reveal` and `.draw` run on
+  `animation-timeline: view()` inside `@supports`, so other browsers show the
+  content still. The hero scene is one 8.1 s CSS loop; its markup rests on
+  the final frame, and `hero-scene.tsx` only sets `data-play` from an
+  IntersectionObserver, `visibilitychange` and a Pause button.
+- **Forms.** No backend: native validation, then same-tab navigation opens a
+  WhatsApp draft with the answers (`send-on-whatsapp.ts`). Copy tells the visitor
+  to press Send there; there is no fake "sent" state.
+- **Mobile.** 16 px gutters, no horizontal scroll, and a fixed WhatsApp /
+  call-back bar at 760 px and below.

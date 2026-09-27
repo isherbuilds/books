@@ -26,7 +26,7 @@ export const Route = createFileRoute("/$orgSlug/settings/opening-balance")({
   head: () => ({ meta: [{ title: "Opening balance · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { openingBalance: ["read"] });
-    await queryClient.query(openingBalanceOptions(orgSlug)).catch(() => {});
+    await queryClient.prefetchQuery(openingBalanceOptions(orgSlug));
   },
   component: OpeningBalanceRoute,
 });
@@ -83,7 +83,7 @@ function OpeningBalanceRoute() {
       ) : document ? (
         <PageBody>
           <div className="grid gap-4">
-            <h2 className="font-mono text-sm font-medium tabular-nums">{document.number}</h2>
+            <h2 className="font-mono text-base font-medium tabular-nums">{document.number}</h2>
 
             <dl className="grid max-w-2xl gap-3">
               <DetailRow label="As at">{formatBusinessDate(document.documentDate)}</DetailRow>

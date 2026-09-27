@@ -6,7 +6,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
     <div data-slot="table-container" className="relative w-full overflow-x-auto">
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom border-collapse text-xs", className)}
+        className={cn("w-full caption-bottom border-collapse text-sm", className)}
         {...props}
       />
     </div>
@@ -27,16 +27,6 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   );
 }
 
-function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
-  return (
-    <tfoot
-      data-slot="table-footer"
-      className={cn("border-t border-border font-medium [&>tr:last-child]:border-b-0", className)}
-      {...props}
-    />
-  );
-}
-
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
@@ -44,7 +34,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
       className={cn(
         "border-b border-border/60",
         // Hover is a pointing affordance: gate it to real pointers so it never sticks on touch.
-        "hover:bg-muted/40",
+        "hover:bg-accent/70",
         className,
       )}
       {...props}
@@ -57,7 +47,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-8 px-3 text-left align-middle text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase whitespace-nowrap",
+        "h-8 bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide text-muted-foreground uppercase whitespace-nowrap",
         className,
       )}
       {...props}
@@ -75,4 +65,4 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   );
 }
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell };
+export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell };

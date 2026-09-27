@@ -1,4 +1,3 @@
-import { NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,
@@ -8,10 +7,11 @@ import {
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
-import { Input } from "@accly/ui/components/input";
+
 import { useQuery } from "@tanstack/react-query";
 import { useFormContext } from "react-hook-form";
 
+import { AmountInput } from "@/components/amount-input";
 import { LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
@@ -41,7 +41,7 @@ function WriteOffRow({
       <FormField
         control={form.control}
         name={`writeOffs.${index}.accountId`}
-        render={({ field, fieldState }) => (
+        render={({ field }) => (
           <FormItem>
             <FormLabel>Write-off account</FormLabel>
             <FormControl>
@@ -56,7 +56,6 @@ function WriteOffRow({
                 onSelect={(account) => field.onChange(account?.id ?? null)}
                 inputRef={field.ref}
                 placeholder="Choose write-off account"
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             <FormMessage />
@@ -69,14 +68,7 @@ function WriteOffRow({
           <FormItem>
             <FormLabel>Amount</FormLabel>
             <FormControl>
-              <Input
-                {...field}
-                required
-                inputMode="decimal"
-                pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                placeholder="0.00"
-                className="tabular-nums"
-              />
+              <AmountInput symbol {...field} required />
             </FormControl>
             <FormMessage />
           </FormItem>

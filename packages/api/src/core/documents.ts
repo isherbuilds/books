@@ -58,6 +58,8 @@ export type PostDocumentLine = {
   unit: string | null;
   quantity: number | null;
   unitPricePaise: bigint | null;
+  /** An Invoice line's Item MRP; no other line has one. */
+  mrpPaise: bigint | null;
   taxRateId: string | null;
   itcEligible: boolean | null;
   sourceLineId: string | null;
@@ -86,21 +88,11 @@ export type PostDocumentInput = {
 
 /** A claim's taxable value, taxes, round-off and total, from its lines. */
 export function documentTotals(lines: readonly PostDocumentLine[]) {
-  const taxablePaise = sumPaise(lines.map((line) => line.amountPaise));
-  const cgstPaise = sumPaise(lines.map((line) => line.cgstPaise));
-  const sgstPaise = sumPaise(lines.map((line) => line.sgstPaise));
-  const igstPaise = sumPaise(lines.map((line) => line.igstPaise));
-  const grossPaise = taxablePaise + cgstPaise + sgstPaise + igstPaise;
+  const taxes = taxTotals(lines);
+  const grossPaise = taxes.taxablePaise + taxes.cgstPaise + taxes.sgstPaise + taxes.igstPaise;
   const roundOffPaise = roundOff(grossPaise);
 
-  return {
-    taxablePaise,
-    cgstPaise,
-    sgstPaise,
-    igstPaise,
-    roundOffPaise,
-    totalPaise: grossPaise + roundOffPaise,
-  };
+  return { ...taxes, roundOffPaise, totalPaise: grossPaise + roundOffPaise };
 }
 
 /**
@@ -147,6 +139,7 @@ export function accountLine(
     unit: null,
     quantity: null,
     unitPricePaise: null,
+    mrpPaise: null,
     taxRateId: null,
     cgstPaise: 0n,
     sgstPaise: 0n,
@@ -208,31 +201,23 @@ export function receiptSupply(
   return { placeOfSupplyStateCode, intraState: placeOfSupplyStateCode === orgStateCode };
 }
 
-function addressLine(
-  addressLine1: string | null,
-  addressLine2: string | null,
+function documentAddress(
+  address: string | null,
   city: string | null,
   pinCode: string | null,
 ): string {
-  return [addressLine1, addressLine2, [city, pinCode].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
+  return [address, [city, pinCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 }
 
 export function organizationSnapshot(
   settings: Pick<
     typeof organizationSettings.$inferSelect,
-    "legalName" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
+    "legalName" | "address" | "city" | "pinCode" | "gstin" | "pan"
   >,
 ): PrintSnapshot["organization"] {
   return {
     legalName: settings.legalName,
-    address: addressLine(
-      settings.addressLine1,
-      settings.addressLine2,
-      settings.city,
-      settings.pinCode,
-    ),
+    address: documentAddress(settings.address, settings.city, settings.pinCode),
     gstin: settings.gstin,
     pan: settings.pan,
   };
@@ -241,14 +226,15 @@ export function organizationSnapshot(
 export function partySnapshot(
   party: Pick<
     typeof parties.$inferSelect,
-    "name" | "addressLine1" | "addressLine2" | "city" | "pinCode" | "gstin" | "pan"
+    "name" | "address" | "city" | "pinCode" | "stateCode" | "gstin" | "pan"
   > | null,
 ): PrintSnapshot["party"] {
   if (!party) return null;
 
   return {
     name: party.name,
-    address: addressLine(party.addressLine1, party.addressLine2, party.city, party.pinCode),
+    address: documentAddress(party.address, party.city, party.pinCode),
+    stateCode: party.stateCode,
     gstin: party.gstin,
     pan: party.pan,
   };
@@ -374,7 +360,6 @@ export async function writeDraft(
   const header = {
     type: posting.type,
     state: "draft" as const,
-    series: numbering.prefix,
     financialYear,
     documentDate: input.documentDate,
     dueDate: input.dueDate,
@@ -943,7 +928,6 @@ export async function amendDocument(
       orgId: scope.orgId,
       type,
       state: "draft",
-      series: original.series,
       financialYear: original.financialYear,
       documentDate: original.documentDate,
       dueDate: original.dueDate,
@@ -988,6 +972,7 @@ export async function amendDocument(
         unit: line.unit,
         quantity: line.quantity,
         unitPricePaise: line.unitPricePaise,
+        mrpPaise: line.mrpPaise,
         taxRateId: line.taxRateId,
         itcEligible: line.itcEligible,
         cgstPaise: line.cgstPaise,

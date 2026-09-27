@@ -33,7 +33,7 @@ function AccountName({ account }: { account: AccountRow }) {
       <span className="truncate font-medium" title={account.name}>
         {account.name}
       </span>
-      {account.active ? null : <Badge variant="muted">Inactive</Badge>}
+      {account.active ? null : <Badge>Inactive</Badge>}
     </span>
   );
 }

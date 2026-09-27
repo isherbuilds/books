@@ -5,16 +5,17 @@ import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRightIcon, CircleDotIcon, ContactRoundIcon, WalletIcon } from "lucide-react";
+import { ArrowLeftRightIcon, CircleDotIcon, WalletIcon } from "lucide-react";
 import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
-import { SETTLEMENT_KIND_LABELS } from "@/components/document-columns";
-import { TableEmpty } from "@/components/data-table/table-empty";
+import { DOCUMENT_STATE_LABELS, SETTLEMENT_KIND_LABELS } from "@/components/document-columns";
+import { RegisterEmpty } from "@/components/data-table/table-empty";
 import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
   FilterChips,
+  usePartyChip,
   FilterMenu,
   FilterSubmenu,
   focusSearch,
@@ -24,27 +25,24 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
-import { PartyFilterItems } from "@/components/party-filter-items";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
-import { membershipOptions, useCan } from "@/lib/membership";
+import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
-import { partyListOptions, usePartyName } from "@/lib/parties";
 import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
+import { periodSearch, requirePeriod } from "@/lib/require-period";
+import { requireOrgPermission } from "@/lib/route-permission";
 
 // A Receipt posts in full, so it is never a draft.
 const RECEIPT_STATES = ["posted", "cancelled"] as const;
-
-const STATE_LABELS = { posted: "Posted", cancelled: "Cancelled" } as const;
 
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
   q: searchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
-  from: z.iso.date().optional().catch(undefined),
-  to: z.iso.date().optional().catch(undefined),
+  ...periodSearch,
   paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional().catch(undefined),
   state: z.enum(RECEIPT_STATES).optional().catch(undefined),
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
@@ -55,25 +53,27 @@ type ReceiptFilters = Omit<z.infer<typeof receiptSearch>, "create">;
 export const Route = createFileRoute("/$orgSlug/receipts")({
   head: () => ({ meta: [{ title: "Receipts · Accly Books" }] }),
   validateSearch: receiptSearch,
+  beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
+    requirePeriod(queryClient, orgSlug, location, search, "this-month"),
   // `create` stays out: opening the overlay must not refetch the list.
-  loaderDeps: ({ search: { create: _create, ...filters } }) => filters,
-  // The method master starts here, not after mount, so it rides the list's batch
-  // instead of a second round trip. Only the list blocks the page.
+  loaderDeps: ({ search: { create: _create, all: _all, ...filters } }) => filters,
+  // The method master loads with the list, in one batch; awaited, so the server
+  // renders the method chip the client hydrates.
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
-    const membership = await queryClient.query(membershipOptions(orgSlug));
+    const membership = await requireOrgPermission(queryClient, orgSlug, { receipt: ["read"] });
 
-    if (authorize(membership.roles, { paymentMethod: ["read"] })) {
-      void queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {});
-    }
-
-    await queryClient.infiniteQuery(receiptListOptions(orgSlug, deps)).catch(() => {});
+    await Promise.all([
+      authorize(membership.roles, { paymentMethod: ["read"] }) &&
+        queryClient.prefetchQuery(paymentMethodListOptions(orgSlug)),
+      queryClient.prefetchInfiniteQuery(receiptListOptions(orgSlug, deps)),
+    ]);
   },
   component: ReceiptsRoute,
 });
 
 function ReceiptsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, ...filters } = Route.useSearch();
+  const { create, all: _all, ...filters } = Route.useSearch();
   const { q, partyId, from, to, paymentMethodIds, state, settlementKind } = filters;
   const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -81,7 +81,6 @@ function ReceiptsRoute() {
   const newTrigger = useRef<HTMLButtonElement>(null);
   const canPost = useCan(orgSlug, { receipt: ["post"] });
   const canReadMethods = useCan(orgSlug, { paymentMethod: ["read"] });
-  const canReadParties = useCan(orgSlug, { party: ["read"] });
 
   const receipts = useInfiniteQuery({
     ...receiptListOptions(orgSlug, filters),
@@ -91,14 +90,6 @@ function ReceiptsRoute() {
   // Every method, not only active ones: old receipts name retired methods.
   const methods = useQuery({ ...paymentMethodListOptions(orgSlug), enabled: canReadMethods });
 
-  // The party chip needs a name; the master is cached and shared with the palette.
-  const parties = useQuery({
-    ...partyListOptions(orgSlug),
-    enabled: canReadParties && partyId !== undefined,
-  });
-
-  const partyName = usePartyName(orgSlug, partyId, parties.data?.rows);
-
   const activeRowId = useMatch({ from: "/$orgSlug/receipts/$receiptId", shouldThrow: false })
     ?.params.receiptId;
 
@@ -107,33 +98,20 @@ function ReceiptsRoute() {
   const setFilters = (patch: Partial<ReceiptFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
+  const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
+
   const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
 
   // Both Clear buttons unmount once the filters go, so focus moves to the box first.
   const clear = () => {
     focusSearch(field, { empty: true });
 
-    void setFilters({
-      q: undefined,
-      partyId: undefined,
-      from: undefined,
-      to: undefined,
-      paymentMethodIds: undefined,
-      state: undefined,
-      settlementKind: undefined,
-    });
+    void navigate({ replace: true, search: { all: true } });
   };
 
   const chips: ActiveFilter[] = [];
 
-  if (partyId) {
-    chips.push({
-      id: "partyId",
-      name: "Party",
-      label: partyName ? `Party: ${partyName}` : "One party",
-      remove: () => setFilters({ partyId: undefined }),
-    });
-  }
+  if (partyChip) chips.push(partyChip);
 
   if (date.chip) chips.push(date.chip);
 
@@ -158,7 +136,7 @@ function ReceiptsRoute() {
     chips.push({
       id: "state",
       name: "State",
-      label: STATE_LABELS[state],
+      label: DOCUMENT_STATE_LABELS[state],
       remove: () => setFilters({ state: undefined }),
     });
   }
@@ -184,23 +162,14 @@ function ReceiptsRoute() {
       search: (previous) => ({ ...previous, create: undefined }),
     }).then(() => newTrigger.current?.focus());
 
-  const empty =
-    q !== undefined || chips.length > 0 ? (
-      <TableEmpty
-        title="No receipts match"
-        description="Try another search or clear the filters."
-        action={
-          <Button size="xs" variant="outline" onClick={clear}>
-            Clear filters
-          </Button>
-        }
-      />
-    ) : (
-      <TableEmpty
-        title="No receipts yet"
-        description="Posted receipts appear here, newest first."
-      />
-    );
+  const empty = (
+    <RegisterEmpty
+      noun="receipts"
+      filtered={q !== undefined || chips.length > 0}
+      onClear={clear}
+      description="Posted receipts appear here, newest first."
+    />
+  );
 
   return (
     <>
@@ -226,15 +195,6 @@ function ReceiptsRoute() {
             trailing={
               <FilterMenu anchor={field} active={chips.length > 0}>
                 {date.submenu}
-                {canReadParties ? (
-                  <FilterSubmenu icon={ContactRoundIcon} label="Party">
-                    <PartyFilterItems
-                      orgSlug={orgSlug}
-                      partyId={partyId}
-                      onChange={(next) => void setFilters({ partyId: next })}
-                    />
-                  </FilterSubmenu>
-                ) : null}
                 {canReadMethods ? (
                   <FilterSubmenu icon={WalletIcon} label="Payment method">
                     {methods.data?.length ? (
@@ -269,7 +229,7 @@ function ReceiptsRoute() {
                   icon={CircleDotIcon}
                   label="State"
                   options={RECEIPT_STATES}
-                  labels={STATE_LABELS}
+                  labels={DOCUMENT_STATE_LABELS}
                   value={state}
                   onChange={(next) => void setFilters({ state: next })}
                 />

@@ -46,7 +46,6 @@ function settingsDto(settings: typeof organizationSettings.$inferSelect): Settin
   return {
     ...rest,
     gstin: settings.gstin ?? undefined,
-    addressLine2: settings.addressLine2 ?? undefined,
   };
 }
 
@@ -91,7 +90,6 @@ export const settingsRouter = {
         .set({
           ...settings,
           gstin: settings.gstin ?? null,
-          addressLine2: settings.addressLine2 ?? null,
           updatedAt: new Date(),
         })
         .where(eq(organizationSettings.orgId, scope.orgId))

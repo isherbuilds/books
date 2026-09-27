@@ -128,7 +128,6 @@ export const journalRouter = {
         documentDate: documents.documentDate,
         state: documents.state,
         totalPaise: documents.totalPaise,
-        reference: documents.reference,
         narration: documents.narration,
       })
       .from(documents)

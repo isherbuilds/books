@@ -1,4 +1,3 @@
-import { NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,
@@ -8,11 +7,12 @@ import {
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
-import { Input } from "@accly/ui/components/input";
+
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useQuery } from "@tanstack/react-query";
 import { useFormContext, Watch } from "react-hook-form";
 
+import { AmountInput } from "@/components/amount-input";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
@@ -77,7 +77,7 @@ function AdjustmentRow({
               <FormField
                 control={form.control}
                 name={`adjustments.${index}.accountId`}
-                render={({ field, fieldState }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Expense account</FormLabel>
                     <FormControl>
@@ -92,7 +92,6 @@ function AdjustmentRow({
                         onSelect={(account) => field.onChange(account?.id ?? null)}
                         inputRef={field.ref}
                         placeholder="Choose account"
-                        aria-invalid={fieldState.invalid}
                       />
                     </FormControl>
                     <FormMessage />
@@ -108,14 +107,7 @@ function AdjustmentRow({
             <FormItem>
               <FormLabel>Amount</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  required
-                  inputMode="decimal"
-                  pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                  placeholder="0.00"
-                  className="tabular-nums"
-                />
+                <AmountInput symbol {...field} required />
               </FormControl>
               <FormMessage />
             </FormItem>

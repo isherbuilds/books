@@ -2,7 +2,12 @@ import { ENTRY_SIDES, type EntrySide } from "@accly/db/schema/document-lines";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { z } from "zod";
 
-import { NON_NEGATIVE_MONEY_PATTERN, parseMoney } from "../core/money";
+import {
+  NON_NEGATIVE_MONEY_PATTERN,
+  PERCENT_PATTERN,
+  parseBasisPoints,
+  parseMoney,
+} from "../core/money";
 import { INDIAN_STATES } from "./indian-states";
 import { normalizedName } from "./normalized-name";
 
@@ -12,6 +17,8 @@ import { normalizedName } from "./normalized-name";
 export const money = z.string().regex(NON_NEGATIVE_MONEY_PATTERN).transform(parseMoney);
 
 export const positiveMoney = money.refine((value) => value > 0n);
+
+export const MAX_INVOICE_QUANTITY = 1_000_000;
 
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
@@ -139,8 +146,22 @@ export const invoiceFields = {
   documentDate: dateOnly.optional(),
   dueDate: dateOnly.optional(),
   placeOfSupplyStateCode: indianStateCode,
+  // Its own state: a bill-to-ship-to supply keeps the buyer's place of supply.
+  shipTo: z
+    .strictObject({
+      address: z.string().trim().min(1).max(300),
+      stateCode: indianStateCode,
+    })
+    .optional(),
   reference: settlementPostFields.reference,
+  // A bill discount: an amount, or a percentage of the subtotal.
   discount: money.optional(),
+  discountPercent: z
+    .string()
+    .regex(PERCENT_PATTERN)
+    .transform(parseBasisPoints)
+    .refine((basisPoints) => basisPoints > 0 && basisPoints <= 10_000)
+    .optional(),
   narration: settlementPostFields.narration,
   // Invoice lines are Items only (accounting-core call 5). `kind` stays on the wire,
   // matching the stored line kind that Bills also use.
@@ -149,7 +170,7 @@ export const invoiceFields = {
       z.object({
         kind: z.literal("item"),
         itemId: z.uuid(),
-        quantity: z.number().int().min(1).max(1_000_000),
+        quantity: z.number().int().min(1).max(MAX_INVOICE_QUANTITY),
         unitPrice: money.optional(),
         description: z.string().trim().max(200).optional(),
       }),
@@ -250,13 +271,7 @@ export const organizationProfileFields = {
   pan: optionalPan,
   gstin: optionalGstin,
   stateCode: optionalStateCode,
-  addressLine1: z.string().trim().min(1).max(200),
-  addressLine2: z
-    .string()
-    .trim()
-    .max(200)
-    .transform((value) => value || undefined)
-    .optional(),
+  address: z.string().trim().min(1).max(500),
   city: z.string().trim().min(1).max(120),
   pinCode: indianPinCode,
 };

@@ -18,95 +18,81 @@
 }
 
 :root {
-  /* The inset shell layers three surfaces: the canvas (--background), the
-     rail that sits flat on it (--sidebar, same value), and the raised content
-     card (--card). Keep --sidebar equal to --background or the rail stops
-     reading as part of the page. */
-  --background: oklch(0.978 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.938 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  /* Focus indicators must maintain 3:1 contrast; guarded by the theme contrast test. */
-  --ring: oklch(0.45 0 0);
-  /* Status severity. `docs/design.md` §5 says colour means state, and these
-     are the one exception: what needs attention (an overdue balance), what is
-     provisional, what is settled, and what is neutral identity. Never used
-     decoratively — a hue here is a claim. */
-  --status-alert: oklch(0.52 0.19 27);
-  --status-alert-surface: oklch(0.962 0.024 27);
-  --status-alert-border: oklch(0.88 0.06 27);
-  --status-note: oklch(0.5 0.11 68);
-  --status-note-surface: oklch(0.965 0.03 80);
-  --status-note-border: oklch(0.89 0.06 75);
-  --status-info: oklch(0.5 0.13 253);
-  --status-info-surface: oklch(0.962 0.025 253);
-  --status-info-border: oklch(0.88 0.05 253);
-  --status-clear: oklch(0.47 0.11 155);
-  --status-clear-surface: oklch(0.958 0.03 155);
-  --status-clear-border: oklch(0.87 0.06 155);
+  /* The Edernal Books palette, from the Books design system: ink on warm paper,
+     never pure white, no blue. Its one owner is this file; the public site and
+     the console both read it. Colour means state: `stamp` (violet) is settled,
+     `warn` is due or pending, `danger` is overdue or an error, and each always
+     travels with a word. */
+  --paper: #fafaf7;
+  --surface: #ffffff;
+  --sunken: #f1f0ea;
+  --ink: #0b0b0a;
+  --ink-muted: #5a5953;
+  --on-ink: #fafaf7;
+  --line: #e6e4dd;
+  --line-2: #d9d7cf;
+  --line-strong: #8c8a82;
+  --stamp: #6c2a9e;
+  --stamp-soft: #f3ecf7;
+  --warn: #8a5300;
+  --warn-soft: #fdf1d8;
+  --danger: #b42318;
+  --danger-soft: #fde8e5;
+
+  /* shadcn's names for the same palette. The inset shell layers three
+     surfaces: the paper canvas (--background), the rail that sits flat on it
+     (--sidebar, same value), and the raised white content panel (--card).
+     Keep --sidebar equal to --background or the rail stops reading as part
+     of the page. */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--on-ink);
+  --secondary: var(--sunken);
+  --secondary-foreground: var(--ink);
+  --muted: var(--sunken);
+  --muted-foreground: var(--ink-muted);
+  /* Hover and selected rows: one step darker than `sunken`, so a row stands out
+     on a white card. */
+  --accent: var(--line);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  /* Field, checkbox and outline-button borders rest on the light `line-2`
+     hairline; the controls darken them to `line-strong` on hover and focus. */
+  --input: var(--line-2);
+  --ring: var(--ink);
   --radius: 0.625rem;
-  --sidebar: oklch(0.978 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.928 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.45 0 0);
+  --sidebar: var(--paper);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--on-ink);
+  --sidebar-accent: var(--line);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--ink);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.87 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --status-alert: oklch(0.78 0.13 27);
-  --status-alert-surface: oklch(0.28 0.055 27);
-  --status-alert-border: oklch(0.4 0.08 27);
-  --status-note: oklch(0.83 0.11 80);
-  --status-note-surface: oklch(0.28 0.045 75);
-  --status-note-border: oklch(0.4 0.07 75);
-  --status-info: oklch(0.8 0.1 253);
-  --status-info-surface: oklch(0.28 0.05 253);
-  --status-info-border: oklch(0.4 0.07 253);
-  --status-clear: oklch(0.8 0.11 155);
-  --status-clear-surface: oklch(0.27 0.045 155);
-  --status-clear-border: oklch(0.39 0.07 155);
-  --sidebar: oklch(0.145 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --paper: #0b0b0a;
+  --surface: #151513;
+  --sunken: #1d1d1b;
+  --ink: #f4f3ee;
+  --ink-muted: #a5a49c;
+  --on-ink: #0b0b0a;
+  --line: #2a2a27;
+  --line-2: #3a3a36;
+  --line-strong: #6e6d66;
+  --stamp: #cba3ee;
+  --stamp-soft: #241a2c;
+  --warn: #f2b64a;
+  --warn-soft: #2b2110;
+  --danger: #ff8b7b;
+  --danger-soft: #2e1512;
 }
 
 @theme inline {
@@ -121,18 +107,13 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-ring: var(--ring);
-  --color-status-alert: var(--status-alert);
-  --color-status-alert-surface: var(--status-alert-surface);
-  --color-status-alert-border: var(--status-alert-border);
-  --color-status-note: var(--status-note);
-  --color-status-note-surface: var(--status-note-surface);
-  --color-status-note-border: var(--status-note-border);
-  --color-status-info: var(--status-info);
-  --color-status-info-surface: var(--status-info-surface);
-  --color-status-info-border: var(--status-info-border);
-  --color-status-clear: var(--status-clear);
-  --color-status-clear-surface: var(--status-clear-surface);
-  --color-status-clear-border: var(--status-clear-border);
+  --color-line-strong: var(--line-strong);
+  --color-stamp: var(--stamp);
+  --color-stamp-soft: var(--stamp-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -188,6 +169,10 @@
 
   body {
     @apply font-sans bg-background text-foreground;
+    /* Inter's tailed l and serifed I, so l, I and 1 never mix in a name or GSTIN. */
+    font-feature-settings:
+      "cv05" 1,
+      "cv08" 1;
   }
   html {
     @apply font-sans;
@@ -199,6 +184,11 @@
     overscroll-behavior: none;
   }
 
+  /* Lucide at the design system's 1.5 px stroke. CSS outranks the SVG attribute. */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
   select option {
     background: var(--popover);
     color: var(--popover-foreground);
@@ -207,6 +197,27 @@
   select option:disabled {
     color: var(--muted-foreground);
   }
+}
+
+/*
+ * Amount columns sized in digits, not pixels, so they fit at any type size. `ch`
+ * is one tabular digit; the rem is the cell's padding. `w-money` holds
+ * ₹99,99,99,999.00, `w-balance` the same with " Dr" or " Cr".
+ */
+@utility w-money {
+  width: calc(16ch + 1.5rem);
+}
+@utility w-balance {
+  width: calc(19ch + 1.5rem);
+}
+
+/*
+ * The accountant's close (design system motif): the double stamp rule under a total
+ * that balances or closes a document. The row above it takes an ink rule
+ * (`border-t border-foreground`). Nowhere else in the app.
+ */
+@utility closing-total {
+  border-bottom: 4px double var(--stamp);
 }
 
 /*
@@ -254,12 +265,8 @@
  * box touches other rules (the page tab strip) marks an inner child
  * `data-focus-ring`, which takes the ring with its own padding and radius.
  */
-:root {
-  --focus-ring: color-mix(in oklch, var(--ring), var(--foreground) 30%);
-}
-
 :focus-visible {
-  outline: 2.5px solid var(--focus-ring);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -270,7 +277,7 @@
   [role="option"],
   [data-focus-inset]
 ):focus-visible {
-  outline-offset: -2.5px;
+  outline-offset: -2px;
 }
 
 :focus-visible:has(> [data-focus-ring]) {
@@ -278,7 +285,7 @@
 }
 
 :focus-visible > [data-focus-ring] {
-  outline: 2.5px solid var(--focus-ring);
+  outline: 2px solid var(--ring);
 }
 
 [data-focus-floor="off"]:focus-visible {

@@ -1,6 +1,6 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
+import { AmountInput } from "@/components/amount-input";
 import {
-  NON_NEGATIVE_MONEY_PATTERN,
   enteredPaise,
   formatDecimal,
   formatMoney,
@@ -26,7 +26,7 @@ import {
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
-import { Input } from "@accly/ui/components/input";
+
 import { Label } from "@accly/ui/components/label";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -233,7 +233,7 @@ export function ApplyCreditDialog({
                             </span>
                           ) : (
                             <>
-                              <CheckIcon className="invisible size-3.5 shrink-0 group-data-selected/combobox-item:visible" />
+                              <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
                               <span className="min-w-0 truncate">
                                 <span className="text-muted-foreground">
                                   {creditLabel(option.type)} ·{" "}
@@ -277,15 +277,7 @@ export function ApplyCreditDialog({
                         <FormItem>
                           <FormLabel>Amount</FormLabel>
                           <FormControl>
-                            <Input
-                              {...field}
-                              required
-                              inputMode="decimal"
-                              autoComplete="off"
-                              pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                              placeholder="0.00"
-                              className="tabular-nums"
-                            />
+                            <AmountInput symbol {...field} required />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

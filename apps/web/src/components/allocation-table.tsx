@@ -17,7 +17,7 @@ import {
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
-import { Input } from "@accly/ui/components/input";
+
 import {
   Table,
   TableBody,
@@ -31,6 +31,7 @@ import type { ReactNode } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
+import { AmountInput } from "@/components/amount-input";
 import { LineGrid } from "@/components/document-form";
 import { ErrorNote, LoadMore } from "@/components/page";
 
@@ -313,14 +314,7 @@ export function AllocationTable({
                                 <FormLabel className="sr-only">Amount for {row.number}</FormLabel>
                                 <div className="flex items-center gap-1">
                                   <FormControl>
-                                    <Input
-                                      {...field}
-                                      inputMode="decimal"
-                                      autoComplete="off"
-                                      pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                                      placeholder="0.00"
-                                      className="h-7 min-w-0 text-right tabular-nums"
-                                    />
+                                    <AmountInput {...field} className="h-7 min-w-0" />
                                   </FormControl>
                                   <Button
                                     type="button"

@@ -3,7 +3,6 @@ import {
   formatDecimal,
   formatMoney,
   isPositiveMoney,
-  NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
 } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
@@ -18,13 +17,13 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { Kbd } from "@accly/ui/components/kbd";
 import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { AmountInput } from "@/components/amount-input";
 import { DocumentForm, FieldArrayError, LineGrid, PostBar } from "@/components/document-form";
 import { NoteSourceLink } from "@/components/note-columns";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -148,14 +147,7 @@ export function NoteForm({
           if (canPost) void submit(event);
         }}
         footer={
-          <PostBar onClose={onClose} closeLabel="Close">
-            {canPost ? (
-              <Button type="submit">
-                {post.isPending ? "Posting…" : "Post note"}
-                <Kbd>⌘↵</Kbd>
-              </Button>
-            ) : null}
-          </PostBar>
+          <PostBar onClose={onClose} post={canPost ? post : undefined} postLabel="Post note" />
         }
       >
         <p className="text-muted-foreground">
@@ -218,13 +210,7 @@ export function NoteForm({
                     <FormLabel className="md:sr-only">Note amount for {line.description}</FormLabel>
                     <div className="flex gap-1">
                       <FormControl>
-                        <Input
-                          {...field}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                          className="text-right tabular-nums"
-                        />
+                        <AmountInput {...field} />
                       </FormControl>
                       <Button
                         type="button"

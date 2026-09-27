@@ -47,7 +47,18 @@ export const accountRouter = {
     }),
   ).handler(async ({ context, input }) => {
     const rows = await db
-      .select()
+      .select({
+        id: accounts.id,
+        parentId: accounts.parentId,
+        code: accounts.code,
+        name: accounts.name,
+        type: accounts.type,
+        systemKey: accounts.systemKey,
+        supplyClass: accounts.supplyClass,
+        active: accounts.active,
+        // The edit token: an update carries it back.
+        updatedAt: accounts.updatedAt,
+      })
       .from(accounts)
       .where(
         and(

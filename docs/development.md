@@ -45,6 +45,7 @@ three values and add its web origin to `s3.allowedOrigins`, never a wildcard.
 bun run create-founder <name> <password>       # FOUNDING_EMAIL, the only Organization creator
 bun run create-user <email> <name> <password>  # an account without an invitation
 bun run db:seed
+bun run db:seed:demo # complete the practical cases in an older base seed
 ```
 
 Organization creation runs one bootstrap (`core/organizations.ts`): settings,
@@ -60,24 +61,34 @@ ICICI NEFT, ICICI cheque and Cash. Receipts from the financial-year start, at
 most six months back, post through the real core, each into the account of its
 method.
 
+The seed also creates Cedar Components, a GST-registered trading company with
+six named parties and three Items. Its marked cases cover Invoice and Bill drafts,
+local, interstate and B2B sales, a split-payment counter sale, an overdue part-paid
+Invoice, an advance applied to an Invoice, eligible and ineligible Bill ITC,
+contractor TDS, direct and against Payments, a supplier advance, direct and
+cancelled Receipts, both Note types, an Opening Balance and a cash deposit
+Journal. Run `db:seed:demo` after an older base seed; it finds its marked cases
+before writing, so a rerun completes a partial seed without duplicates.
+
 ## Commands
 
-| Command                      | Purpose                                             |
-| ---------------------------- | --------------------------------------------------- |
-| `bun run dev`                | Services, migrations, all apps                      |
-| `bun run dev:status`         | Read-only service and migration check               |
-| `bun run check-types`        | Type-check packages and `tests/`                    |
-| `bunx oxlint`                | Non-writing lint check                              |
-| `bunx oxfmt --check .`       | Non-writing repository format check                 |
-| `bun run check`              | Run oxlint, then write formatting                   |
-| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test` |
-| `bun run build`              | Production-build all workspaces                     |
-| `bun run db:up`              | Start PostgreSQL and SeaweedFS                      |
-| `bun run db:generate`        | Generate a migration from the schema                |
-| `bun run db:migrate`         | Apply migrations                                    |
-| `bun run db:seed -- --reset` | Reset and seed; deletes local data                  |
-| `bun run db:seed:volume`     | 100,000 receipts per seeded organization by default |
-| `bun run db:studio`          | Drizzle Studio                                      |
+| Command                      | Purpose                                              |
+| ---------------------------- | ---------------------------------------------------- |
+| `bun run dev`                | Services, migrations, all apps                       |
+| `bun run dev:status`         | Read-only service and migration check                |
+| `bun run check-types`        | Type-check packages and `tests/`                     |
+| `bunx oxlint`                | Non-writing lint check                               |
+| `bunx oxfmt --check .`       | Non-writing repository format check                  |
+| `bun run check`              | Run oxlint, then write formatting                    |
+| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test`  |
+| `bun run build`              | Production-build all workspaces                      |
+| `bun run db:up`              | Start PostgreSQL and SeaweedFS                       |
+| `bun run db:generate`        | Generate a migration from the schema                 |
+| `bun run db:migrate`         | Apply migrations                                     |
+| `bun run db:seed -- --reset` | Reset and seed; deletes local data                   |
+| `bun run db:seed:volume`     | 100,000 receipts per seeded organization by default  |
+| `bun run db:seed:demo`       | Add or complete the practical Cedar Components cases |
+| `bun run db:studio`          | Drizzle Studio                                       |
 
 `benchmark:server`, `benchmark:rpc`, `benchmark:browser` and
 `benchmark:navigation` measure a running build. `benchmark:browser` times hard

@@ -50,14 +50,33 @@ export function formatDecimal(paise: bigint): string {
 }
 
 // Organizations are created in INR and cannot change currency, so one formatter
-// serves every amount.
+// serves every amount, and one without paise serves the owner's headline figures.
 const rupeeFormat = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 
-/** Display text such as "₹1,23,456.78", exact at any size. */
-export function formatMoney(paise: bigint): string {
+const wholeRupeeFormat = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+// A negative prints in brackets, as a ledger does: a minus sign is easy to miss. Intl's
+// `currencySign: "accounting"` would do this but drops Indian grouping.
+function bracketed(format: Intl.NumberFormat, paise: bigint): string {
   // SAFETY: a bigint's digits followed by E-2 always form a numeric string, and Intl
   // formats the exact value of a numeric string rather than a binary float.
-  return rupeeFormat.format(`${paise}E-2` as Intl.StringNumericLiteral);
+  const text = format.format(`${absMoney(paise)}E-2` as Intl.StringNumericLiteral);
+
+  return paise < 0n ? `(${text})` : text;
+}
+
+/** Display text such as "₹1,23,456.78", exact at any size; a negative is "(₹4,250.00)". */
+export function formatMoney(paise: bigint): string {
+  return bracketed(rupeeFormat, paise);
+}
+
+/** A dashboard figure such as "₹18,42,600": whole rupees, rounded, never paise. */
+export function formatRupees(paise: bigint): string {
+  return bracketed(wholeRupeeFormat, paise);
 }
 
 // These exist so no `.tsx` has to hold a bigint literal. oxc's React Compiler pass
@@ -96,4 +115,28 @@ export function formatBalance(paise: Money): string {
   if (isZeroMoney(paise)) return formatMoney(ZERO_MONEY);
 
   return `${formatMoney(absMoney(paise))} ${paise > 0n ? "Dr" : "Cr"}`;
+}
+
+/** How far `pricePaise` sits below `referencePaise`, in whole basis points (MRP "% off"). */
+export function belowBasisPoints(referencePaise: Money, pricePaise: Money): number {
+  if (referencePaise <= 0n || pricePaise >= referencePaise) return 0;
+
+  return Number(((referencePaise - pricePaise) * 10_000n) / referencePaise);
+}
+
+/** A percentage with up to two decimals, such as "12.5"; the form's and the API's. */
+export const PERCENT_PATTERN = /^\d{1,3}(\.\d{1,2})?$/;
+
+/** "12.5" to 1250 basis points. */
+export function parseBasisPoints(value: string): number {
+  if (!PERCENT_PATTERN.test(value)) throw new RangeError(`Invalid percentage: ${value}`);
+
+  const [whole, fraction = ""] = value.split(".");
+
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
+/** `basisPoints` of an amount, half-up to the paisa: a 10% bill discount. */
+export function percentOfPaise(amountPaise: Money, basisPoints: number): Money {
+  return divideHalfUp(amountPaise * BigInt(basisPoints), 10_000n);
 }

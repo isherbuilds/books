@@ -1,3 +1,4 @@
+import { drainAuditWrites } from "@accly/api/audit";
 import {
   organizationSnapshot,
   accountLine,
@@ -27,6 +28,8 @@ import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { env } from "@accly/env/server";
 import { and, asc, count, eq } from "drizzle-orm";
 import pg from "pg";
+
+import { seedDemo } from "./seed-demo";
 
 // bun run db:seed, or `-- --reset` to drop the schema first. Refuses to touch a
 // production database. Every account is created with `createUserWithPassword`,
@@ -120,7 +123,7 @@ export const ORGS: OrgProfile[] = [
       stateCode: "27",
       financialYearStart: 4,
       timeZone: "Asia/Kolkata",
-      addressLine1: "12 Business Road",
+      address: "12 Business Road",
       city: "Pune",
       pinCode: "411001",
     },
@@ -175,7 +178,7 @@ export const ORGS: OrgProfile[] = [
       stateCode: "29",
       financialYearStart: 4,
       timeZone: "Asia/Kolkata",
-      addressLine1: "4 Lake View Road, Jayanagar",
+      address: "4 Lake View Road, Jayanagar",
       city: "Bengaluru",
       pinCode: "560041",
     },
@@ -388,7 +391,7 @@ function buildParties(
       stateCode: place.stateCode,
       pan,
       gstin: pan && roll < 0.75 ? gstinFor(place.stateCode, pan) : null,
-      addressLine1: `${between(random, 1, 250)}, ${pick(random, STREETS)}`,
+      address: `${between(random, 1, 250)}, ${pick(random, STREETS)}`,
       city: place.city,
       pinCode: `${place.pin}${digits(random, 3)}`,
       email:
@@ -406,9 +409,7 @@ function buildParties(
     return row(name, roles, {
       stateCode: place.stateCode,
       pan: random() < 0.3 ? panFor("P", family) : null,
-      addressLine1: withAddress
-        ? `Flat ${between(random, 101, 1204)}, ${pick(random, STREETS)}`
-        : null,
+      address: withAddress ? `Flat ${between(random, 101, 1204)}, ${pick(random, STREETS)}` : null,
       city: withAddress ? place.city : null,
       pinCode: withAddress ? `${place.pin}${digits(random, 3)}` : null,
       email: random() < 0.4 ? `${handle(name)}@example.com` : null,
@@ -854,6 +855,8 @@ async function main(): Promise<void> {
     ORGS.map((profile, index) => seedBooks(orgIds[index]!, profile, index)),
   );
 
+  await seedDemo();
+
   console.info(
     [
       "",
@@ -861,7 +864,7 @@ async function main(): Promise<void> {
       "",
       `  Password for every account below: ${PASSWORD}`,
       "",
-      "  owner@example.com       owner       Meridian Traders + Ridgeview Academy",
+      "  owner@example.com       owner       Meridian Traders + Ridgeview Academy + Cedar Components",
       "  accountant@example.com  accountant  Meridian Traders",
       "  operator@example.com    operator    Meridian Traders",
       "  invited@example.com has a pending invitation to Meridian Traders.",
@@ -893,6 +896,7 @@ async function main(): Promise<void> {
 
 if (import.meta.main) {
   await main();
+  await drainAuditWrites();
 
   process.exit(0);
 }

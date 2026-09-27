@@ -77,8 +77,7 @@ export async function createOrganization(
         gstin,
         stateCode: input.stateCode,
         financialYearStart: input.financialYearStart,
-        addressLine1: input.addressLine1,
-        addressLine2: input.addressLine2 ?? null,
+        address: input.address,
         city: input.city,
         pinCode: input.pinCode,
       });

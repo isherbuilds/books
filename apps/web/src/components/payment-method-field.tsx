@@ -14,7 +14,7 @@ import { LinkField } from "@/components/link-field";
 import { PaymentMethodSheet } from "@/components/payment-method-sheet";
 import { useCan } from "@/lib/membership";
 import { BANKS_MANAGE_PERMISSION } from "@/lib/navigation";
-import { paymentMethodListOptions } from "@/lib/receipts";
+import { activePaymentMethodsOptions } from "@/lib/receipts";
 
 /**
  * The method a new receipt or payment moves money through. Only an active method in an
@@ -23,34 +23,40 @@ import { paymentMethodListOptions } from "@/lib/receipts";
  * Banks manager adds one in a stacked Sheet (DocumentForm ignores its portal events),
  * so the document keeps its typed values.
  */
-export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
-  const { control, getValues, setValue } = useFormContext<{ paymentMethodId: string }>();
+export function PaymentMethodField({
+  orgSlug,
+  name = "paymentMethodId",
+  labelClassName,
+}: {
+  orgSlug: string;
+  /** The form path holding the method id; an Invoice's payment lines pass their own. */
+  name?: "paymentMethodId" | `payments.${number}.paymentMethodId`;
+  labelClassName?: string;
+}) {
+  const { control, getValues, setValue } = useFormContext();
   const canCreate = useCan(orgSlug, BANKS_MANAGE_PERMISSION);
   const [creating, setCreating] = useState(false);
 
-  const methods = useQuery({
-    ...paymentMethodListOptions(orgSlug),
-    select: (rows) => rows.filter((method) => method.active && method.accountActive),
-  });
+  const methods = useQuery(activePaymentMethodsOptions(orgSlug));
 
   const preferred =
     methods.data?.find((method) => method.name.toLocaleLowerCase() === "bank transfer") ??
     methods.data?.[0];
 
   useEffect(() => {
-    if (preferred && !getValues("paymentMethodId")) {
-      setValue("paymentMethodId", preferred.id, { shouldValidate: true });
+    if (preferred && !getValues(name)) {
+      setValue(name, preferred.id, { shouldValidate: true });
     }
-  }, [preferred, getValues, setValue]);
+  }, [preferred, getValues, setValue, name]);
 
   return (
     <>
       <FormField
         control={control}
-        name="paymentMethodId"
-        render={({ field, fieldState }) => (
+        name={name}
+        render={({ field }) => (
           <FormItem>
-            <FormLabel>Payment method</FormLabel>
+            <FormLabel className={labelClassName}>Payment method</FormLabel>
             <FormControl>
               <LinkField
                 items={methods.data}
@@ -62,7 +68,6 @@ export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
                 onSelect={(method) => field.onChange(method?.id ?? "")}
                 placeholder="Choose a payment method"
                 inputRef={field.ref}
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             {/* No active method would leave the required field a dead end. */}
@@ -93,7 +98,7 @@ export function PaymentMethodField({ orgSlug }: { orgSlug: string }) {
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={(method) =>
-          setValue("paymentMethodId", method.id, { shouldDirty: true, shouldValidate: true })
+          setValue(name, method.id, { shouldDirty: true, shouldValidate: true })
         }
       />
     </>

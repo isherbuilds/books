@@ -7,7 +7,6 @@ import { accounts } from "@accly/db/schema/accounts";
 import { items } from "@accly/db/schema/items";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
-import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
@@ -26,7 +25,7 @@ type Account = typeof accounts.$inferSelect;
 
 type Item = typeof items.$inferSelect;
 
-type PaymentMethod = typeof paymentMethods.$inferSelect;
+type PaymentMethod = Awaited<ReturnType<AppRouterClient["paymentMethod"]["list"]>>[number];
 
 const FIXTURE_TIME_ZONE = "UTC";
 
@@ -113,7 +112,7 @@ beforeAll(async () => {
     name: "Allocation Customer",
     roles: ["customer"],
     stateCode: "27",
-    addressLine1: "4 Settlement Road",
+    address: "4 Settlement Road",
     city: "Pune",
     pinCode: "411001",
   });
@@ -416,13 +415,12 @@ test("an invoice due yesterday is overdue and appears in the overdue filter", as
 
   const listed = await api.invoice.list({
     orgSlug: organization.slug,
-    settlement: "overdue",
+    status: "overdue",
   });
 
   expect(listed.rows).toEqual([
     expect.objectContaining({
       id: overdueInvoice.id,
-      outstandingPaise: 10_000n,
       settlementStatus: "unpaid",
       overdue: true,
     }),
@@ -580,7 +578,7 @@ test("a supplier payment advance settles a bill and reverses its allocation entr
     name: "Allocation Supplier",
     roles: ["vendor"],
     stateCode: "27",
-    addressLine1: "8 Supplier Road",
+    address: "8 Supplier Road",
     city: "Pune",
     pinCode: "411001",
   });

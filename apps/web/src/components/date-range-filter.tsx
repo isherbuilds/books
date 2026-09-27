@@ -3,15 +3,19 @@
 import { Button } from "@accly/ui/components/button";
 import { Calendar, type CalendarRange } from "@accly/ui/components/calendar";
 import {
+  DropdownMenu,
   DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@accly/ui/components/dropdown-menu";
 import { Popover, PopoverContent } from "@accly/ui/components/popover";
 import { useIsMobile } from "@accly/ui/hooks/use-mobile";
 import { ClientOnly } from "@tanstack/react-router";
-import { CalendarIcon } from "lucide-react";
-import { useState, type RefObject } from "react";
+import { CalendarIcon, ChevronDownIcon } from "lucide-react";
+import { useRef, useState, type RefObject } from "react";
 
 import { FilterSubmenu, type ActiveFilter } from "@/components/list-filter";
 import {
@@ -26,13 +30,14 @@ import {
 } from "@/lib/date-presets";
 import { useOrgDateTime } from "@/lib/org-datetime";
 
-const ALL_TIME: SearchRange = { from: undefined, to: undefined };
+const ALL_TIME: SearchRange = { from: undefined, to: undefined, all: true };
 
 /**
- * Presets write their dates to the URL; All time removes both dates. The URL never
- * stores which label the operator clicked.
+ * Presets write their dates to the URL; All time removes both dates and says so, or the
+ * page would move back to its default period. The URL never stores which preset was
+ * clicked.
  */
-export function PresetItems({
+function PresetItems({
   range,
   today,
   financialYearStart,
@@ -60,7 +65,11 @@ export function PresetItems({
           // Unchecking an applied period returns the list to all time, so it is never
           // left half-filtered.
           onCheckedChange={(checked) =>
-            onSelect(checked ? presetRange(preset, today, financialYearStart) : ALL_TIME)
+            onSelect(
+              checked
+                ? { ...presetRange(preset, today, financialYearStart), all: undefined }
+                : ALL_TIME,
+            )
           }
         >
           {presetLabel(preset, today, financialYearStart)}
@@ -97,7 +106,7 @@ function toDay(date?: Date): string | undefined {
  * The custom range, picked on a month grid anchored to the control that opened it. Two
  * `type="date"` boxes in a modal asked the operator to type what a calendar shows.
  */
-export function DateRangePopover({
+function DateRangePopover({
   open,
   onOpenChange,
   anchor,
@@ -229,8 +238,59 @@ export function useDateRangeFilter(
         from={range.from}
         to={range.to}
         today={today}
-        onApply={(next) => void onChange(next)}
+        onApply={(next) => void onChange({ ...next, all: undefined })}
       />
     ),
   };
+}
+
+/** A tab's own period control, for a page with no filter menu: presets, then the calendar. */
+export function PeriodMenu({
+  range,
+  onChange,
+}: {
+  range: SearchRange;
+  onChange: (range: SearchRange) => void;
+}) {
+  const { today, financialYearStart } = useOrgDateTime();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+
+  const periodTrigger = (
+    <Button ref={trigger} variant="outline">
+      <CalendarIcon data-icon="inline-start" />
+      {rangeLabel(range, today, financialYearStart)}
+      <ChevronDownIcon data-icon="inline-end" />
+    </Button>
+  );
+
+  return (
+    <>
+      <ClientOnly fallback={periodTrigger}>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={periodTrigger} />
+          <DropdownMenuContent>
+            <DropdownMenuGroup>
+              <PresetItems
+                range={range}
+                today={today}
+                financialYearStart={financialYearStart}
+                onSelect={onChange}
+                onCustom={() => setCustomOpen(true)}
+              />
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ClientOnly>
+      <DateRangePopover
+        open={customOpen}
+        onOpenChange={setCustomOpen}
+        anchor={trigger}
+        from={range.from}
+        to={range.to}
+        today={today}
+        onApply={(next) => onChange({ ...next, all: undefined })}
+      />
+    </>
+  );
 }

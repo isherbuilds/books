@@ -122,7 +122,7 @@ export function DataTable<T extends RowData>({
         !hasRows && "min-h-64",
       )}
     >
-      <table className="hidden w-full table-fixed border-separate border-spacing-0 text-xs md:table">
+      <table className="hidden w-full table-fixed border-separate border-spacing-0 text-sm md:table">
         <thead>
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id}>
@@ -140,7 +140,7 @@ export function DataTable<T extends RowData>({
                       // -top-4 cancels PageBody's p-4: at top-0 the header would stick
                       // at the scrollport's padding edge and rows would scroll through
                       // the 1rem band above it.
-                      "sticky -top-4 z-10 h-10 border-r border-b border-border border-r-border/60 bg-muted px-3 text-left align-middle font-normal whitespace-nowrap text-muted-foreground last:border-r-0",
+                      "sticky -top-4 z-10 h-10 border-r border-b border-border border-r-border/60 bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase last:border-r-0",
                       columnMeta?.align === "right" && "text-right",
                       columnMeta?.className,
                     )}
@@ -203,7 +203,7 @@ export function DataTable<T extends RowData>({
   );
 }
 
-const CARD_CLASS = "flex min-h-10 flex-col gap-1 border-b border-border/60 px-3 py-2 text-xs";
+const CARD_CLASS = "flex min-h-10 flex-col gap-1 border-b border-border/60 px-3 py-2 text-sm";
 
 // A compiled child: it receives plain values only, never the table or row objects,
 // so a memoized row cannot render stale after a sort or a visibility change.
@@ -243,7 +243,7 @@ function DataTableRow<T extends RowData>({
         void navigate(rowLink(original));
       }}
       className={cn(
-        "group h-10 data-active:bg-muted has-[a[data-row-link]:focus-visible]:bg-muted/60 hover:bg-muted/40",
+        "group h-10 data-active:bg-accent has-[a[data-row-link]:focus-visible]:bg-accent hover:bg-accent/70",
         rowLink && "cursor-pointer",
       )}
     >

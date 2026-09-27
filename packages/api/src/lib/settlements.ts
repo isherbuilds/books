@@ -3,7 +3,6 @@ import { allocations } from "@accly/db/schema/allocations";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
-import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
 import {
   and,
@@ -44,11 +43,10 @@ type DocumentListInput = z.output<z.ZodObject<typeof documentListFields>>;
 
 type SettlementListInput = z.output<z.ZodObject<typeof settlementListFields>>;
 
-/** The Invoice and Bill registers' filters. */
+/** The Invoice and Bill registers' filters. A status is a state, or a posted claim still open. */
 export const claimListFields = {
   ...documentListFields,
-  state: z.enum(DOCUMENT_STATES).optional(),
-  settlement: z.enum(["open", "overdue"]).optional(),
+  status: z.enum([...DOCUMENT_STATES, "open", "overdue"]).optional(),
 };
 
 type ClaimListInput = z.output<z.ZodObject<typeof claimListFields>>;
@@ -65,6 +63,19 @@ export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boole
 /** The party name printed on a document; registers show and search it. */
 export const printedPartyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
 
+/** A list's date range. A draft is unfinished work, so no period hides it. */
+export function documentPeriod(input: { from?: string; to?: string }) {
+  if (!input.from && !input.to) return undefined;
+
+  return or(
+    eq(documents.state, "draft"),
+    and(
+      input.from ? gte(documents.documentDate, input.from) : undefined,
+      input.to ? lte(documents.documentDate, input.to) : undefined,
+    ),
+  );
+}
+
 /** The keyset, party, period, number, reference, narration and party-name predicates every document register shares. */
 export function documentListWhere(
   orgId: string,
@@ -78,8 +89,7 @@ export function documentListWhere(
     inArray(documents.type, [...types]),
     input.cursor ? lt(documents.id, input.cursor) : undefined,
     input.partyId ? eq(documents.partyId, input.partyId) : undefined,
-    input.from ? gte(documents.documentDate, input.from) : undefined,
-    input.to ? lte(documents.documentDate, input.to) : undefined,
+    documentPeriod(input),
     pattern
       ? or(
           ilike(documents.number, pattern),
@@ -231,14 +241,15 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
     .where(
       and(
         documentListWhere(orgId, [type], input),
-        input.state ? eq(documents.state, input.state) : undefined,
-        input.settlement
+        input.status === "open" || input.status === "overdue"
           ? and(
               eq(documents.state, "posted"),
               gt(balancePaise, 0n),
-              input.settlement === "overdue" ? lt(documents.dueDate, today) : undefined,
+              input.status === "overdue" ? lt(documents.dueDate, today) : undefined,
             )
-          : undefined,
+          : input.status
+            ? eq(documents.state, input.status)
+            : undefined,
       ),
     )
     .orderBy(desc(documents.id))
@@ -246,7 +257,14 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
 
   const { rows, hasMore } = pageOf(page, input.limit);
 
-  return { rows: rows.map((row) => ({ ...row, ...documentSettlement(row, today) })), hasMore };
+  // Capacity and outstanding only decide the status; the register shows the status.
+  return {
+    rows: rows.map(({ capacityPaise, outstandingPaise, ...row }) => ({
+      ...row,
+      ...documentSettlement({ ...row, capacityPaise, outstandingPaise }, today),
+    })),
+    hasMore,
+  };
 }
 
 /**
@@ -294,39 +312,23 @@ export async function allocationsOf(
   }));
 }
 
-export async function listSettlements(orgId: string, type: PostedType, input: SettlementListInput) {
-  const rows = await db
-    .select({
-      id: documents.id,
-      number: documents.number,
-      documentDate: documents.documentDate,
-      state: documents.state,
-      exposureSide: documents.exposureSide,
-      settlementKind: documents.settlementKind,
-      totalPaise: documents.totalPaise,
-      reference: documents.reference,
-      partyName: printedPartyName,
-      paymentMethodName: paymentMethods.name,
-    })
-    .from(documents)
-    .innerJoin(
-      paymentMethods,
-      and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
-    )
-    .where(
-      and(
-        documentListWhere(orgId, [type], input),
-        input.paymentMethodIds
-          ? inArray(documents.paymentMethodId, input.paymentMethodIds)
-          : undefined,
-        input.state ? eq(documents.state, input.state) : undefined,
-        input.settlementKind ? eq(documents.settlementKind, input.settlementKind) : undefined,
-      ),
-    )
-    .orderBy(desc(documents.id))
-    .limit(input.limit + 1);
+/** The columns every Receipt and Payment register row carries. */
+export const settlementListRow = {
+  id: documents.id,
+  number: documents.number,
+  documentDate: documents.documentDate,
+  state: documents.state,
+  totalPaise: documents.totalPaise,
+  partyName: printedPartyName,
+};
 
-  return pageOf(rows, input.limit);
+export function settlementListWhere(orgId: string, type: PostedType, input: SettlementListInput) {
+  return and(
+    documentListWhere(orgId, [type], input),
+    input.paymentMethodIds ? inArray(documents.paymentMethodId, input.paymentMethodIds) : undefined,
+    input.state ? eq(documents.state, input.state) : undefined,
+    input.settlementKind ? eq(documents.settlementKind, input.settlementKind) : undefined,
+  );
 }
 
 /** Business-date settlement state for either side's claim. */
@@ -380,9 +382,6 @@ export async function openItems(
 ) {
   const outstandingPaise = settlementPaise(orgId, "target").balancePaise;
 
-  const types =
-    input.side === "receivable" ? (["invoice", "payment"] as const) : (["bill"] as const);
-
   const rows = await db
     .select({
       id: documents.id,
@@ -398,7 +397,6 @@ export async function openItems(
         eq(documents.orgId, orgId),
         eq(documents.partyId, input.partyId),
         eq(documents.state, "posted"),
-        inArray(documents.type, [...types]),
         input.side === "receivable"
           ? or(
               eq(documents.type, "invoice"),
@@ -408,7 +406,7 @@ export async function openItems(
                 eq(documents.exposureSide, "receivable"),
               ),
             )
-          : undefined,
+          : eq(documents.type, "bill"),
         afterPickerCursor(orgId, input.cursor),
         gt(outstandingPaise, 0n),
       ),
@@ -437,11 +435,6 @@ export async function openCredits(
 ) {
   const unappliedPaise = settlementPaise(orgId, "source").balancePaise;
 
-  const types =
-    input.side === "receivable"
-      ? (["receipt", "creditNote"] as const)
-      : (["payment", "debitNote"] as const);
-
   const rows = await db
     .select({
       id: documents.id,
@@ -456,7 +449,6 @@ export async function openCredits(
         eq(documents.orgId, orgId),
         eq(documents.partyId, input.partyId),
         eq(documents.state, "posted"),
-        inArray(documents.type, [...types]),
         input.type ? eq(documents.type, input.type) : undefined,
         input.side === "receivable"
           ? or(

@@ -79,15 +79,15 @@ export function ProductWindow({
   return (
     <div
       aria-hidden={alt ? undefined : true}
-      className={`overflow-hidden rounded-lg border border-border bg-card shadow-2xl ${className}`}
+      className={`overflow-hidden rounded-xl bg-(--surface) shadow-(--shadow) ${className}`}
     >
-      <div className="flex h-8 items-center gap-2 border-b border-border px-3">
+      <div className="flex h-8 items-center gap-2 border-b border-(--line) px-3">
         <span aria-hidden className="flex gap-1.5">
-          <span className="size-2 rounded-full bg-muted-foreground/35" />
-          <span className="size-2 rounded-full bg-muted-foreground/35" />
-          <span className="size-2 rounded-full bg-muted-foreground/35" />
+          <span className="size-2 rounded-full bg-(--line-2)" />
+          <span className="size-2 rounded-full bg-(--line-2)" />
+          <span className="size-2 rounded-full bg-(--line-2)" />
         </span>
-        <span className="flex-1 truncate text-center text-xs whitespace-nowrap text-muted-foreground">
+        <span className="flex-1 truncate text-center text-xs whitespace-nowrap text-(--ink-muted)">
           {title}
         </span>
         <span aria-hidden className="w-10" />

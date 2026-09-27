@@ -46,7 +46,7 @@ export const BILL_COLUMNS = [
   }),
   column.accessor("totalPaise", {
     header: "Total",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: bill } }) => (
       <span className={cn("tabular-nums", struck(bill.state))}>{formatMoney(bill.totalPaise)}</span>
     ),

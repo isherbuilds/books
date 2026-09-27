@@ -36,7 +36,7 @@ import { NAV_GROUPS, PRIMARY_NAV, SETTINGS_TABS, type NavGroup } from "@/lib/nav
 // One class for every rail row, links and menu triggers alike. TanStack Link marks
 // the active route with `data-status="active"`.
 const ROW =
-  "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-sidebar-accent/60 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground data-[status=active]:[&_svg]:text-foreground";
+  "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent/60 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground data-[status=active]:[&_svg]:text-foreground";
 
 /** The rail group that holds the current page, if any. */
 function useActiveGroup(): NavGroup | undefined {
@@ -382,7 +382,7 @@ export function AppShell({ orgSlug, children }: { orgSlug: string; children: Rea
       <main
         id="main"
         tabIndex={-1}
-        className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground lg:m-2 lg:ml-0 lg:rounded-md lg:shadow-sm print:m-0 print:overflow-visible print:shadow-none"
+        className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground lg:m-2 lg:ml-0 lg:rounded-lg lg:border lg:border-border print:m-0 print:overflow-visible print:border-0"
       >
         {children}
       </main>

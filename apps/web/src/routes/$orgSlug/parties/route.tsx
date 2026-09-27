@@ -66,9 +66,9 @@ export const Route = createFileRoute("/$orgSlug/parties")({
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
     await Promise.all([
-      queryClient.query(partyListOptions(orgSlug)).catch(() => {}),
+      queryClient.prefetchQuery(partyListOptions(orgSlug)),
       authorize(membership.roles, { report: ["read"] })
-        ? queryClient.query(partyBalancesOptions(orgSlug)).catch(() => {})
+        ? queryClient.prefetchQuery(partyBalancesOptions(orgSlug))
         : undefined,
     ]);
   },

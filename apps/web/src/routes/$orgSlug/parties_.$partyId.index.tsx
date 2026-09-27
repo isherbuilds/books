@@ -10,18 +10,17 @@ import { membershipOptions, useCan } from "@/lib/membership";
 import { partyDetailOptions, partyStatementOptions, partyTotalsOptions } from "@/lib/parties";
 
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/")({
-  // The figures start here so they ride `party.get`'s batch; neither blocks the page,
-  // since a statement over a long history must not hold the record back.
+  // Awaited, so the server renders the figures the client hydrates (a streamed read
+  // with `useQuery` mismatches). A failed read shows in its figure.
   loader: async ({ context: { queryClient }, params: { orgSlug, partyId } }) => {
     const { roles } = await queryClient.query(membershipOptions(orgSlug));
 
-    if (authorize(roles, { receipt: ["read"] })) {
-      void queryClient.query(partyTotalsOptions(orgSlug, partyId)).catch(() => {});
-    }
-
-    if (authorize(roles, { report: ["read"] })) {
-      void queryClient.query(partyStatementOptions(orgSlug, partyId)).catch(() => {});
-    }
+    await Promise.all([
+      authorize(roles, { receipt: ["read"] }) &&
+        queryClient.prefetchQuery(partyTotalsOptions(orgSlug, partyId)),
+      authorize(roles, { report: ["read"] }) &&
+        queryClient.prefetchQuery(partyStatementOptions(orgSlug, partyId)),
+    ]);
   },
   component: PartyOverview,
 });
@@ -30,7 +29,7 @@ function Summary({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1 border-border p-4 not-last:border-b sm:not-last:border-r sm:not-last:border-b-0">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium tabular-nums">{children}</dd>
+      <dd className="text-base font-medium tabular-nums">{children}</dd>
     </div>
   );
 }
@@ -54,7 +53,7 @@ function PartyOverview() {
   const received = totals.data ? formatMoney(own?.receivedPaise ?? ZERO_MONEY) : null;
 
   return (
-    <div className="grid w-full max-w-4xl gap-6">
+    <div className="@container mx-auto grid w-full max-w-3xl gap-6">
       {canReadReceipts || canReadLedger ? (
         <dl className="grid overflow-clip rounded-lg border border-border bg-card sm:grid-cols-2">
           {canReadReceipts ? <Summary label="Received">{received}</Summary> : null}

@@ -35,7 +35,7 @@ const ITEM_COLUMNS = [
         >
           {item.name}
         </span>
-        {item.active ? null : <Badge variant="muted">Inactive</Badge>}
+        {item.active ? null : <Badge>Inactive</Badge>}
       </span>
     ),
   }),
@@ -54,7 +54,7 @@ const ITEM_COLUMNS = [
   col.accessor("unitPricePaise", {
     header: "Price",
     enableSorting: false,
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ getValue }) => <span className="tabular-nums">{formatMoney(getValue())}</span>,
   }),
   col.accessor("incomeAccountName", {
@@ -83,7 +83,7 @@ function ItemCard({ item }: { item: ItemListRow }) {
           <span className={cn("truncate font-medium", !item.active && "text-muted-foreground")}>
             {item.name}
           </span>
-          {item.active ? null : <Badge variant="muted">Inactive</Badge>}
+          {item.active ? null : <Badge>Inactive</Badge>}
         </span>
         <span className="shrink-0 tabular-nums">{formatMoney(item.unitPricePaise)}</span>
       </div>
@@ -103,7 +103,7 @@ export const Route = createFileRoute("/$orgSlug/items")({
   }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { item: ["read"] });
-    await queryClient.query(itemListOptions(orgSlug)).catch(() => {});
+    await queryClient.prefetchQuery(itemListOptions(orgSlug));
   },
   component: ItemsRoute,
 });

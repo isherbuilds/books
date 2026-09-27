@@ -542,24 +542,16 @@ export function postDebitNote(
   return reverseLines(postBill({ ...document, type: "bill", tdsPaise: 0n }, byKey));
 }
 
+// `recordEntry` asserts the entry balances; this checks each line and the amount.
 export function postJournal(document: JournalPosting | OpeningBalancePosting): JournalLineInput[] {
-  if (document.lines.length < 2) {
-    throw new Error("Journal must have at least two lines");
-  }
-
   let debitTotal = 0n;
-  let creditTotal = 0n;
 
   const lines = document.lines.map((line) => {
     if (line.amountPaise <= 0n) {
       throw new Error("Journal line amount must be positive");
     }
 
-    if (line.side === "debit") {
-      debitTotal += line.amountPaise;
-    } else {
-      creditTotal += line.amountPaise;
-    }
+    if (line.side === "debit") debitTotal += line.amountPaise;
 
     return {
       accountId: line.accountId,
@@ -568,10 +560,6 @@ export function postJournal(document: JournalPosting | OpeningBalancePosting): J
       credit: line.side === "credit" ? line.amountPaise : 0n,
     };
   });
-
-  if (debitTotal !== creditTotal) {
-    throw new Error("Journal debit and credit totals must match");
-  }
 
   if (debitTotal !== document.amountPaise) {
     throw new Error("Journal debit total must match document amount");
@@ -701,10 +689,6 @@ export async function reverseEntries(
   entryIds: readonly string[],
   meta: { entryDate: string; narration: string },
 ): Promise<void> {
-  if (entryIds.length === 0) {
-    return;
-  }
-
   const storedLines = await tx
     .select({
       entryId: journalLines.entryId,

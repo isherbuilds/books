@@ -78,21 +78,29 @@ export const NOTE_COLUMNS = [
   }),
   column.accessor("totalPaise", {
     header: "Total",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: note } }) => (
       <span className={cn("tabular-nums", struck(note.state))}>{formatMoney(note.totalPaise)}</span>
     ),
   }),
   column.accessor("unappliedPaise", {
     header: "Unapplied",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ getValue }) => <span className="tabular-nums">{formatMoney(getValue())}</span>,
   }),
   column.accessor("state", {
     header: "Status",
     meta: { className: "w-24" },
     cell: ({ row: { original: note } }) => (
-      <Badge variant={note.state === "cancelled" ? "muted" : "outline"}>
+      <Badge
+        variant={
+          note.state === "cancelled"
+            ? "neutral"
+            : isPositiveMoney(note.unappliedPaise)
+              ? "warn"
+              : "settled"
+        }
+      >
         {note.state === "cancelled"
           ? "Cancelled"
           : isPositiveMoney(note.unappliedPaise)

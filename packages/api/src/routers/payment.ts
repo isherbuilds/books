@@ -3,7 +3,7 @@ import { db } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -36,7 +36,9 @@ import {
   adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
-  listSettlements,
+  pageOf,
+  settlementListRow,
+  settlementListWhere,
   orgSettings,
   orgTimeZone,
   settlementDetail,
@@ -380,7 +382,22 @@ export const paymentRouter = {
   list: orgProcedure(
     { payment: ["read"] },
     orgInput.extend(settlementListFields).superRefine(orderedPeriod),
-  ).handler(({ context, input }) => listSettlements(context.scope.orgId, "payment", input)),
+  ).handler(async ({ context, input }) => {
+    const { orgId } = context.scope;
+
+    const rows = await db
+      .select({
+        ...settlementListRow,
+        settlementKind: documents.settlementKind,
+        exposureSide: documents.exposureSide,
+      })
+      .from(documents)
+      .where(settlementListWhere(orgId, "payment", input))
+      .orderBy(desc(documents.id))
+      .limit(input.limit + 1);
+
+    return pageOf(rows, input.limit);
+  }),
 
   cancel: orgProcedure(
     { payment: ["cancel"] },

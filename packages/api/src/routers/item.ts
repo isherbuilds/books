@@ -20,6 +20,7 @@ import {
   masterName,
   money,
   optionalHsnSac,
+  positiveMoney,
   optionalTaxCode,
 } from "../lib/schemas";
 import { orgTimeZone } from "../lib/settlements";
@@ -31,6 +32,7 @@ const itemFields = {
   hsnSac: optionalHsnSac,
   unit: optionalUnit,
   unitPrice: money,
+  mrp: positiveMoney.optional(),
   incomeAccountId: z.uuid(),
   taxCode: optionalTaxCode,
 };
@@ -82,6 +84,7 @@ async function itemValues(tx: DbTransaction, orgId: string, fields: ItemFields, 
     hsnSac: fields.hsnSac ?? null,
     unit: fields.unit ?? null,
     unitPricePaise: fields.unitPrice,
+    mrpPaise: fields.mrp ?? null,
     incomeAccountId: incomeAccount.id,
     taxCode: fields.taxCode ?? null,
   };
@@ -107,6 +110,7 @@ export const itemRouter = {
         hsnSac: items.hsnSac,
         unit: items.unit,
         unitPricePaise: items.unitPricePaise,
+        mrpPaise: items.mrpPaise,
         incomeAccountId: items.incomeAccountId,
         incomeAccountName: accounts.name,
         taxCode: items.taxCode,

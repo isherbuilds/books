@@ -52,18 +52,18 @@ export const LEDGER_COLUMNS = [
   col.display({
     id: "debit",
     header: "Debit",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: line } }) => <Amount paise={debitOf(line.amountPaise)} />,
   }),
   col.display({
     id: "credit",
     header: "Credit",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: line } }) => <Amount paise={creditOf(line.amountPaise)} />,
   }),
   col.accessor("balancePaise", {
     header: "Balance",
-    meta: { align: "right", className: "w-40" },
+    meta: { align: "right", className: "w-balance" },
     cell: ({ getValue }) => <span className="tabular-nums">{formatBalance(getValue())}</span>,
   }),
 ];

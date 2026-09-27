@@ -41,11 +41,11 @@ function DefaultRouteError({ error, reset }: ErrorComponentProps) {
     <main
       id="main"
       tabIndex={-1}
-      className="mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center gap-4 p-4 text-xs"
+      className="mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center gap-4 p-4 text-sm"
     >
       <div role="alert" className="flex flex-col gap-1 border-l-2 border-destructive pl-3">
-        <p className="font-mono text-xs tracking-widest text-destructive">REQUEST FAILED</p>
-        <h1 className="text-sm font-medium">This page could not be loaded</h1>
+        <p className="font-mono text-sm tracking-widest text-destructive">REQUEST FAILED</p>
+        <h1 className="text-base font-medium">This page could not be loaded</h1>
         <p className="text-muted-foreground">{routeErrorMessage(error, import.meta.env.DEV)}</p>
       </div>
 
@@ -61,11 +61,11 @@ function NotFound() {
     <main
       id="main"
       tabIndex={-1}
-      className="mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center gap-4 p-4 text-xs"
+      className="mx-auto flex min-h-svh w-full max-w-lg flex-col justify-center gap-4 p-4 text-sm"
     >
       <div className="flex flex-col gap-1 border-l-2 border-border pl-3">
-        <p className="font-mono text-xs tracking-widest text-muted-foreground">404 · ROUTE</p>
-        <h1 className="text-sm font-medium">Page not found</h1>
+        <p className="font-mono text-sm tracking-widest text-muted-foreground">404 · ROUTE</p>
+        <h1 className="text-base font-medium">Page not found</h1>
         <p className="text-muted-foreground">The address does not match an Accly Books page.</p>
       </div>
 

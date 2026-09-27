@@ -80,7 +80,7 @@ export function PartyLinkField({
       onSelect={onSelect}
       onCreate={onCreate}
       clearable={clearable}
-      placeholder={onCreate ? "Select or create a party" : "Select a party"}
+      placeholder="Choose a party"
       inputRef={inputRef}
       autoFocus={autoFocus}
       id={id}
@@ -130,7 +130,7 @@ export function DocumentPartyField({
       <FormField
         control={form.control}
         name="partyId"
-        render={({ field, fieldState }) => (
+        render={({ field }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <FormControl>
@@ -144,7 +144,6 @@ export function DocumentPartyField({
                 clearable={clearable}
                 inputRef={field.ref}
                 autoFocus={form.formState.submitCount > 0}
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             <FormMessage />

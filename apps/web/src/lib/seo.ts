@@ -76,8 +76,8 @@ function siteGraph(): JsonLd[] {
 
 /* The homepage's machine-readable claims: what the software is, who it is for,
    and the FAQ — serialized from the same `FAQS` list the page renders, so an
-   answer engine can never quote an answer the page does not carry. No price is
-   stated because none is public; `offers` stays out until one is. */
+   answer engine can never quote an answer the page does not carry. The private
+   preview lists prices, but `offers` stays out until launch. */
 function homeGraph(): JsonLd[] {
   const origin = env.VITE_WEB_URL;
 

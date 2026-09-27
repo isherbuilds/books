@@ -22,10 +22,10 @@ test("the landing page head carries the complete Open Graph contract with absolu
     ]),
   );
 
-  expect(byKey.title).toBe("Accly Books — the books your business actually runs on");
+  expect(byKey.title).toBe("Edernal Books — get paid sooner. Never lose input credit.");
   expect(byKey.description).toBeString();
   expect(byKey["og:type"]).toBe("website");
-  expect(byKey["og:site_name"]).toBe("Accly Books");
+  expect(byKey["og:site_name"]).toBe("Edernal Books");
   expect(byKey["og:title"]).toBe(byKey.title);
   expect(byKey["og:description"]).toBe(byKey.description);
   expect(byKey["og:url"]).toBe("https://accly.example/");

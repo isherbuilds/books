@@ -1,9 +1,9 @@
 import {
-  NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
   absMoney,
   enteredPaise,
   formatMoney,
+  isPositiveMoney,
 } from "@accly/api/core/money";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import type { EntrySide } from "@accly/db/schema/document-lines";
@@ -23,6 +23,7 @@ import { Trash2Icon } from "lucide-react";
 import { useFieldArray, useFormContext, Watch } from "react-hook-form";
 import { z } from "zod";
 
+import { AmountInput } from "@/components/amount-input";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { PartyLinkField } from "@/components/party-link-field";
@@ -161,7 +162,7 @@ function EntryLineFields({
       <FormField
         control={form.control}
         name={`lines.${index}.accountId`}
-        render={({ field, fieldState }) => (
+        render={({ field }) => (
           <FormItem className="col-span-2 md:col-span-1">
             <FormLabel className="md:sr-only">Account</FormLabel>
             <FormControl>
@@ -177,7 +178,6 @@ function EntryLineFields({
                 placeholder="Choose an account"
                 inputRef={field.ref}
                 autoFocus={autoFocus}
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             <FormMessage />
@@ -202,7 +202,7 @@ function EntryLineFields({
         <FormField
           control={form.control}
           name={`lines.${index}.partyId`}
-          render={({ field, fieldState }) => (
+          render={({ field }) => (
             <FormItem className="col-span-2 md:col-span-1">
               <FormLabel className="md:sr-only">Party (optional)</FormLabel>
               <FormControl>
@@ -221,7 +221,6 @@ function EntryLineFields({
                   onCreate={onCreateParty ? (seed) => onCreateParty(index, seed) : undefined}
                   clearable
                   inputRef={field.ref}
-                  aria-invalid={fieldState.invalid}
                 />
               </FormControl>
               <FormDescription className="sr-only">Shown in the day book only.</FormDescription>
@@ -246,7 +245,7 @@ function EntryLineFields({
                     {side === "debit" ? "Debit" : "Credit"}
                   </FormLabel>
                   <FormControl>
-                    <Input
+                    <AmountInput
                       {...field}
                       onChange={(event) => {
                         field.onChange(event);
@@ -255,10 +254,6 @@ function EntryLineFields({
                           form.setValue(`lines.${index}.${other}`, "", { shouldValidate: true });
                         }
                       }}
-                      inputMode="decimal"
-                      pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                      placeholder="0.00"
-                      className="text-right tabular-nums"
                     />
                   </FormControl>
                   <FormMessage />
@@ -327,7 +322,7 @@ export function EntryLines({
       >
         <div
           className={cn(
-            "hidden items-center gap-2 text-xs text-muted-foreground md:grid",
+            "hidden items-center gap-2 text-sm text-muted-foreground md:grid",
             gridTemplate,
           )}
         >
@@ -364,22 +359,28 @@ export function EntryLines({
         render={(lines) => {
           const { debit, credit } = entryTotals(lines);
           const difference = absMoney(debit - credit);
+          // The closing rule marks an entry that balances, not an empty one.
+          const balanced = difference === ZERO_MONEY && isPositiveMoney(debit);
 
           return (
             <dl
               className={cn(
-                "grid gap-1 border-y border-border py-3 text-xs md:gap-2",
+                "grid gap-1 border-t border-foreground py-3 text-sm md:gap-2",
                 gridTemplate,
               )}
             >
               <div className="grid gap-1 md:col-start-[-3] md:grid-cols-2 md:gap-2">
                 <div className="flex items-baseline justify-between gap-4 md:block">
                   <dt className="text-muted-foreground md:sr-only">Debit total</dt>
-                  <dd className="text-right tabular-nums">{formatMoney(debit)}</dd>
+                  <dd className={cn("text-right tabular-nums", balanced && "closing-total")}>
+                    {formatMoney(debit)}
+                  </dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-4 md:block">
                   <dt className="text-muted-foreground md:sr-only">Credit total</dt>
-                  <dd className="text-right tabular-nums">{formatMoney(credit)}</dd>
+                  <dd className={cn("text-right tabular-nums", balanced && "closing-total")}>
+                    {formatMoney(credit)}
+                  </dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-4 font-medium md:col-span-2">
                   <dt>Difference</dt>

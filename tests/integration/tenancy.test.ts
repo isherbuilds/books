@@ -735,6 +735,13 @@ const GUARDED_CALLS = {
       placeOfSupplyStateCode: "27",
       lines: [{ kind: "item", itemId: crypto.randomUUID(), quantity: 1 }],
     }),
+  "invoice.quote": (api, claim) =>
+    api.invoice.quote({
+      ...claim,
+      partyId: crypto.randomUUID(),
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: crypto.randomUUID(), quantity: 1 }],
+    }),
   "invoice.get": (api, claim) => api.invoice.get({ ...claim, invoiceId: crypto.randomUUID() }),
   "invoice.list": (api, claim) => api.invoice.list({ ...claim }),
   "invoice.amend": (api, claim) =>
@@ -888,7 +895,7 @@ const GUARDED_CALLS = {
       legalName: "intrusion",
       pan: "ABCDE1234F",
       stateCode: "27",
-      addressLine1: "1 Intrusion Street",
+      address: "1 Intrusion Street",
       city: "Pune",
       pinCode: "411001",
       financialYearStart: 4,

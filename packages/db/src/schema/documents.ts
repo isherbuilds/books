@@ -37,8 +37,6 @@ const EXPOSURE_SIDES = ["receivable", "payable"] as const;
 
 export const ADVANCE_SUPPLY_KINDS = ["goods", "exempt", "taxableService"] as const;
 
-const DOCUMENT_SOURCES = ["user", "opening"] as const;
-
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 export type AdvanceSupply = (typeof ADVANCE_SUPPLY_KINDS)[number];
@@ -53,11 +51,17 @@ export type PrintSnapshot = {
   party: {
     name: string;
     address: string;
+    /** The recipient's state, printed with its name and code (CGST rule 46). */
+    stateCode: string;
     gstin: string | null;
     pan: string | null;
   } | null;
   paymentMethod: string | null;
   lines: Array<{ description: string }>;
+  /** An Invoice's address of delivery when it differs (CGST rule 46(o)); print-only. */
+  shipTo?: { address: string; stateCode: string };
+  /** An Invoice discount entered as a percentage, so the print can say "Discount (10%)". */
+  discountBasisPoints?: number;
 };
 
 export const documents = pgTable(
@@ -70,7 +74,6 @@ export const documents = pgTable(
     type: text("type", { enum: DOCUMENT_TYPES }).notNull(),
     state: text("state", { enum: DOCUMENT_STATES }).notNull(),
     number: text("number"),
-    series: text("series"),
     financialYear: text("financial_year"),
     documentDate: date("document_date", { mode: "string" }).notNull(),
     dueDate: date("due_date", { mode: "string" }),
@@ -85,7 +88,6 @@ export const documents = pgTable(
     paymentMethodId: text("payment_method_id"),
     reference: text("reference"),
     narration: text("narration"),
-    source: text("source", { enum: DOCUMENT_SOURCES }).notNull().default("user"),
     version: integer("version").notNull().default(1),
     totalPaise: bigint("total_paise", { mode: "bigint" }).notNull(),
     discountPaise: bigint("discount_paise", { mode: "bigint" })
@@ -161,7 +163,6 @@ export const documents = pgTable(
       "documents_advance_supply_check",
       sql`case when ${table.type} = 'receipt' and ${table.settlementKind} = 'advance' then ${table.advanceSupply} is not null when ${table.type} = 'receipt' and ${table.settlementKind} = 'against' then true else ${table.advanceSupply} is null end`,
     ),
-    check("documents_source_check", sql`${table.source} in ('user', 'opening')`),
     check("documents_total_paise_check", sql`${table.totalPaise} >= 0`),
     check("documents_discount_paise_check", sql`${table.discountPaise} >= 0`),
   ],

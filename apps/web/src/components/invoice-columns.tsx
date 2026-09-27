@@ -35,11 +35,6 @@ export const INVOICE_COLUMNS = [
     header: "Party",
     cell: ({ getValue }) => <TextOrDash value={getValue()} />,
   }),
-  column.accessor("reference", {
-    header: "Reference",
-    meta: { className: "hidden w-36 xl:table-cell" },
-    cell: ({ getValue }) => <TextOrDash value={getValue()} />,
-  }),
   column.display({
     id: "status",
     header: "Status",
@@ -48,7 +43,7 @@ export const INVOICE_COLUMNS = [
   }),
   column.accessor("totalPaise", {
     header: "Total",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: invoice } }) => (
       <span className={cn("tabular-nums", struck(invoice.state))}>
         {formatMoney(invoice.totalPaise)}

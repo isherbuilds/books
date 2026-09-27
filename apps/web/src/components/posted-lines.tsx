@@ -22,7 +22,7 @@ export function PostedLines({ lines }: { lines: readonly PostedLine[] }) {
   const showParty = lines.some((line) => line.partyName);
 
   return (
-    <section className="grid gap-2">
+    <section className="grid grid-cols-1 gap-2">
       <h3 className="min-h-6 text-muted-foreground">Lines</h3>
       <div className="hidden md:block">
         <Table>

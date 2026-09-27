@@ -17,21 +17,25 @@ import type { InvoiceDetail } from "@/lib/invoices";
 const numericCell: CSSProperties = { flex: 1, textAlign: "right" };
 
 /** A posted invoice: `renderInvoicePdf` refuses one without a number or snapshot. */
-export type PrintableInvoice = InvoiceDetail & { number: string; printSnapshot: PrintSnapshot };
+type PrintableInvoice = InvoiceDetail & { number: string; printSnapshot: PrintSnapshot };
 
 export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
-  const { organization, party } = data.printSnapshot;
+  const { organization, party, shipTo } = data.printSnapshot;
 
   if (!party) throw new Error("An invoice document requires a buyer in its print snapshot");
 
   // The server sums the document; a column shows only when some line carries it.
   const { taxablePaise, cgstPaise, sgstPaise, igstPaise } = data.totals;
   const hasDiscount = data.lines.some((line) => !isZeroMoney(line.discountPaise));
+  // Only packaged goods carry an MRP, so the column appears only when a line has one.
+  const hasMrp = data.lines.some((line) => line.mrpPaise !== null);
   const hasSplitTax = !isZeroMoney(cgstPaise) || !isZeroMoney(sgstPaise);
   const hasIgst = !isZeroMoney(igstPaise);
 
+  const stateLabel = (code: string) => `${INDIAN_STATES[code] ?? code} (${code})`;
+
   const placeOfSupply = data.placeOfSupplyStateCode
-    ? `${INDIAN_STATES[data.placeOfSupplyStateCode] ?? data.placeOfSupplyStateCode} (${data.placeOfSupplyStateCode})`
+    ? stateLabel(data.placeOfSupplyStateCode)
     : null;
 
   return (
@@ -41,13 +45,24 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       number={data.number}
       cancelled={data.state === "cancelled"}
     >
-      <section style={{ marginBottom: 18 }}>
-        <SectionHeading>Buyer</SectionHeading>
-        <div style={{ fontWeight: 700 }}>{party.name}</div>
-        <div>{party.address}</div>
-        {party.gstin ? <div>GSTIN {party.gstin}</div> : null}
-        {party.pan ? <div>PAN {party.pan}</div> : null}
-      </section>
+      {/* CGST rule 46(d)/(e): the recipient with its state; 46(o): the address of delivery. */}
+      <div style={{ display: "flex", gap: 24, marginBottom: 18 }}>
+        <section style={{ flex: 1 }}>
+          <SectionHeading>Bill to</SectionHeading>
+          <div style={{ fontWeight: 700 }}>{party.name}</div>
+          <div style={{ whiteSpace: "pre-line" }}>{party.address}</div>
+          <div>State {stateLabel(party.stateCode)}</div>
+          <div>{party.gstin ? `GSTIN ${party.gstin}` : "Unregistered"}</div>
+          {party.pan ? <div>PAN {party.pan}</div> : null}
+        </section>
+        {shipTo ? (
+          <section style={{ flex: 1 }}>
+            <SectionHeading>Ship to</SectionHeading>
+            <div style={{ whiteSpace: "pre-line" }}>{shipTo.address}</div>
+            <div>State {stateLabel(shipTo.stateCode)}</div>
+          </section>
+        ) : null}
+      </div>
 
       <section style={{ marginBottom: 18 }}>
         <DetailRow label="Date">{formatBusinessDate(data.documentDate)}</DetailRow>
@@ -55,6 +70,8 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
           <DetailRow label="Due date">{formatBusinessDate(data.dueDate)}</DetailRow>
         ) : null}
         {placeOfSupply ? <DetailRow label="Place of supply">{placeOfSupply}</DetailRow> : null}
+        {/* CGST rule 46(p). Outward reverse charge is not modelled (accounting-core deferral). */}
+        {data.printClass === "taxInvoice" ? <DetailRow label="Reverse charge">No</DetailRow> : null}
       </section>
 
       <section>
@@ -74,7 +91,8 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
           <span style={{ flex: 2 }}>Description</span>
           <span style={numericCell}>HSN/SAC</span>
           <span style={numericCell}>Qty</span>
-          <span style={numericCell}>Unit price</span>
+          {hasMrp ? <span style={numericCell}>MRP</span> : null}
+          <span style={numericCell}>Rate</span>
           {hasDiscount ? <span style={numericCell}>Discount</span> : null}
           <span style={numericCell}>Taxable</span>
           <span style={numericCell}>GST rate</span>
@@ -101,6 +119,11 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
               {line.quantity ?? "—"}
               {line.unit ? ` ${line.unit}` : ""}
             </span>
+            {hasMrp ? (
+              <span style={numericCell}>
+                {line.mrpPaise === null ? "—" : formatMoney(line.mrpPaise)}
+              </span>
+            ) : null}
             <span style={numericCell}>
               {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
             </span>
@@ -123,7 +146,14 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
         {isZeroMoney(data.discountPaise) ? null : (
           <>
             <TotalRow label="Subtotal" amountPaise={taxablePaise + data.discountPaise} />
-            <TotalRow label="Discount" amountPaise={-data.discountPaise} />
+            <TotalRow
+              label={
+                data.printSnapshot.discountBasisPoints === undefined
+                  ? "Discount"
+                  : `Discount (${data.printSnapshot.discountBasisPoints / 100}%)`
+              }
+              amountPaise={-data.discountPaise}
+            />
           </>
         )}
         <TotalRow label="Taxable" amountPaise={taxablePaise} />

@@ -16,6 +16,9 @@ import { ClientOnly } from "@tanstack/react-router";
 import { ListFilterIcon, XIcon, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
+import { useCan } from "@/lib/membership";
+import { usePartyName } from "@/lib/parties";
+
 /** Add or remove one value; an empty selection leaves the URL. */
 export function toggleValue<T>(values: readonly T[] | undefined, value: T): T[] | undefined {
   const next = values?.includes(value)
@@ -140,6 +143,20 @@ export type ActiveFilter = {
   remove: () => Promise<void>;
 };
 
+/** A register's Party chip; the name shows only to a viewer who may read parties. */
+export function usePartyChip(
+  orgSlug: string,
+  partyId: string | undefined,
+  remove: () => Promise<void>,
+): ActiveFilter | undefined {
+  const canReadParties = useCan(orgSlug, { party: ["read"] });
+  const name = usePartyName(orgSlug, canReadParties ? partyId : undefined);
+
+  if (!partyId) return undefined;
+
+  return { id: "partyId", name: "Party", label: name ? `Party: ${name}` : "One party", remove };
+}
+
 /** `onClear` must move focus itself (see focusSearch): Clear unmounts with the last chip. */
 export function FilterChips({
   filters,
@@ -161,7 +178,7 @@ export function FilterChips({
               type="button"
               title={filter.label}
               aria-label={`Remove ${filter.name} filter: ${filter.label}`}
-              className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md bg-muted px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md bg-muted px-2 text-sm text-muted-foreground hover:text-foreground"
               onClick={(event) => {
                 // The chip unmounts: keep keyboard focus on the next chip, else the field.
                 const next = event.currentTarget

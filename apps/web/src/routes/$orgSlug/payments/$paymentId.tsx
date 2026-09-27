@@ -14,6 +14,7 @@ import { AllocationsSection } from "@/components/allocations-section";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { SETTLEMENT_KIND_LABELS, struck } from "@/components/document-columns";
+import { PartyNameLink } from "@/components/party-name-link";
 import { RecordSheet } from "@/components/record-sheet";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
@@ -79,8 +80,15 @@ function PaymentSheetRoute() {
     <RecordSheet
       rowId={paymentId}
       title={payment.number ?? "Payment"}
-      status={cancelled ? <Badge variant="muted">Cancelled</Badge> : null}
-      description={partyName ?? "No party"}
+      status={cancelled ? <Badge>Cancelled</Badge> : null}
+      description={
+        <PartyNameLink
+          orgSlug={orgSlug}
+          partyId={payment.partyId}
+          name={partyName}
+          canRead={canReadParties}
+        />
+      }
       onClose={close}
       onStep={(next) =>
         void navigate({
@@ -105,19 +113,6 @@ function PaymentSheetRoute() {
         <Separator />
         <dl className="grid gap-3">
           <DetailRow label="Date">{formatBusinessDate(payment.documentDate)}</DetailRow>
-          <DetailRow label="Party">
-            {payment.partyId && canReadParties ? (
-              <Link
-                to="/$orgSlug/parties/$partyId"
-                params={{ orgSlug, partyId: payment.partyId }}
-                className="underline-offset-4 hover:underline"
-              >
-                {partyName ?? "Party"}
-              </Link>
-            ) : (
-              partyName
-            )}
-          </DetailRow>
           <DetailRow label="Payment method">{payment.printSnapshot?.paymentMethod}</DetailRow>
           <DetailRow label="Settlement">
             {refund

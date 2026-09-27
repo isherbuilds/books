@@ -1,7 +1,7 @@
 export type CreateItem = { __create: string };
 
 /** A Link Field shows at most this many matches; typing narrows to the rest. */
-export const LINK_ROW_LIMIT = 8;
+const LINK_ROW_LIMIT = 6;
 
 export function isCreateItem<T>(item: T | CreateItem): item is CreateItem {
   return typeof item === "object" && item !== null && "__create" in item;
@@ -35,10 +35,9 @@ export function filterLinkItems<T>(
 
 /**
  * The rows a Link Field shows: the best `LINK_ROW_LIMIT` matches. Untouched text
- * equals the committed label, so the list opens unfiltered, as Midday's pickers do,
- * with the committed value first: a keyboard commit then keeps it, even when it lies
- * past the limit. A typed name that already exists gets no Create row; Create is
- * otherwise always last.
+ * equals the committed label, so the list opens with the committed value first: a
+ * keyboard commit then keeps it, even when it lies past the limit. A typed name
+ * that already exists gets no Create row; Create is otherwise always last.
  */
 export function linkRows<T>({
   items,
@@ -60,6 +59,7 @@ export function linkRows<T>({
   getCode?: (item: T) => string | undefined;
 }): Array<T | CreateItem> {
   const needle = query === selectedLabel ? "" : query.trim();
+
   const all = filterLinkItems(items, needle, getLabel, getCode);
 
   if (needle === "" && selected !== null) {

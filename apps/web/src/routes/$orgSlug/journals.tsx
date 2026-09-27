@@ -7,7 +7,8 @@ import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
-import { TableEmpty } from "@/components/data-table/table-empty";
+import { DOCUMENT_STATE_LABELS } from "@/components/document-columns";
+import { RegisterEmpty } from "@/components/data-table/table-empty";
 import { JOURNAL_COLUMNS, JournalCard } from "@/components/journal-columns";
 import { useDateRangeFilter } from "@/components/date-range-filter";
 import {
@@ -23,15 +24,13 @@ import { journalListOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { requireOrgPermission } from "@/lib/route-permission";
+import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const JOURNAL_STATES = ["posted", "cancelled"] as const;
 
-const STATE_LABELS = { posted: "Posted", cancelled: "Cancelled" } as const;
-
 const journalSearch = z.object({
   q: searchQuery.catch(undefined),
-  from: z.iso.date().optional().catch(undefined),
-  to: z.iso.date().optional().catch(undefined),
+  ...periodSearch,
   state: z.enum(JOURNAL_STATES).optional().catch(undefined),
 });
 
@@ -40,17 +39,19 @@ type JournalFilters = z.infer<typeof journalSearch>;
 export const Route = createFileRoute("/$orgSlug/journals")({
   head: () => ({ meta: [{ title: "Journals · Accly Books" }] }),
   validateSearch: journalSearch,
-  loaderDeps: ({ search }) => search,
+  beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
+    requirePeriod(queryClient, orgSlug, location, search, "this-year"),
+  loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
-    await queryClient.infiniteQuery(journalListOptions(orgSlug, deps)).catch(() => {});
+    await queryClient.prefetchInfiniteQuery(journalListOptions(orgSlug, deps));
   },
   component: JournalsRoute,
 });
 
 function JournalsRoute() {
   const { orgSlug } = Route.useParams();
-  const filters = Route.useSearch();
+  const { all: _all, ...filters } = Route.useSearch();
   const { q, from, to, state } = filters;
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
@@ -70,7 +71,7 @@ function JournalsRoute() {
 
   const clear = () => {
     focusSearch(field, { empty: true });
-    void setFilters({ q: undefined, from: undefined, to: undefined, state: undefined });
+    void navigate({ replace: true, search: { all: true } });
   };
 
   const chips: ActiveFilter[] = [];
@@ -81,7 +82,7 @@ function JournalsRoute() {
     chips.push({
       id: "state",
       name: "State",
-      label: STATE_LABELS[state],
+      label: DOCUMENT_STATE_LABELS[state],
       remove: () => setFilters({ state: undefined }),
     });
   }
@@ -92,23 +93,14 @@ function JournalsRoute() {
     canPost ? [{ id: "journal:new", label: "New journal", group: "action", run: openCreate }] : [],
   );
 
-  const empty =
-    q !== undefined || chips.length > 0 ? (
-      <TableEmpty
-        title="No journals match"
-        description="Try another search or clear the filters."
-        action={
-          <Button size="xs" variant="outline" onClick={clear}>
-            Clear filters
-          </Button>
-        }
-      />
-    ) : (
-      <TableEmpty
-        title="No journals yet"
-        description="Post a journal to move balances between accounts."
-      />
-    );
+  const empty = (
+    <RegisterEmpty
+      noun="journals"
+      filtered={q !== undefined || chips.length > 0}
+      onClear={clear}
+      description="Post a journal to move balances between accounts."
+    />
+  );
 
   return (
     <>
@@ -132,7 +124,7 @@ function JournalsRoute() {
                   icon={CircleDotIcon}
                   label="State"
                   options={JOURNAL_STATES}
-                  labels={STATE_LABELS}
+                  labels={DOCUMENT_STATE_LABELS}
                   value={state}
                   onChange={(next) => void setFilters({ state: next })}
                 />

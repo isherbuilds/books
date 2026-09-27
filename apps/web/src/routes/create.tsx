@@ -1,6 +1,5 @@
 import {
   deriveOrganizationIdentity,
-  gstinParts,
   optionalGstin,
   optionalPan,
   optionalStateCode,
@@ -10,7 +9,6 @@ import { ORGANIZATION_SLUG_MIN_LENGTH, organizationSlugIssue } from "@accly/auth
 import {
   Form,
   FormControl,
-  FormDescription,
   FormFieldset,
   FormItem,
   FormLabel,
@@ -20,6 +18,7 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { SubmitButton } from "@accly/ui/components/submit-button";
+import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation } from "@tanstack/react-query";
 import { Link, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { ArrowRightIcon } from "lucide-react";
@@ -27,6 +26,7 @@ import { useRef } from "react";
 import { Watch, useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { GstinField, IdInput } from "@/components/id-input";
 import { MONTH_OPTIONS, OptionField, STATE_OPTIONS, type Option } from "@/components/option-field";
 import { OrganizationEntryLayout } from "@/components/organization-entry-layout";
 import { ErrorNote } from "@/components/page";
@@ -79,12 +79,6 @@ const LEGAL_TYPE_OPTIONS: Option[] = LEGAL_TYPES.map((code) => ({
   name: LEGAL_TYPE_LABELS[code],
 }));
 
-const optionalTrimmedString = z
-  .string()
-  .trim()
-  .max(200, "Enter no more than 200 characters")
-  .transform((value) => value || undefined);
-
 const createOrganizationSchema = z
   .object({
     name: z
@@ -117,12 +111,11 @@ const createOrganizationSchema = z
       .refine((raw) => raw.trim() !== "", "Pick a month")
       .transform(Number)
       .pipe(z.number().int().min(1, "Pick a month").max(12, "Pick a month")),
-    addressLine1: z
+    address: z
       .string()
       .trim()
       .min(1, "Enter the registered address")
-      .max(200, "Enter no more than 200 characters"),
-    addressLine2: optionalTrimmedString,
+      .max(500, "Enter no more than 500 characters"),
     city: z.string().trim().min(1, "Enter the city").max(120, "Enter no more than 120 characters"),
     pinCode: indianPinCode,
   })
@@ -163,8 +156,7 @@ function CreateOrganizationForm() {
       gstin: "",
       stateCode: "",
       financialYearStart: "4",
-      addressLine1: "",
-      addressLine2: "",
+      address: "",
       city: "",
       pinCode: "",
     },
@@ -198,15 +190,15 @@ function CreateOrganizationForm() {
     <Form {...form}>
       <form noValidate onSubmit={submit} className="flex flex-col gap-6">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">Organization details</h2>
-          <p className="text-xs leading-5 text-muted-foreground">
+          <h2 className="text-base font-medium">Organization details</h2>
+          <p className="text-sm leading-5 text-muted-foreground">
             Creation is restricted to the deployment&apos;s founding operator.
           </p>
         </div>
 
         <FormFieldset disabled={create.isPending} className="flex flex-col gap-4">
           <section className="flex flex-col gap-3" aria-labelledby="organization-identity">
-            <h3 id="organization-identity" className="text-xs font-medium text-muted-foreground">
+            <h3 id="organization-identity" className="text-sm font-medium text-muted-foreground">
               Legal identity
             </h3>
             <OrganizationNameField
@@ -243,7 +235,7 @@ function CreateOrganizationForm() {
               <FormField
                 control={form.control}
                 name="legalType"
-                render={({ field, fieldState }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Legal type</FormLabel>
                     <FormControl>
@@ -255,7 +247,6 @@ function CreateOrganizationForm() {
                         onChange={field.onChange}
                         placeholder="Choose legal type"
                         inputRef={field.ref}
-                        aria-invalid={fieldState.invalid}
                       />
                     </FormControl>
                     <FormMessage />
@@ -265,7 +256,7 @@ function CreateOrganizationForm() {
               <FormField
                 control={form.control}
                 name="financialYearStart"
-                render={({ field, fieldState }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Fiscal year starts in</FormLabel>
                     <FormControl>
@@ -277,7 +268,6 @@ function CreateOrganizationForm() {
                         onChange={field.onChange}
                         placeholder="Choose a month"
                         inputRef={field.ref}
-                        aria-invalid={fieldState.invalid}
                       />
                     </FormControl>
                     <FormMessage />
@@ -286,36 +276,7 @@ function CreateOrganizationForm() {
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <RegisteredFormField
-                name="gstin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>GSTIN (optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="font-mono uppercase"
-                        maxLength={15}
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        placeholder="22ABCDE1234F1Z5"
-                        onChange={(event) => {
-                          void field.onChange(event);
-                          const parts = gstinParts(event.currentTarget.value);
-
-                          if (!parts) return;
-
-                          form.setValue("stateCode", parts.stateCode);
-                          form.setValue("pan", parts.pan);
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <GstinField label="GSTIN (optional)" placeholder="22ABCDE1234F1Z5" />
               {gstin.trim() === "" ? (
                 <RegisteredFormField
                   name="pan"
@@ -323,16 +284,7 @@ function CreateOrganizationForm() {
                     <FormItem>
                       <FormLabel>PAN</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          required
-                          className="font-mono uppercase"
-                          maxLength={10}
-                          autoComplete="off"
-                          autoCapitalize="characters"
-                          spellCheck={false}
-                          placeholder="ABCDE1234F"
-                        />
+                        <IdInput {...field} required maxLength={10} placeholder="ABCDE1234F" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -348,28 +300,22 @@ function CreateOrganizationForm() {
           </section>
 
           <section className="flex flex-col gap-3" aria-labelledby="registered-address">
-            <h3 id="registered-address" className="text-xs font-medium text-muted-foreground">
+            <h3 id="registered-address" className="text-sm font-medium text-muted-foreground">
               Registered address
             </h3>
             <RegisteredFormField
-              name="addressLine1"
+              name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address line 1</FormLabel>
+                  <FormLabel>Address</FormLabel>
                   <FormControl>
-                    <Input {...field} required maxLength={200} autoComplete="address-line1" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <RegisteredFormField
-              name="addressLine2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address line 2 (optional)</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} autoComplete="address-line2" />
+                    <Textarea
+                      {...field}
+                      required
+                      maxLength={500}
+                      rows={3}
+                      autoComplete="street-address"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -392,7 +338,7 @@ function CreateOrganizationForm() {
                 <FormField
                   control={form.control}
                   name="stateCode"
-                  render={({ field, fieldState }) => (
+                  render={({ field }) => (
                     <FormItem>
                       <FormLabel>State code</FormLabel>
                       <FormControl>
@@ -405,7 +351,6 @@ function CreateOrganizationForm() {
                           onChange={field.onChange}
                           placeholder="Choose state or union territory"
                           inputRef={field.ref}
-                          aria-invalid={fieldState.invalid}
                         />
                       </FormControl>
                       <FormMessage />
@@ -487,11 +432,11 @@ function OrganizationSlugField({ onSlugEdit }: { onSlugEdit: () => void }) {
         }}
         render={({ field }) => (
           <FormItem>
-            <FormLabel className="font-mono text-xs tracking-widest text-muted-foreground">
+            <FormLabel className="font-mono text-sm tracking-widest text-muted-foreground">
               ORGANIZATION ADDRESS
             </FormLabel>
             <div className="flex items-center gap-2">
-              <span aria-hidden="true" className="font-mono text-xs text-muted-foreground">
+              <span aria-hidden="true" className="font-mono text-sm text-muted-foreground">
                 /
               </span>
               <FormControl>
@@ -515,7 +460,7 @@ function OrganizationSlugField({ onSlugEdit }: { onSlugEdit: () => void }) {
         name="slug"
         exact
         render={(value) => (
-          <p aria-live="polite" className="text-xs text-muted-foreground">
+          <p aria-live="polite" className="text-sm text-muted-foreground">
             Saved as /{slugFrom(String(value ?? "")) || "meridian-traders"} — at least{" "}
             {ORGANIZATION_SLUG_MIN_LENGTH} characters, and permanent.
           </p>

@@ -11,7 +11,7 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
 
 const sheetVariants = cva(
   // The outer radius carries the 8px border, so the inner panel corner lands on --radius-md.
-  "fixed z-50 flex flex-col overflow-hidden overscroll-contain rounded-[calc(var(--radius-md)+8px)] border-8 border-muted bg-popover text-xs/relaxed text-popover-foreground shadow-lg transition-[translate,opacity] duration-150 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+  "fixed z-50 flex flex-col overflow-hidden overscroll-contain rounded-[calc(var(--radius-md)+8px)] border-8 border-muted bg-popover text-sm/relaxed text-popover-foreground shadow-lg transition-[translate,opacity] duration-150 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",
   {
     variants: {
       side: {
@@ -117,7 +117,7 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-base font-medium text-balance", className)}
+      className={cn("text-lg font-medium text-balance", className)}
       {...props}
     />
   );
@@ -127,7 +127,7 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-xs/relaxed text-muted-foreground", className)}
+      className={cn("text-sm/relaxed text-muted-foreground", className)}
       {...props}
     />
   );

@@ -43,14 +43,9 @@ export const RECEIPT_COLUMNS = [
     meta: { className: "hidden w-32 xl:table-cell" },
     cell: ({ getValue }) => <span title={getValue()}>{getValue()}</span>,
   }),
-  col.accessor("reference", {
-    header: "Reference",
-    meta: { className: "hidden w-40 xl:table-cell" },
-    cell: ({ getValue }) => <TextOrDash value={getValue()} />,
-  }),
   col.accessor("totalPaise", {
     header: "Amount",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: receipt } }) => (
       <span className={cn("tabular-nums", struck(receipt.state))}>
         {formatMoney(receipt.totalPaise)}

@@ -81,7 +81,9 @@ export function PrintedDocument({
       >
         <div>
           <h1 style={{ fontSize: 18, lineHeight: 1.2, margin: 0 }}>{organization.legalName}</h1>
-          <p style={{ color: colors.muted, fontSize: 8, margin: "4px 0 0" }}>
+          <p
+            style={{ color: colors.muted, fontSize: 8, margin: "4px 0 0", whiteSpace: "pre-line" }}
+          >
             {[
               organization.address,
               organization.gstin ? `GSTIN ${organization.gstin}` : "",

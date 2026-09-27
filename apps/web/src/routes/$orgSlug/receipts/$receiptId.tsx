@@ -8,7 +8,7 @@ import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { cn } from "@accly/ui/lib/utils";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -17,6 +17,7 @@ import { AllocationsSection } from "@/components/allocations-section";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
+import { PartyNameLink } from "@/components/party-name-link";
 import { RecordSheet } from "@/components/record-sheet";
 import { invalidateCashState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
@@ -110,8 +111,15 @@ function ReceiptSheetRoute() {
     <RecordSheet
       rowId={receiptId}
       title={receipt.number ?? "Receipt"}
-      status={cancelled ? <Badge variant="muted">Cancelled</Badge> : null}
-      description={partyName ?? "No party"}
+      status={cancelled ? <Badge>Cancelled</Badge> : null}
+      description={
+        <PartyNameLink
+          orgSlug={orgSlug}
+          partyId={receipt.partyId}
+          name={partyName}
+          canRead={canReadParties}
+        />
+      }
       onClose={close}
       onStep={(next) =>
         void navigate({
@@ -138,19 +146,6 @@ function ReceiptSheetRoute() {
 
         <dl className="grid gap-3">
           <DetailRow label="Date">{formatBusinessDate(receipt.documentDate)}</DetailRow>
-          <DetailRow label="Party">
-            {receipt.partyId && canReadParties ? (
-              <Link
-                to="/$orgSlug/parties/$partyId"
-                params={{ orgSlug, partyId: receipt.partyId }}
-                className="underline-offset-4 hover:underline"
-              >
-                {partyName ?? "Party"}
-              </Link>
-            ) : (
-              partyName
-            )}
-          </DetailRow>
           <DetailRow label="Payment method">{receipt.printSnapshot?.paymentMethod}</DetailRow>
           <DetailRow label="Settlement">
             {receipt.settlementKind && SETTLEMENT_KIND_LABELS[receipt.settlementKind]}
@@ -158,6 +153,9 @@ function ReceiptSheetRoute() {
           <DetailRow label="Reference" mono>
             {receipt.reference}
           </DetailRow>
+          {receipt.unappliedPaise !== null ? (
+            <DetailRow label="Unapplied">{formatMoney(receipt.unappliedPaise)}</DetailRow>
+          ) : null}
         </dl>
 
         {receipt.adjustments.length > 0 ? (

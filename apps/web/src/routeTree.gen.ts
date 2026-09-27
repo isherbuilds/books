@@ -9,16 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrgSlugRouteRouteImport } from './routes/$orgSlug/route'
-import { Route as AboutRouteImport } from './routes/about'
-import { Route as BillingRouteImport } from './routes/billing'
-import { Route as ContactRouteImport } from './routes/contact'
+import { Route as SiteRouteImport } from './routes/_site'
 import { Route as CreateRouteImport } from './routes/create'
-import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as OrgSlugIndexRouteImport } from './routes/$orgSlug/index'
@@ -35,8 +30,16 @@ import { Route as OrgSlugPaymentsRouteRouteImport } from './routes/$orgSlug/paym
 import { Route as OrgSlugReceiptsRouteRouteImport } from './routes/$orgSlug/receipts/route'
 import { Route as OrgSlugReportsRouteImport } from './routes/$orgSlug/reports'
 import { Route as OrgSlugSettingsRouteRouteImport } from './routes/$orgSlug/settings/route'
-import { Route as ChangelogIndexRouteImport } from './routes/changelog.index'
-import { Route as ChangelogSlugRouteImport } from './routes/changelog.$slug'
+import { Route as SiteIndexRouteImport } from './routes/_site/index'
+import { Route as SiteAboutRouteImport } from './routes/_site/about'
+import { Route as SiteBillingRouteImport } from './routes/_site/billing'
+import { Route as SiteCasRouteImport } from './routes/_site/cas'
+import { Route as SiteContactRouteImport } from './routes/_site/contact'
+import { Route as SiteCustomersRouteImport } from './routes/_site/customers'
+import { Route as SiteEarlyAccessRouteImport } from './routes/_site/early-access'
+import { Route as SitePricingRouteImport } from './routes/_site/pricing'
+import { Route as SitePrivacyRouteImport } from './routes/_site/privacy'
+import { Route as SiteTallyRouteImport } from './routes/_site/tally'
 import { Route as OrgSlugBillsBillIdRouteImport } from './routes/$orgSlug/bills/$billId'
 import { Route as OrgSlugBillsNewRouteImport } from './routes/$orgSlug/bills_.new'
 import { Route as OrgSlugInvoicesInvoiceIdRouteImport } from './routes/$orgSlug/invoices/$invoiceId'
@@ -55,6 +58,8 @@ import { Route as OrgSlugSettingsLocksRouteImport } from './routes/$orgSlug/sett
 import { Route as OrgSlugSettingsMembersRouteImport } from './routes/$orgSlug/settings/members'
 import { Route as OrgSlugSettingsOpeningBalanceRouteImport } from './routes/$orgSlug/settings/opening-balance'
 import { Route as OrgSlugSettingsOrganizationRouteImport } from './routes/$orgSlug/settings/organization'
+import { Route as SiteChangelogIndexRouteImport } from './routes/_site/changelog.index'
+import { Route as SiteChangelogSlugRouteImport } from './routes/_site/changelog.$slug'
 import { Route as OrgSlugBillsBillIdEditRouteImport } from './routes/$orgSlug/bills_.$billId.edit'
 import { Route as OrgSlugInvoicesInvoiceIdEditRouteImport } from './routes/$orgSlug/invoices_.$invoiceId.edit'
 import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlug/parties_.$partyId.index'
@@ -63,39 +68,18 @@ import { Route as OrgSlugPartiesPartyIdTransactionsRouteImport } from './routes/
 import { Route as ApiOrgSlugInvoicesInvoiceIdPdfRouteImport } from './routes/api.$orgSlug.invoices.$invoiceId.pdf'
 import { Route as ApiOrgSlugReceiptsReceiptIdPdfRouteImport } from './routes/api.$orgSlug.receipts.$receiptId.pdf'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OrgSlugRouteRoute = OrgSlugRouteRouteImport.update({
   id: '/$orgSlug',
   path: '/$orgSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BillingRoute = BillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
+const SiteRoute = SiteRouteImport.update({
+  id: '/_site',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CreateRoute = CreateRouteImport.update({
   id: '/create',
   path: '/create',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CustomersRoute = CustomersRouteImport.update({
-  id: '/customers',
-  path: '/customers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinRoute = JoinRouteImport.update({
@@ -106,11 +90,6 @@ const JoinRoute = JoinRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -193,15 +172,55 @@ const OrgSlugSettingsRouteRoute = OrgSlugSettingsRouteRouteImport.update({
   path: '/settings',
   getParentRoute: () => OrgSlugRouteRoute,
 } as any)
-const ChangelogIndexRoute = ChangelogIndexRouteImport.update({
-  id: '/changelog/',
-  path: '/changelog/',
-  getParentRoute: () => rootRouteImport,
+const SiteIndexRoute = SiteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SiteRoute,
 } as any)
-const ChangelogSlugRoute = ChangelogSlugRouteImport.update({
-  id: '/changelog/$slug',
-  path: '/changelog/$slug',
-  getParentRoute: () => rootRouteImport,
+const SiteAboutRoute = SiteAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteBillingRoute = SiteBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteCasRoute = SiteCasRouteImport.update({
+  id: '/cas',
+  path: '/cas',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteContactRoute = SiteContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteCustomersRoute = SiteCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteEarlyAccessRoute = SiteEarlyAccessRouteImport.update({
+  id: '/early-access',
+  path: '/early-access',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SitePricingRoute = SitePricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SitePrivacyRoute = SitePrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteTallyRoute = SiteTallyRouteImport.update({
+  id: '/tally',
+  path: '/tally',
+  getParentRoute: () => SiteRoute,
 } as any)
 const OrgSlugBillsBillIdRoute = OrgSlugBillsBillIdRouteImport.update({
   id: '/$billId',
@@ -299,6 +318,16 @@ const OrgSlugSettingsOrganizationRoute =
     path: '/organization',
     getParentRoute: () => OrgSlugSettingsRouteRoute,
   } as any)
+const SiteChangelogIndexRoute = SiteChangelogIndexRouteImport.update({
+  id: '/changelog/',
+  path: '/changelog/',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteChangelogSlugRoute = SiteChangelogSlugRouteImport.update({
+  id: '/changelog/$slug',
+  path: '/changelog/$slug',
+  getParentRoute: () => SiteRoute,
+} as any)
 const OrgSlugBillsBillIdEditRoute = OrgSlugBillsBillIdEditRouteImport.update({
   id: '/bills_/$billId/edit',
   path: '/bills/$billId/edit',
@@ -342,16 +371,11 @@ const ApiOrgSlugReceiptsReceiptIdPdfRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
   '/$orgSlug': typeof OrgSlugRouteRouteWithChildren
-  '/about': typeof AboutRoute
-  '/billing': typeof BillingRoute
-  '/contact': typeof ContactRoute
+  '/': typeof SiteIndexRoute
   '/create': typeof CreateRoute
-  '/customers': typeof CustomersRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$orgSlug/bills': typeof OrgSlugBillsRouteRouteWithChildren
@@ -367,9 +391,16 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/journals': typeof OrgSlugJournalsRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/$orgSlug/reports': typeof OrgSlugReportsRoute
-  '/changelog/$slug': typeof ChangelogSlugRoute
+  '/about': typeof SiteAboutRoute
+  '/billing': typeof SiteBillingRoute
+  '/cas': typeof SiteCasRoute
+  '/contact': typeof SiteContactRoute
+  '/customers': typeof SiteCustomersRoute
+  '/early-access': typeof SiteEarlyAccessRoute
+  '/pricing': typeof SitePricingRoute
+  '/privacy': typeof SitePrivacyRoute
+  '/tally': typeof SiteTallyRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
-  '/changelog/': typeof ChangelogIndexRoute
   '/$orgSlug/bills/$billId': typeof OrgSlugBillsBillIdRoute
   '/$orgSlug/bills/new': typeof OrgSlugBillsNewRoute
   '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
@@ -387,7 +418,9 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
+  '/changelog/$slug': typeof SiteChangelogSlugRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
+  '/changelog/': typeof SiteChangelogIndexRoute
   '/$orgSlug/bills/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -397,15 +430,9 @@ export interface FileRoutesByFullPath {
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/billing': typeof BillingRoute
-  '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
-  '/customers': typeof CustomersRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$orgSlug/bills': typeof OrgSlugBillsRouteRouteWithChildren
@@ -420,9 +447,17 @@ export interface FileRoutesByTo {
   '/$orgSlug/journals': typeof OrgSlugJournalsRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/$orgSlug/reports': typeof OrgSlugReportsRoute
-  '/changelog/$slug': typeof ChangelogSlugRoute
+  '/about': typeof SiteAboutRoute
+  '/billing': typeof SiteBillingRoute
+  '/cas': typeof SiteCasRoute
+  '/contact': typeof SiteContactRoute
+  '/customers': typeof SiteCustomersRoute
+  '/early-access': typeof SiteEarlyAccessRoute
+  '/pricing': typeof SitePricingRoute
+  '/privacy': typeof SitePrivacyRoute
+  '/tally': typeof SiteTallyRoute
   '/$orgSlug': typeof OrgSlugIndexRoute
-  '/changelog': typeof ChangelogIndexRoute
+  '/': typeof SiteIndexRoute
   '/$orgSlug/bills/$billId': typeof OrgSlugBillsBillIdRoute
   '/$orgSlug/bills/new': typeof OrgSlugBillsNewRoute
   '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
@@ -439,7 +474,9 @@ export interface FileRoutesByTo {
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
+  '/changelog/$slug': typeof SiteChangelogSlugRoute
   '/$orgSlug/settings': typeof OrgSlugSettingsIndexRoute
+  '/changelog': typeof SiteChangelogIndexRoute
   '/$orgSlug/bills/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -450,16 +487,11 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/$orgSlug': typeof OrgSlugRouteRouteWithChildren
-  '/about': typeof AboutRoute
-  '/billing': typeof BillingRoute
-  '/contact': typeof ContactRoute
+  '/_site': typeof SiteRouteWithChildren
   '/create': typeof CreateRoute
-  '/customers': typeof CustomersRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$orgSlug/bills': typeof OrgSlugBillsRouteRouteWithChildren
@@ -475,9 +507,17 @@ export interface FileRoutesById {
   '/$orgSlug/journals': typeof OrgSlugJournalsRoute
   '/$orgSlug/onboarding': typeof OrgSlugOnboardingRoute
   '/$orgSlug/reports': typeof OrgSlugReportsRoute
-  '/changelog/$slug': typeof ChangelogSlugRoute
+  '/_site/about': typeof SiteAboutRoute
+  '/_site/billing': typeof SiteBillingRoute
+  '/_site/cas': typeof SiteCasRoute
+  '/_site/contact': typeof SiteContactRoute
+  '/_site/customers': typeof SiteCustomersRoute
+  '/_site/early-access': typeof SiteEarlyAccessRoute
+  '/_site/pricing': typeof SitePricingRoute
+  '/_site/privacy': typeof SitePrivacyRoute
+  '/_site/tally': typeof SiteTallyRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
-  '/changelog/': typeof ChangelogIndexRoute
+  '/_site/': typeof SiteIndexRoute
   '/$orgSlug/bills/$billId': typeof OrgSlugBillsBillIdRoute
   '/$orgSlug/bills_/new': typeof OrgSlugBillsNewRoute
   '/$orgSlug/invoices/$invoiceId': typeof OrgSlugInvoicesInvoiceIdRoute
@@ -495,7 +535,9 @@ export interface FileRoutesById {
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
   '/$orgSlug/settings/organization': typeof OrgSlugSettingsOrganizationRoute
+  '/_site/changelog/$slug': typeof SiteChangelogSlugRoute
   '/$orgSlug/settings/': typeof OrgSlugSettingsIndexRoute
+  '/_site/changelog/': typeof SiteChangelogIndexRoute
   '/$orgSlug/bills_/$billId/edit': typeof OrgSlugBillsBillIdEditRoute
   '/$orgSlug/invoices_/$invoiceId/edit': typeof OrgSlugInvoicesInvoiceIdEditRoute
   '/$orgSlug/parties_/$partyId/ledger': typeof OrgSlugPartiesPartyIdLedgerRoute
@@ -507,16 +549,11 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | '/$orgSlug'
-    | '/about'
-    | '/billing'
-    | '/contact'
+    | '/'
     | '/create'
-    | '/customers'
     | '/join'
     | '/login'
-    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/$orgSlug/bills'
@@ -532,9 +569,16 @@ export interface FileRouteTypes {
     | '/$orgSlug/journals'
     | '/$orgSlug/onboarding'
     | '/$orgSlug/reports'
-    | '/changelog/$slug'
+    | '/about'
+    | '/billing'
+    | '/cas'
+    | '/contact'
+    | '/customers'
+    | '/early-access'
+    | '/pricing'
+    | '/privacy'
+    | '/tally'
     | '/$orgSlug/'
-    | '/changelog/'
     | '/$orgSlug/bills/$billId'
     | '/$orgSlug/bills/new'
     | '/$orgSlug/invoices/$invoiceId'
@@ -552,7 +596,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
+    | '/changelog/$slug'
     | '/$orgSlug/settings/'
+    | '/changelog/'
     | '/$orgSlug/bills/$billId/edit'
     | '/$orgSlug/invoices/$invoiceId/edit'
     | '/$orgSlug/parties/$partyId/ledger'
@@ -562,15 +608,9 @@ export interface FileRouteTypes {
     | '/api/$orgSlug/receipts/$receiptId/pdf'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
-    | '/about'
-    | '/billing'
-    | '/contact'
     | '/create'
-    | '/customers'
     | '/join'
     | '/login'
-    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/$orgSlug/bills'
@@ -585,9 +625,17 @@ export interface FileRouteTypes {
     | '/$orgSlug/journals'
     | '/$orgSlug/onboarding'
     | '/$orgSlug/reports'
-    | '/changelog/$slug'
+    | '/about'
+    | '/billing'
+    | '/cas'
+    | '/contact'
+    | '/customers'
+    | '/early-access'
+    | '/pricing'
+    | '/privacy'
+    | '/tally'
     | '/$orgSlug'
-    | '/changelog'
+    | '/'
     | '/$orgSlug/bills/$billId'
     | '/$orgSlug/bills/new'
     | '/$orgSlug/invoices/$invoiceId'
@@ -604,7 +652,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
+    | '/changelog/$slug'
     | '/$orgSlug/settings'
+    | '/changelog'
     | '/$orgSlug/bills/$billId/edit'
     | '/$orgSlug/invoices/$invoiceId/edit'
     | '/$orgSlug/parties/$partyId/ledger'
@@ -614,16 +664,11 @@ export interface FileRouteTypes {
     | '/api/$orgSlug/receipts/$receiptId/pdf'
   id:
     | '__root__'
-    | '/'
     | '/$orgSlug'
-    | '/about'
-    | '/billing'
-    | '/contact'
+    | '/_site'
     | '/create'
-    | '/customers'
     | '/join'
     | '/login'
-    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/$orgSlug/bills'
@@ -639,9 +684,17 @@ export interface FileRouteTypes {
     | '/$orgSlug/journals'
     | '/$orgSlug/onboarding'
     | '/$orgSlug/reports'
-    | '/changelog/$slug'
+    | '/_site/about'
+    | '/_site/billing'
+    | '/_site/cas'
+    | '/_site/contact'
+    | '/_site/customers'
+    | '/_site/early-access'
+    | '/_site/pricing'
+    | '/_site/privacy'
+    | '/_site/tally'
     | '/$orgSlug/'
-    | '/changelog/'
+    | '/_site/'
     | '/$orgSlug/bills/$billId'
     | '/$orgSlug/bills_/new'
     | '/$orgSlug/invoices/$invoiceId'
@@ -659,7 +712,9 @@ export interface FileRouteTypes {
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
     | '/$orgSlug/settings/organization'
+    | '/_site/changelog/$slug'
     | '/$orgSlug/settings/'
+    | '/_site/changelog/'
     | '/$orgSlug/bills_/$billId/edit'
     | '/$orgSlug/invoices_/$invoiceId/edit'
     | '/$orgSlug/parties_/$partyId/ledger'
@@ -670,33 +725,19 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
   OrgSlugRouteRoute: typeof OrgSlugRouteRouteWithChildren
-  AboutRoute: typeof AboutRoute
-  BillingRoute: typeof BillingRoute
-  ContactRoute: typeof ContactRoute
+  SiteRoute: typeof SiteRouteWithChildren
   CreateRoute: typeof CreateRoute
-  CustomersRoute: typeof CustomersRoute
   JoinRoute: typeof JoinRoute
   LoginRoute: typeof LoginRoute
-  PrivacyRoute: typeof PrivacyRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  ChangelogSlugRoute: typeof ChangelogSlugRoute
-  ChangelogIndexRoute: typeof ChangelogIndexRoute
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   ApiOrgSlugReceiptsReceiptIdPdfRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/$orgSlug': {
       id: '/$orgSlug'
       path: '/$orgSlug'
@@ -704,25 +745,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/billing': {
-      id: '/billing'
-      path: '/billing'
-      fullPath: '/billing'
-      preLoaderRoute: typeof BillingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
+    '/_site': {
+      id: '/_site'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof SiteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/create': {
@@ -730,13 +757,6 @@ declare module '@tanstack/react-router' {
       path: '/create'
       fullPath: '/create'
       preLoaderRoute: typeof CreateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/customers': {
-      id: '/customers'
-      path: '/customers'
-      fullPath: '/customers'
-      preLoaderRoute: typeof CustomersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join': {
@@ -751,13 +771,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -872,19 +885,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugSettingsRouteRouteImport
       parentRoute: typeof OrgSlugRouteRoute
     }
-    '/changelog/': {
-      id: '/changelog/'
-      path: '/changelog'
-      fullPath: '/changelog/'
-      preLoaderRoute: typeof ChangelogIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_site/': {
+      id: '/_site/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof SiteIndexRouteImport
+      parentRoute: typeof SiteRoute
     }
-    '/changelog/$slug': {
-      id: '/changelog/$slug'
-      path: '/changelog/$slug'
-      fullPath: '/changelog/$slug'
-      preLoaderRoute: typeof ChangelogSlugRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_site/about': {
+      id: '/_site/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof SiteAboutRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/billing': {
+      id: '/_site/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof SiteBillingRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/cas': {
+      id: '/_site/cas'
+      path: '/cas'
+      fullPath: '/cas'
+      preLoaderRoute: typeof SiteCasRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/contact': {
+      id: '/_site/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof SiteContactRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/customers': {
+      id: '/_site/customers'
+      path: '/customers'
+      fullPath: '/customers'
+      preLoaderRoute: typeof SiteCustomersRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/early-access': {
+      id: '/_site/early-access'
+      path: '/early-access'
+      fullPath: '/early-access'
+      preLoaderRoute: typeof SiteEarlyAccessRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/pricing': {
+      id: '/_site/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof SitePricingRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/privacy': {
+      id: '/_site/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof SitePrivacyRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/tally': {
+      id: '/_site/tally'
+      path: '/tally'
+      fullPath: '/tally'
+      preLoaderRoute: typeof SiteTallyRouteImport
+      parentRoute: typeof SiteRoute
     }
     '/$orgSlug/bills/$billId': {
       id: '/$orgSlug/bills/$billId'
@@ -1011,6 +1080,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$orgSlug/settings/organization'
       preLoaderRoute: typeof OrgSlugSettingsOrganizationRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
+    }
+    '/_site/changelog/': {
+      id: '/_site/changelog/'
+      path: '/changelog'
+      fullPath: '/changelog/'
+      preLoaderRoute: typeof SiteChangelogIndexRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/changelog/$slug': {
+      id: '/_site/changelog/$slug'
+      path: '/changelog/$slug'
+      fullPath: '/changelog/$slug'
+      preLoaderRoute: typeof SiteChangelogSlugRouteImport
+      parentRoute: typeof SiteRoute
     }
     '/$orgSlug/bills_/$billId/edit': {
       id: '/$orgSlug/bills_/$billId/edit'
@@ -1214,21 +1297,46 @@ const OrgSlugRouteRouteWithChildren = OrgSlugRouteRoute._addFileChildren(
   OrgSlugRouteRouteChildren,
 )
 
+interface SiteRouteChildren {
+  SiteAboutRoute: typeof SiteAboutRoute
+  SiteBillingRoute: typeof SiteBillingRoute
+  SiteCasRoute: typeof SiteCasRoute
+  SiteContactRoute: typeof SiteContactRoute
+  SiteCustomersRoute: typeof SiteCustomersRoute
+  SiteEarlyAccessRoute: typeof SiteEarlyAccessRoute
+  SitePricingRoute: typeof SitePricingRoute
+  SitePrivacyRoute: typeof SitePrivacyRoute
+  SiteTallyRoute: typeof SiteTallyRoute
+  SiteIndexRoute: typeof SiteIndexRoute
+  SiteChangelogSlugRoute: typeof SiteChangelogSlugRoute
+  SiteChangelogIndexRoute: typeof SiteChangelogIndexRoute
+}
+
+const SiteRouteChildren: SiteRouteChildren = {
+  SiteAboutRoute: SiteAboutRoute,
+  SiteBillingRoute: SiteBillingRoute,
+  SiteCasRoute: SiteCasRoute,
+  SiteContactRoute: SiteContactRoute,
+  SiteCustomersRoute: SiteCustomersRoute,
+  SiteEarlyAccessRoute: SiteEarlyAccessRoute,
+  SitePricingRoute: SitePricingRoute,
+  SitePrivacyRoute: SitePrivacyRoute,
+  SiteTallyRoute: SiteTallyRoute,
+  SiteIndexRoute: SiteIndexRoute,
+  SiteChangelogSlugRoute: SiteChangelogSlugRoute,
+  SiteChangelogIndexRoute: SiteChangelogIndexRoute,
+}
+
+const SiteRouteWithChildren = SiteRoute._addFileChildren(SiteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
   OrgSlugRouteRoute: OrgSlugRouteRouteWithChildren,
-  AboutRoute: AboutRoute,
-  BillingRoute: BillingRoute,
-  ContactRoute: ContactRoute,
+  SiteRoute: SiteRouteWithChildren,
   CreateRoute: CreateRoute,
-  CustomersRoute: CustomersRoute,
   JoinRoute: JoinRoute,
   LoginRoute: LoginRoute,
-  PrivacyRoute: PrivacyRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  ChangelogSlugRoute: ChangelogSlugRoute,
-  ChangelogIndexRoute: ChangelogIndexRoute,
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: ApiOrgSlugInvoicesInvoiceIdPdfRoute,
   ApiOrgSlugReceiptsReceiptIdPdfRoute: ApiOrgSlugReceiptsReceiptIdPdfRoute,
 }

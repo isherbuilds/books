@@ -1,11 +1,4 @@
-import {
-  NON_NEGATIVE_MONEY_PATTERN,
-  ZERO_MONEY,
-  enteredPaise,
-  isPositiveMoney,
-  parseMoney,
-} from "@accly/api/core/money";
-import { Button } from "@accly/ui/components/button";
+import { ZERO_MONEY, enteredPaise, isPositiveMoney, parseMoney } from "@accly/api/core/money";
 import {
   Form,
   FormControl,
@@ -16,7 +9,6 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { Kbd } from "@accly/ui/components/kbd";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import {
   skipToken,
@@ -27,6 +19,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import {
@@ -35,8 +28,9 @@ import {
   reportRowErrors,
   type OpenDocument,
 } from "@/components/allocation-table";
+import { AmountInput } from "@/components/amount-input";
 import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
-import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
+import { DocumentForm, PostBar } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
 import { PaymentMethodField } from "@/components/payment-method-field";
@@ -234,8 +228,14 @@ export function PaymentForm({
 
   const post = useMutation(
     orpc.payment.post.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async ({ number }) => {
         await invalidateCashState(queryClient, orgSlug);
+        toast.success(`Payment ${number} posted`);
+        const { documentDate, paymentMethodId, partyId, partyName } = form.getValues();
+        form.reset(
+          { ...defaults(documentDate, partyId, paymentMethodId), partyName },
+          { keepSubmitCount: true },
+        );
       },
       onError: (error) =>
         handleWriteError(error, {
@@ -369,22 +369,6 @@ export function PaymentForm({
     post.mutate(payableInput);
   });
 
-  if (post.data)
-    return (
-      <PostedView
-        number={post.data.number}
-        onDone={onClose}
-        onNext={() => {
-          const { documentDate, paymentMethodId, partyId, partyName } = form.getValues();
-          form.reset(
-            { ...defaults(documentDate, partyId, paymentMethodId), partyName },
-            { keepSubmitCount: true },
-          );
-          post.reset();
-        }}
-      />
-    );
-
   const accountField = (
     name: "expenseAccountId" | "feeAccountId",
     label: string,
@@ -393,7 +377,7 @@ export function PaymentForm({
     <FormField
       control={form.control}
       name={name}
-      render={({ field, fieldState }) => (
+      render={({ field }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
@@ -408,7 +392,6 @@ export function PaymentForm({
               onSelect={(account) => field.onChange(account?.id ?? null)}
               inputRef={field.ref}
               placeholder={`Choose ${label.toLowerCase()}`}
-              aria-invalid={fieldState.invalid}
             />
           </FormControl>
           <FormMessage />
@@ -420,16 +403,11 @@ export function PaymentForm({
   return (
     <Form {...form}>
       <DocumentForm
+        // Each post remounts the fields, so the next entry starts on the first field.
+        key={post.data?.id}
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
-        footer={
-          <PostBar onClose={onClose} closeLabel="Close">
-            <Button type="submit">
-              {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
-              <Kbd>⌘↵</Kbd>
-            </Button>
-          </PostBar>
-        }
+        footer={<PostBar onClose={onClose} post={post} />}
       >
         <DocumentPartyField
           orgSlug={orgSlug}
@@ -445,15 +423,7 @@ export function PaymentForm({
               <FormItem>
                 <FormLabel>Amount</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    required
-                    inputMode="decimal"
-                    autoComplete="off"
-                    pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                    placeholder="0.00"
-                    className="tabular-nums"
-                  />
+                  <AmountInput symbol {...field} required />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -545,12 +515,7 @@ export function PaymentForm({
                   <FormItem>
                     <FormLabel>Fee amount</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        className="tabular-nums"
-                      />
+                      <AmountInput symbol {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -563,7 +528,7 @@ export function PaymentForm({
           <FormField
             control={form.control}
             name="tdsSectionId"
-            render={({ field, fieldState }) => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>TDS section (optional)</FormLabel>
                 <FormControl>
@@ -578,7 +543,6 @@ export function PaymentForm({
                     inputRef={field.ref}
                     clearable
                     placeholder="No TDS"
-                    aria-invalid={fieldState.invalid}
                   />
                 </FormControl>
                 <FormMessage />

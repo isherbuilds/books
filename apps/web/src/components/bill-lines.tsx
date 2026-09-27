@@ -1,4 +1,3 @@
-import { NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { Button } from "@accly/ui/components/button";
 import { Checkbox } from "@accly/ui/components/checkbox";
@@ -16,6 +15,7 @@ import { Trash2Icon } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { z } from "zod";
 
+import { AmountInput } from "@/components/amount-input";
 import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
@@ -81,7 +81,7 @@ function BillLineRow({
       <FormField
         control={form.control}
         name={`lines.${index}.accountId`}
-        render={({ field, fieldState }) => (
+        render={({ field }) => (
           <FormItem className="col-span-2 md:col-span-1">
             <FormLabel className="md:sr-only">Expense or asset account</FormLabel>
             <FormControl>
@@ -96,7 +96,6 @@ function BillLineRow({
                 onSelect={(account) => field.onChange(account?.id ?? "")}
                 placeholder="Choose an account"
                 inputRef={field.ref}
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             <FormMessage />
@@ -130,7 +129,7 @@ function BillLineRow({
       <FormField
         control={form.control}
         name={`lines.${index}.taxCode`}
-        render={({ field, fieldState }) => (
+        render={({ field }) => (
           <FormItem>
             <FormLabel className="md:sr-only">GST rate (optional)</FormLabel>
             <FormControl>
@@ -146,7 +145,6 @@ function BillLineRow({
                 clearable
                 placeholder="GST rate"
                 inputRef={field.ref}
-                aria-invalid={fieldState.invalid}
               />
             </FormControl>
             <FormMessage />
@@ -159,14 +157,7 @@ function BillLineRow({
           <FormItem>
             <FormLabel className="md:sr-only">Taxable amount</FormLabel>
             <FormControl>
-              <Input
-                {...field}
-                required
-                inputMode="decimal"
-                pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                placeholder="0.00"
-                className="text-right tabular-nums"
-              />
+              <AmountInput {...field} required />
             </FormControl>
             <FormMessage />
           </FormItem>

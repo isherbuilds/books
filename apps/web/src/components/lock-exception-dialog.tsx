@@ -135,7 +135,7 @@ export function LockExceptionDialog({
                   <FormField
                     control={form.control}
                     name="userId"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Member</FormLabel>
                         <FormControl>
@@ -150,7 +150,6 @@ export function LockExceptionDialog({
                             onSelect={(member) => field.onChange(member?.userId ?? "")}
                             inputRef={field.ref}
                             placeholder="Choose a member"
-                            aria-invalid={fieldState.invalid}
                           />
                         </FormControl>
                         <FormMessage />

@@ -22,5 +22,12 @@ export const paymentMethodListOptions = (orgSlug: string) => ({
   staleTime: 5 * 60_000,
 });
 
+/** The methods money can move through now: active, in an active account. */
+export const activePaymentMethodsOptions = (orgSlug: string) => ({
+  ...paymentMethodListOptions(orgSlug),
+  select: (rows: Awaited<ReturnType<AppRouterClient["paymentMethod"]["list"]>>) =>
+    rows.filter((method) => method.active && method.accountActive),
+});
+
 export const receiptDetailOptions = (orgSlug: string, receiptId: string) =>
   orpc.receipt.get.queryOptions({ input: { orgSlug, receiptId } });

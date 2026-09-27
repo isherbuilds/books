@@ -38,8 +38,8 @@ export const Route = createFileRoute("/$orgSlug/banking")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, BANKS_PERMISSION);
     await Promise.all([
-      queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {}),
-      queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
+      queryClient.prefetchQuery(moneyBalanceOptions(orgSlug)),
+      queryClient.prefetchQuery(paymentMethodListOptions(orgSlug)),
       // The account Sheet's parent list; a failed load reaches the route error view.
       loadRouteQuery(queryClient.query(accountListOptions(orgSlug))),
     ]);
@@ -140,10 +140,10 @@ function BankingRoute() {
                       <TableCell>
                         <span className="inline-flex items-center gap-1">
                           {account.name}
-                          {account.active ? null : <Badge variant="muted">Inactive</Badge>}
+                          {account.active ? null : <Badge>Inactive</Badge>}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-xs font-medium tabular-nums">
+                      <TableCell className="text-right text-sm font-medium tabular-nums">
                         {formatMoney(account.balancePaise)}
                       </TableCell>
                     </TableRow>
@@ -182,9 +182,7 @@ function BankingRoute() {
                     <TableCell>
                       {/* Reactivating a method does not reactivate its account, and posting
                           refuses an inactive account, so say which one blocks it. */}
-                      <Badge
-                        variant={method.active && method.accountActive ? "secondary" : "muted"}
-                      >
+                      <Badge variant={method.active && !method.accountActive ? "warn" : "neutral"}>
                         {method.active
                           ? method.accountActive
                             ? "Active"

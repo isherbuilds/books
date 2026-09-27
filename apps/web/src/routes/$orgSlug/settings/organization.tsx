@@ -1,7 +1,6 @@
 import {
   deriveOrganizationIdentity,
   documentPrefix,
-  gstinParts,
   optionalGstin,
   optionalPan,
   optionalStateCode,
@@ -11,7 +10,6 @@ import type { SettingsFields } from "@accly/api/routers/settings";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,12 +18,14 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { SubmitButton } from "@accly/ui/components/submit-button";
+import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { GstinField, IdInput } from "@/components/id-input";
 import { MONTH_OPTIONS, OptionField, STATE_OPTIONS } from "@/components/option-field";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     // The page is a save form, so the tab strip gates it on `update` too.
     await requireOrgPermission(queryClient, orgSlug, { settings: ["update"] });
-    await queryClient.query(settingsOptions(orgSlug)).catch(() => {});
+    await queryClient.prefetchQuery(settingsOptions(orgSlug));
   },
   component: SettingsRoute,
 });
@@ -67,16 +67,11 @@ const formSchema = z
     pan: optionalPan,
     gstin: optionalGstin.unwrap(),
     stateCode: optionalStateCode,
-    addressLine1: z
+    address: z
       .string()
       .trim()
       .min(1, "Enter the registered address")
-      .max(200, "Keep the address under 200 characters"),
-    addressLine2: z
-      .string()
-      .trim()
-      .max(200, "Keep the address under 200 characters")
-      .transform((value) => value || undefined),
+      .max(500, "Keep the address under 500 characters"),
     city: z.string().trim().min(1, "Enter the city").max(120, "Keep the city under 120 characters"),
     pinCode: indianPinCode,
     financialYearStart: z
@@ -98,7 +93,6 @@ function toFormValues(settings: SettingsFields) {
   return {
     ...settings,
     gstin: settings.gstin ?? "",
-    addressLine2: settings.addressLine2 ?? "",
     financialYearStart: String(settings.financialYearStart),
   };
 }
@@ -164,7 +158,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
             otherwise discard anything typed during the request. */}
         <fieldset disabled={update.isPending} className="contents">
           <section className="flex flex-col gap-3">
-            <h2 className="text-xs font-medium text-muted-foreground">Organization</h2>
+            <h2 className="text-sm font-medium text-muted-foreground">Organization</h2>
             <RegisteredFormField
               name="legalName"
               render={({ field }) => (
@@ -184,36 +178,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
               )}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <RegisteredFormField
-                name="gstin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>GSTIN (optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="font-mono uppercase"
-                        maxLength={15}
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        placeholder="27ABCDE1234F1Z5"
-                        onChange={(event) => {
-                          void field.onChange(event);
-                          const parts = gstinParts(event.currentTarget.value);
-
-                          if (!parts) return;
-
-                          form.setValue("stateCode", parts.stateCode, { shouldDirty: true });
-                          form.setValue("pan", parts.pan, { shouldDirty: true });
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>State and PAN come from the GSTIN.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <GstinField label="GSTIN (optional)" placeholder="27ABCDE1234F1Z5" />
               {gstin.trim() === "" ? (
                 <RegisteredFormField
                   name="pan"
@@ -221,16 +186,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                     <FormItem>
                       <FormLabel>PAN</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          required
-                          className="font-mono uppercase"
-                          maxLength={10}
-                          autoComplete="off"
-                          autoCapitalize="characters"
-                          spellCheck={false}
-                          placeholder="ABCDE1234F"
-                        />
+                        <IdInput {...field} required maxLength={10} placeholder="ABCDE1234F" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -239,24 +195,18 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
               ) : null}
             </div>
             <RegisteredFormField
-              name="addressLine1"
+              name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address line 1</FormLabel>
+                  <FormLabel>Address</FormLabel>
                   <FormControl>
-                    <Input {...field} required maxLength={200} autoComplete="address-line1" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <RegisteredFormField
-              name="addressLine2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address line 2 (optional)</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} autoComplete="address-line2" />
+                    <Textarea
+                      {...field}
+                      required
+                      maxLength={500}
+                      rows={3}
+                      autoComplete="street-address"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -279,7 +229,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                 <FormField
                   control={form.control}
                   name="stateCode"
-                  render={({ field, fieldState }) => (
+                  render={({ field }) => (
                     <FormItem>
                       <FormLabel>State code</FormLabel>
                       <FormControl>
@@ -292,7 +242,6 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                           onChange={field.onChange}
                           placeholder="Choose a state"
                           inputRef={field.ref}
-                          aria-invalid={fieldState.invalid}
                         />
                       </FormControl>
                       <FormMessage />
@@ -325,7 +274,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-xs font-medium text-muted-foreground">Document numbering</h2>
+            <h2 className="text-sm font-medium text-muted-foreground">Document numbering</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               {PREFIX_FIELDS.map(([name, label]) => (
                 <RegisteredFormField
@@ -346,7 +295,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
             <FormField
               control={form.control}
               name="financialYearStart"
-              render={({ field, fieldState }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fiscal year starts in</FormLabel>
                   <FormControl>
@@ -357,7 +306,6 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
                       onChange={field.onChange}
                       placeholder="Choose a month"
                       inputRef={field.ref}
-                      aria-invalid={fieldState.invalid}
                     />
                   </FormControl>
                   <FormMessage />

@@ -1,11 +1,12 @@
 import { beforeAll, expect, test } from "bun:test";
 
+import { MAX_INVOICE_QUANTITY } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { documents } from "@accly/db/schema/documents";
 import { items } from "@accly/db/schema/items";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
 import { required } from "../support/assert";
@@ -108,7 +109,7 @@ beforeAll(async () => {
     name: "Maharashtra Customer",
     roles: ["customer"],
     stateCode: "27",
-    addressLine1: "2 Customer Road",
+    address: "2 Customer Road",
     city: "Pune",
     pinCode: "411001",
   });
@@ -564,7 +565,7 @@ test("an unregistered organization invoices a date with no effective rate", asyn
       name: "Unregistered Customer",
       roles: ["customer"],
       stateCode: "27",
-      addressLine1: "3 Customer Road",
+      address: "3 Customer Road",
       city: "Pune",
       pinCode: "411001",
     }),
@@ -632,6 +633,74 @@ test("header discount splits before GST, round-trips drafts, and rejects excess"
   );
 });
 
+test("a quote equals the posted totals and writes nothing", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    discount: "150.01",
+    lines: [
+      { kind: "item" as const, itemId: taxableItem.id, quantity: 1 },
+      { kind: "item" as const, itemId: exemptItem.id, quantity: 1 },
+    ],
+  };
+
+  const [before] = await db.select({ count: count() }).from(documents);
+  const quote = await api.invoice.quote(fields);
+  const [after] = await db.select({ count: count() }).from(documents);
+
+  expect(after).toEqual(before);
+  expect(quote.lines).toEqual([
+    { rateBasisPoints: 1_800, grossPaise: 106_199n },
+    { rateBasisPoints: null, grossPaise: 45_000n },
+  ]);
+
+  const posted = await api.invoice.post(fields);
+  const invoice = await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id });
+
+  expect(quote).toMatchObject({
+    discountPaise: invoice.discountPaise,
+    taxablePaise: invoice.totals.taxablePaise,
+    cgstPaise: invoice.totals.cgstPaise,
+    sgstPaise: invoice.totals.sgstPaise,
+    igstPaise: invoice.totals.igstPaise,
+    roundOffPaise: invoice.roundOffPaise,
+    totalPaise: invoice.totalPaise,
+  });
+});
+
+test("a percentage discount is worked out on the subtotal and reopens as a percentage", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 3 }],
+  };
+
+  const draft = await api.invoice.saveDraft({ ...fields, discountPercent: "12.5" });
+  const saved = await api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id });
+
+  expect(saved).toMatchObject({ discountPaise: 18_750n, roundOffPaise: 50n, totalPaise: 131_300n });
+  expect(saved.printSnapshot?.discountBasisPoints).toBe(1_250);
+});
+
+test("a discount amount and percentage cannot both be submitted", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    discount: "10.00",
+    discountPercent: "10",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  };
+
+  await expectReason(api.invoice.quote(fields), "DISCOUNT_CONFLICT");
+  await expectReason(api.invoice.saveDraft(fields), "DISCOUNT_CONFLICT");
+  await expectReason(api.invoice.post(fields), "DISCOUNT_CONFLICT");
+});
+
 test("counter sale posts an allocated receipt in the invoice transaction", async () => {
   const cash = required(
     (await api.paymentMethod.list({ orgSlug: organization.slug })).find(
@@ -646,10 +715,10 @@ test("counter sale posts an allocated receipt in the invoice transaction", async
     placeOfSupplyStateCode: "27",
     documentDate: "2026-09-12",
     lines: [{ kind: "item", itemId: exemptItem.id, quantity: 1 }],
-    settle: { paymentMethodId: cash.id, reference: "COUNTER" },
+    settle: { payments: [{ paymentMethodId: cash.id, amount: "500.00", reference: "COUNTER" }] },
   });
 
-  const receipt = required(posted.receipt, "counter-sale receipt");
+  const receipt = required(posted.receipts[0], "counter-sale receipt");
   expect(receipt.number.startsWith("RCT")).toBe(true);
   expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
     {
@@ -672,14 +741,71 @@ test("counter sale posts an allocated receipt in the invoice transaction", async
     placeOfSupplyStateCode: "27",
     documentDate: "2026-09-12",
     lines: [{ kind: "item", itemId: exemptItem.id, quantity: 1 }],
-    settle: { paymentMethodId: cash.id, reference: "" },
+    settle: { payments: [{ paymentMethodId: cash.id, amount: "500.00", reference: "" }] },
   });
 
-  const blankReceipt = required(blankReference.receipt, "blank-reference receipt");
+  const blankReceipt = required(blankReference.receipts[0], "blank-reference receipt");
 
   expect(
     await api.receipt.get({ orgSlug: organization.slug, receiptId: blankReceipt.id }),
   ).toMatchObject({ reference: null });
+});
+
+test("a counter sale splits across methods, may fall short, and never exceeds the total", async () => {
+  const methods = await api.paymentMethod.list({ orgSlug: organization.slug });
+
+  const cash = required(
+    methods.find(({ name }) => name === "Cash"),
+    "cash method",
+  );
+
+  const other = required(
+    methods.find(({ id, active }) => id !== cash.id && active),
+    "second method",
+  );
+
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  };
+
+  const posted = await api.invoice.post({
+    ...fields,
+    settle: {
+      payments: [
+        { paymentMethodId: cash.id, amount: "200.00" },
+        { paymentMethodId: other.id, amount: "100.00", reference: "UPI-1" },
+      ],
+    },
+  });
+
+  expect(posted.receipts).toHaveLength(2);
+  expect(await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id })).toMatchObject(
+    {
+      outstandingPaise: 20_000n,
+      allocations: expect.arrayContaining([
+        expect.objectContaining({ otherDocumentId: posted.receipts[0]!.id, amountPaise: 20_000n }),
+        expect.objectContaining({ otherDocumentId: posted.receipts[1]!.id, amountPaise: 10_000n }),
+      ]),
+    },
+  );
+
+  const [before] = await db.select({ count: count() }).from(documents);
+
+  await expectReason(
+    api.invoice.post({
+      ...fields,
+      settle: { payments: [{ paymentMethodId: cash.id, amount: "500.01" }] },
+    }),
+    "SETTLEMENT_EXCEEDS_TOTAL",
+  );
+
+  const [after] = await db.select({ count: count() }).from(documents);
+
+  expect(after).toEqual(before);
 });
 
 test("amending cancels the invoice and copies its discounted lines to an editable draft", async () => {
@@ -710,6 +836,91 @@ test("amending cancels the invoice and copies its discounted lines to an editabl
   });
 });
 
+test("a line keeps the MRP its item had when it posted", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    name: "Packaged tablets",
+    unitPrice: "90.00",
+    mrp: "100.00",
+    incomeAccountId: exemptIncome.id,
+  };
+
+  const item = await api.item.create(fields);
+
+  const posted = await api.invoice.post({
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    lines: [{ kind: "item", itemId: item.id, quantity: 1 }],
+  });
+
+  await api.item.update({
+    ...fields,
+    itemId: item.id,
+    updatedAt: item.updatedAt.toISOString(),
+    mrp: "120.00",
+  });
+
+  const invoice = await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id });
+
+  expect(invoice.lines).toEqual([expect.objectContaining({ mrpPaise: 10_000n })]);
+});
+
+test("a ship-to address survives draft, post and amend, and a blank one is refused", async () => {
+  const shipTo = { address: "Plot 4, MIDC\nNagpur 440016", stateCode: "27" };
+
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    documentDate: "2026-09-12",
+    shipTo,
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  };
+
+  const draft = await api.invoice.saveDraft(fields);
+
+  expect(
+    (await api.invoice.get({ orgSlug: organization.slug, invoiceId: draft.id })).printSnapshot,
+  ).toMatchObject({ shipTo });
+
+  const posted = await api.invoice.post({ ...fields, draft });
+
+  const amended = await api.invoice.amend({
+    orgSlug: organization.slug,
+    invoiceId: posted.id,
+    reason: "Correct the delivery address",
+  });
+
+  expect(
+    (await api.invoice.get({ orgSlug: organization.slug, invoiceId: amended.id })).printSnapshot,
+  ).toMatchObject({ shipTo });
+
+  await expectORPCCode(
+    api.invoice.post({ ...fields, shipTo: { address: "  ", stateCode: "27" } }),
+    "BAD_REQUEST",
+  );
+});
+
+test("invoice quantities above the shared editor limit are refused", async () => {
+  await expectORPCCode(
+    api.invoice.quote({
+      orgSlug: organization.slug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [
+        {
+          kind: "item",
+          itemId: exemptItem.id,
+          quantity: MAX_INVOICE_QUANTITY + 1,
+        },
+      ],
+    }),
+    "BAD_REQUEST",
+  );
+});
+
 test("a line amount beyond the storable range is refused, not left to the database", async () => {
   await expectReason(
     api.invoice.post({
@@ -727,4 +938,25 @@ test("a line amount beyond the storable range is refused, not left to the databa
     }),
     "INVOICE_AMOUNT_TOO_LARGE",
   );
+});
+
+test("a percentage discount beyond the storable range is refused by quote, draft and post", async () => {
+  const line = {
+    kind: "item" as const,
+    itemId: exemptItem.id,
+    quantity: 10_000,
+    unitPrice: "9000000000000",
+  };
+
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    discountPercent: "90",
+    lines: [line, line],
+  };
+
+  await expectReason(api.invoice.quote(fields), "INVOICE_AMOUNT_TOO_LARGE");
+  await expectReason(api.invoice.saveDraft(fields), "INVOICE_AMOUNT_TOO_LARGE");
+  await expectReason(api.invoice.post(fields), "INVOICE_AMOUNT_TOO_LARGE");
 });

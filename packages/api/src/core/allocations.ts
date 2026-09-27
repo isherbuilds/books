@@ -182,8 +182,6 @@ export async function applyAllocations(
     requiredSourceType?: "creditNote";
   },
 ): Promise<{ id: string; amountPaise: bigint }[]> {
-  if (args.pairs.length === 0)
-    throw badRequest("ALLOCATION_TARGET_INVALID", "Choose an allocation.");
   const keys = args.pairs.map((pair) => `${pair.sourceDocumentId}:${pair.targetDocumentId}`);
 
   if (new Set(keys).size !== keys.length || args.pairs.some((pair) => pair.amountPaise <= 0n)) {

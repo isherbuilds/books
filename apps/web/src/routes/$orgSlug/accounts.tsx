@@ -40,7 +40,7 @@ export const Route = createFileRoute("/$orgSlug/accounts")({
   }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { account: ["read"] });
-    await queryClient.query(accountListOptions(orgSlug)).catch(() => {});
+    await queryClient.prefetchQuery(accountListOptions(orgSlug));
   },
   component: AccountsRoute,
 });

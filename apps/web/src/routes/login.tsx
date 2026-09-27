@@ -35,7 +35,7 @@ function LoginRoute() {
           <p className="max-w-md text-xl leading-snug font-medium tracking-tight text-white">
             From the first token of the morning to the day-close, one ledger.
           </p>
-          <p className="text-sm text-white/50">
+          <p className="text-base text-white/50">
             Customers, invoicing, payments and reports for the whole business.
           </p>
         </div>
@@ -46,7 +46,7 @@ function LoginRoute() {
           <div className="flex flex-1 flex-col justify-center gap-6">
             <div className="flex flex-col gap-1 text-center">
               <h1 className="text-lg font-medium tracking-tight">Sign in</h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 New here? Open your business invitation to create an account.
               </p>
             </div>

@@ -43,8 +43,7 @@ export const organizationSettings = pgTable(
     financialYearStart: integer("financial_year_start")
       .notNull()
       .default(SETTINGS_DEFAULTS.financialYearStart),
-    addressLine1: text("address_line_1").notNull(),
-    addressLine2: text("address_line_2"),
+    address: text("address").notNull(),
     city: text("city").notNull(),
     pinCode: text("pin_code").notNull(),
     invoicePrefix: text("invoice_prefix").notNull(),

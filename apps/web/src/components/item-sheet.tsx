@@ -1,4 +1,9 @@
-import { formatDecimal, NON_NEGATIVE_MONEY_PATTERN } from "@accly/api/core/money";
+import {
+  formatDecimal,
+  NON_NEGATIVE_MONEY_PATTERN,
+  isPositiveMoney,
+  parseMoney,
+} from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
 import {
   Form,
@@ -18,6 +23,7 @@ import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { AmountInput } from "@/components/amount-input";
 import { FormSheet } from "@/components/form-sheet";
 import { LinkField } from "@/components/link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -45,6 +51,14 @@ const itemSchema = z.object({
     ),
   unit: z.string().trim().max(20, "Keep the unit under 20 characters"),
   unitPrice: z.string().regex(NON_NEGATIVE_MONEY_PATTERN, "Enter a valid amount"),
+  mrp: z
+    .string()
+    .refine(
+      (value) =>
+        value === "" ||
+        (NON_NEGATIVE_MONEY_PATTERN.test(value) && isPositiveMoney(parseMoney(value))),
+      "Enter an MRP above zero, or leave it empty",
+    ),
   incomeAccountId: z.string().min(1, "Choose an income account"),
   taxCode: z.string(),
 });
@@ -59,6 +73,7 @@ function defaults(item: ItemListRow | undefined, seedName: string | undefined): 
     hsnSac: item?.hsnSac ?? "",
     unit: item?.unit ?? "",
     unitPrice: item ? formatDecimal(item.unitPricePaise) : "",
+    mrp: item?.mrpPaise == null ? "" : formatDecimal(item.mrpPaise),
     incomeAccountId: item?.incomeAccountId ?? "",
     taxCode: item?.taxCode ?? "",
   };
@@ -161,6 +176,7 @@ function ItemForm({
       hsnSac: values.hsnSac || undefined,
       unit: values.unit || undefined,
       unitPrice: values.unitPrice,
+      mrp: values.mrp || undefined,
       incomeAccountId: values.incomeAccountId,
       taxCode: values.taxCode || undefined,
     };
@@ -226,31 +242,37 @@ function ItemForm({
               />
             </div>
 
-            <RegisteredFormField
-              name="unitPrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Unit price</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      required
-                      inputMode="decimal"
-                      autoComplete="off"
-                      pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                      placeholder="0.00"
-                      className="tabular-nums"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <RegisteredFormField
+                name="unitPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit price</FormLabel>
+                    <FormControl>
+                      <AmountInput symbol {...field} required />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <RegisteredFormField
+                name="mrp"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>MRP (optional)</FormLabel>
+                    <FormControl>
+                      <AmountInput symbol {...field} placeholder="Packaged goods" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
               name="incomeAccountId"
-              render={({ field, fieldState }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Income account</FormLabel>
                   <FormControl>
@@ -271,7 +293,6 @@ function ItemForm({
                       }}
                       inputRef={field.ref}
                       placeholder="Choose an income account"
-                      aria-invalid={fieldState.invalid}
                     />
                   </FormControl>
                   <FormMessage />
@@ -283,7 +304,7 @@ function ItemForm({
               <FormField
                 control={form.control}
                 name="taxCode"
-                render={({ field, fieldState }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>GST rate</FormLabel>
                     <FormControl>
@@ -297,7 +318,6 @@ function ItemForm({
                         onSelect={(rate) => field.onChange(rate?.code ?? "")}
                         placeholder="Choose a GST rate"
                         inputRef={field.ref}
-                        aria-invalid={fieldState.invalid}
                       />
                     </FormControl>
                     <FormMessage />

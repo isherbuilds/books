@@ -92,7 +92,7 @@ function NoteSheetRoute() {
       rowId={noteId}
       title={note.number}
       status={
-        <Badge variant={note.state === "cancelled" ? "muted" : "outline"}>
+        <Badge variant={note.state === "cancelled" ? "neutral" : "settled"}>
           {note.state === "cancelled" ? "Cancelled" : "Posted"}
         </Badge>
       }
@@ -144,7 +144,7 @@ function NoteSheetRoute() {
         </section>
         <AllocationsSection orgSlug={orgSlug} allocations={note.allocations} />
         <Separator />
-        <section className="grid gap-2">
+        <section className="grid grid-cols-1 gap-2">
           <h3 className="text-muted-foreground">Lines</h3>
           <div className="hidden md:block">
             <Table>

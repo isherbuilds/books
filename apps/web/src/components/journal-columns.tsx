@@ -5,7 +5,7 @@ import { cn } from "@accly/ui/lib/utils";
 import type { RouterClient } from "@orpc/server";
 import { createColumnHelper } from "@tanstack/react-table";
 
-import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
+import { DATA_TABLE_FEATURES } from "@/components/data-table/data-table";
 import { CopyMenuItem, RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { CancelledBadge, struck } from "@/components/document-columns";
 
@@ -41,14 +41,9 @@ export const JOURNAL_COLUMNS = [
       );
     },
   }),
-  col.accessor("reference", {
-    header: "Reference",
-    meta: { className: "hidden w-40 xl:table-cell" },
-    cell: ({ getValue }) => <TextOrDash value={getValue()} />,
-  }),
   col.accessor("totalPaise", {
     header: "Amount",
-    meta: { align: "right", className: "w-32" },
+    meta: { align: "right", className: "w-money" },
     cell: ({ row: { original: journal } }) => (
       <span className={cn("tabular-nums", struck(journal.state))}>
         {formatMoney(journal.totalPaise)}
@@ -79,7 +74,6 @@ export function JournalCard({ journal }: { journal: JournalRow }) {
       </div>
       <p className="truncate text-muted-foreground">
         {journal.narration ?? "No narration"} · {formatBusinessDay(journal.documentDate)}
-        {journal.reference ? ` · ${journal.reference}` : null}
       </p>
     </>
   );

@@ -80,12 +80,13 @@ Check UI items in the running app on desktop and mobile, in both themes.
   so the running-app check could not exercise this transition.
 - **Limits rule ([#17](https://github.com/isherbuilds/books/issues/17))**:
   Verification. Members pages 25 at a time with Load more, keeps `q` in the
-  URL and renders cards on mobile; Link Fields show at most eight matches;
+  URL and renders cards on mobile; Link Fields show at most six rows, including
+  on initial open;
   past 5,000 parties the Party Link Field, palette and parties page search
   the server. Remaining: check each in the running app on desktop and mobile
   in both themes, and the party search on an Organization seeded past 5,000
-  parties. The register party filter menus and chips still read the first
-  5,000 parties.
+  parties. Register Party menus are removed; a linked Party filter resolves its
+  chip by one Party id.
 - **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
   sort measurement, the H4 runs, and slice 5 import. Slice 4 is implemented
   and runtime verified with accounting-core slices 4a and 4b-i; slice 5's
@@ -93,8 +94,15 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **Invoice pages**: Verification. On the production build at 1440 and 390 px,
   light and dark: New opens `/invoices/new`, Save Draft moves to
   `/invoices/$invoiceId/edit`, Post opens the record Sheet, and a draft reopens
-  from the record with every field. Open: keyboard-only entry, Post and next,
+  from the record with every field. Open: keyboard-only entry, the post toast and reset,
   a stale-draft CONFLICT closing the editor, and a real phone.
+- **[Invoice editor](./specs/invoice-editor.md)** and
+  **[ship-to](./specs/invoice-ship-to.md)**: Verification. Built and checked
+  in the dev app at desktop and 390 px (light and dark): Bill-to card, ship-to,
+  live quote, discount, split and partial payment, MRP hint, draft reopen, and
+  the PDF. Open: a GST-registered organization's CGST/SGST and IGST quote and
+  the PDF's reverse-charge line in the app (covered by tests), and a reopened
+  draft line repeating the item name as its description.
 - **Bills, payments and notes**: Verification. Open: hands-on form entry for
   Bill lines, TDS and ITC; Payment against Bills and as a refund; Credit and
   Debit Note pages; Invoice discount, counter sale and amend; and Receipt
@@ -115,6 +123,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **Organization settings**: Verification. After `bun run db:seed -- --reset`
   (it deletes local data), create an organization, then save and reload its
   settings, including the Payment prefix.
+- **Single address field**: Verification. Party and Organization forms now use
+  one multiline Address field. The receipt and tenancy tests pass. The local
+  database has the regenerated baseline; reset any other disposable database
+  still on the old baseline before migration. Check create, edit, save and
+  reload on desktop and mobile in both themes.
 - **Banking**: Verification. Add account opens the Add account Sheet in
   Banking with Bank Accounts chosen; saving it opens Add payment method with
   the new account chosen. Open: add a bank account and its method that way,
@@ -163,10 +176,16 @@ Check UI items in the running app on desktop and mobile, in both themes.
   [Release evidence](./operations.md#production-hardening).
 - **Pilot readiness**: Active. A named owner records every
   [gate](./operations.md#pilot-readiness).
-- **Marketing captures**: Verification. The public pages, FAQ and changelog
-  describe the accounting product, with captures of the Invoices, Parties and
-  Receipts screens from local seed data. Open: a founder's review of the copy,
-  and the Product menu's single-shelf layout on desktop.
+- **[Marketing homepage](./research/launch-and-homepage-2026-09-26.md)**:
+  Verification. The Edernal preview uses the selected copy and palette, an
+  8.1-second story loop and product previews. The owner has accepted its
+  future-feature claims while the site stays private: production builds send
+  `/` to login, return Not Found for other site routes and omit them from the
+  sitemap. WhatsApp forms open a
+  prepared message; the visitor must press Send. Open: confirm the public
+  contact settings, founder copy acceptance, qualified-conversion evidence and
+  the product capabilities promised before public launch. Check the Product
+  menu's single-shelf layout on desktop.
 - **Midday licence**: Blocked on Midday Labs. A written licence comes before the
   first external release.
 

@@ -10,7 +10,7 @@ export function struck(state: DocumentState) {
 
 // Only the exception is marked: a posted document carries no badge.
 export function CancelledBadge({ state }: { state: DocumentState }) {
-  return state === "cancelled" ? <Badge variant="muted">Cancelled</Badge> : null;
+  return state === "cancelled" ? <Badge>Cancelled</Badge> : null;
 }
 
 export const DOCUMENT_STATE_LABELS = {
@@ -28,7 +28,8 @@ export const SETTLEMENT_KIND_LABELS = {
 
 const SETTLEMENT_LABELS = { paid: "Paid", partPaid: "Part paid", unpaid: "Unpaid" } as const;
 
-const ALERT = "ring-status-alert-border bg-status-alert-surface text-status-alert";
+// Settled is paid, still due is provisional, part paid stays neutral (design §5).
+const SETTLEMENT_TONES = { paid: "settled", partPaid: "neutral", unpaid: "warn" } as const;
 
 /** A posted Invoice or Bill shows how far it is settled; a draft or cancelled one, its state. */
 export function ClaimStatus({
@@ -42,7 +43,7 @@ export function ClaimStatus({
 }) {
   if (claim.state !== "posted") {
     return (
-      <Badge variant={claim.state === "cancelled" ? "muted" : "outline"}>
+      <Badge variant={claim.state === "cancelled" ? "neutral" : "warn"}>
         {DOCUMENT_STATE_LABELS[claim.state]}
       </Badge>
     );
@@ -50,21 +51,10 @@ export function ClaimStatus({
 
   return (
     <span className="flex items-center gap-1">
-      <Badge
-        variant="outline"
-        className={
-          claim.settlementStatus === "paid"
-            ? "ring-status-clear-border bg-status-clear-surface text-status-clear"
-            : ALERT
-        }
-      >
+      <Badge variant={SETTLEMENT_TONES[claim.settlementStatus]}>
         {SETTLEMENT_LABELS[claim.settlementStatus]}
       </Badge>
-      {claim.overdue ? (
-        <Badge variant="outline" className={ALERT}>
-          Overdue
-        </Badge>
-      ) : null}
+      {claim.overdue ? <Badge variant="danger">Overdue</Badge> : null}
     </span>
   );
 }

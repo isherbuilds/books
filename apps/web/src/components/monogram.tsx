@@ -7,7 +7,7 @@ export function Monogram({ label, tone = "muted" }: { label: string; tone?: "mut
     <span
       aria-hidden
       className={cn(
-        "grid size-6 shrink-0 place-items-center rounded-md text-xs font-medium",
+        "grid size-6 shrink-0 place-items-center rounded-md text-sm font-medium",
         tone === "accent" ? "bg-sidebar-accent text-sidebar-foreground" : "bg-card",
       )}
     >

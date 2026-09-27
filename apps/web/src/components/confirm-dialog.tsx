@@ -17,37 +17,6 @@ type Question = {
   confirmLabel: string;
 };
 
-// Internal to `useConfirm`; callers use that hook or `ReasonDialog`.
-function ConfirmDialog({
-  open,
-  title,
-  description,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-}: Question & { open: boolean; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <ClientOnly fallback={null}>
-      <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button variant="destructive" autoFocus onClick={onConfirm}>
-              {confirmLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </ClientOnly>
-  );
-}
-
 type ReasonQuestion = Question & {
   placeholder: string;
   /** The button that leaves the record as it is: "Keep invoice". */
@@ -103,7 +72,7 @@ function ReasonBody({
 
   return (
     <>
-      <label className="grid gap-2 text-xs">
+      <label className="grid gap-2 text-sm">
         <span>Reason</span>
         <Textarea
           required
@@ -132,27 +101,39 @@ function ReasonBody({
   );
 }
 
-type Pending = Question & { run: () => void; cancel?: () => void };
+type Pending = Question & { run: () => void };
 
+/** A destructive yes/no question; `ReasonDialog` asks for a written reason instead. */
 export function useConfirm(): [(action: Pending) => void, ReactNode] {
   const [pending, setPending] = useState<Pending | null>(null);
   const close = () => setPending(null);
 
   const dialog = (
-    <ConfirmDialog
-      open={pending !== null}
-      title={pending?.title ?? ""}
-      description={pending?.description}
-      confirmLabel={pending?.confirmLabel ?? ""}
-      onConfirm={() => {
-        pending?.run();
-        close();
-      }}
-      onCancel={() => {
-        pending?.cancel?.();
-        close();
-      }}
-    />
+    <ClientOnly fallback={null}>
+      <Dialog open={pending !== null} onOpenChange={(next) => !next && close()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{pending?.title}</DialogTitle>
+            <DialogDescription>{pending?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={close}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              autoFocus
+              onClick={() => {
+                pending?.run();
+                close();
+              }}
+            >
+              {pending?.confirmLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </ClientOnly>
   );
 
   return [setPending, dialog];

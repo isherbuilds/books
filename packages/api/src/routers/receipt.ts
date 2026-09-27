@@ -1,7 +1,8 @@
 import { db, type DbTransaction } from "@accly/db";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
+import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -14,6 +15,7 @@ import {
   receiptTax,
   type PostDocumentInput,
 } from "../core/documents";
+import { settlementPaise } from "../core/allocations";
 import { formatDecimal, sumPaise } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
@@ -31,7 +33,9 @@ import {
   adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
-  listSettlements,
+  pageOf,
+  settlementListRow,
+  settlementListWhere,
   orgSettings,
   settlementDetail,
 } from "../lib/settlements";
@@ -297,20 +301,48 @@ export const receiptRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const [detail, allocations, adjustments] = await Promise.all([
+      const [detail, allocations, adjustments, [credit]] = await Promise.all([
         settlementDetail(orgId, "receipt", input.receiptId),
         allocationsOf(db, orgId, input.receiptId, "source"),
         adjustmentLinesOf(orgId, input.receiptId),
+        db
+          .select({ unappliedPaise: settlementPaise(orgId, "source").balancePaise })
+          .from(documents)
+          .where(and(eq(documents.orgId, orgId), eq(documents.id, input.receiptId))),
       ]);
 
-      return { ...detail, adjustments, allocations };
+      // A direct receipt holds no credit; a cancelled one keeps its capacity row but
+      // settles nothing more. `settlementDetail` has already proved the row exists.
+      const unappliedPaise =
+        detail.settlementKind === "direct"
+          ? null
+          : detail.state === "posted"
+            ? credit!.unappliedPaise
+            : 0n;
+
+      return { ...detail, adjustments, allocations, unappliedPaise };
     },
   ),
 
   list: orgProcedure(
     { receipt: ["read"] },
     orgInput.extend(settlementListFields).superRefine(orderedPeriod),
-  ).handler(({ context, input }) => listSettlements(context.scope.orgId, "receipt", input)),
+  ).handler(async ({ context, input }) => {
+    const { orgId } = context.scope;
+
+    const rows = await db
+      .select({ ...settlementListRow, paymentMethodName: paymentMethods.name })
+      .from(documents)
+      .innerJoin(
+        paymentMethods,
+        and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
+      )
+      .where(settlementListWhere(orgId, "receipt", input))
+      .orderBy(desc(documents.id))
+      .limit(input.limit + 1);
+
+    return pageOf(rows, input.limit);
+  }),
 
   // Received per party. A grouped read of its own, not a column on the cached party
   // master, so posting a receipt never refetches up to 5,000 parties. `partyId`

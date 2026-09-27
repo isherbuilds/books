@@ -1,12 +1,10 @@
 import {
-  NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
   enteredPaise,
   formatDecimal,
   isPositiveMoney,
   parseMoney,
 } from "@accly/api/core/money";
-import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   Form,
   FormControl,
@@ -17,7 +15,6 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { Kbd } from "@accly/ui/components/kbd";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import {
@@ -28,6 +25,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import {
@@ -36,8 +34,9 @@ import {
   reportRowErrors,
   type OpenDocument,
 } from "@/components/allocation-table";
+import { AmountInput } from "@/components/amount-input";
 import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
-import { DocumentForm, PostBar, PostedView } from "@/components/document-form";
+import { DocumentForm, PostBar } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
 import { PaymentMethodField } from "@/components/payment-method-field";
@@ -227,8 +226,25 @@ export function ReceiptForm({
 
   const post = useMutation(
     orpc.receipt.post.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async ({ id, number }) => {
         await invalidateCashState(queryClient, orgSlug);
+        toast.success(`Receipt ${number} posted`, {
+          action: {
+            label: "Print",
+            onClick: () =>
+              window.open(`/api/${orgSlug}/receipts/${id}/pdf`, "_blank", "noreferrer"),
+          },
+        });
+
+        // A receipt against one Invoice is done; a fresh receipt clears for the next one.
+        if (invoice) {
+          onClose();
+
+          return;
+        }
+
+        const { documentDate, paymentMethodId } = form.getValues();
+        form.reset(defaults(documentDate, paymentMethodId), { keepSubmitCount: true });
       },
       // Retrying could post it twice; the list shows whether it went through.
       onError: (error) =>
@@ -256,9 +272,6 @@ export function ReceiptForm({
         }),
     }),
   );
-
-  // Held until "Post and next" resets the mutation.
-  const posted = post.data;
 
   const submit = form.handleSubmit((values) => {
     const common = {
@@ -360,29 +373,6 @@ export function ReceiptForm({
     });
   });
 
-  if (posted) {
-    return (
-      <PostedView
-        number={posted.number}
-        onDone={onClose}
-        onNext={() => {
-          const { documentDate, paymentMethodId } = form.getValues();
-          form.reset(defaults(documentDate, paymentMethodId), { keepSubmitCount: true });
-          post.reset();
-        }}
-      >
-        <a
-          href={`/api/${orgSlug}/receipts/${posted.id}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className={buttonVariants({ variant: "outline", className: "mx-auto" })}
-        >
-          Print
-        </a>
-      </PostedView>
-    );
-  }
-
   // Advance receipts always ask; against receipts ask only for an unallocated remainder.
   const advanceSupplyField = (
     <FormField
@@ -419,16 +409,11 @@ export function ReceiptForm({
   return (
     <Form {...form}>
       <DocumentForm
+        // Each post remounts the fields, so the next entry starts on the first field.
+        key={post.data?.id}
         pending={post.isPending}
         onSubmit={(event) => void submit(event)}
-        footer={
-          <PostBar onClose={onClose} closeLabel="Close">
-            <Button type="submit">
-              {post.isPending ? "Posting…" : post.isError ? "Post again" : "Post"}
-              <Kbd>⌘↵</Kbd>
-            </Button>
-          </PostBar>
-        }
+        footer={<PostBar onClose={onClose} post={post} />}
       >
         <DocumentPartyField
           orgSlug={orgSlug}
@@ -446,7 +431,8 @@ export function ReceiptForm({
               <FormItem>
                 <FormLabel>Amount</FormLabel>
                 <FormControl>
-                  <Input
+                  <AmountInput
+                    symbol
                     {...field}
                     // A receipt from an Invoice moves its allocation too, up to the
                     // outstanding, until the operator types a different allocation. The
@@ -469,11 +455,6 @@ export function ReceiptForm({
                       void field.onChange(event);
                     }}
                     required
-                    inputMode="decimal"
-                    autoComplete="off"
-                    pattern={NON_NEGATIVE_MONEY_PATTERN.source}
-                    placeholder="0.00"
-                    className="tabular-nums"
                   />
                 </FormControl>
                 <FormMessage />
@@ -537,7 +518,7 @@ export function ReceiptForm({
           <FormField
             control={form.control}
             name="incomeAccountId"
-            render={({ field, fieldState }) => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Income account</FormLabel>
                 <FormControl>
@@ -554,7 +535,6 @@ export function ReceiptForm({
                     onSelect={(account) => field.onChange(account?.id ?? null)}
                     inputRef={field.ref}
                     placeholder="Choose an income account"
-                    aria-invalid={fieldState.invalid}
                   />
                 </FormControl>
                 <FormMessage />

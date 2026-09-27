@@ -1,6 +1,11 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Button } from "@accly/ui/components/button";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@accly/ui/components/dropdown-menu";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import {
@@ -25,6 +30,7 @@ import { DetailRow } from "@/components/detail-row";
 import { ClaimStatus, struck } from "@/components/document-columns";
 import { DocumentTotals } from "@/components/invoice-summary";
 import { RecordSheet } from "@/components/record-sheet";
+import { SheetActionsMenu } from "@/components/sheet-actions-menu";
 import { billDetailOptions } from "@/lib/bills";
 import { invalidateBillDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
@@ -211,7 +217,7 @@ function BillSheetRoute() {
         ) : null}
         <AllocationsSection orgSlug={orgSlug} allocations={bill.allocations} />
         <Separator />
-        <section className="grid gap-2">
+        <section className="grid grid-cols-1 gap-2">
           <h3 className="text-muted-foreground">Lines</h3>
           <div className="hidden md:block">
             <Table>
@@ -311,10 +317,44 @@ function BillSheetRoute() {
               </Button>
             </>
           ) : null}
+          {canApply || canNote || canAmend || canCancel ? (
+            <SheetActionsMenu>
+              <DropdownMenuGroup>
+                {canApply ? (
+                  <DropdownMenuItem onClick={() => setApplyOpen(true)}>
+                    Apply credit
+                  </DropdownMenuItem>
+                ) : null}
+                {canNote ? (
+                  <DropdownMenuItem
+                    render={
+                      <Link
+                        to="/$orgSlug/notes/new"
+                        params={{ orgSlug }}
+                        search={{ type: "debitNote", against: billId }}
+                      />
+                    }
+                  >
+                    Debit note
+                  </DropdownMenuItem>
+                ) : null}
+                {canAmend ? (
+                  <DropdownMenuItem onClick={() => setAmendOpen(true)}>Amend</DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+              {canCancel ? (
+                <>
+                  {canApply || canNote || canAmend ? <DropdownMenuSeparator /> : null}
+                  <DropdownMenuItem variant="destructive" onClick={() => setCancelOpen(true)}>
+                    Cancel bill
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </SheetActionsMenu>
+          ) : null}
           {canPay ? (
             <Button
               type="button"
-              variant="outline"
               onClick={() =>
                 void navigate({
                   to: "/$orgSlug/payments",
@@ -324,36 +364,6 @@ function BillSheetRoute() {
               }
             >
               Pay
-            </Button>
-          ) : null}
-          {canApply ? (
-            <Button type="button" variant="outline" onClick={() => setApplyOpen(true)}>
-              Apply credit
-            </Button>
-          ) : null}
-          {canNote ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                void navigate({
-                  to: "/$orgSlug/notes/new",
-                  params: { orgSlug },
-                  search: { type: "debitNote", against: billId },
-                })
-              }
-            >
-              Debit note
-            </Button>
-          ) : null}
-          {canAmend ? (
-            <Button type="button" variant="outline" onClick={() => setAmendOpen(true)}>
-              Amend
-            </Button>
-          ) : null}
-          {canCancel ? (
-            <Button type="button" variant="destructive" onClick={() => setCancelOpen(true)}>
-              Cancel bill
             </Button>
           ) : null}
         </SheetFooter>

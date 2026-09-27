@@ -11,7 +11,6 @@ import { container, text } from "takumi-js/helpers";
 import { Renderer } from "takumi-js/node";
 import { ImageResponse } from "takumi-js/response";
 
-import { WASH_BACKGROUND } from "../apps/web/src/components/landing/wash";
 import { OG_IMAGE, PUBLIC_ROUTES, siteConfig } from "../apps/web/src/config/site";
 
 const started = performance.now();
@@ -27,8 +26,12 @@ const renderer = new Renderer();
 
 await renderer.registerFont({ name: "Inter", data: await Bun.file(inter).bytes() });
 
-// The ink pinned for anything drawn on the wash (`ON_WASH` in wash.tsx).
-const INK = "oklch(0.145 0 0)";
+// The public site's paper, ink and stamp (`.site` in components/landing/marketing.css).
+const PAPER = "#FAFAF7";
+
+const INK = "#0B0B0A";
+
+const STAMP = "#6C2A9E";
 
 const outDir = resolve(import.meta.dirname, "../apps/web/public/og");
 
@@ -43,7 +46,8 @@ for (const route of PUBLIC_ROUTES) {
       width: "100%",
       height: "100%",
       padding: "72px 80px",
-      background: WASH_BACKGROUND,
+      background: PAPER,
+      borderBottom: `24px solid ${STAMP}`,
       fontFamily: "Inter",
       color: INK,
     },

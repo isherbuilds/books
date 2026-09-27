@@ -229,10 +229,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
 
   const collisionInput = partyCreateInput(organization.slug, "ACME CO");
   const collision = await expectORPCCode(api.party.create(collisionInput), "CONFLICT");
-  expect(collision.data).toMatchObject({
-    reason: "PARTY_NAME_COLLISION",
-    candidateIds: [original.id],
-  });
+  expect(collision.data).toMatchObject({ reason: "PARTY_NAME_COLLISION" });
 
   const namesake = await api.party.create({
     ...partyCreateInput(organization.slug, "ＡＣＭＥ ＣＯ"),

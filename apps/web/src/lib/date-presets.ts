@@ -3,8 +3,8 @@
 // becomes YYYY-MM-DD string maths from the organization's business date.
 //
 // The presets are the periods an accountant actually reconciles — a month, a financial
-// year, today's cash — not a rolling window. A bare URL shows all time; presets are
-// explicit choices the operator applies when they want to narrow the list.
+// year, today's cash — not a rolling window. A bare URL moves to the page's default
+// period (`requirePeriod`); all time is an explicit choice, `?all=true`.
 //
 // A list URL carries the two dates and nothing else. The preset is a label the range is
 // matched back to, never a stored value: `?from=2026-04-01&to=2027-03-31` reads the same
@@ -15,11 +15,11 @@ import { formatBusinessDate } from "@accly/api/lib/business-date";
 export type DateRange = { from: string; to: string };
 
 /** The range carried by list search params. Neither end means all time. */
-export type SearchRange = { from?: string; to?: string };
+export type SearchRange = { from?: string; to?: string; all?: boolean };
 
 export const PRESETS = ["today", "this-month", "last-month", "this-year", "last-year"] as const;
 
-type Preset = (typeof PRESETS)[number];
+export type Preset = (typeof PRESETS)[number];
 
 // UTC throughout: a business date names a day, so a preset never shifts across zones.
 function day(year: number, month: number, date: number): string {

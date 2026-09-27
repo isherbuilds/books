@@ -104,7 +104,7 @@ function JournalPage() {
           <p className={cn("text-2xl font-medium tabular-nums", struck(journal.state))}>
             {formatMoney(journal.totalPaise)}
           </p>
-          <Badge variant={cancelled ? "muted" : "outline"}>
+          <Badge variant={cancelled ? "neutral" : "settled"}>
             {cancelled ? "Cancelled" : "Posted"}
           </Badge>
         </div>

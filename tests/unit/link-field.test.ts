@@ -28,6 +28,13 @@ test("prefix matches lead, substring matches follow, and Create comes last", () 
   expect(linkRows(options("sha"))).toEqual([sharma, asha, { __create: "sha" }]);
 });
 
+test("opening lists six choices, and one character can find a name or start Create", () => {
+  const many = Array.from({ length: 12 }, (_, index): Row => ({ name: `Party ${index}` }));
+
+  expect(linkRows(options("", { items: many }))).toEqual(many.slice(0, 6));
+  expect(linkRows(options(" s "))).toEqual([sharma, kapoor, asha, { __create: "s" }]);
+});
+
 test("an existing name, a committed value, or no create grant offers no Create row", () => {
   expect(linkRows(options("kapoor stores"))).toEqual([kapoor]);
   expect(
@@ -36,11 +43,11 @@ test("an existing name, a committed value, or no create grant offers no Create r
   expect(linkRows(options("sha", { canCreate: false }))).toEqual([sharma, asha]);
 });
 
-test("at most eight matches show, with Create still last", () => {
+test("at most six matches show, with Create still last", () => {
   const many = Array.from({ length: 12 }, (_, index): Row => ({ name: `Shah ${index}` }));
 
   expect(linkRows(options("shah", { items: many }))).toEqual([
-    ...many.slice(0, 8),
+    ...many.slice(0, 6),
     { __create: "shah" },
   ]);
 });
@@ -51,5 +58,5 @@ test("an untyped field lists its saved value first, even past the limit", () => 
 
   expect(
     linkRows(options("Shah 10", { items: many, selected: saved, selectedLabel: "Shah 10" })),
-  ).toEqual([saved, ...many.slice(0, 7)]);
+  ).toEqual([saved, ...many.slice(0, 5)]);
 });
