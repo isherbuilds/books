@@ -6,6 +6,12 @@ type QueryInvalidator = {
   invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<void>;
 };
 
+function invalidateInvoiceQuotes(queryClient: QueryInvalidator, orgSlug: string) {
+  return queryClient.invalidateQueries({
+    queryKey: orpc.invoice.quote.key({ input: { orgSlug } }),
+  });
+}
+
 // Each set covers one kind of write. Every mutation calls the set for what it moved,
 // on success and on an uncertain result alike; a broader set would refetch every
 // mounted register and balance for a draft that touched none of them.
@@ -103,10 +109,13 @@ export function invalidatePartyState(queryClient: QueryInvalidator, orgSlug: str
   });
 }
 
-export function invalidateItems(queryClient: QueryInvalidator, orgSlug: string) {
-  return queryClient.invalidateQueries({
-    queryKey: orpc.item.key({ input: { orgSlug } }),
-  });
+export async function invalidateItems(queryClient: QueryInvalidator, orgSlug: string) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: orpc.item.key({ input: { orgSlug } }),
+    }),
+    invalidateInvoiceQuotes(queryClient, orgSlug),
+  ]);
 }
 
 // Account writes change the chart (every list variant and money balances), the journal
@@ -155,6 +164,7 @@ export async function invalidateSettings(
     queryClient.invalidateQueries({ queryKey: orpc.settings.get.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.member.me.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
+    invalidateInvoiceQuotes(queryClient, orgSlug),
   ]);
 }
 
