@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 
+import { MAX_INVOICE_QUANTITY } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
@@ -650,7 +651,10 @@ test("a quote equals the posted totals and writes nothing", async () => {
   const [after] = await db.select({ count: count() }).from(documents);
 
   expect(after).toEqual(before);
-  expect(quote.lines).toEqual([{ rateBasisPoints: 1_800 }, { rateBasisPoints: null }]);
+  expect(quote.lines).toEqual([
+    { rateBasisPoints: 1_800, grossPaise: 106_199n },
+    { rateBasisPoints: null, grossPaise: 45_000n },
+  ]);
 
   const posted = await api.invoice.post(fields);
   const invoice = await api.invoice.get({ orgSlug: organization.slug, invoiceId: posted.id });
@@ -680,6 +684,21 @@ test("a percentage discount is worked out on the subtotal and reopens as a perce
 
   expect(saved).toMatchObject({ discountPaise: 18_750n, roundOffPaise: 50n, totalPaise: 131_300n });
   expect(saved.printSnapshot?.discountBasisPoints).toBe(1_250);
+});
+
+test("a discount amount and percentage cannot both be submitted", async () => {
+  const fields = {
+    orgSlug: organization.slug,
+    partyId: party.id,
+    placeOfSupplyStateCode: "27",
+    discount: "10.00",
+    discountPercent: "10",
+    lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
+  };
+
+  await expectReason(api.invoice.quote(fields), "DISCOUNT_CONFLICT");
+  await expectReason(api.invoice.saveDraft(fields), "DISCOUNT_CONFLICT");
+  await expectReason(api.invoice.post(fields), "DISCOUNT_CONFLICT");
 });
 
 test("counter sale posts an allocated receipt in the invoice transaction", async () => {
@@ -880,6 +899,24 @@ test("a ship-to address survives draft, post and amend, and a blank one is refus
 
   await expectORPCCode(
     api.invoice.post({ ...fields, shipTo: { address: "  ", stateCode: "27" } }),
+    "BAD_REQUEST",
+  );
+});
+
+test("invoice quantities above the shared editor limit are refused", async () => {
+  await expectORPCCode(
+    api.invoice.quote({
+      orgSlug: organization.slug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [
+        {
+          kind: "item",
+          itemId: exemptItem.id,
+          quantity: MAX_INVOICE_QUANTITY + 1,
+        },
+      ],
+    }),
     "BAD_REQUEST",
   );
 });
