@@ -118,7 +118,7 @@ export const journalRouter = {
       // Only after the type check: a non-journal document's lines carry no entry side.
       // A Journal credits one party and debits another, so it is both a source and a
       // target. An active target allocation blocks cancel, so the record shows it.
-      const [lines, applied, received] = await Promise.all([
+      const [lines, allocationsApplied, allocationsReceived] = await Promise.all([
         entryLinesOf(orgId, header.id),
         allocationsOf(db, orgId, header.id, "source"),
         allocationsOf(db, orgId, header.id, "target"),
@@ -128,7 +128,8 @@ export const journalRouter = {
         ...header,
         number: postedNumber(header.number, header.id),
         lines,
-        allocations: [...applied, ...received],
+        allocationsApplied,
+        allocationsReceived,
       };
     },
   ),
