@@ -38,8 +38,8 @@ export const Route = createFileRoute("/$orgSlug/banking")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, BANKS_PERMISSION);
     await Promise.all([
-      queryClient.prefetchQuery(moneyBalanceOptions(orgSlug)),
-      queryClient.prefetchQuery(paymentMethodListOptions(orgSlug)),
+      queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {}),
+      queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
       // The account Sheet's parent list; a failed load reaches the route error view.
       loadRouteQuery(queryClient.query(accountListOptions(orgSlug))),
     ]);

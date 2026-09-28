@@ -15,7 +15,7 @@ import {
   type ActiveFilter,
 } from "@/components/list-filter";
 import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/$orgSlug/notes")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { note: ["read"] });
-    await queryClient.prefetchInfiniteQuery(noteListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(noteListOptions(orgSlug, deps)).catch(() => {});
   },
   component: NotesRoute,
 });
@@ -130,7 +130,6 @@ function NotesRoute() {
           }
           activeRowId={activeRowId}
         />
-        <LoadMore query={notes} shown={rows.length} />
         <Outlet />
       </PageBody>
       {date.popover}

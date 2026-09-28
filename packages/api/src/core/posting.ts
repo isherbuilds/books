@@ -678,6 +678,7 @@ export async function recordEntry(
       id: Bun.randomUUIDv7(),
       orgId: scope.orgId,
       entryId,
+      entryDate: args.entryDate,
       ...line,
     })),
   );
@@ -747,7 +748,13 @@ export async function reverseEntries(
     });
 
     for (const line of lines) {
-      lineRows.push({ id: Bun.randomUUIDv7(), orgId: scope.orgId, entryId, ...line });
+      lineRows.push({
+        id: Bun.randomUUIDv7(),
+        orgId: scope.orgId,
+        entryId,
+        entryDate: meta.entryDate,
+        ...line,
+      });
     }
   }
 

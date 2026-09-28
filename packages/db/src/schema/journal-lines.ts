@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, foreignKey, index, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { bigint, check, date, foreignKey, index, pgTable, text, unique } from "drizzle-orm/pg-core";
 
 import { accounts } from "./accounts";
 import { organization } from "./auth";
@@ -14,6 +14,7 @@ export const journalLines = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     entryId: text("entry_id").notNull(),
+    entryDate: date("entry_date", { mode: "string" }).notNull(),
     accountId: text("account_id").notNull(),
     partyId: text("party_id"),
     debit: bigint("debit", { mode: "bigint" })
@@ -28,8 +29,8 @@ export const journalLines = pgTable(
     check("journal_lines_credit_check", sql`${table.credit} >= 0`),
     check("journal_lines_one_side_check", sql`(${table.debit} = 0) <> (${table.credit} = 0)`),
     foreignKey({
-      columns: [table.orgId, table.entryId],
-      foreignColumns: [journalEntries.orgId, journalEntries.id],
+      columns: [table.orgId, table.entryId, table.entryDate],
+      foreignColumns: [journalEntries.orgId, journalEntries.id, journalEntries.entryDate],
     }).onDelete("cascade"),
     foreignKey({
       columns: [table.orgId, table.accountId],
@@ -40,7 +41,12 @@ export const journalLines = pgTable(
       foreignColumns: [parties.orgId, parties.id],
     }),
     unique("journal_lines_org_id_id_unique").on(table.orgId, table.id),
-    index("journal_lines_org_account_idx").on(table.orgId, table.accountId),
+    index("journal_lines_org_account_date_idx").on(
+      table.orgId,
+      table.accountId,
+      table.entryDate,
+      table.id,
+    ),
     index("journal_lines_org_entry_idx").on(table.orgId, table.entryId),
   ],
 );

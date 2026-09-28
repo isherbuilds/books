@@ -263,6 +263,10 @@ test("debit note against a bill reduces its payable outstanding", async () => {
 
   const detail = await api.note.get({ orgSlug: organization.slug, noteId: note.id });
   expect(detail).toMatchObject({ totalPaise: 59_000n, unappliedPaise: 0n });
+  const listed = await api.note.list({ orgSlug: organization.slug, type: "debitNote" });
+  expect(listed.rows).toContainEqual(
+    expect.objectContaining({ id: note.id, againstNumber: bill.number, unappliedPaise: 0n }),
+  );
   expect(
     (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
   ).toBe(59_000n);

@@ -50,6 +50,8 @@
     "db:seed": "bun scripts/seed.ts",
     "db:seed:demo": "bun scripts/seed-demo.ts",
     "db:seed:volume": "bun scripts/seed-volume.ts",
+    "db:seed:mega": "bun scripts/seed-mega.ts",
+    "db:down:clean": "bun scripts/clean-local-services.ts",
     "benchmark:browser": "bun scripts/benchmark-browser.ts",
     "benchmark:navigation": "bun scripts/benchmark-navigation.ts",
     "benchmark:server": "bun scripts/benchmark-server.ts",

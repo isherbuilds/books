@@ -1,9 +1,10 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
-import { formatMoney } from "@accly/api/core/money";
+import { formatBalance, formatMoney } from "@accly/api/core/money";
+import { authorize } from "@accly/auth/access";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
 import { cn } from "@accly/ui/lib/utils";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { z } from "zod";
@@ -12,11 +13,12 @@ import { DATA_TABLE_FEATURES, DataTable, TextOrDash } from "@/components/data-ta
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { CancelledBadge, struck } from "@/components/document-columns";
 import { PeriodMenu } from "@/components/date-range-filter";
-import { ListToolbar, LoadMore } from "@/components/page";
+import { ListToolbar } from "@/components/page";
 import type { SearchRange } from "@/lib/date-presets";
+import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { orpc } from "@/lib/orpc";
-import { partyDocumentLink } from "@/lib/parties";
+import { keysetPaging, orpc } from "@/lib/orpc";
+import { partyDocumentLink, partyLedgerSummaryOptions } from "@/lib/parties";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 type TransactionRow = Awaited<ReturnType<AppRouterClient["party"]["transactions"]>>["rows"][number];
@@ -33,8 +35,7 @@ const TYPE_LABELS: Record<TransactionRow["type"], string> = {
 const transactionListOptions = (orgSlug: string, partyId: string, range: DateBounds) =>
   orpc.party.transactions.infiniteOptions({
     input: (cursor: string | undefined) => ({ orgSlug, partyId, ...range, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => (last.hasMore ? last.rows.at(-1)?.id : undefined),
+    ...keysetPaging,
   });
 
 const transactionSearch = z.object({
@@ -49,7 +50,12 @@ export const Route = createFileRoute("/$orgSlug/parties_/$partyId/transactions")
     requirePeriod(queryClient, orgSlug, location, search, "this-year"),
   loaderDeps: ({ search: { all: _all, ...range } }) => range,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug, partyId } }) => {
-    await queryClient.prefetchInfiniteQuery(transactionListOptions(orgSlug, partyId, deps));
+    const { roles } = await queryClient.query(membershipOptions(orgSlug));
+    await Promise.all([
+      queryClient.infiniteQuery(transactionListOptions(orgSlug, partyId, deps)).catch(() => {}),
+      authorize(roles, { report: ["read"] }) &&
+        queryClient.query(partyLedgerSummaryOptions(orgSlug, partyId)).catch(() => {}),
+    ]);
   },
   component: PartyTransactions,
 });
@@ -121,10 +127,16 @@ function PartyTransactions() {
   const { orgSlug, partyId } = Route.useParams();
   const { all: _all, ...range } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  const canReadLedger = useCan(orgSlug, { report: ["read"] });
 
   const transactions = useInfiniteQuery({
     ...transactionListOptions(orgSlug, partyId, range),
     ...OPERATIONAL_INFINITE_REFETCH,
+  });
+
+  const summary = useQuery({
+    ...partyLedgerSummaryOptions(orgSlug, partyId),
+    enabled: canReadLedger,
   });
 
   const rows = transactions.data?.pages.flatMap((page) => page.rows) ?? [];
@@ -136,6 +148,14 @@ function PartyTransactions() {
     <>
       <ListToolbar>
         <PeriodMenu range={range} onChange={setSearch} />
+        {canReadLedger && summary.data ? (
+          <p className="ml-auto text-muted-foreground">
+            Balance{" "}
+            <span className="font-medium text-foreground tabular-nums">
+              {formatBalance(summary.data.closingPaise)}
+            </span>
+          </p>
+        ) : null}
       </ListToolbar>
       <DataTable
         columns={TRANSACTION_COLUMNS}
@@ -160,7 +180,6 @@ function PartyTransactions() {
           )
         }
       />
-      <LoadMore query={transactions} shown={rows.length} />
     </>
   );
 }

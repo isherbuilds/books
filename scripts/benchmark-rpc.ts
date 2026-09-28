@@ -1,4 +1,5 @@
 import type { AppRouter } from "@accly/api/routers/index";
+import { businessDate } from "@accly/api/lib/business-date";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
@@ -15,7 +16,7 @@ const REQUEST_COUNT = Number(process.env.PERF_RPC_REQUESTS ?? 200);
 
 const WARMUP_COUNT = 20;
 
-const ORG_SLUG = "meridian-traders";
+const ORG_SLUG = process.env.PERF_ORG_SLUG ?? "meridian-traders";
 
 if (!EMAIL || !PASSWORD) {
   throw new Error("Set PERF_EMAIL and PERF_PASSWORD to a benchmark fixture account");
@@ -121,12 +122,52 @@ const cookie = await signIn();
 
 const client = createClient(cookie);
 
+const { timeZone } = await client.member.me({ orgSlug: ORG_SLUG });
+
+const to = businessDate(new Date(), timeZone);
+
+const start = new Date(to);
+
+start.setUTCDate(start.getUTCDate() - 364);
+
+const from = start.toISOString().slice(0, 10);
+
 // Reads only, so a run leaves the fixture unchanged.
 const scenarios: Scenario[] = [
   {
     name: "receipts_first_page",
     run: async () => {
       await client.receipt.list({ orgSlug: ORG_SLUG });
+    },
+  },
+  {
+    name: "invoices_first_page",
+    run: async () => {
+      await client.invoice.list({ orgSlug: ORG_SLUG });
+    },
+  },
+  {
+    name: "bills_first_page",
+    run: async () => {
+      await client.bill.list({ orgSlug: ORG_SLUG });
+    },
+  },
+  {
+    name: "credit_notes_first_page",
+    run: async () => {
+      await client.note.list({ orgSlug: ORG_SLUG, type: "creditNote" });
+    },
+  },
+  {
+    name: "debit_notes_first_page",
+    run: async () => {
+      await client.note.list({ orgSlug: ORG_SLUG, type: "debitNote" });
+    },
+  },
+  {
+    name: "payments_first_page",
+    run: async () => {
+      await client.payment.list({ orgSlug: ORG_SLUG });
     },
   },
   {
@@ -147,6 +188,24 @@ const scenarios: Scenario[] = [
       await client.account.moneyBalances({ orgSlug: ORG_SLUG });
     },
   },
+  {
+    name: "trial_balance",
+    run: async () => {
+      await client.report.trialBalance({ orgSlug: ORG_SLUG, from, to });
+    },
+  },
+  {
+    name: "profit_and_loss",
+    run: async () => {
+      await client.report.profitAndLoss({ orgSlug: ORG_SLUG, from, to });
+    },
+  },
+  {
+    name: "balance_sheet",
+    run: async () => {
+      await client.report.balanceSheet({ orgSlug: ORG_SLUG, asOf: to });
+    },
+  },
 ];
 
 const scenarioReports: ScenarioReport[] = [];
@@ -159,6 +218,7 @@ const report = JSON.stringify(
   {
     generatedAt: new Date().toISOString(),
     apiUrl: API_URL,
+    orgSlug: ORG_SLUG,
     requestsPerScenario: REQUEST_COUNT,
     scenarios: scenarioReports,
   },

@@ -73,7 +73,7 @@ function footerBand(caption: string) {
 
 export async function renderPdf(
   element: NodeInput,
-  options: { fileName: string; title: string },
+  options: { fileName: string; title: string; header?: NodeInput },
 ): Promise<{ bytes: Uint8Array; fileName: string }> {
   const bytes = await render(element, {
     fontFamilies: ["sans-serif", "Inter", "Noto Sans Devanagari"],
@@ -81,7 +81,9 @@ export async function renderPdf(
     lang: "en-IN",
     metadata: { creator: "Accly Books", title: options.title },
     footer: footerBand(options.title),
-    margin: PAGE_MARGIN,
+    ...(options.header === undefined
+      ? { margin: PAGE_MARGIN }
+      : { header: options.header, margin: { ...PAGE_MARGIN, top: "auto" as const } }),
     size: "a4",
   });
 

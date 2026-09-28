@@ -187,8 +187,8 @@ function PartyForm({
 
   // The server returns the saved row: write it into both caches so the list and the
   // record show it now, and the next edit carries the new `updatedAt` token. The list
-  // keeps only its own fields. Its refresh runs in the background instead of making
-  // Save wait for up to 5,000 rows.
+  // keeps only its own fields. Pickers and reports that show the name refresh in the
+  // background instead of making Save wait for up to 5,000 rows.
   const saved = (row: PartyRecord) => {
     const { id, name, roles, gstin, active } = row;
 
@@ -207,7 +207,7 @@ function PartyForm({
         : list,
     );
     queryClient.setQueryData(partyDetailOptions(orgSlug, row.id).queryKey, row);
-    void queryClient.invalidateQueries({ queryKey: listKey });
+    void invalidatePartyState(queryClient, orgSlug);
     onSaved({ id: row.id, name: row.name });
   };
 

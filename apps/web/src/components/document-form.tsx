@@ -1,7 +1,7 @@
 import { Button } from "@accly/ui/components/button";
 import { Kbd } from "@accly/ui/components/kbd";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
-import { useId, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
+import { useId, type ReactNode, type SubmitEvent, type SyntheticEvent } from "react";
 import { get, useFormState, type Control, type FieldPath, type FieldValues } from "react-hook-form";
 
 // React bubbles portal events through the tree, so a stacked quick-create Sheet's
@@ -46,7 +46,7 @@ export function DocumentForm({
   footer,
 }: {
   pending: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: SubmitEvent<HTMLFormElement>) => void;
   children: ReactNode;
   footer: ReactNode;
 }) {

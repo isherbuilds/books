@@ -1,11 +1,13 @@
 import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
 import { cn } from "@accly/ui/lib/utils";
-import { createLink } from "@tanstack/react-router";
+import { CatchBoundary, createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
-import { useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
+import { Suspense, useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
 
 import { MobileMenu } from "@/components/app-shell";
+import type { VirtualPage } from "@/components/data-table/use-virtual-rows";
+import { WaveLoader } from "@/components/wave-loader";
 import { useDebouncedCallback } from "@/hooks/use-debounced-value";
 import { errorMessage } from "@/lib/orpc-error";
 
@@ -79,6 +81,31 @@ export function ErrorNote({
       <p className="font-medium">{title}</p>
       {body && <p className="text-muted-foreground">{body}</p>}
     </div>
+  );
+}
+
+export function ReportBody({
+  resetKey,
+  errorTitle,
+  stale = false,
+  children,
+}: {
+  resetKey: string;
+  errorTitle: string;
+  stale?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <CatchBoundary
+      getResetKey={() => resetKey}
+      errorComponent={({ error }) => <ErrorNote title={errorTitle} error={error} />}
+    >
+      <Suspense fallback={<ListLoading />}>
+        <div aria-busy={stale || undefined} className={stale ? "opacity-60" : undefined}>
+          {children}
+        </div>
+      </Suspense>
+    </CatchBoundary>
   );
 }
 
@@ -246,6 +273,22 @@ export function ListSection({
   );
 }
 
+export function ListLoading() {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-3">
+      <WaveLoader />
+    </div>
+  );
+}
+
+export function ListEmpty({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 export function ListState({
   query,
   errorTitle,
@@ -269,7 +312,7 @@ export function ListState({
   empty: ReactNode;
   children: ReactNode;
 }) {
-  if (query.isPending) return null;
+  if (query.isPending) return <ListLoading />;
 
   const retry = (
     <Button variant="outline" size="xs" onClick={() => void query.refetch()}>
@@ -299,9 +342,7 @@ export function ListState({
     return (
       <>
         {stale}
-        <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
-          {empty}
-        </div>
+        <ListEmpty>{empty}</ListEmpty>
       </>
     );
   }
@@ -314,22 +355,20 @@ export function ListState({
   );
 }
 
-export function LoadMore({
+/** Paging status; manual lists expose the next-page button instead of fetching on scroll. */
+export function ListFooter({
   query,
   shown,
+  manual = false,
 }: {
-  query: {
-    isFetchNextPageError: boolean;
-    hasNextPage: boolean;
-    isFetchingNextPage: boolean;
-    fetchNextPage: () => void;
-  };
+  query: VirtualPage;
   shown: number;
+  manual?: boolean;
 }) {
   if (shown === 0) return null;
 
   return (
-    <div className="flex h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
+    <div className="flex min-h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
       <span className="tabular-nums">
         {query.isFetchNextPageError
           ? `${shown} shown · could not load more`
@@ -337,19 +376,28 @@ export function LoadMore({
             ? `${shown} shown`
             : `All ${shown} shown`}
       </span>
-      {query.hasNextPage ? (
+      {manual && query.hasNextPage ? (
         <Button
           variant="ghost"
           size="xs"
           disabled={query.isFetchingNextPage}
+          aria-label={query.isFetchingNextPage ? "Loading more" : undefined}
           onClick={() => void query.fetchNextPage()}
         >
-          {query.isFetchingNextPage
-            ? "Loading…"
-            : query.isFetchNextPageError
-              ? "Try again"
-              : "Load more"}
+          {query.isFetchingNextPage ? (
+            <WaveLoader label="Loading more" />
+          ) : query.isFetchNextPageError ? (
+            "Try again"
+          ) : (
+            "Load more"
+          )}
         </Button>
+      ) : query.isFetchNextPageError ? (
+        <Button variant="ghost" size="xs" onClick={() => void query.fetchNextPage()}>
+          Try again
+        </Button>
+      ) : query.isFetchingNextPage ? (
+        <WaveLoader label="Loading more" />
       ) : null}
     </div>
   );

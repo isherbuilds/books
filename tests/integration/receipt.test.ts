@@ -648,11 +648,12 @@ test("operator may post but not cancel while a CA cannot post", async () => {
 test("day book XLSX contains the receipt number and numeric rupee amount", async () => {
   const file = await api.export.dayBookXlsx({
     orgSlug: organization.slug,
-    date: "2026-09-12",
+    from: "2026-09-12",
+    to: "2026-09-12",
   });
 
   expect(file).toBeInstanceOf(Blob);
-  expect(file.name).toBe("day-book-2026-09-12.xlsx");
+  expect(file.name).toBe("day-book-2026-09-12-2026-09-12.xlsx");
   expect(file.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
   const bytes = new Uint8Array(await file.arrayBuffer());

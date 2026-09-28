@@ -1,19 +1,29 @@
 import { db } from "@accly/db";
-import { accounts } from "@accly/db/schema/accounts";
 import { documents } from "@accly/db/schema/documents";
-import { journalEntries } from "@accly/db/schema/journal-entries";
-import { journalLines } from "@accly/db/schema/journal-lines";
-import { parties } from "@accly/db/schema/parties";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { writeXlsx } from "hucre/xlsx";
+import { z } from "zod";
 
+import { formatDecimal } from "../core/money";
 import { buildInwardRegister, buildOutwardRegister, type RegisterLine } from "../core/gst-register";
+import type { StatementNode } from "../core/reports";
 import { gstRegisterRows } from "../lib/gst-register-rows";
-
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import type { ReportHeader } from "../lib/reports";
 import { dateOnly, orderedPeriod } from "../lib/schemas";
+import { partyStatement } from "./party";
+import {
+  accountLedger,
+  balanceSheet,
+  dayBook,
+  dayBookInput,
+  ledgerInput,
+  periodInput,
+  profitAndLoss,
+  trialBalance,
+} from "./report";
 
 const BOLD_HEADER = { style: { font: { bold: true } } };
 
@@ -21,12 +31,25 @@ type Sheet = Parameters<typeof writeXlsx>[0]["sheets"][number];
 
 async function xlsxSheets(
   fileName: string,
-  sheets: (Pick<Sheet, "name" | "data"> & { columns: NonNullable<Sheet["columns"]> })[],
+  sheets: (Pick<Sheet, "name"> & {
+    columns: NonNullable<Sheet["columns"]>;
+    data?: Sheet["data"];
+    rows?: Sheet["rows"];
+    headerRowIndex?: number;
+    totalsRowIndex?: number;
+  })[],
 ): Promise<File> {
   const bytes = await writeXlsx({
-    sheets: sheets.map((sheet) => ({
+    sheets: sheets.map(({ headerRowIndex = 0, totalsRowIndex, ...sheet }) => ({
       ...sheet,
-      cells: new Map(sheet.columns.map((_, index) => [`0,${index}`, BOLD_HEADER])),
+      cells: new Map(
+        [
+          ...sheet.columns.map((_, index) => `${headerRowIndex},${index}`),
+          ...(totalsRowIndex === undefined
+            ? []
+            : sheet.columns.map((_, index) => `${totalsRowIndex},${index}`)),
+        ].map((key) => [key, BOLD_HEADER]),
+      ),
     })),
   });
 
@@ -37,28 +60,57 @@ async function xlsxSheets(
   });
 }
 
-// One sheet with a bold header row, returned as a downloadable file.
-function xlsxFile(
-  fileName: string,
-  name: string,
-  sheetColumns: NonNullable<Sheet["columns"]>,
-  data: Sheet["data"],
+export function reportXlsx(
+  header: ReportHeader,
+  title: string,
+  sheetName: string,
+  columns: NonNullable<Sheet["columns"]>,
+  rows: Array<Record<string, string | number | null>>,
+  totals?: Record<string, string | number | null>,
+  extraProvenanceRows: string[][] = [],
 ): Promise<File> {
-  return xlsxSheets(fileName, [{ name, columns: sheetColumns, data }]);
-}
+  const range =
+    "asOf" in header.range
+      ? `As of ${header.range.asOf}`
+      : `${header.range.from} to ${header.range.to}`;
 
-const columns = [
-  { header: "Date", key: "date", width: 14 },
-  { header: "Document", key: "document", width: 18 },
-  { header: "Type", key: "type", width: 16 },
-  { header: "Kind", key: "kind", width: 12 },
-  { header: "Account code", key: "accountCode", width: 16 },
-  { header: "Account", key: "account", width: 28 },
-  { header: "Party", key: "party", width: 24 },
-  { header: "Debit", key: "debit", width: 14 },
-  { header: "Credit", key: "credit", width: 14 },
-  { header: "Narration", key: "narration", width: 36 },
-];
+  const format = new Intl.DateTimeFormat("en-GB", {
+    timeZone: header.timeZone,
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const provenanceRows = [
+    [header.organization.legalName],
+    [title],
+    [range],
+    [`Generated ${format.format(header.generatedAt)} · period not closed`],
+    ...extraProvenanceRows,
+  ];
+
+  const sheetRows: NonNullable<Sheet["rows"]> = [
+    ...provenanceRows,
+    columns.map((column) => column.header ?? column.key ?? ""),
+    ...rows.map((row) => columns.map((column) => row[column.key ?? ""] ?? null)),
+  ];
+
+  if (totals) sheetRows.push(columns.map((column) => totals[column.key ?? ""] ?? null));
+
+  const slug = title.toLowerCase().replaceAll(" ", "-");
+
+  const dates =
+    "asOf" in header.range ? header.range.asOf : `${header.range.from}-${header.range.to}`;
+
+  return xlsxSheets(`${slug}-${dates}.xlsx`, [
+    {
+      name: sheetName,
+      columns,
+      rows: sheetRows,
+      headerRowIndex: provenanceRows.length,
+      totalsRowIndex: totals ? sheetRows.length - 1 : undefined,
+    },
+  ]);
+}
 
 const tdsColumns = [
   { header: "Date", key: "date", width: 14 },
@@ -73,9 +125,81 @@ const tdsColumns = [
   { header: "Net", key: "net", width: 14 },
 ];
 
-const periodInput = orgInput.extend({ from: dateOnly, to: dateOnly }).superRefine(orderedPeriod);
+function statementRows(
+  nodes: StatementNode[],
+  depth = 0,
+): Array<Record<string, string | number | null>> {
+  return nodes.flatMap((node) => [
+    {
+      code: node.code,
+      account: `${"  ".repeat(depth)}${node.name}`,
+      amount: money(node.amountPaise),
+    },
+    ...statementRows(node.children, depth + 1),
+  ]);
+}
 
-const money = (paise: bigint) => Number(paise) / 100;
+const statementColumns = [
+  { header: "Code", key: "code", width: 16 },
+  { header: "Account", key: "account", width: 42 },
+  { header: "Amount", key: "amount", width: 20 },
+];
+
+const dateDocumentColumns = [
+  { header: "Date", key: "date", width: 14 },
+  { header: "Document", key: "document", width: 20 },
+];
+
+const debitCreditColumns = [
+  { header: "Debit", key: "debit", width: 18 },
+  { header: "Credit", key: "credit", width: 18 },
+];
+
+const trialBalanceColumns = [
+  { header: "Code", key: "code", width: 14 },
+  { header: "Account", key: "account", width: 32 },
+  { header: "Group", key: "group", width: 28 },
+  { header: "Opening Dr", key: "openingDebit", width: 17 },
+  { header: "Opening Cr", key: "openingCredit", width: 17 },
+  { header: "Debit", key: "debit", width: 17 },
+  { header: "Credit", key: "credit", width: 17 },
+  { header: "Closing Dr", key: "closingDebit", width: 17 },
+  { header: "Closing Cr", key: "closingCredit", width: 17 },
+];
+
+const ledgerColumns = [
+  ...dateDocumentColumns,
+  { header: "Type", key: "type", width: 18 },
+  { header: "Narration", key: "narration", width: 40 },
+  { header: "Party", key: "party", width: 26 },
+  ...debitCreditColumns,
+  { header: "Balance (Dr +)", key: "balance", width: 20 },
+];
+
+const dayBookColumns = [
+  ...dateDocumentColumns,
+  { header: "Type", key: "type", width: 18 },
+  { header: "Kind", key: "kind", width: 12 },
+  { header: "Account code", key: "accountCode", width: 16 },
+  { header: "Account", key: "account", width: 30 },
+  { header: "Party", key: "party", width: 26 },
+  ...debitCreditColumns,
+  { header: "Narration", key: "narration", width: 40 },
+];
+
+const partyStatementColumns = [
+  ...dateDocumentColumns,
+  { header: "Type", key: "type", width: 20 },
+  { header: "Reference", key: "reference", width: 36 },
+  ...debitCreditColumns,
+  { header: "Balance (Dr +)", key: "balance", width: 20 },
+];
+
+// Excel preserves at most 15 significant digits in numeric cells.
+const money = (paise: bigint): number | string =>
+  paise > -1_000_000_000_000_000n && paise < 1_000_000_000_000_000n
+    ? Number(paise) / 100
+    : formatDecimal(paise);
 
 const gstColumns = [
   { header: "GSTIN", key: "gstin", width: 18 },
@@ -137,59 +261,194 @@ function gstDocument(
 }
 
 export const exportRouter = {
-  dayBookXlsx: orgProcedure({ export: ["read"] }, orgInput.extend({ date: dateOnly })).handler(
-    async ({ context, input }) => {
-      const { orgId } = context.scope;
+  trialBalanceXlsx: orgProcedure(
+    { export: ["read"], report: ["readFinancial"] },
+    periodInput,
+  ).handler(async ({ context, input }) => {
+    const { header, rows, totals } = await trialBalance(context.scope.orgId, {
+      from: input.from,
+      to: input.to,
+    });
 
-      const rows = await db
-        .select({
-          entryDate: journalEntries.entryDate,
-          documentNumber: documents.number,
-          documentType: journalEntries.documentType,
-          kind: journalEntries.kind,
-          accountCode: accounts.code,
-          accountName: accounts.name,
-          partyName: parties.name,
-          debit: journalLines.debit,
-          credit: journalLines.credit,
-          narration: journalEntries.narration,
-        })
-        .from(journalEntries)
-        .innerJoin(
-          journalLines,
-          and(eq(journalLines.orgId, orgId), eq(journalLines.entryId, journalEntries.id)),
-        )
-        .innerJoin(
-          accounts,
-          and(eq(accounts.orgId, orgId), eq(accounts.id, journalLines.accountId)),
-        )
-        .leftJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, journalLines.partyId)))
-        .leftJoin(
-          documents,
-          and(eq(documents.orgId, orgId), eq(documents.id, journalEntries.documentId)),
-        )
-        .where(and(eq(journalEntries.orgId, orgId), eq(journalEntries.entryDate, input.date)))
-        .orderBy(asc(journalEntries.id), asc(journalLines.id));
+    return reportXlsx(
+      header,
+      "Trial balance",
+      "Trial balance",
+      trialBalanceColumns,
+      rows.map((row) => ({
+        code: row.code,
+        account: row.active ? row.name : `${row.name} (Inactive)`,
+        group: row.parentName ?? "",
+        openingDebit: money(row.openingDebitPaise),
+        openingCredit: money(row.openingCreditPaise),
+        debit: money(row.debitPaise),
+        credit: money(row.creditPaise),
+        closingDebit: money(row.closingDebitPaise),
+        closingCredit: money(row.closingCreditPaise),
+      })),
+      {
+        account: "Total",
+        openingDebit: money(totals.openingDebitPaise),
+        openingCredit: money(totals.openingCreditPaise),
+        debit: money(totals.debitPaise),
+        credit: money(totals.creditPaise),
+        closingDebit: money(totals.closingDebitPaise),
+        closingCredit: money(totals.closingCreditPaise),
+      },
+    );
+  }),
 
-      return xlsxFile(
-        `day-book-${input.date}.xlsx`,
-        "Day book",
-        columns,
-        rows.map((row) => ({
-          date: row.entryDate,
-          document: row.documentNumber ?? "",
-          type: row.documentType,
-          kind: row.kind,
-          accountCode: row.accountCode,
-          account: row.accountName,
-          party: row.partyName ?? "",
-          debit: Number(row.debit) / 100,
-          credit: Number(row.credit) / 100,
-          narration: row.narration,
+  profitAndLossXlsx: orgProcedure(
+    { export: ["read"], report: ["readFinancial"] },
+    periodInput,
+  ).handler(async ({ context, input }) => {
+    const { header, income, expenses, incomePaise, expensesPaise, netProfitPaise } =
+      await profitAndLoss(context.scope.orgId, { from: input.from, to: input.to });
+
+    return reportXlsx(
+      header,
+      "Profit and loss",
+      "Profit and loss",
+      statementColumns,
+      [
+        { account: "Income", amount: null },
+        ...statementRows(income),
+        { account: "Total income", amount: money(incomePaise) },
+        { account: "Expenses", amount: null },
+        ...statementRows(expenses),
+        { account: "Total expenses", amount: money(expensesPaise) },
+      ],
+      { account: "Net profit / loss", amount: money(netProfitPaise) },
+    );
+  }),
+  balanceSheetXlsx: orgProcedure(
+    { export: ["read"], report: ["readFinancial"] },
+    orgInput.extend({ asOf: dateOnly }),
+  ).handler(async ({ context, input }) => {
+    const sheet = await balanceSheet(context.scope.orgId, input.asOf);
+
+    return reportXlsx(
+      sheet.header,
+      "Balance sheet",
+      "Balance sheet",
+      statementColumns,
+      [
+        { account: "Assets", amount: null },
+        ...statementRows(sheet.assets),
+        { account: "Total assets", amount: money(sheet.assetsPaise) },
+        { account: "Liabilities", amount: null },
+        ...statementRows(sheet.liabilities),
+        { account: "Total liabilities", amount: money(sheet.liabilitiesPaise) },
+        { account: "Equity", amount: null },
+        ...statementRows(sheet.equity),
+        {
+          account: "Profit and loss, current year",
+          amount: money(sheet.currentYearProfitPaise),
+        },
+        {
+          account: "Profit and loss, earlier years",
+          amount: money(sheet.earlierYearsProfitPaise),
+        },
+        { account: "Total equity", amount: money(sheet.equityPaise) },
+      ],
+      {
+        account: "Total liabilities and equity",
+        amount: money(sheet.liabilitiesPaise + sheet.equityPaise),
+      },
+    );
+  }),
+  accountLedgerXlsx: orgProcedure(
+    { export: ["read"], report: ["readFinancial"] },
+    ledgerInput,
+  ).handler(async ({ context, input }) => {
+    const ledger = await accountLedger(context.scope.orgId, input, 100_000);
+
+    return reportXlsx(
+      ledger.header,
+      `Account ledger - ${ledger.account.code} ${ledger.account.name}`,
+      "Account ledger",
+      ledgerColumns,
+      [
+        { narration: "Opening balance", balance: money(ledger.openingPaise) },
+        ...ledger.lines.map((line) => ({
+          date: line.entryDate,
+          document: line.number,
+          type: line.documentType,
+          narration: line.narration,
+          party: line.partyName,
+          debit: money(line.debitPaise),
+          credit: money(line.creditPaise),
+          balance: money(line.balancePaise),
         })),
+      ],
+      { narration: "Closing balance", balance: money(ledger.closingPaise) },
+    );
+  }),
+  dayBookXlsx: orgProcedure({ export: ["read"], report: ["readFinancial"] }, dayBookInput).handler(
+    async ({ context, input }) => {
+      const book = await dayBook(context.scope.orgId, input, 100_000);
+
+      return reportXlsx(
+        book.header,
+        "Day book",
+        "Day book",
+        dayBookColumns,
+        book.entries.flatMap((entry) =>
+          entry.lines.map((line) => ({
+            date: entry.entryDate,
+            document: entry.number,
+            type: entry.documentType,
+            kind: entry.kind,
+            accountCode: line.accountCode,
+            account: line.accountName,
+            party: line.partyName,
+            debit: money(line.debitPaise),
+            credit: money(line.creditPaise),
+            narration: entry.narration,
+          })),
+        ),
+        {
+          account: "Total",
+          debit: money(book.debitPaise),
+          credit: money(book.creditPaise),
+        },
       );
     },
   ),
+  partyStatementXlsx: orgProcedure(
+    { export: ["read"], party: ["read"], report: ["read"] },
+    orgInput
+      .extend({ partyId: z.uuid(), from: dateOnly.optional(), to: dateOnly.optional() })
+      .superRefine(orderedPeriod),
+  ).handler(async ({ context, input }) => {
+    const statement = await partyStatement(context.scope.orgId, input, 100_000);
+
+    return reportXlsx(
+      statement.header,
+      `Party statement - ${statement.party.name}${statement.party.gstin ? ` (${statement.party.gstin})` : ""}`,
+      "Party statement",
+      partyStatementColumns,
+      [
+        { type: "Opening balance", balance: money(statement.openingPaise) },
+        ...statement.lines.map((line) => ({
+          date: line.entryDate,
+          document: line.number,
+          type: line.kind === "reverse" ? "Cancellation" : line.typeLabel,
+          reference: line.reference,
+          debit: line.amountPaise > 0n ? money(line.amountPaise) : 0,
+          credit: line.amountPaise < 0n ? money(-line.amountPaise) : 0,
+          balance: money(line.balancePaise),
+        })),
+      ],
+      { type: "Closing balance", balance: money(statement.closingPaise) },
+      [
+        ["Party", statement.party.name],
+        ["GSTIN", statement.party.gstin ?? ""],
+        ["Address", statement.party.address ?? ""],
+        ["State code", statement.party.stateCode ?? ""],
+      ],
+    );
+  }),
   tdsRegisterXlsx: orgProcedure({ export: ["read"] }, periodInput).handler(
     async ({ context, input }) => {
       const { orgId } = context.scope;
@@ -228,23 +487,24 @@ export const exportRouter = {
         )
         .orderBy(asc(documents.documentDate), asc(documents.id));
 
-      return xlsxFile(
-        `tds-register-${input.from}-${input.to}.xlsx`,
-        "TDS register",
-        tdsColumns,
-        rows.map((row) => ({
-          date: row.documentDate,
-          document: row.number,
-          type: row.type === "bill" ? "Bill" : "Payment",
-          section: row.code,
-          rate: row.rateBasisPoints / 100,
-          party: row.partyName,
-          partyPan: row.partyPan,
-          gross: money(row.basePaise),
-          tds: money(row.tdsPaise),
-          net: money(row.basePaise - row.tdsPaise),
-        })),
-      );
+      return xlsxSheets(`tds-register-${input.from}-${input.to}.xlsx`, [
+        {
+          name: "TDS register",
+          columns: tdsColumns,
+          data: rows.map((row) => ({
+            date: row.documentDate,
+            document: row.number,
+            type: row.type === "bill" ? "Bill" : "Payment",
+            section: row.code,
+            rate: row.rateBasisPoints / 100,
+            party: row.partyName,
+            partyPan: row.partyPan,
+            gross: money(row.basePaise),
+            tds: money(row.tdsPaise),
+            net: money(row.basePaise - row.tdsPaise),
+          })),
+        },
+      ]);
     },
   ),
   gstOutwardXlsx: orgProcedure({ export: ["read"] }, periodInput).handler(

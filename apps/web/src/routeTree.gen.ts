@@ -51,6 +51,11 @@ import { Route as OrgSlugNotesNewRouteImport } from './routes/$orgSlug/notes_.ne
 import { Route as OrgSlugPartiesPartyIdRouteImport } from './routes/$orgSlug/parties_.$partyId'
 import { Route as OrgSlugPaymentsPaymentIdRouteImport } from './routes/$orgSlug/payments/$paymentId'
 import { Route as OrgSlugReceiptsReceiptIdRouteImport } from './routes/$orgSlug/receipts/$receiptId'
+import { Route as OrgSlugReportsAccountLedgerRouteImport } from './routes/$orgSlug/reports_.account-ledger'
+import { Route as OrgSlugReportsBalanceSheetRouteImport } from './routes/$orgSlug/reports_.balance-sheet'
+import { Route as OrgSlugReportsDayBookRouteImport } from './routes/$orgSlug/reports_.day-book'
+import { Route as OrgSlugReportsProfitAndLossRouteImport } from './routes/$orgSlug/reports_.profit-and-loss'
+import { Route as OrgSlugReportsTrialBalanceRouteImport } from './routes/$orgSlug/reports_.trial-balance'
 import { Route as OrgSlugSettingsIndexRouteImport } from './routes/$orgSlug/settings/index'
 import { Route as OrgSlugSettingsAuditRouteImport } from './routes/$orgSlug/settings/audit'
 import { Route as OrgSlugSettingsFilesRouteImport } from './routes/$orgSlug/settings/files'
@@ -67,6 +72,12 @@ import { Route as OrgSlugPartiesPartyIdLedgerRouteImport } from './routes/$orgSl
 import { Route as OrgSlugPartiesPartyIdTransactionsRouteImport } from './routes/$orgSlug/parties_.$partyId.transactions'
 import { Route as ApiOrgSlugInvoicesInvoiceIdPdfRouteImport } from './routes/api.$orgSlug.invoices.$invoiceId.pdf'
 import { Route as ApiOrgSlugReceiptsReceiptIdPdfRouteImport } from './routes/api.$orgSlug.receipts.$receiptId.pdf'
+import { Route as ApiOrgSlugReportsAccountLedgerPdfRouteImport } from './routes/api.$orgSlug.reports.account-ledger.pdf'
+import { Route as ApiOrgSlugReportsBalanceSheetPdfRouteImport } from './routes/api.$orgSlug.reports.balance-sheet.pdf'
+import { Route as ApiOrgSlugReportsDayBookPdfRouteImport } from './routes/api.$orgSlug.reports.day-book.pdf'
+import { Route as ApiOrgSlugReportsProfitAndLossPdfRouteImport } from './routes/api.$orgSlug.reports.profit-and-loss.pdf'
+import { Route as ApiOrgSlugReportsTrialBalancePdfRouteImport } from './routes/api.$orgSlug.reports.trial-balance.pdf'
+import { Route as ApiOrgSlugPartiesPartyIdStatementPdfRouteImport } from './routes/api.$orgSlug.parties.$partyId.statement.pdf'
 
 const OrgSlugRouteRoute = OrgSlugRouteRouteImport.update({
   id: '/$orgSlug',
@@ -281,6 +292,35 @@ const OrgSlugReceiptsReceiptIdRoute =
     path: '/$receiptId',
     getParentRoute: () => OrgSlugReceiptsRouteRoute,
   } as any)
+const OrgSlugReportsAccountLedgerRoute =
+  OrgSlugReportsAccountLedgerRouteImport.update({
+    id: '/reports_/account-ledger',
+    path: '/reports/account-ledger',
+    getParentRoute: () => OrgSlugRouteRoute,
+  } as any)
+const OrgSlugReportsBalanceSheetRoute =
+  OrgSlugReportsBalanceSheetRouteImport.update({
+    id: '/reports_/balance-sheet',
+    path: '/reports/balance-sheet',
+    getParentRoute: () => OrgSlugRouteRoute,
+  } as any)
+const OrgSlugReportsDayBookRoute = OrgSlugReportsDayBookRouteImport.update({
+  id: '/reports_/day-book',
+  path: '/reports/day-book',
+  getParentRoute: () => OrgSlugRouteRoute,
+} as any)
+const OrgSlugReportsProfitAndLossRoute =
+  OrgSlugReportsProfitAndLossRouteImport.update({
+    id: '/reports_/profit-and-loss',
+    path: '/reports/profit-and-loss',
+    getParentRoute: () => OrgSlugRouteRoute,
+  } as any)
+const OrgSlugReportsTrialBalanceRoute =
+  OrgSlugReportsTrialBalanceRouteImport.update({
+    id: '/reports_/trial-balance',
+    path: '/reports/trial-balance',
+    getParentRoute: () => OrgSlugRouteRoute,
+  } as any)
 const OrgSlugSettingsIndexRoute = OrgSlugSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -369,6 +409,42 @@ const ApiOrgSlugReceiptsReceiptIdPdfRoute =
     path: '/api/$orgSlug/receipts/$receiptId/pdf',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiOrgSlugReportsAccountLedgerPdfRoute =
+  ApiOrgSlugReportsAccountLedgerPdfRouteImport.update({
+    id: '/api/$orgSlug/reports/account-ledger/pdf',
+    path: '/api/$orgSlug/reports/account-ledger/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOrgSlugReportsBalanceSheetPdfRoute =
+  ApiOrgSlugReportsBalanceSheetPdfRouteImport.update({
+    id: '/api/$orgSlug/reports/balance-sheet/pdf',
+    path: '/api/$orgSlug/reports/balance-sheet/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOrgSlugReportsDayBookPdfRoute =
+  ApiOrgSlugReportsDayBookPdfRouteImport.update({
+    id: '/api/$orgSlug/reports/day-book/pdf',
+    path: '/api/$orgSlug/reports/day-book/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOrgSlugReportsProfitAndLossPdfRoute =
+  ApiOrgSlugReportsProfitAndLossPdfRouteImport.update({
+    id: '/api/$orgSlug/reports/profit-and-loss/pdf',
+    path: '/api/$orgSlug/reports/profit-and-loss/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOrgSlugReportsTrialBalancePdfRoute =
+  ApiOrgSlugReportsTrialBalancePdfRouteImport.update({
+    id: '/api/$orgSlug/reports/trial-balance/pdf',
+    path: '/api/$orgSlug/reports/trial-balance/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOrgSlugPartiesPartyIdStatementPdfRoute =
+  ApiOrgSlugPartiesPartyIdStatementPdfRouteImport.update({
+    id: '/api/$orgSlug/parties/$partyId/statement/pdf',
+    path: '/api/$orgSlug/parties/$partyId/statement/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/$orgSlug': typeof OrgSlugRouteRouteWithChildren
@@ -412,6 +488,11 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/payments/$paymentId': typeof OrgSlugPaymentsPaymentIdRoute
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
+  '/$orgSlug/reports/account-ledger': typeof OrgSlugReportsAccountLedgerRoute
+  '/$orgSlug/reports/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
+  '/$orgSlug/reports/day-book': typeof OrgSlugReportsDayBookRoute
+  '/$orgSlug/reports/profit-and-loss': typeof OrgSlugReportsProfitAndLossRoute
+  '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
@@ -428,6 +509,12 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/parties/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
+  '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
+  '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
+  '/api/$orgSlug/reports/day-book/pdf': typeof ApiOrgSlugReportsDayBookPdfRoute
+  '/api/$orgSlug/reports/profit-and-loss/pdf': typeof ApiOrgSlugReportsProfitAndLossPdfRoute
+  '/api/$orgSlug/reports/trial-balance/pdf': typeof ApiOrgSlugReportsTrialBalancePdfRoute
+  '/api/$orgSlug/parties/$partyId/statement/pdf': typeof ApiOrgSlugPartiesPartyIdStatementPdfRoute
 }
 export interface FileRoutesByTo {
   '/create': typeof CreateRoute
@@ -468,6 +555,11 @@ export interface FileRoutesByTo {
   '/$orgSlug/notes/new': typeof OrgSlugNotesNewRoute
   '/$orgSlug/payments/$paymentId': typeof OrgSlugPaymentsPaymentIdRoute
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
+  '/$orgSlug/reports/account-ledger': typeof OrgSlugReportsAccountLedgerRoute
+  '/$orgSlug/reports/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
+  '/$orgSlug/reports/day-book': typeof OrgSlugReportsDayBookRoute
+  '/$orgSlug/reports/profit-and-loss': typeof OrgSlugReportsProfitAndLossRoute
+  '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
@@ -484,6 +576,12 @@ export interface FileRoutesByTo {
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
+  '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
+  '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
+  '/api/$orgSlug/reports/day-book/pdf': typeof ApiOrgSlugReportsDayBookPdfRoute
+  '/api/$orgSlug/reports/profit-and-loss/pdf': typeof ApiOrgSlugReportsProfitAndLossPdfRoute
+  '/api/$orgSlug/reports/trial-balance/pdf': typeof ApiOrgSlugReportsTrialBalancePdfRoute
+  '/api/$orgSlug/parties/$partyId/statement/pdf': typeof ApiOrgSlugPartiesPartyIdStatementPdfRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -529,6 +627,11 @@ export interface FileRoutesById {
   '/$orgSlug/parties_/$partyId': typeof OrgSlugPartiesPartyIdRouteWithChildren
   '/$orgSlug/payments/$paymentId': typeof OrgSlugPaymentsPaymentIdRoute
   '/$orgSlug/receipts/$receiptId': typeof OrgSlugReceiptsReceiptIdRoute
+  '/$orgSlug/reports_/account-ledger': typeof OrgSlugReportsAccountLedgerRoute
+  '/$orgSlug/reports_/balance-sheet': typeof OrgSlugReportsBalanceSheetRoute
+  '/$orgSlug/reports_/day-book': typeof OrgSlugReportsDayBookRoute
+  '/$orgSlug/reports_/profit-and-loss': typeof OrgSlugReportsProfitAndLossRoute
+  '/$orgSlug/reports_/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
@@ -545,6 +648,12 @@ export interface FileRoutesById {
   '/$orgSlug/parties_/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
+  '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
+  '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
+  '/api/$orgSlug/reports/day-book/pdf': typeof ApiOrgSlugReportsDayBookPdfRoute
+  '/api/$orgSlug/reports/profit-and-loss/pdf': typeof ApiOrgSlugReportsProfitAndLossPdfRoute
+  '/api/$orgSlug/reports/trial-balance/pdf': typeof ApiOrgSlugReportsTrialBalancePdfRoute
+  '/api/$orgSlug/parties/$partyId/statement/pdf': typeof ApiOrgSlugPartiesPartyIdStatementPdfRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -590,6 +699,11 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties/$partyId'
     | '/$orgSlug/payments/$paymentId'
     | '/$orgSlug/receipts/$receiptId'
+    | '/$orgSlug/reports/account-ledger'
+    | '/$orgSlug/reports/balance-sheet'
+    | '/$orgSlug/reports/day-book'
+    | '/$orgSlug/reports/profit-and-loss'
+    | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
     | '/$orgSlug/settings/locks'
@@ -606,6 +720,12 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
+    | '/api/$orgSlug/reports/account-ledger/pdf'
+    | '/api/$orgSlug/reports/balance-sheet/pdf'
+    | '/api/$orgSlug/reports/day-book/pdf'
+    | '/api/$orgSlug/reports/profit-and-loss/pdf'
+    | '/api/$orgSlug/reports/trial-balance/pdf'
+    | '/api/$orgSlug/parties/$partyId/statement/pdf'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/create'
@@ -646,6 +766,11 @@ export interface FileRouteTypes {
     | '/$orgSlug/notes/new'
     | '/$orgSlug/payments/$paymentId'
     | '/$orgSlug/receipts/$receiptId'
+    | '/$orgSlug/reports/account-ledger'
+    | '/$orgSlug/reports/balance-sheet'
+    | '/$orgSlug/reports/day-book'
+    | '/$orgSlug/reports/profit-and-loss'
+    | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
     | '/$orgSlug/settings/locks'
@@ -662,6 +787,12 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties/$partyId'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
+    | '/api/$orgSlug/reports/account-ledger/pdf'
+    | '/api/$orgSlug/reports/balance-sheet/pdf'
+    | '/api/$orgSlug/reports/day-book/pdf'
+    | '/api/$orgSlug/reports/profit-and-loss/pdf'
+    | '/api/$orgSlug/reports/trial-balance/pdf'
+    | '/api/$orgSlug/parties/$partyId/statement/pdf'
   id:
     | '__root__'
     | '/$orgSlug'
@@ -706,6 +837,11 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties_/$partyId'
     | '/$orgSlug/payments/$paymentId'
     | '/$orgSlug/receipts/$receiptId'
+    | '/$orgSlug/reports_/account-ledger'
+    | '/$orgSlug/reports_/balance-sheet'
+    | '/$orgSlug/reports_/day-book'
+    | '/$orgSlug/reports_/profit-and-loss'
+    | '/$orgSlug/reports_/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
     | '/$orgSlug/settings/locks'
@@ -722,6 +858,12 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties_/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
+    | '/api/$orgSlug/reports/account-ledger/pdf'
+    | '/api/$orgSlug/reports/balance-sheet/pdf'
+    | '/api/$orgSlug/reports/day-book/pdf'
+    | '/api/$orgSlug/reports/profit-and-loss/pdf'
+    | '/api/$orgSlug/reports/trial-balance/pdf'
+    | '/api/$orgSlug/parties/$partyId/statement/pdf'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -734,6 +876,12 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
   ApiOrgSlugReceiptsReceiptIdPdfRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
+  ApiOrgSlugReportsAccountLedgerPdfRoute: typeof ApiOrgSlugReportsAccountLedgerPdfRoute
+  ApiOrgSlugReportsBalanceSheetPdfRoute: typeof ApiOrgSlugReportsBalanceSheetPdfRoute
+  ApiOrgSlugReportsDayBookPdfRoute: typeof ApiOrgSlugReportsDayBookPdfRoute
+  ApiOrgSlugReportsProfitAndLossPdfRoute: typeof ApiOrgSlugReportsProfitAndLossPdfRoute
+  ApiOrgSlugReportsTrialBalancePdfRoute: typeof ApiOrgSlugReportsTrialBalancePdfRoute
+  ApiOrgSlugPartiesPartyIdStatementPdfRoute: typeof ApiOrgSlugPartiesPartyIdStatementPdfRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1032,6 +1180,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugReceiptsReceiptIdRouteImport
       parentRoute: typeof OrgSlugReceiptsRouteRoute
     }
+    '/$orgSlug/reports_/account-ledger': {
+      id: '/$orgSlug/reports_/account-ledger'
+      path: '/reports/account-ledger'
+      fullPath: '/$orgSlug/reports/account-ledger'
+      preLoaderRoute: typeof OrgSlugReportsAccountLedgerRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
+    '/$orgSlug/reports_/balance-sheet': {
+      id: '/$orgSlug/reports_/balance-sheet'
+      path: '/reports/balance-sheet'
+      fullPath: '/$orgSlug/reports/balance-sheet'
+      preLoaderRoute: typeof OrgSlugReportsBalanceSheetRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
+    '/$orgSlug/reports_/day-book': {
+      id: '/$orgSlug/reports_/day-book'
+      path: '/reports/day-book'
+      fullPath: '/$orgSlug/reports/day-book'
+      preLoaderRoute: typeof OrgSlugReportsDayBookRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
+    '/$orgSlug/reports_/profit-and-loss': {
+      id: '/$orgSlug/reports_/profit-and-loss'
+      path: '/reports/profit-and-loss'
+      fullPath: '/$orgSlug/reports/profit-and-loss'
+      preLoaderRoute: typeof OrgSlugReportsProfitAndLossRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
+    '/$orgSlug/reports_/trial-balance': {
+      id: '/$orgSlug/reports_/trial-balance'
+      path: '/reports/trial-balance'
+      fullPath: '/$orgSlug/reports/trial-balance'
+      preLoaderRoute: typeof OrgSlugReportsTrialBalanceRouteImport
+      parentRoute: typeof OrgSlugRouteRoute
+    }
     '/$orgSlug/settings/': {
       id: '/$orgSlug/settings/'
       path: '/'
@@ -1142,6 +1325,48 @@ declare module '@tanstack/react-router' {
       path: '/api/$orgSlug/receipts/$receiptId/pdf'
       fullPath: '/api/$orgSlug/receipts/$receiptId/pdf'
       preLoaderRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/reports/account-ledger/pdf': {
+      id: '/api/$orgSlug/reports/account-ledger/pdf'
+      path: '/api/$orgSlug/reports/account-ledger/pdf'
+      fullPath: '/api/$orgSlug/reports/account-ledger/pdf'
+      preLoaderRoute: typeof ApiOrgSlugReportsAccountLedgerPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/reports/balance-sheet/pdf': {
+      id: '/api/$orgSlug/reports/balance-sheet/pdf'
+      path: '/api/$orgSlug/reports/balance-sheet/pdf'
+      fullPath: '/api/$orgSlug/reports/balance-sheet/pdf'
+      preLoaderRoute: typeof ApiOrgSlugReportsBalanceSheetPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/reports/day-book/pdf': {
+      id: '/api/$orgSlug/reports/day-book/pdf'
+      path: '/api/$orgSlug/reports/day-book/pdf'
+      fullPath: '/api/$orgSlug/reports/day-book/pdf'
+      preLoaderRoute: typeof ApiOrgSlugReportsDayBookPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/reports/profit-and-loss/pdf': {
+      id: '/api/$orgSlug/reports/profit-and-loss/pdf'
+      path: '/api/$orgSlug/reports/profit-and-loss/pdf'
+      fullPath: '/api/$orgSlug/reports/profit-and-loss/pdf'
+      preLoaderRoute: typeof ApiOrgSlugReportsProfitAndLossPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/reports/trial-balance/pdf': {
+      id: '/api/$orgSlug/reports/trial-balance/pdf'
+      path: '/api/$orgSlug/reports/trial-balance/pdf'
+      fullPath: '/api/$orgSlug/reports/trial-balance/pdf'
+      preLoaderRoute: typeof ApiOrgSlugReportsTrialBalancePdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$orgSlug/parties/$partyId/statement/pdf': {
+      id: '/api/$orgSlug/parties/$partyId/statement/pdf'
+      path: '/api/$orgSlug/parties/$partyId/statement/pdf'
+      fullPath: '/api/$orgSlug/parties/$partyId/statement/pdf'
+      preLoaderRoute: typeof ApiOrgSlugPartiesPartyIdStatementPdfRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -1264,6 +1489,11 @@ interface OrgSlugRouteRouteChildren {
   OrgSlugJournalsNewRoute: typeof OrgSlugJournalsNewRoute
   OrgSlugNotesNewRoute: typeof OrgSlugNotesNewRoute
   OrgSlugPartiesPartyIdRoute: typeof OrgSlugPartiesPartyIdRouteWithChildren
+  OrgSlugReportsAccountLedgerRoute: typeof OrgSlugReportsAccountLedgerRoute
+  OrgSlugReportsBalanceSheetRoute: typeof OrgSlugReportsBalanceSheetRoute
+  OrgSlugReportsDayBookRoute: typeof OrgSlugReportsDayBookRoute
+  OrgSlugReportsProfitAndLossRoute: typeof OrgSlugReportsProfitAndLossRoute
+  OrgSlugReportsTrialBalanceRoute: typeof OrgSlugReportsTrialBalanceRoute
   OrgSlugBillsBillIdEditRoute: typeof OrgSlugBillsBillIdEditRoute
   OrgSlugInvoicesInvoiceIdEditRoute: typeof OrgSlugInvoicesInvoiceIdEditRoute
 }
@@ -1289,6 +1519,11 @@ const OrgSlugRouteRouteChildren: OrgSlugRouteRouteChildren = {
   OrgSlugJournalsNewRoute: OrgSlugJournalsNewRoute,
   OrgSlugNotesNewRoute: OrgSlugNotesNewRoute,
   OrgSlugPartiesPartyIdRoute: OrgSlugPartiesPartyIdRouteWithChildren,
+  OrgSlugReportsAccountLedgerRoute: OrgSlugReportsAccountLedgerRoute,
+  OrgSlugReportsBalanceSheetRoute: OrgSlugReportsBalanceSheetRoute,
+  OrgSlugReportsDayBookRoute: OrgSlugReportsDayBookRoute,
+  OrgSlugReportsProfitAndLossRoute: OrgSlugReportsProfitAndLossRoute,
+  OrgSlugReportsTrialBalanceRoute: OrgSlugReportsTrialBalanceRoute,
   OrgSlugBillsBillIdEditRoute: OrgSlugBillsBillIdEditRoute,
   OrgSlugInvoicesInvoiceIdEditRoute: OrgSlugInvoicesInvoiceIdEditRoute,
 }
@@ -1339,6 +1574,15 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: ApiOrgSlugInvoicesInvoiceIdPdfRoute,
   ApiOrgSlugReceiptsReceiptIdPdfRoute: ApiOrgSlugReceiptsReceiptIdPdfRoute,
+  ApiOrgSlugReportsAccountLedgerPdfRoute:
+    ApiOrgSlugReportsAccountLedgerPdfRoute,
+  ApiOrgSlugReportsBalanceSheetPdfRoute: ApiOrgSlugReportsBalanceSheetPdfRoute,
+  ApiOrgSlugReportsDayBookPdfRoute: ApiOrgSlugReportsDayBookPdfRoute,
+  ApiOrgSlugReportsProfitAndLossPdfRoute:
+    ApiOrgSlugReportsProfitAndLossPdfRoute,
+  ApiOrgSlugReportsTrialBalancePdfRoute: ApiOrgSlugReportsTrialBalancePdfRoute,
+  ApiOrgSlugPartiesPartyIdStatementPdfRoute:
+    ApiOrgSlugPartiesPartyIdStatementPdfRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

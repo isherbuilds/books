@@ -19,7 +19,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { invoiceListOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/$orgSlug/invoices")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { invoice: ["read"] });
-    await queryClient.prefetchInfiniteQuery(invoiceListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(invoiceListOptions(orgSlug, deps)).catch(() => {});
   },
   component: InvoicesRoute,
 });
@@ -154,7 +154,6 @@ function InvoicesRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={invoices} shown={rows.length} />
         <Outlet />
       </PageBody>
 

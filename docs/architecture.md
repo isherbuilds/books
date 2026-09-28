@@ -65,7 +65,10 @@ A new org-scoped domain follows the
   `organization.canCreate`. Base UI popups stay behind `ClientOnly`.
 - TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
   `operational-query.ts`). Loaders prime it, components subscribe with the same
-  `queryOptions`, and loaders never pass data down as props. Membership comes
+  `queryOptions`, and loaders never pass data down as props. Report loaders start
+  non-awaited prefetches; report bodies read them with suspense inside local
+  boundaries, so header and controls appear immediately during navigation and
+  streamed SSR results hydrate without a loading/data mismatch. Membership comes
   from `useMembership` through `membershipOptions`, stale after five minutes;
   member and settings edits invalidate it.
 - The browser client batches same-tick non-`export` calls into one `/rpc`
@@ -85,9 +88,16 @@ A new org-scoped domain follows the
 - Every query key includes `orgSlug`. Growing lists use full keysets and select
   `limit + 1` base rows through a tenant-leading index before joins. Never use
   `OFFSET`.
+- Ledgers page oldest first on `(entry_date, id)` with an object cursor. A
+  separate summary procedure returns opening, debits, credits and closing for
+  the period; the client starts the running balance from the summary's opening
+  and accumulates it across the pages it has loaded. `journal_lines.entry_date`
+  copies its entry's date (composite FK) so account ledger pages read
+  `(org_id, account_id, entry_date, id)`. PDF and XLSX exports keep the
+  full-period helpers.
 - Live lists poll every 10 s (stale after 5 s) and refetch on focus only
-  while page one is the only loaded page. Both stop after Load more; polling
-  also pauses in background tabs. There is no WebSocket or SSE.
+  while page one is the only loaded page. Both stop once a second page loads;
+  polling also pauses in background tabs. There is no WebSocket or SSE.
 
 Query, form and invalidation rules are in
 [Development](./development.md#react-and-forms).

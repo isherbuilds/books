@@ -42,7 +42,7 @@ test("unique violations remain distinguishable when Postgres omits the constrain
   expect(uniqueViolationConstraint({ cause: { code: "23503" } })).toBeUndefined();
 });
 
-test("journal lines reject accounts and entries from another organization", async () => {
+test("journal lines reject cross-organization references and dates different from their entries", async () => {
   const [ownerA, ownerB] = await Promise.all([
     createTestUser("core-journal-tenant-a"),
     createTestUser("core-journal-tenant-b"),
@@ -85,7 +85,7 @@ test("journal lines reject accounts and entries from another organization", asyn
     },
   ]);
 
-  // The composite (org_id, id) foreign keys refuse a line that crosses tenants.
+  // The composite (org_id, id, entry_date) foreign key and account key refuse cross-tenant lines.
   for (const crossing of [
     { entryId: entryBId, accountId: accountAId },
     { entryId: entryAId, accountId: accountBId },
@@ -96,6 +96,7 @@ test("journal lines reject accounts and entries from another organization", asyn
         .values({
           id: Bun.randomUUIDv7(),
           orgId: organizationB.id,
+          entryDate: "2030-03-15",
           debit: 100n,
           credit: 0n,
           ...crossing,
@@ -103,6 +104,21 @@ test("journal lines reject accounts and entries from another organization", asyn
         .execute(),
     ).rejects.toThrow();
   }
+
+  await expect(
+    db
+      .insert(journalLines)
+      .values({
+        id: Bun.randomUUIDv7(),
+        orgId: organizationB.id,
+        entryId: entryBId,
+        entryDate: "2030-03-16",
+        accountId: accountBId,
+        debit: 100n,
+        credit: 0n,
+      })
+      .execute(),
+  ).rejects.toThrow();
 });
 
 type PartyCreateInput = Parameters<AppRouterClient["party"]["create"]>[0];

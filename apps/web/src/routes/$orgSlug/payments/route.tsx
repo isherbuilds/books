@@ -21,7 +21,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/$orgSlug/payments")({
     filters,
   loader: async ({ context: { queryClient }, params: { orgSlug }, deps }) => {
     await requireOrgPermission(queryClient, orgSlug, { payment: ["read"] });
-    await queryClient.prefetchInfiniteQuery(paymentListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(paymentListOptions(orgSlug, deps)).catch(() => {});
   },
   component: PaymentsRoute,
 });
@@ -227,7 +227,6 @@ function PaymentsRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={payments} shown={rows.length} />
         <Outlet />
       </PageBody>
       {date.popover}

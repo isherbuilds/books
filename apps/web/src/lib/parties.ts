@@ -50,13 +50,17 @@ export type PartyPicker = { rows: PartyOption[]; hasMore: boolean };
 // Roles are descriptive (accounting-core), so a picker ranks the parties holding the
 // document's role first and never hides the rest. Both groups keep name order.
 function pickableParties({ rows, hasMore }: PartyList, role: PartyRole | undefined): PartyPicker {
-  const active = rows.filter((party) => party.active);
+  if (!role) return { rows: rows.filter((party) => party.active), hasMore };
 
-  if (!role) return { rows: active, hasMore };
+  const preferred: PartyListRow[] = [];
+  const others: PartyListRow[] = [];
 
-  const holds = (party: PartyListRow) => party.roles.includes(role);
+  for (const party of rows) {
+    if (!party.active) continue;
+    (party.roles.includes(role) ? preferred : others).push(party);
+  }
 
-  return { rows: [...active.filter(holds), ...active.filter((party) => !holds(party))], hasMore };
+  return { rows: [...preferred, ...others], hasMore };
 }
 
 export const partyPickerOptions = (orgSlug: string, role?: PartyRole, q?: string) => ({
@@ -92,13 +96,12 @@ export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
 export const partyBalancesOptions = (orgSlug: string) =>
   orpc.party.balances.queryOptions({ input: { orgSlug } });
 
-// The party page reads the whole statement for its balance; the Ledger tab
-// requests its selected date range.
-export const partyStatementOptions = (
+// Shared by the overview and transactions balance; the ledger tab also supplies its range.
+export const partyLedgerSummaryOptions = (
   orgSlug: string,
   partyId: string,
   range: { from?: string; to?: string } = {},
-) => orpc.party.statement.queryOptions({ input: { orgSlug, partyId, ...range } });
+) => orpc.party.ledgerSummary.queryOptions({ input: { orgSlug, partyId, ...range } });
 
 export const PARTY_STATUSES = ["active", "inactive"] as const;
 
@@ -144,49 +147,43 @@ type PartyDocumentType =
   | "journal"
   | "openingBalance";
 
-// Each record opens over its own register filtered to the party, so Back and the list
-// behind the Sheet stay on that party's documents.
+// One route table for party registers and accounting reports. Allocations have
+// journal entries but no document record to open.
+export function documentLink(orgSlug: string, type: PartyDocumentType, id: string): LinkOptions;
+export function documentLink(orgSlug: string, type: string, id: string): LinkOptions | undefined;
+export function documentLink(orgSlug: string, type: string, id: string): LinkOptions | undefined {
+  switch (type) {
+    case "invoice":
+      return { to: "/$orgSlug/invoices/$invoiceId", params: { orgSlug, invoiceId: id } };
+    case "bill":
+      return { to: "/$orgSlug/bills/$billId", params: { orgSlug, billId: id } };
+    case "creditNote":
+    case "debitNote":
+      return { to: "/$orgSlug/notes/$noteId", params: { orgSlug, noteId: id } };
+    case "receipt":
+      return { to: "/$orgSlug/receipts/$receiptId", params: { orgSlug, receiptId: id } };
+    case "payment":
+      return { to: "/$orgSlug/payments/$paymentId", params: { orgSlug, paymentId: id } };
+    case "journal":
+      return { to: "/$orgSlug/journals/$journalId", params: { orgSlug, journalId: id } };
+    case "openingBalance":
+      return { to: "/$orgSlug/settings/opening-balance", params: { orgSlug } };
+    case "allocation":
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+// Each party document opens over its register filtered to that party. Journal
+// and opening balance records are pages rather than filtered register Sheets.
 export function partyDocumentLink(
   orgSlug: string,
   partyId: string,
   type: PartyDocumentType,
   id: string,
 ): LinkOptions {
-  switch (type) {
-    case "invoice":
-      return {
-        to: "/$orgSlug/invoices/$invoiceId",
-        params: { orgSlug, invoiceId: id },
-        search: { partyId },
-      };
-    case "bill":
-      return {
-        to: "/$orgSlug/bills/$billId",
-        params: { orgSlug, billId: id },
-        search: { partyId },
-      };
-    case "creditNote":
-    case "debitNote":
-      return {
-        to: "/$orgSlug/notes/$noteId",
-        params: { orgSlug, noteId: id },
-        search: { partyId },
-      };
-    case "receipt":
-      return {
-        to: "/$orgSlug/receipts/$receiptId",
-        params: { orgSlug, receiptId: id },
-        search: { partyId },
-      };
-    case "payment":
-      return {
-        to: "/$orgSlug/payments/$paymentId",
-        params: { orgSlug, paymentId: id },
-        search: { partyId },
-      };
-    case "journal":
-      return { to: "/$orgSlug/journals/$journalId", params: { orgSlug, journalId: id } };
-    case "openingBalance":
-      return { to: "/$orgSlug/settings/opening-balance", params: { orgSlug } };
-  }
+  const link = documentLink(orgSlug, type, id);
+
+  return type === "journal" || type === "openingBalance" ? link : { ...link, search: { partyId } };
 }

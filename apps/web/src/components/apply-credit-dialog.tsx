@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { WaveLoader } from "@/components/wave-loader";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
@@ -190,9 +191,8 @@ export function ApplyCreditDialog({
       ? target.outstandingPaise - enteredAmount
       : null;
 
-  const emptyText = credits.isPending
-    ? "Loading credits…"
-    : credits.isError && !credits.isFetchNextPageError
+  const emptyText =
+    credits.isError && !credits.isFetchNextPageError
       ? "Could not load credits"
       : needle
         ? `No credits match “${needle}”`
@@ -227,11 +227,16 @@ export function ApplyCreditDialog({
                         renderItem={(option) =>
                           isLoadMore(option) ? (
                             <span className="w-full text-center text-muted-foreground">
-                              {credits.isFetchingNextPage
-                                ? "Loading…"
-                                : credits.isFetchNextPageError
-                                  ? "Could not load more. Try again"
-                                  : `${rows.length} shown · Load more`}
+                              {credits.isFetchingNextPage ? (
+                                <WaveLoader
+                                  label="Loading more credits"
+                                  className="justify-center"
+                                />
+                              ) : credits.isFetchNextPageError ? (
+                                "Could not load more. Try again"
+                              ) : (
+                                `${rows.length} shown · Load more`
+                              )}
                             </span>
                           ) : (
                             <>
@@ -257,7 +262,16 @@ export function ApplyCreditDialog({
                         value={selected}
                         inputValue={text}
                         onInputValueChange={setText}
-                        emptyContent={<p className="px-3 py-4 text-center">{emptyText}</p>}
+                        emptyContent={
+                          credits.isPending ? (
+                            <WaveLoader
+                              label="Loading credits"
+                              className="justify-center px-3 py-4"
+                            />
+                          ) : (
+                            <p className="px-3 py-4 text-center">{emptyText}</p>
+                          )
+                        }
                         open={listOpen}
                         onOpenChange={setListOpen}
                         showTrigger

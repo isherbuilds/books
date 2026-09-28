@@ -1,8 +1,8 @@
 # Spec: Accounting core
 
 Status: slices 1–3, 4a, 4b-i, 4b-ii, 5 (Journal, Opening Balance, locks),
-8 (chart of accounts) and 9 (party Journals, 9a and 9b) are implemented.
-Slices 6 (reports, 6a–6d) and 7 (import, 7a–7c) are open and specified;
+6 (reports, 6a–6d), 8 (chart of accounts) and 9 (party Journals, 9a and 9b)
+are implemented. Slice 7 (import, 7a–7c) is open and specified;
 remaining runtime and CA acceptance work is in the work registry.
 Authority: the founder's decisions. `docs/research` and Git keep the evidence
 behind them.
@@ -513,7 +513,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      - Attachments, when the CA asks: lock the parent `FOR UPDATE` and the file
        row `FOR KEY SHARE`, so `file.delete` waits; a duplicate insert returns
        `CONFLICT` (`a716b6c:packages/api/src/routers/opd.ts:933-1003`).
-6. **Reports.** Open, in four parts; 6a is the proof slice for the shared
+6. **Reports.** Implemented, 6a–6d. 6a is the proof slice for the shared
    report path and the latency budget, so it goes first. Trial balance,
    account ledger, day book, P&L and balance sheet are Accounting reports
    (call 15) over journal lines joined to their journal entries; the party
@@ -542,13 +542,13 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      opening, debits and credits are all zero is dropped. Rows sort by
      account code.
    - **Size.** Summary reports (trial balance, P&L, balance sheet) have one
-     row per account and no bound. Detail reports (account ledger, day book,
-     party statement) take a server-chosen line limit: 5,000 for JSON and
-     PDF, 100,000 for XLSX, which calls the builder itself, never the capped
-     procedure. The query fetches limit + 1 lines and, above the limit, the
-     call is `BAD_REQUEST` `REPORT_TOO_LARGE` with "choose a shorter period";
-     nothing is truncated. `party.statement` keeps its 5,000 bound and takes
-     the code. There is no pagination: a CA reads a whole period.
+     row per account and no bound. Interactive account ledger, day book, and
+     party ledger lists use keyset pages plus separate totals; a CA can scroll
+     a whole period. Full detail reports for JSON/PDF and XLSX use server-chosen
+     limits of 5,000 and 100,000 lines respectively. XLSX calls the builder,
+     not the capped JSON procedure. The full-report query fetches limit + 1
+     lines and, above the limit, returns `BAD_REQUEST` `REPORT_TOO_LARGE` with
+     "choose a shorter period"; nothing is truncated.
    - **Permissions.** Accounting reports need `report:readFinancial` (owner,
      accountant, ca). XLSX adds `export:read`. A PDF route calls the JSON
      procedure, so it needs the same grant. The party statement keeps
@@ -578,16 +578,17 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      member may read, then the existing GST and TDS registers, each gated by
      its own grant.
 
-   **6a. Trial balance and latency proof.**
+   **6a. Trial balance and latency proof.** Implemented.
    - `report.trialBalance({ from, to })` returns
-     `{ organization, from, to, rows, totals }`; a row is
+     `{ header, rows, totals }` (`header.range` holds `from` and `to`); a row is
      `{ accountId, code, name, type, parentName, active, openingDebitPaise, openingCreditPaise, debitPaise, creditPaise, closingDebitPaise, closingCreditPaise }`
      and `totals` holds the six sums. Rows are posting leaves; `parentName`
      names the group, as the chart shows it. Opening `O` is
      `sum(debit - credit)` before `from`, shown Dr when positive; closing is
      `O + debit - credit`, shown the same way. One report reads one database
-     snapshot: the two grouped aggregates run in one read-only Repeatable Read
-     transaction, as `invoice.get` does (legacy below). Opening, period and closing totals each balance;
+     snapshot: one grouped read of journal lines through `to` supplies both
+     opening and period amounts in one read-only Repeatable Read transaction,
+     as `invoice.get` does (legacy below). Opening, period and closing totals each balance;
      an unbalanced total is an invariant failure (`impossible`, a 500), never a
      difference row.
    - `export.trialBalanceXlsx({ from, to })` adds a totals row. PDF at
@@ -595,20 +596,14 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      `/$orgSlug/reports/trial-balance`, default this financial year; desktop
      columns Code, Account, Opening, Debit, Credit, Closing; mobile cards show
      Account, Opening and Closing.
-   - **Latency.** `scripts/benchmark-rpc.ts` gains a `trial_balance` scenario:
+   - **Latency.** `scripts/benchmark-rpc.ts` has a `trial_balance` scenario:
      the last 365 days for Meridian Traders after `bun run db:seed:volume`
      (about 200,000 journal lines, twice the target volume). Target p95 under
      100 ms on native PostgreSQL. Record the numbers and
-     `EXPLAIN (ANALYZE, BUFFERS)` in the work registry. If the existing
-     `journal_entries_org_date_idx` and `journal_lines_org_entry_idx` miss,
-     try in order: an index `journal_lines (org_id, entry_id) include
-(account_id, debit, credit)`; then `entry_date` copied onto
-     `journal_lines` from the entry being written, by both `recordEntry` and
-     `reverseEntries` (lines are immutable; a reversal line takes the
-     reversal's date), with an index
-     `(org_id, account_id, entry_date) include (debit, credit)`. Schema
-     changes follow rule 4. The period-close snapshot stays Deferred unless
-     both miss.
+     `EXPLAIN (ANALYZE, BUFFERS)` in the work registry. Journal lines carry
+     the entry date under a composite foreign key, so report totals read
+     `journal_lines` directly. A period-close roll-up stays Deferred unless
+     the measured scan exceeds the budget at required volume.
    - Acceptance, on one proprietorship Organization. April is the first month
      of the financial year before the one containing the run date, and 31
      March is the day before it. Opening Balance on
@@ -642,18 +637,19 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `tests/integration/tenancy.test.ts`, `scripts/benchmark-rpc.ts`, and,
      only if the index fallback runs, `packages/db/src/schema/journal-lines.ts`
      and `packages/api/src/core/posting.ts`.
-   - Interfaces: `accountActivity(orgId, range)` in `lib/reports.ts`, where
-     `range` is `{ before: string } | { from: string; to: string } | { through: string }`,
-     returns `{ accountId, debitPaise, creditPaise }[]` for 6b.
-     `reportHeader(orgId, range)` returns
-     `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from?: string; to?: string } | { asOf: string }; generatedAt: Date }`.
+   - Interfaces: `accountActivity(orgId, { before } | { from, to })` returns
+     `{ accountId, debitPaise, creditPaise }[]`; `accountActivitySince(orgId,
+{ through, since })` also returns `sinceDebitPaise` and `sinceCreditPaise`.
+     `reportHeader(orgId, range)` returns `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from: string; to: string } | { asOf: string }; generatedAt: Date }`.
+     `reportProfile(orgId)` returns the settings row with `financialYearStart`;
+     `headerFromProfile(profile, range)` builds the header from it.
      `reportTooLarge(limit)` in `lib/reports.ts` builds the
      `REPORT_TOO_LARGE` error for 6c and 6d. `ReportPdf` in `report-pdf.tsx`
      takes `{ header, title, columns, rows, totals }`;
      `reportXlsx(header, title, columns, rows, totals?)` in `export.ts`
      writes the four header rows.
 
-   **6b. P&L and balance sheet.**
+   **6b. P&L and balance sheet.** Implemented.
    - `report.profitAndLoss({ from, to })`: Income (credit less debit) and
      Expenses (debit less credit) for the period, each a tree of groups with
      subtotals and leaves; zero leaves and empty groups are dropped.
@@ -671,7 +667,11 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      or the call is an invariant failure.
    - XLSX `export.profitAndLossXlsx` and `export.balanceSheetXlsx` indent
      groups; PDF and pages as 6a at `profit-and-loss` (default this financial
-     year) and `balance-sheet` (default today).
+     year) and `balance-sheet` (default today). Groups collapse inline, and
+     each leaf links to its account ledger (founder decision):
+     from the P&L for the same period; from the balance sheet from the start
+     of the financial year containing `asOf` through `asOf`, so the ledger's
+     closing equals the row.
    - Acceptance, on the 6a fixture plus a `direct` Payment of 3,000 to an
      expense on 20 April: April P&L shows income 10,000, expenses 3,500 (the
      payment and the Journal) and net profit 6,500; the balance sheet at 30
@@ -695,23 +695,28 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `{ accountId, code, name, amountPaise, children }`; groups carry their
      subtotal in `amountPaise`.
 
-   **6c. Account ledger and day book.**
+   **6c. Account ledger and day book.** Implemented.
    - `report.accountLedger({ accountId, from, to })` takes any account of the
      Organization, archived and system accounts included; a group is
-     `BAD_REQUEST` `ACCOUNT_INVALID`, and a foreign id is `NOT_FOUND`, checked
-     in parallel with the lines (legacy below). It returns `openingPaise`,
-     `lines` of
-     `{ entryId, entryDate, kind, documentId, documentType, number, narration, partyName, debitPaise, creditPaise, balancePaise }`
-     ordered by entry date, entry id and line id, and `closingPaise`;
+     `BAD_REQUEST` `ACCOUNT_INVALID`, and a foreign id is `NOT_FOUND`. It
+     returns `openingPaise`, `lines` of
+     `{ id, entryId, entryDate, kind, documentId, documentType, number, narration, partyName, debitPaise, creditPaise, balancePaise }`
+     ordered by entry date and line id, and `closingPaise`;
      balances are signed, debit positive. A `reverse` row reads "Reversal of
      <number>". An allocation entry (document type `allocation`) shows
      "Allocation" and no link.
+   - `report.accountLedgerLines({ accountId, from, to, cursor?, limit })`
+     pages ledger lines by entry date and line id; `report.accountLedgerSummary`
+     returns opening, debit, credit and closing amounts with the account.
    - `report.dayBook({ from, to, documentType? })` returns entries
      `{ entryId, entryDate, kind, documentId, documentType, number, narration, lines: [{ accountCode, accountName, partyName, debitPaise, creditPaise }] }`
-     ordered by entry date, then `postedAt`, then id, with debit and credit
+     ordered by entry date, then entry id and line id, with debit and credit
      totals; the size bound counts lines. `number` is `string | null`: an
      allocation entry shows number null, narration "Allocation" and no link,
      as in the ledger, and `documentType` may filter on `allocation`.
+   - `report.dayBookEntries({ from, to, documentType?, cursor?, limit })`
+     pages complete entries by entry date and id; `report.dayBookSummary`
+     returns entry count and debit/credit totals in one statement.
      `export.dayBookXlsx` changes from
      `{ date }` to `{ from, to, documentType? }` and reads this result; the
      Reports index's one-day card becomes the Day book page. Clean cutover:
@@ -736,10 +741,11 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `apps/web/src/routes/$orgSlug/reports_.day-book.tsx`, and their two PDF
      routes. Touches: the 6a-owned report modules and tests,
      `tests/integration/receipt.test.ts`, and the coordinator-owned files.
-   - Interfaces: the ledger and day book builders take `{ limit }` so the
-     procedure and XLSX pass 5,000 and 100,000.
+   - Interfaces: the ledger and day book builders take a numeric `limit`, so
+     the procedure and XLSX pass 5,000 and 100,000.
 
-   **6d. Party statement exports.**
+   **6d. Party statement exports.** Implemented. The Ledger tab's All time
+   header reads "As of" today.
    - `party.statement` gains the `ReportHeader` and
      `party: { name, gstin, address, stateCode }` and throws
      `REPORT_TOO_LARGE` above 5,000 lines. Its `from` and `to` stay optional:
@@ -760,9 +766,6 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `apps/web/src/routes/$orgSlug/parties_.$partyId.ledger.tsx`, and the
      coordinator-owned files.
 
-   6b, 6c and 6d depend only on 6a but share `report.ts`, `lib/reports.ts`,
-   `core/reports.ts`, `export.ts`, `reports.tsx`, the report tests and
-   `tenancy.test.ts`: run them in order, or give one owner those files.
    - Legacy reference (a716b6c):
      - Trial balance: two grouped aggregates over journal lines (opening before
        `from`, activity in the period), opening netted into Dr or Cr, all-zero
