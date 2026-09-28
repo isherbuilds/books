@@ -191,6 +191,16 @@ Decisions: [Query performance](../specs/query-performance.md).
   cookie; the next five requests read it 0 times. Before, the renewed cookie was
   dropped, so every request after the first 5 minutes of a sign-in read the
   `session` table.
+- **Cookie cache on and off.** Same data and API (`NODE_ENV=production`), 300
+  requests after 20 warm-up, two alternating runs each; p50 in ms, cache on →
+  off: `member.me` 2.2–2.3 → 2.9–3.0, `settings.get` 1.7 → 2.4, `member.list`
+  1.9–2.0 → 2.6, receipts first page 2.0 → 2.7, `invoice.get` 5.3 → 6.2–6.3.
+  The cache saves one database round trip, about 0.7 ms on a local database and
+  more across a network, for 3 lines of Better Auth configuration. Its cost is
+  that a revoked session stays valid for up to 5 minutes; membership is still
+  read on every request. The cookie forwarding stays either way: it also carries
+  the renewed session expiry, which no ordinary page otherwise returns (only
+  `join` and `create` call `get-session`).
 - **Terms without a trigram.** A review measured `---` at 10.06 s through the
   older-history index read. Validation now refuses a term without 3 letters or
   digits in a row: `receipts_search_punctuation_refusal` answers `BAD_REQUEST`
