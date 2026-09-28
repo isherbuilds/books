@@ -16,6 +16,7 @@ export const getRouter = () => {
   const router = createTanStackRouter({
     routeTree,
     scrollRestoration: true,
+    scrollToTopSelectors: ['[data-slot="page-body"]'],
     defaultPreload: "intent",
     // Query owns caching; the router's own preload cache would give the same data two
     // owners with two ideas of when it went stale.
