@@ -940,7 +940,9 @@ test("an unapplied receivables Journal credit settles an invoice without an allo
   expect((await api.party.statement({ ...claim, partyId: party.id })).closingPaise).toBe(
     balanceBefore,
   );
-  expect((await api.journal.get({ ...claim, journalId: journal.id })).allocations).toContainEqual(
+  expect(
+    (await api.journal.get({ ...claim, journalId: journal.id })).allocationsApplied,
+  ).toContainEqual(
     expect.objectContaining({
       id: required(active, "active journal allocation").id,
       reversed: true,

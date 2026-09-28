@@ -1,3 +1,4 @@
+import { enteredPaise, formatMoney, ZERO_MONEY } from "@accly/api/core/money";
 import {
   Form,
   FormControl,
@@ -20,6 +21,7 @@ import {
   EntryLines,
   entryLinesInput,
   entryLinesSchema,
+  journalAllocationLimit,
 } from "@/components/entry-lines";
 import { PartySheet } from "@/components/party-form";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -30,6 +32,7 @@ import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
+import { openItemsOptions } from "@/lib/pickers";
 
 const journalSchema = z.object({
   documentDate: z.iso.date(),
@@ -127,6 +130,30 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
         );
 
         return;
+      }
+
+      // The resolver skips field rules, so the table's limit is checked here. An
+      // invoice missing from the cache is left to the server.
+      const open = queryClient.getQueryData(
+        openItemsOptions({ orgSlug, partyId: line.partyId, side: "receivable", type: "invoice" })
+          .queryKey,
+      );
+
+      for (const row of open?.pages.flatMap((page) => page.rows) ?? []) {
+        const amount = line.allocations[row.id];
+        const limit = journalAllocationLimit(values.lines, index, row.id, row.outstandingPaise);
+
+        if (amount && enteredPaise(amount) > limit) {
+          form.setError(
+            `lines.${index}.allocations.${row.id}`,
+            {
+              message: `Enter no more than ${formatMoney(limit > ZERO_MONEY ? limit : ZERO_MONEY)}`,
+            },
+            { shouldFocus: true },
+          );
+
+          return;
+        }
       }
     }
 
