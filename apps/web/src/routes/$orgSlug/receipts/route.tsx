@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
@@ -41,7 +41,7 @@ const RECEIPT_STATES = ["posted", "cancelled"] as const;
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
   paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional().catch(undefined),
@@ -188,6 +188,7 @@ function ReceiptsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search receipts"
             placeholder="Number, party, or reference"
             value={q}

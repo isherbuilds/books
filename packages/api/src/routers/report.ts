@@ -28,6 +28,8 @@ import {
   accountActivity,
   accountActivitySince,
   accountLedgerLines,
+  accountLedgerProbe,
+  assertReportFits,
   afterCursor,
   dayBookLines,
   headerFromProfile,
@@ -214,9 +216,11 @@ export async function accountLedger(
     async (tx) => {
       const account = await postingAccount(orgId, input.accountId, tx);
 
+      // The probe and the read share this snapshot, so the read cannot pass `limit`.
+      await assertReportFits(accountLedgerProbe(orgId, input, tx), limit);
+
       const detail = await accountLedgerLines(orgId, input, limit, tx);
 
-      if (detail.length > limit) throw reportTooLarge(limit);
       const [opening] = await accountActivity(orgId, { before: input.from }, tx, account.id);
       const openingPaise = (opening?.debitPaise ?? 0n) - (opening?.creditPaise ?? 0n);
       let balancePaise = openingPaise;

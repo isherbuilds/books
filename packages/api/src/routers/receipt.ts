@@ -34,8 +34,8 @@ import {
   adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
-  pageOf,
   settlementListRow,
+  registerPage,
   settlementListWhere,
   orgSettings,
   settlementDetail,
@@ -339,18 +339,18 @@ export const receiptRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const rows = await db
-      .select({ ...settlementListRow, paymentMethodName: paymentMethods.name })
-      .from(documents)
-      .innerJoin(
-        paymentMethods,
-        and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
-      )
-      .where(settlementListWhere(orgId, "receipt", input))
-      .orderBy(desc(documents.id))
-      .limit(input.limit + 1);
-
-    return pageOf(rows, input.limit);
+    return registerPage(orgId, ["receipt"], input, (listed) =>
+      db
+        .select({ ...settlementListRow, paymentMethodName: paymentMethods.name })
+        .from(documents)
+        .innerJoin(
+          paymentMethods,
+          and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
+        )
+        .where(and(listed, settlementListWhere(input)))
+        .orderBy(desc(documents.id))
+        .limit(input.limit + 1),
+    );
   }),
 
   // Received per party. A grouped read of its own, not a column on the cached party

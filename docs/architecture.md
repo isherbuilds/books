@@ -127,7 +127,24 @@ Query, form and invalidation rules are in
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.
 - Migrations run before startup under an advisory lock and must suit a draining
-  old instance ([rules](./development.md#code-rules)).
+  old instance ([rules](./development.md#code-rules)). `runMigrations` first
+  creates the extensions the schema needs; Drizzle generates no extension.
+- Register and palette search match a substring anywhere in a document's
+  number, reference, narration or printed party name, once the term has 3
+  letters or digits in a row (`documentSearchQuery`): a shorter or
+  punctuation-only term has no trigram, so no index serves it.
+  They read one stored generated column, `documents.search_text`, through a
+  `pg_trgm` GIN index. `registerPage` walks the newest 1,000 documents first and
+  reads the index for older ones only when the page is not full: PostgreSQL
+  estimates a term's matches across every organization, so one plan alone can
+  walk a whole register or collect every match of a common term.
+- Balance sums read an index alone: `debit, credit` trail the account ledger
+  index.
+- `amount_paise` trails both party ledger indexes, so party balances and
+  statement sums read an index alone.
+- The session cookie cache stays on, and every adapter forwards the `Set-Cookie`
+  that resolving a session returns, so a request reads its session from the
+  cookie, not the database. Membership is still read on every request.
 - Tests use real PostgreSQL and wipe only a database whose name ends in `_test`.
 
 ## Audit and files

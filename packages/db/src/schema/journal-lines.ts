@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, date, foreignKey, index, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { bigint, check, date, foreignKey, index, pgTable, text } from "drizzle-orm/pg-core";
 
 import { accounts } from "./accounts";
 import { organization } from "./auth";
@@ -40,12 +40,15 @@ export const journalLines = pgTable(
       columns: [table.orgId, table.partyId],
       foreignColumns: [parties.orgId, parties.id],
     }),
-    unique("journal_lines_org_id_id_unique").on(table.orgId, table.id),
+    // An account's lines by date. `debit` and `credit` trail the keyset so balance
+    // sums read this index alone; Drizzle has no INCLUDE.
     index("journal_lines_org_account_date_idx").on(
       table.orgId,
       table.accountId,
       table.entryDate,
       table.id,
+      table.debit,
+      table.credit,
     ),
     index("journal_lines_org_entry_idx").on(table.orgId, table.entryId),
   ],

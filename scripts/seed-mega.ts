@@ -3,11 +3,10 @@ import { financialYearOf } from "@accly/api/core/numbering";
 import { env } from "@accly/env/server";
 import pg from "pg";
 
-const ORGANIZATIONS = [
-  { slug: "meridian-traders", key: "meridian", target: 1_000_000 },
-  { slug: "ridgeview-academy", key: "ridgeview", target: 5_000_000 },
-  { slug: "cedar-components", key: "cedar", target: 15_000_000 },
-] as const;
+// The volume the query-performance measurements use: one large trader, far past a
+// typical client. A second large organization measured the same plans, so only
+// Meridian is filled; the others keep their base and demo seeds.
+const ORGANIZATIONS = [{ slug: "meridian-traders", key: "meridian", target: 1_000_000 }] as const;
 
 const DOCUMENT_TYPES = [
   "invoice",
@@ -98,6 +97,19 @@ function assertLocalDevelopmentDatabase(): void {
       "Refusing mega seeding outside the local development database at localhost:55446/postgres.",
     );
   }
+}
+
+/**
+ * A UUIDv7-shaped document id, as the app writes: its first 48 bits are the document
+ * date in milliseconds plus the row's index, so newest-first `id` order is date and
+ * number order, as in production. The random bits come from `seed`.
+ */
+function documentIdSql(seed: string, date: string, index: string): string {
+  const hash = `md5(${seed})`;
+  const time = `lpad(to_hex((extract(epoch from ${date}) * 1000)::bigint + ${index}), 12, '0')`;
+  const variant = `substr('89ab', ((strpos('0123456789abcdef', substr(${hash}, 17, 1)) - 1) % 4) + 1, 1)`;
+
+  return `(substr(${time}, 1, 8) || '-' || substr(${time}, 9, 4) || '-7' || substr(${hash}, 14, 3) || '-' || ${variant} || substr(${hash}, 18, 3) || '-' || substr(${hash}, 21, 12))::uuid::text`;
 }
 
 function uuidSql(seed: string): string {
@@ -388,6 +400,7 @@ async function insertBatch(
   financialYearShort: string,
   startDate: string,
   dateSpanDays: number,
+  totalCycles: number,
   startIndex: number,
   endIndex: number,
   endCount: number,
@@ -441,31 +454,37 @@ async function insertBatch(
                 $6::text as method_id,
                 $7::text as state_code,
                 $8::date as first_date,
-                $9::integer as date_span
-       ), linked as (
+                $9::integer as date_span,
+                $10::bigint as total_cycles
+       ), dated as (
+         -- Dates rise with the index across the year, so numbers follow dates.
          select t.*, p.*,
+                p.first_date + ((t.cycle * p.date_span) / p.total_cycles)::integer as document_date
+         from typed t cross join params p
+       ), linked as (
+         select t.*,
                 case
-                  when t.document_type = 'creditNote' then ${uuidSql("p.org_key || ':invoice:' || (t.cycle * 7 + 1)::text")}
-                  when t.document_type = 'debitNote' then ${uuidSql("p.org_key || ':bill:' || (t.cycle * 4 + 1)::text")}
-                  when t.document_type = 'receipt' and t.cycle_position in (7, 8) then ${uuidSql("p.org_key || ':invoice:' || (t.cycle * 7 + 1)::text")}
-                  when t.document_type = 'receipt' and t.cycle_position = 9 then ${uuidSql("p.org_key || ':invoice:' || (t.cycle * 7 + 2)::text")}
-                  when t.document_type = 'payment' and t.cycle_position in (17, 18) then ${uuidSql("p.org_key || ':bill:' || (t.cycle * 4 + 1)::text")}
+                  when t.document_type = 'creditNote' then ${documentIdSql("t.org_key || ':invoice:' || (t.cycle * 7 + 1)::text", "t.document_date", "t.cycle * 20 + 1")}
+                  when t.document_type = 'debitNote' then ${documentIdSql("t.org_key || ':bill:' || (t.cycle * 4 + 1)::text", "t.document_date", "t.cycle * 20 + 12")}
+                  when t.document_type = 'receipt' and t.cycle_position in (7, 8) then ${documentIdSql("t.org_key || ':invoice:' || (t.cycle * 7 + 1)::text", "t.document_date", "t.cycle * 20 + 1")}
+                  when t.document_type = 'receipt' and t.cycle_position = 9 then ${documentIdSql("t.org_key || ':invoice:' || (t.cycle * 7 + 2)::text", "t.document_date", "t.cycle * 20 + 2")}
+                  when t.document_type = 'payment' and t.cycle_position in (17, 18) then ${documentIdSql("t.org_key || ':bill:' || (t.cycle * 4 + 1)::text", "t.document_date", "t.cycle * 20 + 12")}
                   else null
                 end as target_document_id,
                 case
-                  when t.document_type = 'invoice' then p.customers[((t.cycle * 7 + t.cycle_position) % cardinality(p.customers))::integer + 1]
-                  when t.document_type = 'creditNote' then p.customers[(t.cycle * 7 % cardinality(p.customers))::integer + 1]
-                  when t.document_type = 'receipt' and t.cycle_position in (7, 8) then p.customers[(t.cycle * 7 % cardinality(p.customers))::integer + 1]
-                  when t.document_type = 'receipt' and t.cycle_position = 9 then p.customers[((t.cycle * 7 + 1) % cardinality(p.customers))::integer + 1]
-                  when t.document_type = 'bill' then p.vendors[((t.cycle * 4 + t.cycle_position - 11) % cardinality(p.vendors))::integer + 1]
-                  when t.document_type = 'debitNote' then p.vendors[(t.cycle * 4 % cardinality(p.vendors))::integer + 1]
-                  when t.document_type = 'payment' and t.cycle_position in (17, 18) then p.vendors[(t.cycle * 4 % cardinality(p.vendors))::integer + 1]
+                  when t.document_type = 'invoice' then t.customers[((t.cycle * 7 + t.cycle_position) % cardinality(t.customers))::integer + 1]
+                  when t.document_type = 'creditNote' then t.customers[(t.cycle * 7 % cardinality(t.customers))::integer + 1]
+                  when t.document_type = 'receipt' and t.cycle_position in (7, 8) then t.customers[(t.cycle * 7 % cardinality(t.customers))::integer + 1]
+                  when t.document_type = 'receipt' and t.cycle_position = 9 then t.customers[((t.cycle * 7 + 1) % cardinality(t.customers))::integer + 1]
+                  when t.document_type = 'bill' then t.vendors[((t.cycle * 4 + t.cycle_position - 11) % cardinality(t.vendors))::integer + 1]
+                  when t.document_type = 'debitNote' then t.vendors[(t.cycle * 4 % cardinality(t.vendors))::integer + 1]
+                  when t.document_type = 'payment' and t.cycle_position in (17, 18) then t.vendors[(t.cycle * 4 % cardinality(t.vendors))::integer + 1]
                   else null
                 end as party_id
-         from typed t cross join params p
+         from dated t
        )
        select global_index, cycle, cycle_position, document_type, type_sequence,
-              ${uuidSql("org_key || ':' || document_type || ':' || type_sequence::text")},
+              ${documentIdSql("org_key || ':' || document_type || ':' || type_sequence::text", "document_date", "global_index")},
               party_id, target_document_id,
               cycle % 100 = 0 and (
                 (document_type = 'invoice' and cycle_position = 6) or
@@ -474,7 +493,7 @@ async function insertBatch(
                 (document_type = 'receipt' and cycle_position = 10) or
                 (document_type = 'payment' and cycle_position = 19)
               ),
-              first_date + (cycle % date_span)::integer,
+              document_date,
               case when document_type in ('creditNote', 'debitNote') then 100000::bigint else
                    case when document_type in ('receipt', 'payment') then 300000::bigint else 1000000::bigint end end,
               case when document_type = 'receipt' then
@@ -500,6 +519,7 @@ async function insertBatch(
         plan.settings.state_code,
         startDate,
         dateSpanDays,
+        totalCycles,
       ],
     );
 
@@ -889,6 +909,7 @@ async function seedOrganization(client: pg.Client, plan: OrganizationPlan, today
       financialYearShort,
       startDate,
       dateSpanDays,
+      Math.ceil(target / DOCUMENTS_PER_CYCLE),
       completed + 1,
       next,
       next,
@@ -922,6 +943,10 @@ async function main(): Promise<void> {
 
   try {
     await client.query("set synchronous_commit = off");
+    // Each batch joins 200,000 rows against tables that grew since their last
+    // ANALYZE. A stale estimate of one row picks a nested loop that rescans the
+    // batch per row (25 minutes for one statement); hash joins stay linear.
+    await client.query("set enable_nestloop = off");
     const plans: OrganizationPlan[] = [];
 
     for (const entry of ORGANIZATIONS) {

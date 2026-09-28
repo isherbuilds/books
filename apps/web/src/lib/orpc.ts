@@ -5,7 +5,7 @@ import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createRouterClient, type RouterClient } from "@orpc/server";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 
 import { createRequestContext, type ORPCContext } from "@accly/api/lib/context";
 import { appRouter, type AppRouter } from "@accly/api/routers/index";
@@ -24,7 +24,13 @@ const getORPCClient = createIsomorphicFn()
 
         if (cached) return cached;
 
-        const context = createRequestContext(new Headers(request.headers));
+        // The page response carries any renewed session cookie to the browser.
+        const context = createRequestContext(new Headers(request.headers)).then((created) => {
+          if (created.setCookies.length > 0) setResponseHeader("set-cookie", created.setCookies);
+
+          return created;
+        });
+
         contextByRequest.set(request, context);
 
         return context;

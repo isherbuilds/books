@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -29,7 +29,7 @@ import { periodSearch, requirePeriod } from "@/lib/require-period";
 const JOURNAL_STATES = ["posted", "cancelled"] as const;
 
 const journalSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   ...periodSearch,
   state: z.enum(JOURNAL_STATES).optional().catch(undefined),
 });
@@ -112,6 +112,7 @@ function JournalsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search journals"
             placeholder="Number, reference, or narration"
             value={q}

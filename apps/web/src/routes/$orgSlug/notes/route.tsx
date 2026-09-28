@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
@@ -22,7 +22,7 @@ import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const noteSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   type: z.enum(["creditNote", "debitNote"]).optional().catch(undefined),
   ...periodSearch,
@@ -92,6 +92,7 @@ function NotesRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search notes"
             placeholder="Number, party, or reason"
             value={q}

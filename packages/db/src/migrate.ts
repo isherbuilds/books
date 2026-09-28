@@ -19,6 +19,9 @@ export async function runMigrations(): Promise<void> {
     await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
 
     try {
+      // Drizzle does not generate extensions. pg_trgm is trusted, so the database
+      // owner creates it; the documents search index needs it before the baseline.
+      await client.query("create extension if not exists pg_trgm");
       await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_FOLDER });
     } finally {
       await client.query("select pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);

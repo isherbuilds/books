@@ -63,7 +63,6 @@ CREATE TABLE "journal_lines" (
 	"party_id" text,
 	"debit" bigint DEFAULT 0 NOT NULL,
 	"credit" bigint DEFAULT 0 NOT NULL,
-	CONSTRAINT "journal_lines_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "journal_lines_debit_check" CHECK ("journal_lines"."debit" >= 0),
 	CONSTRAINT "journal_lines_credit_check" CHECK ("journal_lines"."credit" >= 0),
 	CONSTRAINT "journal_lines_one_side_check" CHECK (("journal_lines"."debit" = 0) <> ("journal_lines"."credit" = 0))
@@ -77,8 +76,7 @@ CREATE TABLE "file" (
 	"mime_type" text,
 	"size" bigint NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "file_org_id_id_unique" UNIQUE("org_id","id")
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "document_lines" (
@@ -128,7 +126,6 @@ CREATE TABLE "party_ledger_lines" (
 	"amount_paise" bigint NOT NULL,
 	"entry_date" date NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "party_ledger_lines_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "party_ledger_lines_side_check" CHECK ("party_ledger_lines"."side" in ('receivable', 'payable')),
 	CONSTRAINT "party_ledger_lines_kind_check" CHECK ("party_ledger_lines"."kind" in ('post', 'reverse'))
 );
@@ -224,6 +221,7 @@ CREATE TABLE "documents" (
 	"round_off_paise" bigint NOT NULL,
 	"affects_tax" boolean DEFAULT false NOT NULL,
 	"print_snapshot" jsonb,
+	"search_text" text GENERATED ALWAYS AS (coalesce(number, '') || ' ' || coalesce(reference, '') || ' ' || coalesce(narration, '') || ' ' || coalesce(print_snapshot->'party'->>'name', '')) STORED,
 	"posted_at" timestamp with time zone,
 	"cancelled_at" timestamp with time zone,
 	"created_by" text,
@@ -465,13 +463,13 @@ CREATE INDEX "items_org_name_idx" ON "items" USING btree ("org_id","name");--> s
 CREATE INDEX "allocations_org_source_document_idx" ON "allocations" USING btree ("org_id","source_document_id");--> statement-breakpoint
 CREATE INDEX "allocations_org_target_document_idx" ON "allocations" USING btree ("org_id","target_document_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "allocations_org_reverses_idx" ON "allocations" USING btree ("org_id","reverses_allocation_id") WHERE "allocations"."reverses_allocation_id" is not null;--> statement-breakpoint
-CREATE INDEX "journal_lines_org_account_date_idx" ON "journal_lines" USING btree ("org_id","account_id","entry_date","id");--> statement-breakpoint
+CREATE INDEX "journal_lines_org_account_date_idx" ON "journal_lines" USING btree ("org_id","account_id","entry_date","id","debit","credit");--> statement-breakpoint
 CREATE INDEX "journal_lines_org_entry_idx" ON "journal_lines" USING btree ("org_id","entry_id");--> statement-breakpoint
 CREATE INDEX "file_org_created_idx" ON "file" USING btree ("org_id","created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST);--> statement-breakpoint
 CREATE INDEX "document_lines_org_document_idx" ON "document_lines" USING btree ("org_id","document_id");--> statement-breakpoint
 CREATE INDEX "document_lines_org_source_line_idx" ON "document_lines" USING btree ("org_id","source_line_id");--> statement-breakpoint
-CREATE INDEX "party_ledger_lines_org_party_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","side");--> statement-breakpoint
-CREATE INDEX "party_ledger_lines_org_party_date_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","entry_date","id");--> statement-breakpoint
+CREATE INDEX "party_ledger_lines_org_party_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","side","amount_paise");--> statement-breakpoint
+CREATE INDEX "party_ledger_lines_org_party_date_idx" ON "party_ledger_lines" USING btree ("org_id","party_id","entry_date","id","amount_paise");--> statement-breakpoint
 CREATE UNIQUE INDEX "party_ledger_lines_org_document_party_kind_idx" ON "party_ledger_lines" USING btree ("org_id","document_id","party_id","kind");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_rates_org_code_from_idx" ON "tax_rates" USING btree ("org_id","code","effective_from");--> statement-breakpoint
 CREATE INDEX "lock_exceptions_org_user_expires_idx" ON "lock_exceptions" USING btree ("org_id","user_id","expires_at");--> statement-breakpoint
@@ -484,7 +482,8 @@ CREATE UNIQUE INDEX "documents_org_number_idx" ON "documents" USING btree ("org_
 CREATE UNIQUE INDEX "documents_org_opening_balance_idx" ON "documents" USING btree ("org_id") WHERE "documents"."type" = 'openingBalance' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_type_date_idx" ON "documents" USING btree ("org_id","type","document_date");--> statement-breakpoint
 CREATE INDEX "documents_org_type_id_idx" ON "documents" USING btree ("org_id","type","id");--> statement-breakpoint
-CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id");--> statement-breakpoint
+CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id","id");--> statement-breakpoint
+CREATE INDEX "documents_search_text_idx" ON "documents" USING gin ("search_text" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "documents_org_amended_from_idx" ON "documents" USING btree ("org_id","amended_from_id");--> statement-breakpoint
 CREATE INDEX "documents_org_against_document_idx" ON "documents" USING btree ("org_id","against_document_id");--> statement-breakpoint
 CREATE INDEX "documents_posted_receipt_party_idx" ON "documents" USING btree ("org_id","party_id","total_paise") WHERE "documents"."type" = 'receipt' and "documents"."state" = 'posted' and "documents"."party_id" is not null;--> statement-breakpoint

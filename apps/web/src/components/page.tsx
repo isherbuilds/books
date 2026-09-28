@@ -3,7 +3,15 @@ import { Input } from "@accly/ui/components/input";
 import { cn } from "@accly/ui/lib/utils";
 import { CatchBoundary, createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
-import { Suspense, useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
+import {
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { MobileMenu } from "@/components/app-shell";
 import type { VirtualPage } from "@/components/data-table/use-virtual-rows";
@@ -157,6 +165,7 @@ export function SearchInput({
   onQueryChange,
   fieldRef,
   trailing,
+  pattern,
 }: {
   label: string;
   placeholder: string;
@@ -169,11 +178,20 @@ export function SearchInput({
   fieldRef?: Ref<HTMLDivElement>;
   /** The filter trigger, drawn inside the field's right edge. */
   trailing?: ReactNode;
+  /** A term the server searches, with the hint shown while the text is too short. */
+  pattern?: { source: string; hint: string };
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const hintId = useId();
+
   // The list re-renders after each pause, not after each keystroke. The pause reads
   // the box when it ends, so a Clear during the pause is not undone by older text.
-  const apply = useDebouncedCallback(() => onQueryChange(input.current?.value.trim() ?? ""), delay);
+  // Text the pattern rejects clears the search; the hint says why.
+  const apply = useDebouncedCallback(() => {
+    const element = input.current;
+
+    onQueryChange(element?.validity.valid ? element.value.trim() : "");
+  }, delay);
 
   // Clear, Back, or a palette link changes the URL; the box follows, but never
   // while the operator types in it.
@@ -194,12 +212,14 @@ export function SearchInput({
         defaultValue={value}
         // The server's searchQuery cap: a longer query would validate to no search.
         maxLength={100}
+        pattern={pattern && `.*${pattern.source}.*`}
+        aria-describedby={pattern && hintId}
         autoComplete="off"
         autoCapitalize="none"
         autoCorrect="off"
         spellCheck={false}
         className={cn(
-          "pl-8",
+          "peer pl-8",
           trailing !== undefined && "pr-8 [&::-webkit-search-cancel-button]:appearance-none",
         )}
         onChange={apply.schedule}
@@ -220,6 +240,17 @@ export function SearchInput({
           }
         }}
       />
+      {pattern ? (
+        <span
+          id={hintId}
+          className={cn(
+            "pointer-events-none absolute top-1/2 hidden -translate-y-1/2 text-xs text-muted-foreground peer-invalid:block",
+            trailing === undefined ? "right-2.5" : "right-9",
+          )}
+        >
+          {pattern.hint}
+        </span>
+      ) : null}
       {trailing === undefined ? null : (
         <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>
       )}

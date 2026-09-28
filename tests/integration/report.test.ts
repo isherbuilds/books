@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { businessDate } from "@accly/api/lib/business-date";
+import { partyStatement } from "@accly/api/routers/party";
 import { accountLedger } from "@accly/api/routers/report";
 import { db } from "@accly/db";
 import { journalEntries } from "@accly/db/schema/journal-entries";
@@ -375,6 +376,11 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     { documentId: receipt.id, documentType: "receipt", balancePaise: 600_000n },
   ]);
   expect(statement.closingPaise).toBe(600_000n);
+
+  // The size probe refuses before the joined read; the bound is inclusive.
+  const statementRange = { partyId: priya.id, ...claimDates };
+  await expectReason(partyStatement(organization.id, statementRange, 1), "REPORT_TOO_LARGE");
+  expect((await partyStatement(organization.id, statementRange, 2)).lines).toHaveLength(2);
 
   const statementFile = await api.export.partyStatementXlsx({
     ...claim,

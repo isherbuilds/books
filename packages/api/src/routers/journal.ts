@@ -21,13 +21,7 @@ import {
   reason,
   settlementPostFields,
 } from "../lib/schemas";
-import {
-  allocationsOf,
-  cancelDocument,
-  documentListWhere,
-  orgSettings,
-  pageOf,
-} from "../lib/settlements";
+import { allocationsOf, cancelDocument, registerPage, orgSettings } from "../lib/settlements";
 
 const lineSchema = z.strictObject({
   ...entryLineFields,
@@ -146,26 +140,21 @@ export const journalRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const queried = await db
-      .select({
-        id: documents.id,
-        number: documents.number,
-        documentDate: documents.documentDate,
-        state: documents.state,
-        totalPaise: documents.totalPaise,
-        narration: documents.narration,
-      })
-      .from(documents)
-      .where(
-        and(
-          documentListWhere(orgId, ["journal"], input),
-          input.state ? eq(documents.state, input.state) : undefined,
-        ),
-      )
-      .orderBy(desc(documents.id))
-      .limit(input.limit + 1);
-
-    const page = pageOf(queried, input.limit);
+    const page = await registerPage(orgId, ["journal"], input, (listed) =>
+      db
+        .select({
+          id: documents.id,
+          number: documents.number,
+          documentDate: documents.documentDate,
+          state: documents.state,
+          totalPaise: documents.totalPaise,
+          narration: documents.narration,
+        })
+        .from(documents)
+        .where(and(listed, input.state ? eq(documents.state, input.state) : undefined))
+        .orderBy(desc(documents.id))
+        .limit(input.limit + 1),
+    );
 
     return {
       ...page,

@@ -163,7 +163,11 @@ function mount(
       return c.notFound();
     }
 
-    return c.newResponse(result.response.body, result.response);
+    const response = c.newResponse(result.response.body, result.response);
+
+    for (const cookie of context.setCookies) response.headers.append("set-cookie", cookie);
+
+    return response;
   });
 }
 
