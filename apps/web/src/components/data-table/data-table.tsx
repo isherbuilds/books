@@ -27,7 +27,6 @@ import {
   type ComponentProps,
   type KeyboardEvent,
   type ReactNode,
-  type RefObject,
 } from "react";
 
 import {
@@ -119,7 +118,6 @@ export function DataTable<T extends RowData>({
 
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
-  const pendingFocus = useRef<{ list: HTMLElement; index: number } | null>(null);
   const desktop = useDesktop();
 
   const nextPage: VirtualPage | undefined = query.fetchNextPage
@@ -148,25 +146,39 @@ export function DataTable<T extends RowData>({
     nextPage: desktop === false ? nextPage : undefined,
   });
 
-  const tableFirst = tableRows.virtualRows[0]?.index;
-  const tableLast = tableRows.virtualRows.at(-1)?.index;
-  const cardFirst = cards.virtualRows[0]?.index;
-  const cardLast = cards.virtualRows.at(-1)?.index;
+  // ↑/↓ step through row links by virtual index. A neighbour outside the mounted
+  // window is scrolled in first and focused on the render that mounts it.
+  const pendingFocus = useRef<{ list: HTMLElement; index: number } | null>(null);
 
   useLayoutEffect(() => {
     const pending = pendingFocus.current;
 
-    if (!pending) return;
+    if (pending && focusRow(pending.list, pending.index)) pendingFocus.current = null;
+  });
 
-    const link = pending.list.querySelector<HTMLElement>(
-      `[data-index="${pending.index}"] [data-row-link]`,
-    );
+  const moveRowFocus = (
+    event: KeyboardEvent<HTMLElement>,
+    scrollToIndex: (index: number) => void,
+  ) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 
-    if (link) {
-      link.focus();
-      pendingFocus.current = null;
-    }
-  }, [tableFirst, tableLast, cardFirst, cardLast]);
+    const link = event.target;
+
+    const row =
+      link instanceof HTMLElement && link.matches("[data-row-link]")
+        ? link.closest<HTMLElement>("[data-index]")
+        : null;
+
+    if (!row) return;
+
+    event.preventDefault();
+    const index = Number(row.dataset.index) + (event.key === "ArrowDown" ? 1 : -1);
+
+    if (index < 0 || index >= rows.length || focusRow(event.currentTarget, index)) return;
+
+    pendingFocus.current = { list: event.currentTarget, index };
+    scrollToIndex(index);
+  };
 
   return (
     // The box hugs its rows, so a short list ends on its last row's line; only the
@@ -224,9 +236,7 @@ export function DataTable<T extends RowData>({
           {hasRows ? (
             <tbody
               ref={tableRows.listRef}
-              onKeyDown={(event) =>
-                moveRowFocus(event, rows.length, tableRows.scrollToIndex, pendingFocus)
-              }
+              onKeyDown={(event) => moveRowFocus(event, tableRows.scrollToIndex)}
               className="[&>tr:last-child>td]:border-b-0"
             >
               {tableRows.paddingTop > 0 ? (
@@ -262,7 +272,7 @@ export function DataTable<T extends RowData>({
       {hasRows && desktop !== true ? (
         <ul
           ref={cards.listRef}
-          onKeyDown={(event) => moveRowFocus(event, rows.length, cards.scrollToIndex, pendingFocus)}
+          onKeyDown={(event) => moveRowFocus(event, cards.scrollToIndex)}
           className="md:hidden"
         >
           {cards.paddingTop > 0 ? (
@@ -424,40 +434,11 @@ export function TextOrDash({ value, mono = false }: { value: string | null; mono
   );
 }
 
-// DOM focus only: moving between row links commits nothing to React.
-function moveRowFocus(
-  event: KeyboardEvent<HTMLElement>,
-  count: number,
-  scrollToIndex: (index: number) => void,
-  pendingFocus: RefObject<{ list: HTMLElement; index: number } | null>,
-) {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+// DOM focus only: moving between mounted row links commits nothing to React.
+function focusRow(list: HTMLElement, index: number) {
+  const link = list.querySelector<HTMLElement>(`[data-index="${index}"] [data-row-link]`);
 
-  const active = document.activeElement;
+  link?.focus();
 
-  if (!(active instanceof HTMLElement) || !active.matches("[data-row-link]")) return;
-
-  if (!event.currentTarget.contains(active)) return;
-
-  const row = active.closest<HTMLElement>("[data-index]");
-
-  if (!row) return;
-
-  const index = Number(row.dataset.index) + (event.key === "ArrowDown" ? 1 : -1);
-  event.preventDefault();
-
-  if (index < 0 || index >= count) return;
-
-  const next = event.currentTarget.querySelector<HTMLElement>(
-    `[data-index="${index}"] [data-row-link]`,
-  );
-
-  if (next) {
-    next.focus();
-
-    return;
-  }
-
-  pendingFocus.current = { list: event.currentTarget, index };
-  scrollToIndex(index);
+  return link !== null;
 }
