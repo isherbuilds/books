@@ -18,6 +18,7 @@ import { z } from "zod";
 import { ErrorNote, ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
 import { presetRange } from "@/lib/date-presets";
+import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
@@ -56,6 +57,7 @@ function TrialBalanceRoute() {
   const { from, to } = search;
   const navigate = useNavigate({ from: Route.fullPath });
   const { today, financialYearStart } = useOrgDateTime();
+  const canExport = useCan(orgSlug, { export: ["read"] });
   const period = from && to ? { from, to } : presetRange("this-year", today, financialYearStart);
   const shownPeriod = { from: shown.from ?? period.from, to: shown.to ?? period.to };
   const valid = period.from <= period.to;
@@ -78,14 +80,16 @@ function TrialBalanceRoute() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <ReportPeriod period={period} onChange={setPeriod} />
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={!valid || download.isPending}
-              onClick={() => download.mutate()}
-            >
-              <DownloadIcon data-icon="inline-start" />
-              {download.isPending ? "Building…" : "Download XLSX"}
-            </Button>
+            {canExport ? (
+              <Button
+                variant="outline"
+                disabled={!valid || download.isPending}
+                onClick={() => download.mutate()}
+              >
+                <DownloadIcon data-icon="inline-start" />
+                {download.isPending ? "Building…" : "Download XLSX"}
+              </Button>
+            ) : null}
             {valid ? (
               <Button
                 render={<a href={pdf} target="_blank" rel="noopener noreferrer" />}

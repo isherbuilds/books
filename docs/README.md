@@ -40,18 +40,16 @@ Check UI items in the running app on desktop and mobile, in both themes.
   themes on Cedar Components: balance sheet → leaf → ledger → voucher, the
   ledger closing equal to the balance sheet row, the P&L net equal to the
   current-year row, and every report PDF answering `application/pdf`. At
-  210,000 journal lines on Docker PostgreSQL after `VACUUM ANALYZE`, through
-  the `--hot` dev API rather than a build, 365 days, p95: `trial_balance`
-  97–110 ms, `profit_and_loss` 105–115 ms, `balance_sheet` 113 ms, just above
-  the budget before the line-only aggregate change. At 2.2 million Meridian
-  journal lines on Docker PostgreSQL, warm direct calls before → after were
-  1.90 → 0.52 s for trial balance, 2.68 → 0.39 s for P&L, and 2.34 → 0.45 s
-  for balance sheet. A focused call through the dev API after the change took
-  about 0.4 s per report when warm. The balance sheet `EXPLAIN ANALYZE` fell
-  from 4.14 s for the joined aggregate to 0.42 s for the line-only aggregate;
-  both returned identical account totals. Open: the native PostgreSQL run
-  against a build at the specified 210,000-line fixture, with
-  `EXPLAIN (ANALYZE, BUFFERS)`. Slice 9a's
+  210,124 Meridian journal lines on native Docker PostgreSQL after `VACUUM
+ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
+  (`trial_balance`), 37.8 ms (`profit_and_loss`) and 39.3 ms
+  (`balance_sheet`) over 200 requests each, all below 100 ms.
+  Warm `EXPLAIN (ANALYZE, BUFFERS)` shows parallel sequential scans of
+  `journal_lines`: 41.2, 30.8 and 30.2 ms respectively, with 11,373
+  shared buffers hit and none read for each. Slice 6 regenerated the
+  migration baseline to add `journal_lines.entry_date` (rule 4); a database
+  still on the earlier `0000_rare_johnny_storm` baseline fails migration and
+  must be reset with `bun run db:seed -- --reset`. Slice 9a's
   Journal form, record, Apply credit and party Ledger link passed at 1440
   and 390 px in both themes; open: the Opening Balance picker without
   `receivables`, the Journal Invoice picker after a reversed refund and Fill
@@ -68,13 +66,24 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **Virtualized lists and paged ledgers**: Verification. Every `DataTable`, the
   audit and files panels, the account ledger and the day book render through
   `useVirtualRows`; keyset lists load the next 25 rows as they scroll into view.
+  At 210,124 Meridian lines on native PostgreSQL, warm
+  `EXPLAIN (ANALYZE, BUFFERS)` shows an account summary parallel sequential
+  scan in 22.4 ms (11,357 buffers hit, none read) and a first-page index
+  scan in 0.4 ms (216 hit). The day-book summary uses parallel sequential
+  scans of lines and entries in 51.1 ms (12,207 hit, 5,194 read); its
+  first-page index-only entry scan takes 0.1 ms (5 hit), and indexed
+  detail takes 0.6 ms (498 hit).
   Party ledger, account ledger and day book page oldest first on
   `(entry_date, id)` with a top summary. On mega-volume Meridian (1.3M journal
   lines) warm page queries take 0.1–3 ms; the summaries scan their period
   (account 165–390 ms, day book 120–770 ms, party 14–80 ms). Checked at 1440
   and 390 px in both themes: SSR first rows, auto-load, bounded mounted rows,
   balances continuing across pages, the Closing row only after the last page, and
-  row focus kept when a Sheet closes. Open: confirm the Parties table and its
+  row focus kept when a Sheet closes. On 1440 px Meridian Invoices, ArrowDown
+  from row 0 reaches row 60 across the mounted window and ArrowUp returns;
+  a cold-loaded day book fills the viewport after scrolling on both widths; a
+  failed remote party search shows "Could not load parties". Auto-load waits
+  while the list is refetching. Open: confirm the Parties table and its
   row highlight fill the bordered box at desktop width after the virtual spacer
   fix, in both themes; the 5,000-party register (the local seed has 94 parties);
   and period roll-ups if summaries miss the report budget on native PostgreSQL.

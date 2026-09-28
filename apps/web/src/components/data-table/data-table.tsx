@@ -21,7 +21,14 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type ComponentProps,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import {
   useDesktop,
@@ -112,12 +119,14 @@ export function DataTable<T extends RowData>({
 
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
+  const pendingFocus = useRef<{ list: HTMLElement; index: number } | null>(null);
   const desktop = useDesktop();
 
   const nextPage: VirtualPage | undefined = query.fetchNextPage
     ? {
         hasNextPage: query.hasNextPage ?? false,
         isFetchingNextPage: query.isFetchingNextPage ?? false,
+        isFetching: query.isFetching ?? false,
         isFetchNextPageError: query.isFetchNextPageError ?? false,
         fetchNextPage: query.fetchNextPage,
       }
@@ -138,6 +147,26 @@ export function DataTable<T extends RowData>({
     enabled: desktop !== true,
     nextPage: desktop === false ? nextPage : undefined,
   });
+
+  const tableFirst = tableRows.virtualRows[0]?.index;
+  const tableLast = tableRows.virtualRows.at(-1)?.index;
+  const cardFirst = cards.virtualRows[0]?.index;
+  const cardLast = cards.virtualRows.at(-1)?.index;
+
+  useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+
+    if (!pending) return;
+
+    const link = pending.list.querySelector<HTMLElement>(
+      `[data-index="${pending.index}"] [data-row-link]`,
+    );
+
+    if (link) {
+      link.focus();
+      pendingFocus.current = null;
+    }
+  }, [tableFirst, tableLast, cardFirst, cardLast]);
 
   return (
     // The box hugs its rows, so a short list ends on its last row's line; only the
@@ -195,7 +224,9 @@ export function DataTable<T extends RowData>({
           {hasRows ? (
             <tbody
               ref={tableRows.listRef}
-              onKeyDown={moveRowFocus}
+              onKeyDown={(event) =>
+                moveRowFocus(event, rows.length, tableRows.scrollToIndex, pendingFocus)
+              }
               className="[&>tr:last-child>td]:border-b-0"
             >
               {tableRows.paddingTop > 0 ? (
@@ -210,6 +241,7 @@ export function DataTable<T extends RowData>({
                 return (
                   <DataTableRow
                     key={row.id}
+                    index={item.index}
                     id={row.id}
                     original={row.original}
                     cells={row.getVisibleCells()}
@@ -228,7 +260,11 @@ export function DataTable<T extends RowData>({
         </table>
       ) : null}
       {hasRows && desktop !== true ? (
-        <ul ref={cards.listRef} onKeyDown={moveRowFocus} className="md:hidden">
+        <ul
+          ref={cards.listRef}
+          onKeyDown={(event) => moveRowFocus(event, rows.length, cards.scrollToIndex, pendingFocus)}
+          className="md:hidden"
+        >
           {cards.paddingTop > 0 ? (
             <li aria-hidden="true" style={{ height: cards.paddingTop }} />
           ) : null}
@@ -278,12 +314,14 @@ const CARD_CLASS = "flex min-h-10 flex-col gap-1 border-b border-border/60 px-3 
 // so a memoized row cannot render stale after a sort or a visibility change.
 function DataTableRow<T extends RowData>({
   id,
+  index,
   original,
   cells,
   active,
   rowLink,
 }: {
   id: string;
+  index: number;
   original: T;
   cells: Cell<typeof DATA_TABLE_FEATURES, T, unknown>[];
   active: boolean;
@@ -294,6 +332,7 @@ function DataTableRow<T extends RowData>({
   return (
     <tr
       data-row-id={id}
+      data-index={index}
       data-active={active || undefined}
       onClick={(event) => {
         if (!rowLink) return;
@@ -386,14 +425,39 @@ export function TextOrDash({ value, mono = false }: { value: string | null; mono
 }
 
 // DOM focus only: moving between row links commits nothing to React.
-function moveRowFocus(event: KeyboardEvent<HTMLElement>) {
+function moveRowFocus(
+  event: KeyboardEvent<HTMLElement>,
+  count: number,
+  scrollToIndex: (index: number) => void,
+  pendingFocus: RefObject<{ list: HTMLElement; index: number } | null>,
+) {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 
-  const links = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-row-link]")];
-  const index = links.findIndex((link) => link === document.activeElement);
+  const active = document.activeElement;
 
-  if (index === -1) return;
+  if (!(active instanceof HTMLElement) || !active.matches("[data-row-link]")) return;
 
+  if (!event.currentTarget.contains(active)) return;
+
+  const row = active.closest<HTMLElement>("[data-index]");
+
+  if (!row) return;
+
+  const index = Number(row.dataset.index) + (event.key === "ArrowDown" ? 1 : -1);
   event.preventDefault();
-  links[index + (event.key === "ArrowDown" ? 1 : -1)]?.focus();
+
+  if (index < 0 || index >= count) return;
+
+  const next = event.currentTarget.querySelector<HTMLElement>(
+    `[data-index="${index}"] [data-row-link]`,
+  );
+
+  if (next) {
+    next.focus();
+
+    return;
+  }
+
+  pendingFocus.current = { list: event.currentTarget, index };
+  scrollToIndex(index);
 }

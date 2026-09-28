@@ -640,8 +640,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
    - Interfaces: `accountActivity(orgId, { before } | { from, to })` returns
      `{ accountId, debitPaise, creditPaise }[]`; `accountActivitySince(orgId,
 { through, since })` also returns `sinceDebitPaise` and `sinceCreditPaise`.
-     `reportHeader(orgId, range)` returns `{ header: ReportHeader, financialYearStart }`,
-     where `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from: string; to: string } | { asOf: string }; generatedAt: Date }`.
+     `reportHeader(orgId, range)` returns `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from: string; to: string } | { asOf: string }; generatedAt: Date }`.
+     `reportProfile(orgId)` returns the settings row with `financialYearStart`;
+     `headerFromProfile(profile, range)` builds the header from it.
      `reportTooLarge(limit)` in `lib/reports.ts` builds the
      `REPORT_TOO_LARGE` error for 6c and 6d. `ReportPdf` in `report-pdf.tsx`
      takes `{ header, title, columns, rows, totals }`;

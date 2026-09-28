@@ -107,11 +107,16 @@ export async function invalidateOpeningBalanceState(
 }
 
 // Every party read for one org: the master list, the record, and anything keyed
-// under `party`. Receipt totals do not change when a party is edited.
-export function invalidatePartyState(queryClient: QueryInvalidator, orgSlug: string) {
-  return queryClient.invalidateQueries({
-    queryKey: orpc.party.key({ input: { orgSlug } }),
-  });
+// under `party`, plus reports, whose ledger and day book rows show the current party
+// name. Receipt totals do not change when a party is edited.
+export async function invalidatePartyState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: orpc.party.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
+  ]);
 }
 
 export async function invalidateItems(queryClient: QueryInvalidator, orgSlug: string) {
@@ -160,8 +165,9 @@ export async function invalidateMembership(
   ]);
 }
 
-// `member.me` carries the financial year the period presets use, and `journal.accounts`
-// follows the GSTIN: a registered organization cannot journal taxable income.
+// `member.me` carries the financial year the period presets use, `journal.accounts`
+// follows the GSTIN (a registered organization cannot journal taxable income), and
+// report headers show the legal name and GSTIN.
 export async function invalidateSettings(
   queryClient: QueryInvalidator,
   orgSlug: string,
@@ -170,6 +176,7 @@ export async function invalidateSettings(
     queryClient.invalidateQueries({ queryKey: orpc.settings.get.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.member.me.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
     invalidateInvoiceQuotes(queryClient, orgSlug),
   ]);
 }

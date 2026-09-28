@@ -8,6 +8,7 @@ const OVERSCAN = 10;
 /** The paging slice of a `useInfiniteQuery` result; the query object itself fits. */
 export type VirtualPage = {
   hasNextPage: boolean;
+  isFetching: boolean;
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
   fetchNextPage: () => void;
@@ -51,6 +52,7 @@ export function useVirtualRows<TList extends HTMLElement, TItem extends Element 
 }) {
   const listRef = useRef<TList>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  const hasRows = count > 0;
 
   const virtualizer = useVirtualizer<HTMLDivElement, TItem>({
     count,
@@ -100,11 +102,14 @@ export function useVirtualRows<TList extends HTMLElement, TItem extends Element 
     observer.observe(scroller);
 
     return () => observer.disconnect();
-  }, [enabled]);
+  }, [enabled, hasRows]);
 
   const virtualRows = virtualizer.getVirtualItems();
   const lastVisibleIndex = virtualizer.range?.endIndex;
-  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = nextPage ?? {};
+
+  // `isFetching` covers next-page loads and background refetches: TanStack Query allows
+  // one fetch per infinite query, and a second would overwrite the refetch.
+  const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = nextPage ?? {};
 
   useEffect(() => {
     if (
@@ -112,7 +117,7 @@ export function useVirtualRows<TList extends HTMLElement, TItem extends Element 
       lastVisibleIndex !== undefined &&
       lastVisibleIndex >= count - 1 &&
       hasNextPage &&
-      !isFetchingNextPage &&
+      !isFetching &&
       !isFetchNextPageError
     ) {
       fetchNextPage?.();
@@ -122,7 +127,7 @@ export function useVirtualRows<TList extends HTMLElement, TItem extends Element 
     lastVisibleIndex,
     count,
     hasNextPage,
-    isFetchingNextPage,
+    isFetching,
     isFetchNextPageError,
     fetchNextPage,
   ]);

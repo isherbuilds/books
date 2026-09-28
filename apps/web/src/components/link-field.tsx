@@ -205,7 +205,7 @@ export function LinkField<T>({
         inputValue={query}
         onInputValueChange={changeQuery}
         emptyContent={
-          status === "pending" || !complete ? (
+          status === "pending" || (status === "ready" && !complete) ? (
             <WaveLoader
               label={status === "pending" ? `Loading ${noun}` : `Searching ${noun}`}
               className="justify-center px-3 py-4"

@@ -88,12 +88,13 @@ A new org-scoped domain follows the
 - Every query key includes `orgSlug`. Growing lists use full keysets and select
   `limit + 1` base rows through a tenant-leading index before joins. Never use
   `OFFSET`.
-- Ledgers page oldest first on `(entry_date, id)` with an object cursor. Each
-  page's running balance starts from one server aggregate of everything before
-  the cursor; a separate summary procedure returns opening, debits, credits and
-  closing for the period. `journal_lines.entry_date` copies its entry's date
-  (composite FK) so account ledger pages read `(org_id, account_id, entry_date,
-id)`. PDF and XLSX exports keep the full-period helpers.
+- Ledgers page oldest first on `(entry_date, id)` with an object cursor. A
+  separate summary procedure returns opening, debits, credits and closing for
+  the period; the client starts the running balance from the summary's opening
+  and accumulates it across the pages it has loaded. `journal_lines.entry_date`
+  copies its entry's date (composite FK) so account ledger pages read
+  `(org_id, account_id, entry_date, id)`. PDF and XLSX exports keep the
+  full-period helpers.
 - Live lists poll every 10 s (stale after 5 s) and refetch on focus only
   while page one is the only loaded page. Both stop once a second page loads;
   polling also pauses in background tabs. There is no WebSocket or SSE.

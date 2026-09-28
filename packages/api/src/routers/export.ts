@@ -6,6 +6,7 @@ import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { writeXlsx } from "hucre/xlsx";
 import { z } from "zod";
 
+import { formatDecimal } from "../core/money";
 import { buildInwardRegister, buildOutwardRegister, type RegisterLine } from "../core/gst-register";
 import type { StatementNode } from "../core/reports";
 import { gstRegisterRows } from "../lib/gst-register-rows";
@@ -194,7 +195,11 @@ const partyStatementColumns = [
   { header: "Balance (Dr +)", key: "balance", width: 20 },
 ];
 
-const money = (paise: bigint) => Number(paise) / 100;
+// Excel preserves at most 15 significant digits in numeric cells.
+const money = (paise: bigint): number | string =>
+  paise > -1_000_000_000_000_000n && paise < 1_000_000_000_000_000n
+    ? Number(paise) / 100
+    : formatDecimal(paise);
 
 const gstColumns = [
   { header: "GSTIN", key: "gstin", width: 18 },
