@@ -7,6 +7,14 @@ export function businessDate(instant: Date, timeZone: string): string {
   }).format(instant);
 }
 
+/** Calendar year in which the financial year containing a business day begins. */
+export function financialYearStartYear(day: string, startMonth: number): number {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+
+  return month >= startMonth ? year : year - 1;
+}
+
 // Fixed English month names, not Intl: ICU versions disagree ("Sep" in Bun, "Sept" in
 // Chrome), so a server render and its hydration would differ.
 const MONTHS = [

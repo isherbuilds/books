@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
@@ -19,7 +19,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { invoiceListOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
@@ -31,7 +31,7 @@ const STATUSES = ["draft", "posted", "cancelled", "open", "overdue"] as const;
 const STATUS_LABELS = { ...DOCUMENT_STATE_LABELS, open: "Open", overdue: "Overdue" };
 
 const invoiceSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   status: z.enum(STATUSES).optional().catch(undefined),
   ...periodSearch,
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/$orgSlug/invoices")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { invoice: ["read"] });
-    await queryClient.prefetchInfiniteQuery(invoiceListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(invoiceListOptions(orgSlug, deps)).catch(() => {});
   },
   component: InvoicesRoute,
 });
@@ -116,6 +116,7 @@ function InvoicesRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search invoices"
             placeholder="Number, party, or reference"
             value={q}
@@ -154,7 +155,6 @@ function InvoicesRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={invoices} shown={rows.length} />
         <Outlet />
       </PageBody>
 

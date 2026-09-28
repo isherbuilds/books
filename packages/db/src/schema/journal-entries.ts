@@ -37,6 +37,11 @@ export const journalEntries = pgTable(
       foreignColumns: [table.orgId, table.id],
     }),
     unique("journal_entries_org_id_id_unique").on(table.orgId, table.id),
+    unique("journal_entries_org_id_id_entry_date_unique").on(
+      table.orgId,
+      table.id,
+      table.entryDate,
+    ),
     uniqueIndex("journal_entries_org_document_kind_idx").on(
       table.orgId,
       table.documentType,
@@ -46,7 +51,7 @@ export const journalEntries = pgTable(
     uniqueIndex("journal_entries_org_reverses_entry_idx")
       .on(table.orgId, table.reversesEntryId)
       .where(sql`${table.reversesEntryId} is not null`),
-    index("journal_entries_org_date_idx").on(table.orgId, table.entryDate),
+    index("journal_entries_org_date_idx").on(table.orgId, table.entryDate, table.id),
     check("journal_entries_kind_check", sql`${table.kind} in ('post', 'reverse')`),
   ],
 );

@@ -65,7 +65,10 @@ A new org-scoped domain follows the
   `organization.canCreate`. Base UI popups stay behind `ClientOnly`.
 - TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
   `operational-query.ts`). Loaders prime it, components subscribe with the same
-  `queryOptions`, and loaders never pass data down as props. Membership comes
+  `queryOptions`, and loaders never pass data down as props. Report loaders start
+  non-awaited prefetches; report bodies read them with suspense inside local
+  boundaries, so header and controls appear immediately during navigation and
+  streamed SSR results hydrate without a loading/data mismatch. Membership comes
   from `useMembership` through `membershipOptions`, stale after five minutes;
   member and settings edits invalidate it.
 - The browser client batches same-tick non-`export` calls into one `/rpc`
@@ -85,9 +88,16 @@ A new org-scoped domain follows the
 - Every query key includes `orgSlug`. Growing lists use full keysets and select
   `limit + 1` base rows through a tenant-leading index before joins. Never use
   `OFFSET`.
+- Ledgers page oldest first on `(entry_date, id)` with an object cursor. A
+  separate summary procedure returns opening, debits, credits and closing for
+  the period; the client starts the running balance from the summary's opening
+  and accumulates it across the pages it has loaded. `journal_lines.entry_date`
+  copies its entry's date (composite FK) so account ledger pages read
+  `(org_id, account_id, entry_date, id)`. PDF and XLSX exports keep the
+  full-period helpers.
 - Live lists poll every 10 s (stale after 5 s) and refetch on focus only
-  while page one is the only loaded page. Both stop after Load more; polling
-  also pauses in background tabs. There is no WebSocket or SSE.
+  while page one is the only loaded page. Both stop once a second page loads;
+  polling also pauses in background tabs. There is no WebSocket or SSE.
 
 Query, form and invalidation rules are in
 [Development](./development.md#react-and-forms).
@@ -117,7 +127,24 @@ Query, form and invalidation rules are in
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.
 - Migrations run before startup under an advisory lock and must suit a draining
-  old instance ([rules](./development.md#code-rules)).
+  old instance ([rules](./development.md#code-rules)). `runMigrations` first
+  creates the extensions the schema needs; Drizzle generates no extension.
+- Register and palette search match a substring anywhere in a document's
+  number, reference, narration or printed party name, once the term has 3
+  letters or digits in a row (`documentSearchQuery`): a shorter or
+  punctuation-only term has no trigram, so no index serves it.
+  They read one stored generated column, `documents.search_text`, through a
+  `pg_trgm` GIN index. `registerPage` walks the newest 1,000 documents first and
+  reads the index for older ones only when the page is not full: PostgreSQL
+  estimates a term's matches across every organization, so one plan alone can
+  walk a whole register or collect every match of a common term.
+- Balance sums read an index alone: `debit, credit` trail the account ledger
+  index.
+- `amount_paise` trails both party ledger indexes, so party balances and
+  statement sums read an index alone.
+- The session cookie cache stays on, and every adapter forwards the `Set-Cookie`
+  that resolving a session returns, so a request reads its session from the
+  cookie, not the database. Membership is still read on every request.
 - Tests use real PostgreSQL and wipe only a database whose name ends in `_test`.
 
 ## Audit and files

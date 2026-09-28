@@ -21,9 +21,20 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type ComponentProps,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
-import { ListState } from "@/components/page";
+import {
+  useDesktop,
+  useVirtualRows,
+  type VirtualPage,
+} from "@/components/data-table/use-virtual-rows";
+import { ListFooter, ListState } from "@/components/page";
 
 type DataTableColumnMeta = {
   /** Width and responsive visibility, applied to the th and every td. */
@@ -73,7 +84,6 @@ export function DataTable<T extends RowData>({
   onSortingChange,
   columnVisibility,
   activeRowId,
-  rowLimit,
 }: {
   /** A module constant: react-table rebuilds its row model when this changes. */
   columns: ColumnDef<typeof DATA_TABLE_FEATURES, T, any>[];
@@ -82,7 +92,8 @@ export function DataTable<T extends RowData>({
   meta: { orgSlug: string };
   rowLink?: RowLink<T>;
   renderCard: (row: T) => ReactNode;
-  query: ComponentProps<typeof ListState>["query"];
+  /** A `useInfiniteQuery` result also grows the list and gets the paging footer. */
+  query: ComponentProps<typeof ListState>["query"] & Partial<VirtualPage>;
   errorTitle: string;
   empty: ReactNode;
   /** Omit for a list whose order the server fixes: no header is sortable. */
@@ -91,8 +102,6 @@ export function DataTable<T extends RowData>({
   columnVisibility?: ColumnVisibilityState;
   /** The open record's id, from the child route. */
   activeRowId?: string;
-  /** Mount at most this many rows; the page's Load more raises it. */
-  rowLimit?: number;
 }) {
   const table = useTable({
     features: DATA_TABLE_FEATURES,
@@ -107,11 +116,69 @@ export function DataTable<T extends RowData>({
     onSortingChange,
   });
 
-  const allRows = table.getRowModel().rows;
-  const rows = rowLimit === undefined ? allRows : allRows.slice(0, rowLimit);
-  // A failed refetch or Load more keeps its cached rows: they stay, and the error
-  // shows beneath them with its retry.
+  const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
+  const desktop = useDesktop();
+
+  const nextPage: VirtualPage | undefined = query.fetchNextPage
+    ? {
+        hasNextPage: query.hasNextPage ?? false,
+        isFetchingNextPage: query.isFetchingNextPage ?? false,
+        isFetching: query.isFetching ?? false,
+        isFetchNextPageError: query.isFetchNextPageError ?? false,
+        fetchNextPage: query.fetchNextPage,
+      }
+    : undefined;
+
+  const tableRows = useVirtualRows<HTMLTableSectionElement>({
+    count: rows.length,
+    estimateSize: 40,
+    getItemKey: (index) => rows[index]!.id,
+    enabled: desktop !== false,
+    nextPage: desktop === true ? nextPage : undefined,
+  });
+
+  const cards = useVirtualRows<HTMLUListElement, HTMLLIElement>({
+    count: rows.length,
+    estimateSize: 72,
+    getItemKey: (index) => rows[index]!.id,
+    enabled: desktop !== true,
+    nextPage: desktop === false ? nextPage : undefined,
+  });
+
+  // ↑/↓ step through row links by virtual index. A neighbour outside the mounted
+  // window is scrolled in first and focused on the render that mounts it.
+  const pendingFocus = useRef<{ list: HTMLElement; index: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+
+    if (pending && focusRow(pending.list, pending.index)) pendingFocus.current = null;
+  });
+
+  const moveRowFocus = (
+    event: KeyboardEvent<HTMLElement>,
+    scrollToIndex: (index: number) => void,
+  ) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+    const link = event.target;
+
+    const row =
+      link instanceof HTMLElement && link.matches("[data-row-link]")
+        ? link.closest<HTMLElement>("[data-index]")
+        : null;
+
+    if (!row) return;
+
+    event.preventDefault();
+    const index = Number(row.dataset.index) + (event.key === "ArrowDown" ? 1 : -1);
+
+    if (index < 0 || index >= rows.length || focusRow(event.currentTarget, index)) return;
+
+    pendingFocus.current = { list: event.currentTarget, index };
+    scrollToIndex(index);
+  };
 
   return (
     // The box hugs its rows, so a short list ends on its last row's line; only the
@@ -122,83 +189,131 @@ export function DataTable<T extends RowData>({
         !hasRows && "min-h-64",
       )}
     >
-      <table className="hidden w-full table-fixed border-separate border-spacing-0 text-sm md:table">
-        <thead>
-          {table.getHeaderGroups().map((group) => (
-            <tr key={group.id}>
-              {group.headers.map((header) => {
-                const columnMeta = header.column.columnDef.meta;
-                const sortable = header.column.getCanSort();
-                const sorted = header.column.getIsSorted();
+      {desktop !== false ? (
+        <table
+          className={cn(
+            "w-full table-fixed border-separate border-spacing-0 text-sm",
+            desktop === undefined && "hidden md:table",
+          )}
+        >
+          <thead>
+            {table.getHeaderGroups().map((group) => (
+              <tr key={group.id}>
+                {group.headers.map((header) => {
+                  const columnMeta = header.column.columnDef.meta;
+                  const sortable = header.column.getCanSort();
+                  const sorted = header.column.getIsSorted();
+
+                  return (
+                    <th
+                      key={header.id}
+                      scope="col"
+                      aria-sort={sortable ? (sorted ? ARIA_SORT[sorted] : "none") : undefined}
+                      className={cn(
+                        // -top-4 cancels PageBody's p-4: at top-0 the header would stick
+                        // at the scrollport's padding edge and rows would scroll through
+                        // the 1rem band above it.
+                        "sticky -top-4 z-10 h-10 border-r border-b border-border border-r-border/60 bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase last:border-r-0",
+                        columnMeta?.align === "right" && "text-right",
+                        columnMeta?.className,
+                      )}
+                    >
+                      {sortable ? (
+                        <SortButton
+                          label={flexRender(header.column.columnDef.header, header.getContext())}
+                          sorted={sorted}
+                          onClick={header.column.getToggleSortingHandler()}
+                        />
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            ))}
+          </thead>
+          {hasRows ? (
+            <tbody
+              ref={tableRows.listRef}
+              onKeyDown={(event) => moveRowFocus(event, tableRows.scrollToIndex)}
+              className="[&>tr:last-child>td]:border-b-0"
+            >
+              {tableRows.paddingTop > 0 ? (
+                <tr aria-hidden="true" style={{ height: tableRows.paddingTop }}>
+                  {/* A colspan counts columns hidden by CSS and leaves a blank track. */}
+                  <td className="p-0" />
+                </tr>
+              ) : null}
+              {tableRows.virtualRows.map((item) => {
+                const row = rows[item.index]!;
 
                 return (
-                  <th
-                    key={header.id}
-                    scope="col"
-                    aria-sort={sortable ? (sorted ? ARIA_SORT[sorted] : "none") : undefined}
-                    className={cn(
-                      // -top-4 cancels PageBody's p-4: at top-0 the header would stick
-                      // at the scrollport's padding edge and rows would scroll through
-                      // the 1rem band above it.
-                      "sticky -top-4 z-10 h-10 border-r border-b border-border border-r-border/60 bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase last:border-r-0",
-                      columnMeta?.align === "right" && "text-right",
-                      columnMeta?.className,
-                    )}
-                  >
-                    {sortable ? (
-                      <SortButton
-                        label={flexRender(header.column.columnDef.header, header.getContext())}
-                        sorted={sorted}
-                        onClick={header.column.getToggleSortingHandler()}
-                      />
-                    ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
-                    )}
-                  </th>
+                  <DataTableRow
+                    key={row.id}
+                    index={item.index}
+                    id={row.id}
+                    original={row.original}
+                    cells={row.getVisibleCells()}
+                    active={row.id === activeRowId}
+                    rowLink={rowLink}
+                  />
                 );
               })}
-            </tr>
-          ))}
-        </thead>
-        {hasRows ? (
-          <tbody onKeyDown={moveRowFocus} className="[&>tr:last-child>td]:border-b-0">
-            {rows.map((row) => (
-              <DataTableRow
+              {tableRows.paddingBottom > 0 ? (
+                <tr aria-hidden="true" style={{ height: tableRows.paddingBottom }}>
+                  <td className="p-0" />
+                </tr>
+              ) : null}
+            </tbody>
+          ) : null}
+        </table>
+      ) : null}
+      {hasRows && desktop !== true ? (
+        <ul
+          ref={cards.listRef}
+          onKeyDown={(event) => moveRowFocus(event, cards.scrollToIndex)}
+          className="md:hidden"
+        >
+          {cards.paddingTop > 0 ? (
+            <li aria-hidden="true" style={{ height: cards.paddingTop }} />
+          ) : null}
+          {cards.virtualRows.map((item) => {
+            const row = rows[item.index]!;
+
+            return (
+              <li
                 key={row.id}
-                id={row.id}
-                original={row.original}
-                cells={row.getVisibleCells()}
-                active={row.id === activeRowId}
-                rowLink={rowLink}
-              />
-            ))}
-          </tbody>
-        ) : null}
-      </table>
-      {hasRows ? (
-        <ul onKeyDown={moveRowFocus} className="md:hidden">
-          {rows.map((row) => (
-            <li key={row.id} data-row-id={row.id} className="[&:last-child>*]:border-b-0">
-              {rowLink ? (
-                <Link
-                  {...rowLink(row.original)}
-                  data-row-link
-                  data-focus-inset
-                  data-active={row.id === activeRowId || undefined}
-                  className={cn(CARD_CLASS, "scroll-mt-2 data-active:bg-muted")}
-                >
-                  {renderCard(row.original)}
-                </Link>
-              ) : (
-                <div className={CARD_CLASS}>{renderCard(row.original)}</div>
-              )}
-            </li>
-          ))}
+                data-index={item.index}
+                ref={cards.measureElement}
+                data-row-id={row.id}
+                className="[&:last-child>*]:border-b-0"
+              >
+                {rowLink ? (
+                  <Link
+                    {...rowLink(row.original)}
+                    data-row-link
+                    data-focus-inset
+                    data-active={row.id === activeRowId || undefined}
+                    className={cn(CARD_CLASS, "scroll-mt-2 data-active:bg-muted")}
+                  >
+                    {renderCard(row.original)}
+                  </Link>
+                ) : (
+                  <div className={CARD_CLASS}>{renderCard(row.original)}</div>
+                )}
+              </li>
+            );
+          })}
+          {cards.paddingBottom > 0 ? (
+            <li aria-hidden="true" style={{ height: cards.paddingBottom }} />
+          ) : null}
         </ul>
       ) : null}
       <ListState query={query} errorTitle={errorTitle} isEmpty={!hasRows} empty={empty}>
         {null}
       </ListState>
+      {nextPage ? <ListFooter query={nextPage} shown={rows.length} /> : null}
     </div>
   );
 }
@@ -209,12 +324,14 @@ const CARD_CLASS = "flex min-h-10 flex-col gap-1 border-b border-border/60 px-3 
 // so a memoized row cannot render stale after a sort or a visibility change.
 function DataTableRow<T extends RowData>({
   id,
+  index,
   original,
   cells,
   active,
   rowLink,
 }: {
   id: string;
+  index: number;
   original: T;
   cells: Cell<typeof DATA_TABLE_FEATURES, T, unknown>[];
   active: boolean;
@@ -225,6 +342,7 @@ function DataTableRow<T extends RowData>({
   return (
     <tr
       data-row-id={id}
+      data-index={index}
       data-active={active || undefined}
       onClick={(event) => {
         if (!rowLink) return;
@@ -316,15 +434,11 @@ export function TextOrDash({ value, mono = false }: { value: string | null; mono
   );
 }
 
-// DOM focus only: moving between row links commits nothing to React.
-function moveRowFocus(event: KeyboardEvent<HTMLElement>) {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+// DOM focus only: moving between mounted row links commits nothing to React.
+function focusRow(list: HTMLElement, index: number) {
+  const link = list.querySelector<HTMLElement>(`[data-index="${index}"] [data-row-link]`);
 
-  const links = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-row-link]")];
-  const index = links.findIndex((link) => link === document.activeElement);
+  link?.focus();
 
-  if (index === -1) return;
-
-  event.preventDefault();
-  links[index + (event.key === "ArrowDown" ? 1 : -1)]?.focus();
+  return link !== null;
 }

@@ -3,7 +3,7 @@ import { file as fileTable } from "@accly/db/schema/file";
 import { createReadUrl, createUploadUrl, deleteObject, maxUploadBytes } from "@accly/storage";
 import { ORPCError } from "@orpc/server";
 import { createHash } from "node:crypto";
-import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -79,8 +79,6 @@ export const fileRouter = {
       search ? ilike(fileTable.name, search) : undefined,
     );
 
-    const cursorTimestamp = input.cursor ? sql`${input.cursor.createdAt}::timestamptz` : undefined;
-
     const items = await db
       .select({
         id: fileTable.id,
@@ -92,15 +90,14 @@ export const fileRouter = {
       })
       .from(fileTable)
       .where(
-        input.cursor && cursorTimestamp
-          ? and(
-              scoped,
-              or(
-                lt(fileTable.createdAt, cursorTimestamp),
-                and(eq(fileTable.createdAt, cursorTimestamp), lt(fileTable.id, input.cursor.id)),
-              ),
-            )
-          : scoped,
+        and(
+          scoped,
+          // A row comparison is one index condition on `file_org_created_idx`; the
+          // equivalent `OR` is a filter, so a deep page would walk every newer file.
+          input.cursor
+            ? sql`(${fileTable.createdAt}, ${fileTable.id}) < (${input.cursor.createdAt}::timestamptz, ${input.cursor.id})`
+            : undefined,
+        ),
       )
       .orderBy(desc(fileTable.createdAt), desc(fileTable.id))
       .limit(input.limit + 1);

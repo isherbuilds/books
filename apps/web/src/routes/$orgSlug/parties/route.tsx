@@ -6,7 +6,7 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { functionalUpdate, type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import { BadgeCheckIcon, CircleDotIcon, TagsIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { z } from "zod";
 
 import { DataTable } from "@/components/data-table/data-table";
@@ -20,7 +20,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PARTY_COLUMNS, PARTY_SORTS, PartyCard, type PartyRow } from "@/components/party-columns";
 import { PartySheet } from "@/components/party-form";
@@ -38,10 +38,6 @@ import {
   partyListOptions,
   type PartyFilters,
 } from "@/lib/parties";
-
-// The list is cached whole up to 5,000 rows; the table mounts it 25 rows at a time, one Load
-// more per step, the same page as the server keyset lists (lib/schemas `pageLimit`).
-const ROW_STEP = 25;
 
 const STATUS_LABELS = { active: "Active", inactive: "Inactive" } as const;
 
@@ -66,9 +62,9 @@ export const Route = createFileRoute("/$orgSlug/parties")({
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
     await Promise.all([
-      queryClient.prefetchQuery(partyListOptions(orgSlug)),
+      queryClient.query(partyListOptions(orgSlug)).catch(() => {}),
       authorize(membership.roles, { report: ["read"] })
-        ? queryClient.prefetchQuery(partyBalancesOptions(orgSlug))
+        ? queryClient.query(partyBalancesOptions(orgSlug)).catch(() => {})
         : undefined,
     ]);
   },
@@ -83,7 +79,6 @@ function PartiesRoute() {
   const navigate = useNavigate({ from: Route.fullPath });
   const field = useRef<HTMLDivElement>(null);
   const newTrigger = useRef<HTMLButtonElement>(null);
-  const [limit, setLimit] = useState(ROW_STEP);
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const canReadBalances = useCan(orgSlug, { report: ["read"] });
   const partyMaster = useQuery(partyListOptions(orgSlug));
@@ -199,9 +194,6 @@ function PartiesRoute() {
     });
   };
 
-  const showMore = () => setLimit((current) => current + ROW_STEP);
-  const hasMore = rows.length > limit;
-
   const empty =
     q !== undefined || chips.length > 0 ? (
       <TableEmpty
@@ -295,16 +287,6 @@ function PartiesRoute() {
           onSortingChange={onSortingChange}
           columnVisibility={columnVisibility}
           activeRowId={openPartyId}
-          rowLimit={limit}
-        />
-        <LoadMore
-          query={{
-            isFetchNextPageError: false,
-            hasNextPage: hasMore,
-            isFetchingNextPage: false,
-            fetchNextPage: showMore,
-          }}
-          shown={Math.min(limit, rows.length)}
         />
         {parties.data?.hasMore ? (
           <p className="px-3 text-muted-foreground">

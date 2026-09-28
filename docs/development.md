@@ -3,9 +3,10 @@
 ## Start locally
 
 You need the Bun version `packageManager` pins in `package.json`, Node 24 or
-later (Portless declares `node >=24`), and Docker. `portless proxy start` runs
-through its Node shebang so its HTTPS proxy can issue certificates for nested
-`.localhost` names; do not force that command to run with Bun. Other tools
+later (Portless declares `node >=24`), and Docker. Start the Portless proxy
+through its Node shebang so it serves certificates for nested `.localhost`
+names. `bunx portless proxy start` runs the proxy with Bun and serves the
+default certificate for those names. Other tools
 with a `node` shebang (Vite, tsc, tsdown, Astro, drizzle-kit, Turborepo, oxlint)
 run as `bun --bun <tool>` in the package scripts. A new script that calls one
 follows suit.
@@ -13,7 +14,7 @@ follows suit.
 ```sh
 bun install
 cp packages/env/.env.example packages/env/.env   # then fill it in
-bunx portless proxy start                       # once per machine
+./node_modules/.bin/portless proxy start        # once per machine; runs with Node
 bun run dev
 ```
 
@@ -46,6 +47,7 @@ bun run create-founder <name> <password>       # FOUNDING_EMAIL, the only Organi
 bun run create-user <email> <name> <password>  # an account without an invitation
 bun run db:seed
 bun run db:seed:demo # complete the practical cases in an older base seed
+bun run db:seed:mega # fill Meridian Traders to 1M documents
 ```
 
 Organization creation runs one bootstrap (`core/organizations.ts`): settings,
@@ -70,30 +72,65 @@ cancelled Receipts, both Note types, an Opening Balance and a cash deposit
 Journal. Run `db:seed:demo` after an older base seed; it finds its marked cases
 before writing, so a rerun completes a partial seed without duplicates.
 
+`db:seed:mega` fills Meridian Traders to 1,000,000 total documents, the volume
+the query-performance measurements use; the other organizations keep their base
+and demo seeds. Document ids are UUIDv7-shaped and dates rise with the document
+number across the financial year, so newest-first `id` order matches production.
+Each 20-document
+cycle includes Invoices, Receipts, Bills, Credit Notes, Debit Notes and
+Payments. The rows include balanced journal entries, party ledger entries,
+settlement allocations, multiple receipts and payments against one document,
+and cancelled documents with reversal entries. It uses batched PostgreSQL
+`INSERT ... SELECT` statements, keeps constraints and indexes enabled, commits
+each batch and resumes from its last committed batch. Run `db:seed` first.
+These are synthetic posted rows for volume reads and reports. Use
+`db:seed:demo` for workflow correctness cases. The mega seed only connects to
+`localhost:55446/postgres` and refuses locked organizations. The fill writes
+about 6.5 million rows across documents, document lines, journal entries and
+lines, party ledger lines and allocations, in about 10 minutes.
+
+To stop the local PostgreSQL and SeaweedFS containers and delete their volumes,
+run `bun run db:down:clean -- --confirm-delete-local-volumes`. This removes the
+local database and file-store data. The command refuses non-local Docker contexts.
+
 ## Commands
 
-| Command                      | Purpose                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| `bun run dev`                | Services, migrations, all apps                                              |
-| `bun run dev:status`         | Read-only service and migration check                                       |
-| `bun run check-types`        | Type-check packages and `tests/`                                            |
-| `bunx oxlint`                | Non-writing lint check                                                      |
-| `bunx oxfmt --check .`       | Non-writing repository format check                                         |
-| `bun run check`              | Run oxlint, then write formatting                                           |
-| `bun run test`               | Real-PostgreSQL and SeaweedFS tests; wipes `*_test`                         |
-| `bun run build`              | Production-build all workspaces                                             |
-| `bun run db:up`              | Start PostgreSQL and SeaweedFS                                              |
-| `bun run db:generate`        | Generate a migration from the schema                                        |
-| `bun run db:migrate`         | Apply migrations                                                            |
-| `bun run db:seed -- --reset` | Reset and seed; deletes local data                                          |
-| `bun run db:seed:volume`     | 100,000 receipts each for Meridian Traders and Ridgeview Academy by default |
-| `bun run db:seed:demo`       | Add or complete the practical Cedar Components cases                        |
-| `bun run db:studio`          | Drizzle Studio                                                              |
+| Command                                                   | Purpose                                                                     |
+| --------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `bun run dev`                                             | Services, migrations, all apps                                              |
+| `bun run dev:status`                                      | Read-only service and migration check                                       |
+| `bun run check-types`                                     | Type-check packages and `tests/`                                            |
+| `bunx oxlint`                                             | Non-writing lint check                                                      |
+| `bunx oxfmt --check .`                                    | Non-writing repository format check                                         |
+| `bun run check`                                           | Run oxlint, then write formatting                                           |
+| `bun run test`                                            | Real-PostgreSQL and SeaweedFS tests; wipes `*_test`                         |
+| `bun run build`                                           | Production-build all workspaces                                             |
+| `bun run db:up`                                           | Start PostgreSQL and SeaweedFS                                              |
+| `bun run db:generate`                                     | Generate a migration from the schema                                        |
+| `bun run db:migrate`                                      | Apply migrations                                                            |
+| `bun run db:seed -- --reset`                              | Reset and seed; deletes local data                                          |
+| `bun run db:seed:volume`                                  | 100,000 receipts each for Meridian Traders and Ridgeview Academy by default |
+| `bun run db:seed:mega`                                    | Fill Meridian Traders to 1M total documents                                 |
+| `bun run db:down:clean -- --confirm-delete-local-volumes` | Stop local services and delete their volumes                                |
+| `bun run db:seed:demo`                                    | Add or complete the practical Cedar Components cases                        |
+| `bun run db:studio`                                       | Drizzle Studio                                                              |
 
 `benchmark:server`, `benchmark:rpc`, `benchmark:browser` and
 `benchmark:navigation` measure a running build. `benchmark:browser` times hard
-page loads; `benchmark:navigation` times in-app route changes. Quote a
-performance number only on `db:seed:volume` data or more.
+page loads; `benchmark:navigation` times in-app route changes. `benchmark:rpc`
+times every API read by route: session and settings, masters, balances, party
+tabs and pickers, each register's pages, party filter and searches, document
+views, reports, day book, exports and oversized-report refusals. It checks
+every response before it counts, so a wrong answer stops the run. Set
+`PERF_WRITES=1` to add inserts, updates, draft upserts and deletes, posts,
+cancels and allocations; these write real documents into the fixture. It picks
+its ids and search terms from the data. `PERF_SCENARIOS` runs only the named
+scenarios and refuses an unknown name; `PERF_RPC_REQUESTS` (30) and
+`PERF_RPC_WARMUP` (5) set the counts; `PERF_OTHER_ORG_TERM` adds a search for
+another organization's party name. `PERF_ORG_SLUG` defaults to `meridian-traders`, the mega-seeded
+organization. The JSON report goes to
+stdout and one checked line per scenario to stderr. Quote a performance number
+only on `db:seed:volume` data or more.
 
 **Check policy.** Validation and deployment are manual. GitHub Actions is
 disabled; this repository has no CI/CD workflows or required automated status

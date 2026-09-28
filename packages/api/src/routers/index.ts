@@ -18,6 +18,7 @@ import { partyRouter } from "./party";
 import { paymentRouter } from "./payment";
 import { paymentMethodRouter } from "./payment-method";
 import { receiptRouter } from "./receipt";
+import { reportRouter } from "./report";
 import { settingsRouter } from "./settings";
 
 export const appRouter = {
@@ -38,6 +39,7 @@ export const appRouter = {
   party: partyRouter,
   payment: paymentRouter,
   paymentMethod: paymentMethodRouter,
+  report: reportRouter,
   receipt: receiptRouter,
   settings: settingsRouter,
 };

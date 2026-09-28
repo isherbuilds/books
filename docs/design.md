@@ -132,6 +132,8 @@ empty-state art. A bare icon button needs `aria-label`. Without a picture, use
   wanted. The chevron shows only on hover, focus, or while collapsed.
 - The rail is flat on the canvas (`--sidebar` equals `--background`); the
   content panel is the raised card.
+- Collapsible group headings use `font-medium` with muted text, so they read as
+  section labels without competing with the active row.
 - Hover changes only the background to `bg-sidebar-accent/60`. The active row
   uses the full accent and a foreground icon; label weight and width stay
   fixed, and colours never transition on this frequent action.
@@ -168,10 +170,19 @@ means a primitive lacks a prop.
 - `DataTable` (`components/data-table/`): a sticky muted header, hairlines,
   single-line rows led by the row `Link`, optional row actions, `aria-sort` on
   complete masters, cards below `md`, and states through `ListState` and
-  `TableEmpty`.
+  `TableEmpty`. Rows render through `useVirtualRows` (TanStack Virtual inside
+  the `PageBody` scroller), so a 5,000-row master or a deep keyset list keeps
+  only the visible rows mounted; report tables use the same hook.
 - `Panel`: the tray for settings and files lists.
-- `ListState` is the only pending, error, retry and empty branch. `LoadMore` is
-  the only way a list grows: it shows the count and fetches the next 25 rows.
+- `ListState` is the only pending, error, retry and empty branch. A keyset list
+  grows by itself: the next 25 rows load as its last rows scroll into view. The
+  footer shows the count, `WaveLoader` while loading, or the failure with one Retry; a
+  failed page is never retried automatically. Form pickers keep a `LoadMore`
+  button.
+- A ledger (party ledger, account ledger, day book) leads with its summary in
+  the toolbar — Opening, Debits, Credits, Closing (day book: entries, debits,
+  credits) — so the result reads before the first row. Rows run oldest first
+  with the running balance; the Closing row appears after the last page.
 
 **Choice controls.** Use a dropdown menu for actions and short option lists,
 including filter checkboxes. Use radio items for one-of-many choices such as

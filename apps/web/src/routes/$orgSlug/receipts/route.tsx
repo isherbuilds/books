@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
@@ -23,10 +23,11 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
+import { WaveLoader } from "@/components/wave-loader";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -40,7 +41,7 @@ const RECEIPT_STATES = ["posted", "cancelled"] as const;
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
   paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional().catch(undefined),
@@ -64,8 +65,8 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
 
     await Promise.all([
       authorize(membership.roles, { paymentMethod: ["read"] }) &&
-        queryClient.prefetchQuery(paymentMethodListOptions(orgSlug)),
-      queryClient.prefetchInfiniteQuery(receiptListOptions(orgSlug, deps)),
+        queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
+      queryClient.infiniteQuery(receiptListOptions(orgSlug, deps)).catch(() => {}),
     ]);
   },
   component: ReceiptsRoute,
@@ -187,6 +188,7 @@ function ReceiptsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search receipts"
             placeholder="Number, party, or reference"
             value={q}
@@ -216,11 +218,13 @@ function ReceiptsRoute() {
                       ))
                     ) : (
                       <DropdownMenuItem disabled>
-                        {methods.isPending
-                          ? "Loading…"
-                          : methods.isError
-                            ? "Could not load payment methods"
-                            : "No payment methods"}
+                        {methods.isPending ? (
+                          <WaveLoader label="Loading payment methods" />
+                        ) : methods.isError ? (
+                          "Could not load payment methods"
+                        ) : (
+                          "No payment methods"
+                        )}
                       </DropdownMenuItem>
                     )}
                   </FilterSubmenu>
@@ -263,7 +267,6 @@ function ReceiptsRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={receipts} shown={rows.length} />
         {/* The record Sheet opens over the list, which stays mounted. */}
         <Outlet />
       </PageBody>

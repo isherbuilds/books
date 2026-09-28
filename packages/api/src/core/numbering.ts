@@ -3,17 +3,15 @@ import { documents, type DocumentType } from "@accly/db/schema/documents";
 import { numberSeries } from "@accly/db/schema/number-series";
 import { and, eq, sql } from "drizzle-orm";
 
+import { financialYearStartYear } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 
 export function financialYearOf(documentDate: string, startMonth: number): string {
-  const year = Number(documentDate.slice(0, 4));
-  const month = Number(documentDate.slice(5, 7));
+  const startYear = financialYearStartYear(documentDate, startMonth);
 
   if (startMonth === 1) {
-    return String(year);
+    return String(startYear);
   }
-
-  const startYear = month >= startMonth ? year : year - 1;
 
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 }

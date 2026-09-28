@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -21,7 +21,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
@@ -39,7 +39,7 @@ const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
   // Seeds the new payment's party; kept apart from the `partyId` list filter.
   payeeId: z.uuid().optional().catch(undefined),
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
   state: z.enum(STATES).optional().catch(undefined),
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/$orgSlug/payments")({
     filters,
   loader: async ({ context: { queryClient }, params: { orgSlug }, deps }) => {
     await requireOrgPermission(queryClient, orgSlug, { payment: ["read"] });
-    await queryClient.prefetchInfiniteQuery(paymentListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(paymentListOptions(orgSlug, deps)).catch(() => {});
   },
   component: PaymentsRoute,
 });
@@ -182,6 +182,7 @@ function PaymentsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search payments"
             placeholder="Number, party, or reference"
             value={q}
@@ -227,7 +228,6 @@ function PaymentsRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={payments} shown={rows.length} />
         <Outlet />
       </PageBody>
       {date.popover}

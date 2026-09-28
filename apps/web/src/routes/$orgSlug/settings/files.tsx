@@ -16,13 +16,14 @@ import { toast } from "sonner";
 import {
   ListState,
   ListToolbar,
-  LoadMore,
+  ListFooter,
   PageBody,
   PageHeader,
   Panel,
   SearchInput,
 } from "@/components/page";
 import { useConfirm } from "@/components/confirm-dialog";
+import { useVirtualRows } from "@/components/data-table/use-virtual-rows";
 import { invalidateFiles } from "@/lib/domain-invalidation";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { formatFileSize, openOrgFile, uploadOrgFile } from "@/lib/org-files";
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/$orgSlug/settings/files")({
   head: () => ({ meta: [{ title: "Files · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { file: ["read"] });
-    await queryClient.prefetchInfiniteQuery(filesQuery(orgSlug, ""));
+    await queryClient.infiniteQuery(filesQuery(orgSlug, "")).catch(() => {});
   },
   component: FilesRoute,
 });
@@ -105,6 +106,13 @@ function FilesRoute() {
 
   const items = files.data?.pages.flatMap((page) => page.items) ?? [];
 
+  const virtual = useVirtualRows<HTMLTableSectionElement, HTMLTableRowElement>({
+    count: items.length,
+    estimateSize: 56,
+    getItemKey: (index) => items[index]!.id,
+    nextPage: files,
+  });
+
   return (
     <>
       <PageHeader
@@ -141,7 +149,7 @@ function FilesRoute() {
         <ListToolbar>
           <SearchInput label="Search files" placeholder="File name" onQueryChange={setQuery} />
         </ListToolbar>
-        <Panel label="Library" footer={<LoadMore query={files} shown={items.length} />}>
+        <Panel label="Library" footer={<ListFooter query={files} shown={items.length} />}>
           <ListState
             query={files}
             errorTitle="Could not load files"
@@ -169,58 +177,72 @@ function FilesRoute() {
                   <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {items.map((file) => (
-                  <TableRow key={file.id}>
-                    <TableCell className="max-w-0">
-                      <div className="truncate font-medium" title={file.name}>
-                        {file.name}
-                      </div>
-                      <div
-                        className="truncate text-muted-foreground"
-                        title={file.mimeType ?? "unknown type"}
-                      >
-                        {file.mimeType ?? "unknown type"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums">
-                      {formatFileSize(file.size)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(file.createdAt, timeZone)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Download ${file.name}`}
-                          onClick={() => download(file.id)}
+              <TableBody ref={virtual.listRef}>
+                {virtual.paddingTop > 0 ? (
+                  <TableRow aria-hidden style={{ height: virtual.paddingTop }}>
+                    <TableCell colSpan={4} className="p-0" />
+                  </TableRow>
+                ) : null}
+                {virtual.virtualRows.map((item) => {
+                  const file = items[item.index]!;
+
+                  return (
+                    <TableRow key={file.id} data-index={item.index} ref={virtual.measureElement}>
+                      <TableCell className="max-w-0">
+                        <div className="truncate font-medium" title={file.name}>
+                          {file.name}
+                        </div>
+                        <div
+                          className="truncate text-muted-foreground"
+                          title={file.mimeType ?? "unknown type"}
                         >
-                          <DownloadIcon />
-                        </Button>
-                        {canDelete ? (
+                          {file.mimeType ?? "unknown type"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums">
+                        {formatFileSize(file.size)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(file.createdAt, timeZone)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon-xs"
-                            aria-label={`Delete ${file.name}`}
-                            onClick={() =>
-                              confirm({
-                                title: `Delete ${file.name}?`,
-                                description:
-                                  "The file and its stored object are removed permanently. This cannot be undone.",
-                                confirmLabel: "Delete",
-                                run: () => void remove(file.id, file.name),
-                              })
-                            }
+                            aria-label={`Download ${file.name}`}
+                            onClick={() => download(file.id)}
                           >
-                            <Trash2 />
+                            <DownloadIcon />
                           </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
+                          {canDelete ? (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Delete ${file.name}`}
+                              onClick={() =>
+                                confirm({
+                                  title: `Delete ${file.name}?`,
+                                  description:
+                                    "The file and its stored object are removed permanently. This cannot be undone.",
+                                  confirmLabel: "Delete",
+                                  run: () => void remove(file.id, file.name),
+                                })
+                              }
+                            >
+                              <Trash2 />
+                            </Button>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {virtual.paddingBottom > 0 ? (
+                  <TableRow aria-hidden style={{ height: virtual.paddingBottom }}>
+                    <TableCell colSpan={4} className="p-0" />
                   </TableRow>
-                ))}
+                ) : null}
               </TableBody>
             </Table>
           </ListState>

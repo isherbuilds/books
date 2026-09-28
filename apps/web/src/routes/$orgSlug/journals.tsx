@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -18,7 +18,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { journalListOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
@@ -29,7 +29,7 @@ import { periodSearch, requirePeriod } from "@/lib/require-period";
 const JOURNAL_STATES = ["posted", "cancelled"] as const;
 
 const journalSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   ...periodSearch,
   state: z.enum(JOURNAL_STATES).optional().catch(undefined),
 });
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/$orgSlug/journals")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
-    await queryClient.prefetchInfiniteQuery(journalListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(journalListOptions(orgSlug, deps)).catch(() => {});
   },
   component: JournalsRoute,
 });
@@ -112,6 +112,7 @@ function JournalsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search journals"
             placeholder="Number, reference, or narration"
             value={q}
@@ -148,7 +149,6 @@ function JournalsRoute() {
           errorTitle="Could not load journals"
           empty={empty}
         />
-        <LoadMore query={journals} shown={rows.length} />
       </PageBody>
 
       {date.popover}

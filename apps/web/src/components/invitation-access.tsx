@@ -8,6 +8,7 @@ import { z } from "zod";
 import { AuthField, AuthFormFooter, PasswordField } from "@/components/auth-fields";
 import { ErrorNote } from "@/components/page";
 import { SignInForm } from "@/components/sign-in-form";
+import { WaveLoader } from "@/components/wave-loader";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 
@@ -56,12 +57,7 @@ export function InvitationAccess({
       }),
   });
 
-  if (invitation.isPending)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading invitation…
-      </p>
-    );
+  if (invitation.isPending) return <WaveLoader label="Loading invitation" />;
 
   return (
     <div className="flex flex-col gap-6">

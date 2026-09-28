@@ -8,10 +8,19 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { conflict, nextEditToken } from "../lib/conflict";
+import { businessDate } from "../lib/business-date";
+import { conflict, impossible, nextEditToken } from "../lib/conflict";
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
 import { normalizedName } from "../lib/normalized-name";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
+import {
+  afterCursor,
+  headerFromProfile,
+  reportProfile,
+  assertReportFits,
+  reportTooLarge,
+  type ReportHeader,
+} from "../lib/reports";
 import { documentPeriod, openCredits, openItems, pageOf } from "../lib/settlements";
 import {
   editToken,
@@ -20,6 +29,7 @@ import {
   likePattern,
   masterName,
   optionalGstin,
+  ledgerCursor,
   optionalPan,
   optionalStateCode,
   orderedPeriod,
@@ -83,14 +93,24 @@ const TRANSACTION_READS: Record<TransactionType, AppPermission> = {
   payment: { payment: ["read"] },
 };
 
-async function requireParty(orgId: string, partyId: string): Promise<void> {
+async function requireParty(
+  orgId: string,
+  partyId: string,
+): Promise<Pick<PartyRecord, "name" | "gstin" | "address" | "stateCode">> {
   const [party] = await db
-    .select({ id: parties.id })
+    .select({
+      name: parties.name,
+      gstin: parties.gstin,
+      address: parties.address,
+      stateCode: parties.stateCode,
+    })
     .from(parties)
     .where(and(eq(parties.orgId, orgId), eq(parties.id, partyId)))
     .limit(1);
 
   if (!party) throw new ORPCError("NOT_FOUND", { message: "Party not found." });
+
+  return party;
 }
 
 function partyValues(fields: PartyFields) {
@@ -162,6 +182,214 @@ async function claimGstin(
     .limit(1);
 
   if (taken) throw conflict("PARTY_GSTIN_TAKEN", "A party with this GSTIN already exists.");
+}
+
+export type PartyStatementReport = {
+  header: ReportHeader;
+  party: Pick<PartyRecord, "name" | "gstin" | "address" | "stateCode">;
+  openingPaise: bigint;
+  lines: Array<{
+    id: string;
+    entryDate: string;
+    kind: (typeof partyLedgerLines.$inferSelect)["kind"];
+    amountPaise: bigint;
+    documentId: string;
+    documentType: (typeof documents.$inferSelect)["type"];
+    number: string | null;
+    settlementKind: (typeof documents.$inferSelect)["settlementKind"];
+    reference: string | null;
+    typeLabel: string;
+    balancePaise: bigint;
+  }>;
+  closingPaise: bigint;
+};
+
+function partyStatementRows(
+  orgId: string,
+  input: { partyId: string; from?: string; to?: string; cursor?: z.infer<typeof ledgerCursor> },
+  limit: number,
+  executor: typeof db | DbTransaction = db,
+) {
+  return executor
+    .select({
+      id: partyLedgerLines.id,
+      entryDate: partyLedgerLines.entryDate,
+      kind: partyLedgerLines.kind,
+      amountPaise: partyLedgerLines.amountPaise,
+      documentId: documents.id,
+      documentType: documents.type,
+      number: documents.number,
+      settlementKind: documents.settlementKind,
+      reference: documents.reference,
+    })
+    .from(partyLedgerLines)
+    .innerJoin(
+      documents,
+      and(eq(documents.orgId, orgId), eq(documents.id, partyLedgerLines.documentId)),
+    )
+    .where(
+      and(
+        partyStatementWhere(orgId, input),
+        input.cursor
+          ? afterCursor(partyLedgerLines.entryDate, partyLedgerLines.id, input.cursor)
+          : undefined,
+      ),
+    )
+    .orderBy(asc(partyLedgerLines.entryDate), asc(partyLedgerLines.id))
+    .limit(limit + 1);
+}
+
+function partyStatementWhere(
+  orgId: string,
+  input: { partyId: string; from?: string; to?: string },
+) {
+  return and(
+    eq(partyLedgerLines.orgId, orgId),
+    eq(partyLedgerLines.partyId, input.partyId),
+    input.from ? gte(partyLedgerLines.entryDate, input.from) : undefined,
+    input.to ? lte(partyLedgerLines.entryDate, input.to) : undefined,
+  );
+}
+
+// Exposure lines oldest first: receivable claims increase the running balance;
+// payable claims decrease it.
+export async function partyStatement(
+  orgId: string,
+  input: { partyId: string; from?: string; to?: string },
+  limit: number,
+): Promise<PartyStatementReport> {
+  const profile = await reportProfile(orgId);
+  const to = input.to ?? businessDate(new Date(), profile.timeZone);
+  const range: ReportHeader["range"] = input.from ? { from: input.from, to } : { asOf: to };
+
+  // Read from `party_ledger_lines_org_party_date_idx` alone, in the statement's order.
+  await assertReportFits(
+    db
+      .select({ id: partyLedgerLines.id })
+      .from(partyLedgerLines)
+      .where(partyStatementWhere(orgId, { ...input, to }))
+      .orderBy(asc(partyLedgerLines.entryDate), asc(partyLedgerLines.id)),
+    limit,
+  );
+
+  const [party, opening, rows] = await Promise.all([
+    requireParty(orgId, input.partyId),
+    input.from
+      ? db
+          .select({
+            total: sql<bigint>`coalesce(sum(${partyLedgerLines.amountPaise}), 0)::bigint`.mapWith(
+              BigInt,
+            ),
+          })
+          .from(partyLedgerLines)
+          .where(
+            and(
+              partyStatementWhere(orgId, { partyId: input.partyId }),
+              lt(partyLedgerLines.entryDate, input.from),
+            ),
+          )
+      : [{ total: 0n }],
+    partyStatementRows(orgId, { ...input, to }, limit),
+  ]);
+
+  if (rows.length > limit) throw reportTooLarge(limit);
+
+  const openingPaise = opening[0]?.total ?? 0n;
+  let balancePaise = openingPaise;
+
+  const lines = rows.map((row) => {
+    balancePaise += row.amountPaise;
+
+    return { ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType], balancePaise };
+  });
+
+  return {
+    header: headerFromProfile(profile, range),
+    party,
+    openingPaise,
+    lines,
+    closingPaise: balancePaise,
+  };
+}
+
+// One keyset page oldest first, without balances: pages load contiguously from
+// page one, so the client runs the balance from `ledgerSummary.openingPaise`
+// instead of the server summing every earlier line for each page.
+async function partyLedgerPage(
+  orgId: string,
+  input: {
+    partyId: string;
+    from?: string;
+    to?: string;
+    cursor?: z.infer<typeof ledgerCursor>;
+    limit: number;
+  },
+) {
+  const profile = await reportProfile(orgId);
+  const to = input.to ?? businessDate(new Date(), profile.timeZone);
+
+  const [, detail] = await Promise.all([
+    requireParty(orgId, input.partyId),
+    partyStatementRows(orgId, { ...input, to }, input.limit),
+  ]);
+
+  const { rows, hasMore } = pageOf(detail, input.limit);
+
+  return {
+    rows: rows.map((row) => ({ ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType] })),
+    hasMore,
+  };
+}
+
+// The statement's figures without its lines: what the ledger toolbar, the party
+// overview and the Transactions tab show. Debits are the positive exposure lines.
+async function partyLedgerSummary(
+  orgId: string,
+  input: { partyId: string; from?: string; to?: string },
+) {
+  const profile = await reportProfile(orgId);
+  const to = input.to ?? businessDate(new Date(), profile.timeZone);
+
+  const amount = partyLedgerLines.amountPaise;
+  const opening = input.from ? lt(partyLedgerLines.entryDate, input.from) : sql`false`;
+  const inPeriod = input.from ? gte(partyLedgerLines.entryDate, input.from) : sql`true`;
+
+  const [, [amounts]] = await Promise.all([
+    requireParty(orgId, input.partyId),
+    db
+      .select({
+        openingPaise:
+          sql<bigint>`coalesce(sum(${amount}) filter (where ${opening}), 0)::bigint`.mapWith(
+            BigInt,
+          ),
+        debitPaise:
+          sql<bigint>`coalesce(sum(${amount}) filter (where ${amount} > 0 and ${inPeriod}), 0)::bigint`.mapWith(
+            BigInt,
+          ),
+        creditPaise:
+          sql<bigint>`coalesce(-sum(${amount}) filter (where ${amount} < 0 and ${inPeriod}), 0)::bigint`.mapWith(
+            BigInt,
+          ),
+      })
+      .from(partyLedgerLines)
+      .where(
+        and(
+          eq(partyLedgerLines.orgId, orgId),
+          eq(partyLedgerLines.partyId, input.partyId),
+          lte(partyLedgerLines.entryDate, to),
+        ),
+      ),
+  ]);
+
+  if (!amounts) throw impossible("aggregate returned no row");
+  const { openingPaise, debitPaise, creditPaise } = amounts;
+
+  return {
+    openingPaise,
+    debitPaise,
+    creditPaise,
+    closingPaise: openingPaise + debitPaise - creditPaise,
+  };
 }
 
 export const partyRouter = {
@@ -307,77 +535,21 @@ export const partyRouter = {
     return openCredits(context.scope.orgId, input);
   }),
 
-  // The party's statement of account, a Billing report (accounting-core call 15): its
-  // exposure lines oldest first with a running balance. Receivable claims increase
-  // the balance; payable claims decrease it. The statement combines both sides.
   statement: orgProcedure(
     { party: ["read"], report: ["read"] },
     orgInput.extend({ partyId: z.uuid(), ...period }).superRefine(orderedPeriod),
-  ).handler(async ({ context, input }) => {
-    const { scope } = context;
-    await requireParty(scope.orgId, input.partyId);
+  ).handler(({ context, input }) => partyStatement(context.scope.orgId, input, STATEMENT_LIMIT)),
+  ledgerLines: orgProcedure(
+    { party: ["read"], report: ["read"] },
+    orgInput
+      .extend({ partyId: z.uuid(), ...period, cursor: ledgerCursor.optional(), limit: pageLimit })
+      .superRefine(orderedPeriod),
+  ).handler(({ context, input }) => partyLedgerPage(context.scope.orgId, input)),
 
-    const partyLines = and(
-      eq(partyLedgerLines.orgId, scope.orgId),
-      eq(partyLedgerLines.partyId, input.partyId),
-    );
-
-    const [opening, rows] = await Promise.all([
-      input.from
-        ? db
-            .select({
-              total: sql<bigint>`coalesce(sum(${partyLedgerLines.amountPaise}), 0)::bigint`.mapWith(
-                BigInt,
-              ),
-            })
-            .from(partyLedgerLines)
-            .where(and(partyLines, lt(partyLedgerLines.entryDate, input.from)))
-        : [{ total: 0n }],
-      db
-        .select({
-          id: partyLedgerLines.id,
-          entryDate: partyLedgerLines.entryDate,
-          kind: partyLedgerLines.kind,
-          amountPaise: partyLedgerLines.amountPaise,
-          documentId: documents.id,
-          documentType: documents.type,
-          number: documents.number,
-          settlementKind: documents.settlementKind,
-          reference: documents.reference,
-        })
-        .from(partyLedgerLines)
-        .innerJoin(
-          documents,
-          and(eq(documents.orgId, scope.orgId), eq(documents.id, partyLedgerLines.documentId)),
-        )
-        .where(
-          and(
-            partyLines,
-            input.from ? gte(partyLedgerLines.entryDate, input.from) : undefined,
-            input.to ? lte(partyLedgerLines.entryDate, input.to) : undefined,
-          ),
-        )
-        .orderBy(asc(partyLedgerLines.entryDate), asc(partyLedgerLines.id))
-        .limit(STATEMENT_LIMIT + 1),
-    ]);
-
-    if (rows.length > STATEMENT_LIMIT) {
-      throw new ORPCError("BAD_REQUEST", {
-        message: "This statement exceeds 5,000 lines; choose a shorter period.",
-      });
-    }
-
-    const openingPaise = opening[0]?.total ?? 0n;
-    let balancePaise = openingPaise;
-
-    const lines = rows.map((row) => {
-      balancePaise += row.amountPaise;
-
-      return { ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType], balancePaise };
-    });
-
-    return { openingPaise, lines, closingPaise: balancePaise };
-  }),
+  ledgerSummary: orgProcedure(
+    { party: ["read"], report: ["read"] },
+    orgInput.extend({ partyId: z.uuid(), ...period }).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => partyLedgerSummary(context.scope.orgId, input)),
 
   // Every document naming the party, newest first, as Zoho's contact Transactions list
   // shows them: drafts, posted and cancelled, one keyset page at a time.

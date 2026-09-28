@@ -33,7 +33,8 @@ import { toast } from "sonner";
 
 import { AmountInput } from "@/components/amount-input";
 import { LineGrid } from "@/components/document-form";
-import { ErrorNote, LoadMore } from "@/components/page";
+import { ErrorNote, ListFooter } from "@/components/page";
+import { WaveLoader } from "@/components/wave-loader";
 
 /** An open claim or credit a settlement can allocate to, with what is still open on it. */
 export type OpenDocument = {
@@ -290,7 +291,7 @@ export function AllocationTable({
           <FormItem>
             <LineGrid title={title}>
               {query.isPending ? (
-                <p className="text-muted-foreground">Loading open documents…</p>
+                <WaveLoader label="Loading open documents" />
               ) : query.isError && !query.isFetchNextPageError ? (
                 <ErrorNote title="Could not load open documents" error={query.error} />
               ) : rows.length === 0 ? (
@@ -365,7 +366,7 @@ export function AllocationTable({
               {query.isSuccess && !query.isFetching ? (
                 <UnavailableAllocations rows={rows} allocationPath={name} />
               ) : null}
-              <LoadMore query={query} shown={rows.length} />
+              <ListFooter query={query} shown={rows.length} manual />
             </LineGrid>
             <FormMessage />
           </FormItem>

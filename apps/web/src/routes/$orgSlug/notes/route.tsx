@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
@@ -15,14 +15,14 @@ import {
   type ActiveFilter,
 } from "@/components/list-filter";
 import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const noteSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   type: z.enum(["creditNote", "debitNote"]).optional().catch(undefined),
   ...periodSearch,
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/$orgSlug/notes")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { note: ["read"] });
-    await queryClient.prefetchInfiniteQuery(noteListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(noteListOptions(orgSlug, deps)).catch(() => {});
   },
   component: NotesRoute,
 });
@@ -92,6 +92,7 @@ function NotesRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search notes"
             placeholder="Number, party, or reason"
             value={q}
@@ -130,7 +131,6 @@ function NotesRoute() {
           }
           activeRowId={activeRowId}
         />
-        <LoadMore query={notes} shown={rows.length} />
         <Outlet />
       </PageBody>
       {date.popover}

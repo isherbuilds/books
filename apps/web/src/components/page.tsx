@@ -1,11 +1,21 @@
 import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
 import { cn } from "@accly/ui/lib/utils";
-import { createLink } from "@tanstack/react-router";
+import { CatchBoundary, createLink } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
-import { useEffect, useRef, type ComponentProps, type ReactNode, type Ref } from "react";
+import {
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { MobileMenu } from "@/components/app-shell";
+import type { VirtualPage } from "@/components/data-table/use-virtual-rows";
+import { WaveLoader } from "@/components/wave-loader";
 import { useDebouncedCallback } from "@/hooks/use-debounced-value";
 import { errorMessage } from "@/lib/orpc-error";
 
@@ -82,6 +92,31 @@ export function ErrorNote({
   );
 }
 
+export function ReportBody({
+  resetKey,
+  errorTitle,
+  stale = false,
+  children,
+}: {
+  resetKey: string;
+  errorTitle: string;
+  stale?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <CatchBoundary
+      getResetKey={() => resetKey}
+      errorComponent={({ error }) => <ErrorNote title={errorTitle} error={error} />}
+    >
+      <Suspense fallback={<ListLoading />}>
+        <div aria-busy={stale || undefined} className={stale ? "opacity-60" : undefined}>
+          {children}
+        </div>
+      </Suspense>
+    </CatchBoundary>
+  );
+}
+
 export function PageTabs({ label, children }: { label: string; children: ReactNode }) {
   // The row, not each tab, overlaps the border by 1px: a tab hanging out of a
   // scroll container would give the strip a scrollbar of its own.
@@ -130,6 +165,7 @@ export function SearchInput({
   onQueryChange,
   fieldRef,
   trailing,
+  pattern,
 }: {
   label: string;
   placeholder: string;
@@ -142,11 +178,20 @@ export function SearchInput({
   fieldRef?: Ref<HTMLDivElement>;
   /** The filter trigger, drawn inside the field's right edge. */
   trailing?: ReactNode;
+  /** A term the server searches, with the hint shown while the text is too short. */
+  pattern?: { source: string; hint: string };
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const hintId = useId();
+
   // The list re-renders after each pause, not after each keystroke. The pause reads
   // the box when it ends, so a Clear during the pause is not undone by older text.
-  const apply = useDebouncedCallback(() => onQueryChange(input.current?.value.trim() ?? ""), delay);
+  // Text the pattern rejects clears the search; the hint says why.
+  const apply = useDebouncedCallback(() => {
+    const element = input.current;
+
+    onQueryChange(element?.validity.valid ? element.value.trim() : "");
+  }, delay);
 
   // Clear, Back, or a palette link changes the URL; the box follows, but never
   // while the operator types in it.
@@ -167,12 +212,14 @@ export function SearchInput({
         defaultValue={value}
         // The server's searchQuery cap: a longer query would validate to no search.
         maxLength={100}
+        pattern={pattern && `.*${pattern.source}.*`}
+        aria-describedby={pattern && hintId}
         autoComplete="off"
         autoCapitalize="none"
         autoCorrect="off"
         spellCheck={false}
         className={cn(
-          "pl-8",
+          "peer pl-8",
           trailing !== undefined && "pr-8 [&::-webkit-search-cancel-button]:appearance-none",
         )}
         onChange={apply.schedule}
@@ -193,6 +240,17 @@ export function SearchInput({
           }
         }}
       />
+      {pattern ? (
+        <span
+          id={hintId}
+          className={cn(
+            "pointer-events-none absolute top-1/2 hidden -translate-y-1/2 text-xs text-muted-foreground peer-invalid:block",
+            trailing === undefined ? "right-2.5" : "right-9",
+          )}
+        >
+          {pattern.hint}
+        </span>
+      ) : null}
       {trailing === undefined ? null : (
         <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>
       )}
@@ -246,6 +304,22 @@ export function ListSection({
   );
 }
 
+export function ListLoading() {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-3">
+      <WaveLoader />
+    </div>
+  );
+}
+
+export function ListEmpty({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 export function ListState({
   query,
   errorTitle,
@@ -269,7 +343,7 @@ export function ListState({
   empty: ReactNode;
   children: ReactNode;
 }) {
-  if (query.isPending) return null;
+  if (query.isPending) return <ListLoading />;
 
   const retry = (
     <Button variant="outline" size="xs" onClick={() => void query.refetch()}>
@@ -299,9 +373,7 @@ export function ListState({
     return (
       <>
         {stale}
-        <div className="flex flex-1 items-center justify-center px-4 py-3 text-center text-muted-foreground">
-          {empty}
-        </div>
+        <ListEmpty>{empty}</ListEmpty>
       </>
     );
   }
@@ -314,22 +386,20 @@ export function ListState({
   );
 }
 
-export function LoadMore({
+/** Paging status; manual lists expose the next-page button instead of fetching on scroll. */
+export function ListFooter({
   query,
   shown,
+  manual = false,
 }: {
-  query: {
-    isFetchNextPageError: boolean;
-    hasNextPage: boolean;
-    isFetchingNextPage: boolean;
-    fetchNextPage: () => void;
-  };
+  query: VirtualPage;
   shown: number;
+  manual?: boolean;
 }) {
   if (shown === 0) return null;
 
   return (
-    <div className="flex h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
+    <div className="flex min-h-9 items-center justify-between gap-2 px-3 text-muted-foreground">
       <span className="tabular-nums">
         {query.isFetchNextPageError
           ? `${shown} shown · could not load more`
@@ -337,19 +407,28 @@ export function LoadMore({
             ? `${shown} shown`
             : `All ${shown} shown`}
       </span>
-      {query.hasNextPage ? (
+      {manual && query.hasNextPage ? (
         <Button
           variant="ghost"
           size="xs"
           disabled={query.isFetchingNextPage}
+          aria-label={query.isFetchingNextPage ? "Loading more" : undefined}
           onClick={() => void query.fetchNextPage()}
         >
-          {query.isFetchingNextPage
-            ? "Loading…"
-            : query.isFetchNextPageError
-              ? "Try again"
-              : "Load more"}
+          {query.isFetchingNextPage ? (
+            <WaveLoader label="Loading more" />
+          ) : query.isFetchNextPageError ? (
+            "Try again"
+          ) : (
+            "Load more"
+          )}
         </Button>
+      ) : query.isFetchNextPageError ? (
+        <Button variant="ghost" size="xs" onClick={() => void query.fetchNextPage()}>
+          Try again
+        </Button>
+      ) : query.isFetchingNextPage ? (
+        <WaveLoader label="Loading more" />
       ) : null}
     </div>
   );

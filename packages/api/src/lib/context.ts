@@ -11,6 +11,12 @@ export type OrgMembership = {
 export type ORPCContext = {
   headers: Headers;
   session: AuthSession | null;
+  /**
+   * `Set-Cookie` values from resolving the session: a renewed cookie cache, or a
+   * slid session expiry. Every adapter forwards them, so the next request reads the
+   * session from its cookie instead of the database.
+   */
+  setCookies: string[];
   // One server-rendered page fans out into several calls that all prove the same
   // membership. Created per request and never outliving it, so revocation still
   // takes effect on the next request.
@@ -20,7 +26,10 @@ export type ORPCContext = {
 // Every adapter must go through this: a hand-built literal would opt out of the
 // shared session and membership map.
 export async function createRequestContext(headers: Headers): Promise<ORPCContext> {
-  const session = await auth.api.getSession({ headers });
+  const { headers: sessionHeaders, response: session } = await auth.api.getSession({
+    headers,
+    returnHeaders: true,
+  });
 
-  return { headers, session, memberships: new Map() };
+  return { headers, session, setCookies: sessionHeaders.getSetCookie(), memberships: new Map() };
 }

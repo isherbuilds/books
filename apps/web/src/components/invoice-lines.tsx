@@ -108,7 +108,8 @@ function setLineItem(form: LinesForm, index: number, item: SavedItem) {
 
 /** A line's quantity times rate, or null while either is incomplete. */
 export function lineAmountPaise(line: { quantity: string; unitPrice: string }): bigint | null {
-  if (!validQuantity(line.quantity) || !NON_NEGATIVE_MONEY_PATTERN.test(line.unitPrice)) return null;
+  if (!validQuantity(line.quantity) || !NON_NEGATIVE_MONEY_PATTERN.test(line.unitPrice))
+    return null;
 
   return BigInt(line.quantity) * parseMoney(line.unitPrice);
 }

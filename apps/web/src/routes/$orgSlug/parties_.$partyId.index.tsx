@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 
 import { PartyFactSections, RecentReceipts } from "@/components/party-facts";
 import { membershipOptions, useCan } from "@/lib/membership";
-import { partyDetailOptions, partyStatementOptions, partyTotalsOptions } from "@/lib/parties";
+import { partyDetailOptions, partyLedgerSummaryOptions, partyTotalsOptions } from "@/lib/parties";
 
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/")({
   // Awaited, so the server renders the figures the client hydrates (a streamed read
@@ -17,9 +17,9 @@ export const Route = createFileRoute("/$orgSlug/parties_/$partyId/")({
 
     await Promise.all([
       authorize(roles, { receipt: ["read"] }) &&
-        queryClient.prefetchQuery(partyTotalsOptions(orgSlug, partyId)),
+        queryClient.query(partyTotalsOptions(orgSlug, partyId)).catch(() => {}),
       authorize(roles, { report: ["read"] }) &&
-        queryClient.prefetchQuery(partyStatementOptions(orgSlug, partyId)),
+        queryClient.query(partyLedgerSummaryOptions(orgSlug, partyId)).catch(() => {}),
     ]);
   },
   component: PartyOverview,
@@ -42,8 +42,8 @@ function PartyOverview() {
   const party = useSuspenseQuery(partyDetailOptions(orgSlug, partyId)).data;
   const totals = useQuery({ ...partyTotalsOptions(orgSlug, partyId), enabled: canReadReceipts });
 
-  const statement = useQuery({
-    ...partyStatementOptions(orgSlug, partyId),
+  const summary = useQuery({
+    ...partyLedgerSummaryOptions(orgSlug, partyId),
     enabled: canReadLedger,
   });
 
@@ -59,7 +59,7 @@ function PartyOverview() {
           {canReadReceipts ? <Summary label="Received">{received}</Summary> : null}
           {canReadLedger ? (
             <Summary label="Balance">
-              {statement.data ? formatBalance(statement.data.closingPaise) : null}
+              {summary.data ? formatBalance(summary.data.closingPaise) : null}
             </Summary>
           ) : null}
         </dl>

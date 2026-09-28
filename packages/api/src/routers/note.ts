@@ -28,9 +28,8 @@ import { dateOnly, documentListFields, orderedPeriod, positiveMoney, reason } fr
 import {
   allocationsOf,
   cancelDocument,
-  documentListWhere,
+  registerPage,
   orgSettings,
-  pageOf,
   printedPartyName,
 } from "../lib/settlements";
 
@@ -282,32 +281,41 @@ export const noteRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const rows = await db
-      .select({
-        id: documents.id,
-        type: noteTypeColumn,
-        number: documents.number,
-        documentDate: documents.documentDate,
-        state: documents.state,
-        totalPaise: documents.totalPaise,
-        partyName: printedPartyName,
-        againstDocumentId: documents.againstDocumentId,
-        againstNumber: against.number,
-        unappliedPaise: settlementPaise(orgId, "source", null).balancePaise,
-      })
-      .from(documents)
-      .leftJoin(against, and(eq(against.orgId, orgId), eq(against.id, documents.againstDocumentId)))
-      .where(documentListWhere(orgId, input.type ? [input.type] : NOTE_TYPES, input))
-      .orderBy(desc(documents.id))
-      .limit(input.limit + 1);
+    const { rows, hasMore } = await registerPage(
+      orgId,
+      input.type ? [input.type] : NOTE_TYPES,
+      input,
+      (listed) =>
+        db
+          .select({
+            id: documents.id,
+            type: noteTypeColumn,
+            number: documents.number,
+            documentDate: documents.documentDate,
+            state: documents.state,
+            totalPaise: documents.totalPaise,
+            partyName: printedPartyName,
+            againstDocumentId: documents.againstDocumentId,
+            againstNumber: against.number,
+            unappliedPaise: settlementPaise(orgId, "source", null).balancePaise,
+          })
+          .from(documents)
+          .leftJoin(
+            against,
+            and(eq(against.orgId, orgId), eq(against.id, documents.againstDocumentId)),
+          )
+          .where(listed)
+          .orderBy(desc(documents.id))
+          .limit(input.limit + 1),
+    );
 
-    return pageOf(
-      rows.map((row) => ({
+    return {
+      rows: rows.map((row) => ({
         ...row,
         unappliedPaise: row.state === "posted" ? row.unappliedPaise : 0n,
       })),
-      input.limit,
-    );
+      hasMore,
+    };
   }),
 
   cancel: orgProcedure({ note: ["cancel"] }, orgInput.extend({ noteId: z.uuid(), reason })).handler(

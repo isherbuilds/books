@@ -96,6 +96,11 @@ export const documents = pgTable(
     roundOffPaise: bigint("round_off_paise", { mode: "bigint" }).notNull(),
     affectsTax: boolean("affects_tax").notNull().default(false),
     printSnapshot: jsonb("print_snapshot").$type<PrintSnapshot>(),
+    // What register and palette search match: number, reference, narration and the
+    // printed party name. One trigram index serves a substring anywhere in it.
+    searchText: text("search_text").generatedAlwaysAs(
+      sql`coalesce(number, '') || ' ' || coalesce(reference, '') || ' ' || coalesce(narration, '') || ' ' || coalesce(print_snapshot->'party'->>'name', '')`,
+    ),
     postedAt: timestamp("posted_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => user.id),
@@ -130,7 +135,10 @@ export const documents = pgTable(
     index("documents_org_type_date_idx").on(table.orgId, table.type, table.documentDate),
     // The newest-first keyset of each document list, without filtering type on the heap.
     index("documents_org_type_id_idx").on(table.orgId, table.type, table.id),
-    index("documents_org_party_idx").on(table.orgId, table.partyId),
+    // A party's documents newest first: the party filter seeks them instead of
+    // walking the whole register.
+    index("documents_org_party_idx").on(table.orgId, table.partyId, table.id),
+    index("documents_search_text_idx").using("gin", table.searchText.op("gin_trgm_ops")),
     index("documents_org_amended_from_idx").on(table.orgId, table.amendedFromId),
     index("documents_org_against_document_idx").on(table.orgId, table.againstDocumentId),
     // receipt.partyTotals reads only this index: one ordered, index-only scan per

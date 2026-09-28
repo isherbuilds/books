@@ -36,8 +36,8 @@ import {
   adjustmentLinesOf,
   allocationsOf,
   cancelDocument,
-  pageOf,
   settlementListRow,
+  registerPage,
   settlementListWhere,
   orgSettings,
   orgTimeZone,
@@ -385,18 +385,18 @@ export const paymentRouter = {
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const rows = await db
-      .select({
-        ...settlementListRow,
-        settlementKind: documents.settlementKind,
-        exposureSide: documents.exposureSide,
-      })
-      .from(documents)
-      .where(settlementListWhere(orgId, "payment", input))
-      .orderBy(desc(documents.id))
-      .limit(input.limit + 1);
-
-    return pageOf(rows, input.limit);
+    return registerPage(orgId, ["payment"], input, (listed) =>
+      db
+        .select({
+          ...settlementListRow,
+          settlementKind: documents.settlementKind,
+          exposureSide: documents.exposureSide,
+        })
+        .from(documents)
+        .where(and(listed, settlementListWhere(input)))
+        .orderBy(desc(documents.id))
+        .limit(input.limit + 1),
+    );
   }),
 
   cancel: orgProcedure(

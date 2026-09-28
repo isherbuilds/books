@@ -1,6 +1,6 @@
 import { auth } from "@accly/auth";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { redirect } from "@tanstack/react-router";
 
 // Where a signed-in visitor belongs when they open a page that is not for them:
@@ -9,7 +9,15 @@ import { redirect } from "@tanstack/react-router";
 // `activeOrganizationId` is never consulted: it can name an org the user left.
 const homeFor = createServerFn({ method: "GET" }).handler(async () => {
   const { headers } = getRequest();
-  const session = await auth.api.getSession({ headers });
+
+  const { headers: sessionHeaders, response: session } = await auth.api.getSession({
+    headers,
+    returnHeaders: true,
+  });
+
+  const renewed = sessionHeaders.getSetCookie();
+
+  if (renewed.length > 0) setResponseHeader("set-cookie", renewed);
 
   if (!session) return null;
 

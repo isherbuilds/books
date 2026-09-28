@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --bun portless",
-    "dev:app": "bun --bun astro dev",
+    "dev:app": "bun --bun astro dev --force",
     "start": "bun --bun astro dev",
     "build": "bun --bun astro build",
     "preview": "bun --bun astro preview",

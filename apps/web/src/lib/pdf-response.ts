@@ -14,20 +14,22 @@ export async function pdfResponse(
   noun: string,
   render: (client: AppRouterClient) => Promise<{ bytes: Uint8Array; fileName: string }>,
 ): Promise<Response> {
-  const client: AppRouterClient = createRouterClient(appRouter, {
-    context: () => createRequestContext(new Headers(request.headers)),
-  });
+  const context = createRequestContext(new Headers(request.headers));
+
+  const client: AppRouterClient = createRouterClient(appRouter, { context: () => context });
 
   try {
     const { bytes, fileName } = await render(client);
 
-    return new Response(new Uint8Array(bytes).buffer, {
-      headers: {
-        "Cache-Control": "private, no-store",
-        "Content-Disposition": contentDisposition("inline", fileName, "document.pdf"),
-        "Content-Type": "application/pdf",
-      },
+    const headers = new Headers({
+      "Cache-Control": "private, no-store",
+      "Content-Disposition": contentDisposition("inline", fileName, "document.pdf"),
+      "Content-Type": "application/pdf",
     });
+
+    for (const cookie of (await context).setCookies) headers.append("set-cookie", cookie);
+
+    return new Response(new Uint8Array(bytes).buffer, { headers });
   } catch (error) {
     // A 4xx message is written for the user; a 5xx one names internal state.
     if (error instanceof ORPCError && error.status < 500) {

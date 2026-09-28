@@ -52,7 +52,7 @@ export const Route = createFileRoute("/$orgSlug/settings/organization")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     // The page is a save form, so the tab strip gates it on `update` too.
     await requireOrgPermission(queryClient, orgSlug, { settings: ["update"] });
-    await queryClient.prefetchQuery(settingsOptions(orgSlug));
+    await queryClient.query(settingsOptions(orgSlug)).catch(() => {});
   },
   component: SettingsRoute,
 });

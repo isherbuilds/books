@@ -8,7 +8,6 @@ import {
   pgTable,
   text,
   timestamp,
-  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -40,8 +39,22 @@ export const partyLedgerLines = pgTable(
       columns: [table.orgId, table.documentId],
       foreignColumns: [documents.orgId, documents.id],
     }),
-    unique("party_ledger_lines_org_id_id_unique").on(table.orgId, table.id),
-    index("party_ledger_lines_org_party_idx").on(table.orgId, table.partyId, table.side),
+    // `amount_paise` trails so `party.balances` sums every party from this index alone.
+    index("party_ledger_lines_org_party_idx").on(
+      table.orgId,
+      table.partyId,
+      table.side,
+      table.amountPaise,
+    ),
+    // A party's lines by date. `amount_paise` trails the keyset so the statement's
+    // opening and summary sums read this index alone.
+    index("party_ledger_lines_org_party_date_idx").on(
+      table.orgId,
+      table.partyId,
+      table.entryDate,
+      table.id,
+      table.amountPaise,
+    ),
     // A document posts at most one line per Party and cancels it at most once, so its
     // settlement capacity is one indexed row, never a sum.
     uniqueIndex("party_ledger_lines_org_document_party_kind_idx").on(

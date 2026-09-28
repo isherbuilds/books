@@ -8,6 +8,7 @@ import { InvitationAccess } from "@/components/invitation-access";
 import { OrganizationEntryLayout } from "@/components/organization-entry-layout";
 import { ErrorNote } from "@/components/page";
 import { SignInForm } from "@/components/sign-in-form";
+import { WaveLoader } from "@/components/wave-loader";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
 
@@ -24,11 +25,7 @@ function JoinOrganizationRoute() {
   const { invitation } = Route.useSearch();
   const { data: session, isPending, error } = authClient.useSession();
 
-  let content: ReactNode = (
-    <p role="status" className="text-sm text-muted-foreground">
-      Loading your account…
-    </p>
-  );
+  let content: ReactNode = <WaveLoader label="Loading your account" />;
 
   if (error) {
     content = <ErrorNote title="Could not load your account" error={error} />;
@@ -93,12 +90,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
   // Only the founding account may create one, so only it sees the link.
   const canCreate = useQuery(orpc.organization.canCreate.queryOptions());
 
-  if (destinations.isPending)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading organizations…
-      </p>
-    );
+  if (destinations.isPending) return <WaveLoader label="Loading organizations" />;
 
   if (destinations.error)
     return (

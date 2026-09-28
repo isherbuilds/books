@@ -103,7 +103,7 @@ export const Route = createFileRoute("/$orgSlug/items")({
   }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { item: ["read"] });
-    await queryClient.prefetchQuery(itemListOptions(orgSlug));
+    await queryClient.query(itemListOptions(orgSlug)).catch(() => {});
   },
   component: ItemsRoute,
 });

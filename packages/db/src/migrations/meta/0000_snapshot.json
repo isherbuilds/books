@@ -1,5 +1,5 @@
 {
-  "id": "6bcade26-e3bd-41db-924c-f3cd5473eb90",
+  "id": "2aa9e6ad-bff7-4f73-b3ff-e6cf06419e56",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -618,6 +618,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
         "account_id": {
           "name": "account_id",
           "type": "text",
@@ -646,8 +652,8 @@
         }
       },
       "indexes": {
-        "journal_lines_org_account_idx": {
-          "name": "journal_lines_org_account_idx",
+        "journal_lines_org_account_date_idx": {
+          "name": "journal_lines_org_account_date_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -657,6 +663,30 @@
             },
             {
               "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "debit",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "credit",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -703,17 +733,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "journal_lines_org_id_entry_id_journal_entries_org_id_id_fk": {
-          "name": "journal_lines_org_id_entry_id_journal_entries_org_id_id_fk",
+        "journal_lines_org_id_entry_id_entry_date_journal_entries_org_id_id_entry_date_fk": {
+          "name": "journal_lines_org_id_entry_id_entry_date_journal_entries_org_id_id_entry_date_fk",
           "tableFrom": "journal_lines",
           "tableTo": "journal_entries",
           "columnsFrom": [
             "org_id",
-            "entry_id"
+            "entry_id",
+            "entry_date"
           ],
           "columnsTo": [
             "org_id",
-            "id"
+            "id",
+            "entry_date"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -750,16 +782,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "journal_lines_org_id_id_unique": {
-          "name": "journal_lines_org_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "journal_lines_debit_check": {
@@ -890,16 +913,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "file_org_id_id_unique": {
-          "name": "file_org_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1336,6 +1350,51 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "amount_paise",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "party_ledger_lines_org_party_date_idx": {
+          "name": "party_ledger_lines_org_party_date_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "amount_paise",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -1423,16 +1482,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "party_ledger_lines_org_id_id_unique": {
-          "name": "party_ledger_lines_org_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "party_ledger_lines_side_check": {
@@ -2103,6 +2153,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -2162,6 +2218,15 @@
           "columns": [
             "org_id",
             "id"
+          ]
+        },
+        "journal_entries_org_id_id_entry_date_unique": {
+          "name": "journal_entries_org_id_id_entry_date_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "id",
+            "entry_date"
           ]
         }
       },
@@ -2331,6 +2396,16 @@
           "primaryKey": false,
           "notNull": false
         },
+        "search_text": {
+          "name": "search_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "coalesce(number, '') || ' ' || coalesce(reference, '') || ' ' || coalesce(narration, '') || ' ' || coalesce(print_snapshot->'party'->>'name', '')",
+            "type": "stored"
+          }
+        },
         "posted_at": {
           "name": "posted_at",
           "type": "timestamp with time zone",
@@ -2483,11 +2558,33 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "documents_search_text_idx": {
+          "name": "documents_search_text_idx",
+          "columns": [
+            {
+              "expression": "search_text",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         },
         "documents_org_amended_from_idx": {

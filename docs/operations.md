@@ -6,7 +6,9 @@
 variables win, and images carry no `.env`. Both containers get the server
 variables, because web SSR imports auth and database code.
 
-- `DATABASE_URL`: PostgreSQL. Tests need a `_test` database.
+- `DATABASE_URL`: PostgreSQL. Tests need a `_test` database. The role must be
+  able to create the trusted extension `pg_trgm` (the database owner can);
+  `runMigrations` creates it.
 - `BETTER_AUTH_SECRET`: at least 32 characters, the same on server and web.
 - `BETTER_AUTH_URL` and `VITE_SERVER_URL`: the public API origin.
 - `CORS_ORIGIN`: the exact web origin and the invitation-link base.
@@ -89,8 +91,11 @@ goes with the release. A configuration or workflow change reruns only its gate.
 5. Staff have rehearsed every live workflow, including cancellations.
 6. A joint PostgreSQL and object-storage restore is timed and verified, with
    cutover and rollback owners.
-7. Advisers have recorded the GST, DPDP, retention and other duties, each with
-   an owner and evidence.
+7. Record each pilot's legal form, GST registration and whether Accly is its
+   primary books. Advisers have recorded the applicable GST, DPDP, audit-trail,
+   retention, India-located backup and filing duties, each with an owner and
+   evidence. The [report fit check](./research/report-fit-and-indian-records-2026-09-27.md)
+   identifies the report and record boundaries to verify.
 
 ## Accounts and Organizations
 

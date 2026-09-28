@@ -36,7 +36,7 @@ import { NAV_GROUPS, PRIMARY_NAV, SETTINGS_TABS, type NavGroup } from "@/lib/nav
 // One class for every rail row, links and menu triggers alike. TanStack Link marks
 // the active route with `data-status="active"`.
 const ROW =
-  "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent/60 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground data-[status=active]:[&_svg]:text-foreground";
+  "flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent/60 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground data-[status=active]:[&_svg]:text-foreground";
 
 /** The rail group that holds the current page, if any. */
 function useActiveGroup(): NavGroup | undefined {
@@ -295,7 +295,7 @@ function OrgNav({ orgSlug, onSelect }: { orgSlug: string; onSelect?: () => void 
               onToggle={(event) => toggle(group, event.currentTarget.open)}
               className="group/section mt-3"
             >
-              <summary className="group/summary flex h-6 cursor-default list-none items-center gap-1 rounded-md px-2 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <summary className="group/summary flex h-6 cursor-default list-none items-center gap-1 rounded-md px-2 font-medium text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
                 <span className="flex-1">{group}</span>
                 {/* Quiet while open; always shown once a group is closed. */}
                 <ChevronRightIcon className="size-3 opacity-0 group-hover/summary:opacity-100 group-focus-visible/summary:opacity-100 group-open/section:rotate-90 group-not-open/section:opacity-100" />
