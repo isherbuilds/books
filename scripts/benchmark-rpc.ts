@@ -132,6 +132,35 @@ start.setUTCDate(start.getUTCDate() - 364);
 
 const from = start.toISOString().slice(0, 10);
 
+// The party with the least received has few documents, so a party filter that walks
+// the register instead of seeking the party shows here; it may have no invoices at all.
+// One of its receipt numbers is a search target that sits anywhere in the register,
+// unlike the newest page.
+const partyTotals = await client.receipt.partyTotals({ orgSlug: ORG_SLUG });
+
+const smallParty = partyTotals.reduce((least, row) =>
+  row.receivedPaise < least.receivedPaise ? row : least,
+);
+
+// The busiest customer has the longest settlement history for the Receipt pickers.
+const busyParty = partyTotals.reduce((most, row) =>
+  row.receivedPaise > most.receivedPaise ? row : most,
+);
+
+const [smallPartyReceipt] = (
+  await client.receipt.list({ orgSlug: ORG_SLUG, partyId: smallParty.partyId })
+).rows;
+
+const [newestReceipt] = (await client.receipt.list({ orgSlug: ORG_SLUG })).rows;
+
+const searchNumber = smallPartyReceipt?.number;
+
+const commonName = newestReceipt?.partyName?.split(" ")[0];
+
+if (!searchNumber || !commonName) {
+  throw new Error("The fixture needs posted receipts with numbers and party names");
+}
+
 // Reads only, so a run leaves the fixture unchanged.
 const scenarios: Scenario[] = [
   {
@@ -177,6 +206,62 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: "receipts_party_small",
+    run: async () => {
+      await client.receipt.list({ orgSlug: ORG_SLUG, partyId: smallParty.partyId });
+    },
+  },
+  {
+    name: "invoices_party_small",
+    run: async () => {
+      await client.invoice.list({ orgSlug: ORG_SLUG, partyId: smallParty.partyId });
+    },
+  },
+  {
+    name: "receipts_query_number",
+    run: async () => {
+      await client.receipt.list({ orgSlug: ORG_SLUG, q: searchNumber });
+    },
+  },
+  {
+    name: "receipts_query_fragment",
+    run: async () => {
+      await client.receipt.list({ orgSlug: ORG_SLUG, q: searchNumber.slice(-6) });
+    },
+  },
+  {
+    name: "receipts_query_miss",
+    run: async () => {
+      await client.receipt.list({ orgSlug: ORG_SLUG, q: "zzqx-none" });
+    },
+  },
+  {
+    name: "receipts_query_name",
+    run: async () => {
+      await client.receipt.list({ orgSlug: ORG_SLUG, q: commonName });
+    },
+  },
+  {
+    name: "party_open_items",
+    run: async () => {
+      await client.party.openItems({
+        orgSlug: ORG_SLUG,
+        partyId: busyParty.partyId,
+        side: "receivable",
+      });
+    },
+  },
+  {
+    name: "party_open_credits",
+    run: async () => {
+      await client.party.openCredits({
+        orgSlug: ORG_SLUG,
+        partyId: busyParty.partyId,
+        side: "receivable",
+      });
+    },
+  },
+  {
     name: "party_list",
     run: async () => {
       await client.party.list({ orgSlug: ORG_SLUG });
@@ -210,7 +295,12 @@ const scenarios: Scenario[] = [
 
 const scenarioReports: ScenarioReport[] = [];
 
+// A comma-separated PERF_SCENARIOS runs only those names, so a before/after pair
+// can repeat just the reads a change targets.
+const selected = process.env.PERF_SCENARIOS?.split(",");
+
 for (const scenario of scenarios) {
+  if (selected && !selected.includes(scenario.name)) continue;
   scenarioReports.push(await runScenario(scenario));
 }
 
@@ -219,6 +309,12 @@ const report = JSON.stringify(
     generatedAt: new Date().toISOString(),
     apiUrl: API_URL,
     orgSlug: ORG_SLUG,
+    inputs: {
+      smallPartyId: smallParty.partyId,
+      busyPartyId: busyParty.partyId,
+      searchNumber,
+      commonName,
+    },
     requestsPerScenario: REQUEST_COUNT,
     scenarios: scenarioReports,
   },

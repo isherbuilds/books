@@ -1,5 +1,5 @@
 {
-  "id": "c0632a4b-b8ea-4135-8bed-fdb6cb32bc99",
+  "id": "6a6278e7-2fb8-4a3d-abcb-8297f3e3b06e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2399,6 +2399,16 @@
           "primaryKey": false,
           "notNull": false
         },
+        "search_text": {
+          "name": "search_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "coalesce(number, '') || ' ' || coalesce(reference, '') || ' ' || coalesce(narration, '') || ' ' || coalesce(print_snapshot->'party'->>'name', '')",
+            "type": "stored"
+          }
+        },
         "posted_at": {
           "name": "posted_at",
           "type": "timestamp with time zone",
@@ -2551,11 +2561,33 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "documents_search_text_idx": {
+          "name": "documents_search_text_idx",
+          "columns": [
+            {
+              "expression": "search_text",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         },
         "documents_org_amended_from_idx": {

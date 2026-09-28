@@ -132,6 +132,20 @@ export function reportTooLarge(limit: number) {
   );
 }
 
+/**
+ * Refuses a report whose rows pass `limit` before its joined read runs. The probe is
+ * the report's own filter and order over one index, seeked to the row after the limit,
+ * so an oversized request fails in one index walk instead of a join that times out.
+ */
+export async function assertReportFits(
+  probe: { offset: (offset: number) => { limit: (limit: number) => PromiseLike<unknown[]> } },
+  limit: number,
+): Promise<void> {
+  const [past] = await probe.offset(limit).limit(1);
+
+  if (past) throw reportTooLarge(limit);
+}
+
 export async function accountLedgerLines(
   orgId: string,
   input: {
@@ -169,10 +183,7 @@ export async function accountLedgerLines(
     .leftJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, journalLines.partyId)))
     .where(
       and(
-        eq(journalLines.orgId, orgId),
-        eq(journalLines.accountId, input.accountId),
-        gte(journalLines.entryDate, input.from),
-        lte(journalLines.entryDate, input.to),
+        accountLedgerWhere(orgId, input),
         input.cursor
           ? afterCursor(journalLines.entryDate, journalLines.id, input.cursor)
           : undefined,
@@ -180,6 +191,28 @@ export async function accountLedgerLines(
     )
     .orderBy(asc(journalLines.entryDate), asc(journalLines.id))
     .limit(limit + 1);
+}
+
+function accountLedgerWhere(orgId: string, input: { accountId: string; from: string; to: string }) {
+  return and(
+    eq(journalLines.orgId, orgId),
+    eq(journalLines.accountId, input.accountId),
+    gte(journalLines.entryDate, input.from),
+    lte(journalLines.entryDate, input.to),
+  );
+}
+
+/** The ledger's lines in order, read from `journal_lines_org_account_date_idx` alone. */
+export function accountLedgerProbe(
+  orgId: string,
+  input: { accountId: string; from: string; to: string },
+  executor: typeof db | DbTransaction = db,
+) {
+  return executor
+    .select({ id: journalLines.id })
+    .from(journalLines)
+    .where(accountLedgerWhere(orgId, input))
+    .orderBy(asc(journalLines.entryDate), asc(journalLines.id));
 }
 
 export async function dayBookLines(

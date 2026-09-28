@@ -17,6 +17,7 @@ import {
   afterCursor,
   headerFromProfile,
   reportProfile,
+  assertReportFits,
   reportTooLarge,
   type ReportHeader,
 } from "../lib/reports";
@@ -228,10 +229,7 @@ function partyStatementRows(
     )
     .where(
       and(
-        eq(partyLedgerLines.orgId, orgId),
-        eq(partyLedgerLines.partyId, input.partyId),
-        input.from ? gte(partyLedgerLines.entryDate, input.from) : undefined,
-        input.to ? lte(partyLedgerLines.entryDate, input.to) : undefined,
+        partyStatementWhere(orgId, input),
         input.cursor
           ? afterCursor(partyLedgerLines.entryDate, partyLedgerLines.id, input.cursor)
           : undefined,
@@ -239,6 +237,18 @@ function partyStatementRows(
     )
     .orderBy(asc(partyLedgerLines.entryDate), asc(partyLedgerLines.id))
     .limit(limit + 1);
+}
+
+function partyStatementWhere(
+  orgId: string,
+  input: { partyId: string; from?: string; to?: string },
+) {
+  return and(
+    eq(partyLedgerLines.orgId, orgId),
+    eq(partyLedgerLines.partyId, input.partyId),
+    input.from ? gte(partyLedgerLines.entryDate, input.from) : undefined,
+    input.to ? lte(partyLedgerLines.entryDate, input.to) : undefined,
+  );
 }
 
 // Exposure lines oldest first: receivable claims increase the running balance;
@@ -255,6 +265,16 @@ export async function partyStatement(
   const partyLines = and(
     eq(partyLedgerLines.orgId, orgId),
     eq(partyLedgerLines.partyId, input.partyId),
+  );
+
+  // Read from `party_ledger_lines_org_party_date_idx` alone, in the statement's order.
+  await assertReportFits(
+    db
+      .select({ id: partyLedgerLines.id })
+      .from(partyLedgerLines)
+      .where(partyStatementWhere(orgId, { ...input, to }))
+      .orderBy(asc(partyLedgerLines.entryDate), asc(partyLedgerLines.id)),
+    limit,
   );
 
   const [party, opening, rows] = await Promise.all([

@@ -62,7 +62,7 @@ export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boole
     : { rows, hasMore: false };
 }
 
-/** The party name printed on a document; registers show and search it. */
+/** The party name printed on a document; registers show it and `searchText` holds it. */
 export const printedPartyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
 
 /** A list's date range. A draft is unfinished work, so no period hides it. */
@@ -92,14 +92,7 @@ export function documentListWhere(
     input.cursor ? lt(documents.id, input.cursor) : undefined,
     input.partyId ? eq(documents.partyId, input.partyId) : undefined,
     documentPeriod(input),
-    pattern
-      ? or(
-          ilike(documents.number, pattern),
-          ilike(documents.reference, pattern),
-          ilike(documents.narration, pattern),
-          ilike(printedPartyName, pattern),
-        )
-      : undefined,
+    pattern ? ilike(documents.searchText, pattern) : undefined,
   );
 }
 

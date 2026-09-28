@@ -127,7 +127,12 @@ Query, form and invalidation rules are in
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.
 - Migrations run before startup under an advisory lock and must suit a draining
-  old instance ([rules](./development.md#code-rules)).
+  old instance ([rules](./development.md#code-rules)). `runMigrations` first
+  creates the extensions the schema needs; Drizzle generates no extension.
+- Register and palette search match a substring anywhere in a document's
+  number, reference, narration or printed party name. They read one stored
+  generated column, `documents.search_text`, through a `pg_trgm` GIN index. A
+  term under 3 characters has no trigram and walks the register newest first.
 - Tests use real PostgreSQL and wipe only a database whose name ends in `_test`.
 
 ## Audit and files

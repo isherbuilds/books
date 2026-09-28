@@ -28,6 +28,8 @@ import {
   accountActivity,
   accountActivitySince,
   accountLedgerLines,
+  accountLedgerProbe,
+  assertReportFits,
   afterCursor,
   dayBookLines,
   headerFromProfile,
@@ -213,6 +215,8 @@ export async function accountLedger(
   return db.transaction(
     async (tx) => {
       const account = await postingAccount(orgId, input.accountId, tx);
+
+      await assertReportFits(accountLedgerProbe(orgId, input, tx), limit);
 
       const detail = await accountLedgerLines(orgId, input, limit, tx);
 

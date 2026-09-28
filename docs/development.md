@@ -116,7 +116,10 @@ local database and file-store data. The command refuses non-local Docker context
 `benchmark:navigation` measure a running build. `benchmark:browser` times hard
 page loads; `benchmark:navigation` times in-app route changes. `benchmark:rpc`
 measures first-page reads for invoices, receipts, bills, credit notes, debit
-notes, payments and reports. Set `PERF_ORG_SLUG` to `meridian-traders`,
+notes, payments and reports; party filters, register search and the Receipt
+pickers; and reports. It picks its party ids and search terms from the data at
+start-up. Set `PERF_SCENARIOS` to a comma-separated list of scenario names to
+repeat only the reads a change targets. Set `PERF_ORG_SLUG` to `meridian-traders`,
 `ridgeview-academy` or `cedar-components` to compare the 1M, 5M and 15M
 organizations; it defaults to Meridian Traders. Quote a performance number
 only on `db:seed:volume` data or more.

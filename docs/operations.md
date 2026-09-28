@@ -6,7 +6,9 @@
 variables win, and images carry no `.env`. Both containers get the server
 variables, because web SSR imports auth and database code.
 
-- `DATABASE_URL`: PostgreSQL. Tests need a `_test` database.
+- `DATABASE_URL`: PostgreSQL. Tests need a `_test` database. The role must be
+  able to create the trusted extension `pg_trgm` (the database owner can);
+  `runMigrations` creates it.
 - `BETTER_AUTH_SECRET`: at least 32 characters, the same on server and web.
 - `BETTER_AUTH_URL` and `VITE_SERVER_URL`: the public API origin.
 - `CORS_ORIGIN`: the exact web origin and the invitation-link base.

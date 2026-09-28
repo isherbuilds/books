@@ -29,17 +29,13 @@ type LockedDocument = Pick<
 
 const reversal = alias(allocations, "allocation_reversal");
 
+// `allocations_kind_check` makes a non-null `reverses_allocation_id` mean a reversal,
+// so the probe reads only `allocations_org_reverses_idx` and never the heap.
 function reversalOf(orgId: string) {
   return db
     .select({ id: reversal.id })
     .from(reversal)
-    .where(
-      and(
-        eq(reversal.orgId, orgId),
-        eq(reversal.kind, "reverse"),
-        eq(reversal.reversesAllocationId, allocations.id),
-      ),
-    );
+    .where(and(eq(reversal.orgId, orgId), eq(reversal.reversesAllocationId, allocations.id)));
 }
 
 function activeApply(orgId: string) {
