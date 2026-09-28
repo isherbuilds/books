@@ -95,9 +95,11 @@ function DocumentLink({ orgSlug, allocation }: { orgSlug: string; allocation: Al
 export function AllocationsSection({
   orgSlug,
   allocations,
+  title = "Allocations",
 }: {
   orgSlug: string;
   allocations: readonly Allocation[];
+  title?: string;
 }) {
   const queryClient = useQueryClient();
   const canReverse = useCan(orgSlug, { allocation: ["reverse"] });
@@ -130,7 +132,7 @@ export function AllocationsSection({
     <>
       <Separator />
       <section className="grid grid-cols-1 gap-2">
-        <h3 className="text-muted-foreground">Allocations</h3>
+        <h3 className="text-muted-foreground">{title}</h3>
         <Table>
           <TableHeader>
             <TableRow>

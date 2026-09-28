@@ -50,10 +50,11 @@ function JournalPage() {
   const journal = useSuspenseQuery(journalDetailOptions(orgSlug, journalId)).data;
 
   const cancelled = journal.state === "cancelled";
+  const cancellationBlocked = journal.allocationsReceived.some(({ reversed }) => !reversed);
   const canCancel = useCan(orgSlug, { journal: ["cancel"] }) && !cancelled;
   const [cancelOpen, setCancelOpen] = useState(false);
 
-  const paletteActions: PaletteItem[] = canCancel
+  const paletteActions: PaletteItem[] = canCancel && !cancellationBlocked
     ? [
         {
           id: `journal:${journal.id}:cancel`,
@@ -93,7 +94,11 @@ function JournalPage() {
         description={`${journal.number} · ${formatBusinessDate(journal.documentDate)}`}
         action={
           canCancel ? (
-            <Button variant="destructive" onClick={() => setCancelOpen(true)}>
+            <Button
+              variant="destructive"
+              disabled={cancellationBlocked}
+              onClick={() => setCancelOpen(true)}
+            >
               Cancel
             </Button>
           ) : undefined
@@ -127,7 +132,21 @@ function JournalPage() {
         <Separator />
 
         <PostedLines lines={journal.lines} />
-        <AllocationsSection orgSlug={orgSlug} allocations={journal.allocations} />
+        {cancellationBlocked ? (
+          <p className="text-muted-foreground">
+            Reverse the active allocations received below before cancelling this journal.
+          </p>
+        ) : null}
+        <AllocationsSection
+          orgSlug={orgSlug}
+          title="Allocations applied"
+          allocations={journal.allocationsApplied}
+        />
+        <AllocationsSection
+          orgSlug={orgSlug}
+          title="Allocations received"
+          allocations={journal.allocationsReceived}
+        />
       </PageBody>
 
       <ReasonDialog

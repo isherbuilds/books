@@ -150,6 +150,27 @@ function journalPartyAmounts(lines: readonly EntryLineValues[], index: number) {
   return { capacity: capacity > ZERO_MONEY ? capacity : ZERO_MONEY, allocated };
 }
 
+/**
+ * What line `index` may allocate to one invoice. Sibling lines share both the party's
+ * credit and the invoice's outstanding, so each counts the other lines' amounts.
+ */
+export function journalAllocationLimit(
+  lines: readonly EntryLineValues[],
+  index: number,
+  documentId: string,
+  openPaise: bigint,
+) {
+  const own = enteredPaise(lines[index]?.allocations[documentId] ?? "");
+  const { capacity, allocated } = journalPartyAmounts(lines, index);
+
+  const invoiceLeft =
+    openPaise - sumEntered(lines.map((line) => line.allocations[documentId] ?? "")) + own;
+
+  const partyLeft = capacity - allocated + own;
+
+  return partyLeft < invoiceLeft ? partyLeft : invoiceLeft;
+}
+
 function JournalAllocationTotals({ index }: { index: number }) {
   const { control } = useFormContext<{ lines: EntryLineValues[] }>();
   const lines = useWatch({ control, name: "lines" });
@@ -203,21 +224,14 @@ function JournalInvoiceAllocations({ orgSlug, index }: { orgSlug: string; index:
         query={openItems}
         rows={invoices}
         name={`lines.${index}.allocations`}
-        remainingFor={(documentId) => {
-          const lines = form.getValues("lines");
-          const own = enteredPaise(lines[index]?.allocations[documentId] ?? "");
-          const { capacity, allocated } = journalPartyAmounts(lines, index);
-
-          // Sibling lines may allocate the same invoice; its outstanding is shared.
-          const invoiceLeft =
-            (invoices.find((row) => row.id === documentId)?.openPaise ?? ZERO_MONEY) -
-            sumEntered(lines.map((line) => line.allocations[documentId] ?? "")) +
-            own;
-
-          const partyLeft = capacity - allocated + own;
-
-          return partyLeft < invoiceLeft ? partyLeft : invoiceLeft;
-        }}
+        remainingFor={(documentId) =>
+          journalAllocationLimit(
+            form.getValues("lines"),
+            index,
+            documentId,
+            invoices.find((row) => row.id === documentId)?.openPaise ?? ZERO_MONEY,
+          )
+        }
       >
         <JournalAllocationTotals index={index} />
       </AllocationTable>
