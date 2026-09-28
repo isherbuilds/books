@@ -79,16 +79,21 @@ ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
   (account 165–390 ms, day book 120–770 ms, party 14–80 ms). Checked at 1440
   and 390 px in both themes: SSR first rows, auto-load, bounded mounted rows,
   balances continuing across pages, the Closing row only after the last page, and
-  row focus kept when a Sheet closes. On 1440 px Meridian Invoices, ArrowDown
-  from row 0 reaches row 60 across the mounted window and ArrowUp returns;
-  a cold-loaded day book fills the viewport after scrolling on both widths; a
-  failed remote party search shows "Could not load parties". Auto-load waits
-  while the list is refetching. Open: confirm the Parties table and its
-  row highlight fill the bordered box at desktop width after the virtual spacer
-  fix, in both themes; the 5,000-party register (the local seed has 94 parties);
-  and period roll-ups if summaries miss the report budget on native PostgreSQL.
-  Open the Party Ledger and five report PDF links in the running app and confirm
-  they open without a Base UI native-button console warning.
+  row focus kept when a Sheet closes. In the light theme: on 1440 px Meridian
+  Invoices, ArrowDown from row 0 reaches row 60 across the mounted window and
+  ArrowUp returns; a cold-loaded day book fills the viewport after scrolling
+  at 1440 and 390 px; a failed remote party search shows "Could not load
+  parties"; renaming a party shows the new name on a day book cached earlier
+  in the session. Open: those four checks in the dark theme; a scroll to the
+  list end during a background refetch, confirming no next-page request starts
+  until the refetch settles (the code follows TanStack Query's `!isFetching`
+  guard); an organization legal-name edit refreshing a cached report header;
+  confirm the Parties table and its row highlight fill the bordered box at
+  desktop width after the virtual spacer fix, in both themes; the 5,000-party
+  register (the local seed has 94 parties); and period roll-ups if summaries
+  miss the report budget on native PostgreSQL. Open the Party Ledger and five
+  report PDF links in the running app and confirm they open without a Base UI
+  native-button console warning.
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as
   a released credit distinct from an advance, before any tax workflow reads
