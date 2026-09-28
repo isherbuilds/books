@@ -1,4 +1,4 @@
-import { documentSearchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
@@ -116,6 +116,7 @@ function BillsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search bills"
             placeholder="Number, party, or reference"
             value={q}

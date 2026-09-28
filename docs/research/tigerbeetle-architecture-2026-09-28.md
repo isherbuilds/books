@@ -122,7 +122,8 @@ use that commit.
   latency", and default numbers "are not necessarily comparable across
   different TigerBeetle versions." Latency is reported per **batch**
   (`:583-600`), not per transfer.
-- The only read phase is 100 `get_account_transfers` calls on one account
+- The only read phase is 100 `get_account_transfers` calls on accounts drawn
+  uniformly by default (hot accounts when configured)
   (`:604-640`).
 - Homepage claims: "1000x Faster OLTP", "100K-500K TPS", "90% Contention", and
   that SQL databases cap at "≈100–1,000 TPS" under contention

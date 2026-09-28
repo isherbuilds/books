@@ -191,6 +191,10 @@ Decisions: [Query performance](../specs/query-performance.md).
   cookie; the next five requests read it 0 times. Before, the renewed cookie was
   dropped, so every request after the first 5 minutes of a sign-in read the
   `session` table.
+- **Terms without a trigram.** A review measured `---` at 10.06 s through the
+  older-history index read. Validation now refuses a term without 3 letters or
+  digits in a row: `receipts_search_punctuation_refusal` answers `BAD_REQUEST`
+  in 0.7 ms p50 (dev API, 5 requests, added after the table above).
 - **Pool.** With all 10 connections held, a request fails after 5,006 ms instead
   of waiting without limit.
 

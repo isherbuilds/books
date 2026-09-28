@@ -1,4 +1,4 @@
-import { documentSearchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -182,6 +182,7 @@ function PaymentsRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search payments"
             placeholder="Number, party, or reference"
             value={q}

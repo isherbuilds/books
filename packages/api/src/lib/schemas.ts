@@ -126,10 +126,26 @@ export const pageLimit = z.number().int().min(1).max(100).default(25);
 export const searchQuery = z.string().trim().min(1).max(100).optional();
 
 /**
- * A document register search. It needs 3 characters: a shorter term has no trigram,
- * so no index can serve it, and a rare one would read the whole register.
+ * A document register search needs 3 letters or digits in a row. The trigram index
+ * reads only such runs: a shorter or punctuation-only term, such as `ab` or `---`,
+ * has no trigram, so PostgreSQL would read every index entry. Browsers compile an
+ * input `pattern` with the `v` flag, which accepts this class unchanged.
  */
-export const documentSearchQuery = z.string().trim().min(3).max(100).optional();
+export const DOCUMENT_SEARCH_PATTERN = {
+  source: "[\\p{L}\\p{M}\\p{N}]{3}",
+  hint: "Enter at least 3 letters or digits",
+};
+
+const documentSearchRun = new RegExp(DOCUMENT_SEARCH_PATTERN.source, "u");
+
+export const isDocumentSearch = (term: string) => documentSearchRun.test(term);
+
+export const documentSearchQuery = z
+  .string()
+  .trim()
+  .max(100)
+  .refine(isDocumentSearch, DOCUMENT_SEARCH_PATTERN.hint)
+  .optional();
 
 export const settlementPostFields = {
   documentDate: dateOnly.optional(),

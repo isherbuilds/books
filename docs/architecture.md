@@ -130,8 +130,9 @@ Query, form and invalidation rules are in
   old instance ([rules](./development.md#code-rules)). `runMigrations` first
   creates the extensions the schema needs; Drizzle generates no extension.
 - Register and palette search match a substring anywhere in a document's
-  number, reference, narration or printed party name, from 3 characters
-  (`documentSearchQuery`): a shorter term has no trigram, so no index serves it.
+  number, reference, narration or printed party name, once the term has 3
+  letters or digits in a row (`documentSearchQuery`): a shorter or
+  punctuation-only term has no trigram, so no index serves it.
   They read one stored generated column, `documents.search_text`, through a
   `pg_trgm` GIN index. `registerPage` walks the newest 1,000 documents first and
   reads the index for older ones only when the page is not full: PostgreSQL

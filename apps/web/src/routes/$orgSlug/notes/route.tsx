@@ -1,4 +1,4 @@
-import { documentSearchQuery } from "@accly/api/lib/schemas";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
@@ -92,6 +92,7 @@ function NotesRoute() {
       <PageBody>
         <ListToolbar>
           <SearchInput
+            pattern={DOCUMENT_SEARCH_PATTERN}
             label="Search notes"
             placeholder="Number, party, or reason"
             value={q}

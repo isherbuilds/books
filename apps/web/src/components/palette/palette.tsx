@@ -3,6 +3,7 @@
 // rebuilt on cmdk + Base UI Dialog, oRPC, TanStack Router and Accly's route action registry.
 
 import { formatMoney } from "@accly/api/core/money";
+import { DOCUMENT_SEARCH_PATTERN, isDocumentSearch } from "@accly/api/lib/schemas";
 import { authorize, type AppPermission } from "@accly/auth/access";
 import {
   Command,
@@ -55,10 +56,6 @@ import { partyListOptions } from "@/lib/parties";
 // The palette renders inside ClientOnly and its trigger only calls `open`, so this
 // module-level handle never binds during SSR.
 const paletteHandle = createDialogHandle();
-
-/** Below this, a remote search matches most of the table, so it is not worth a round trip. */
-// The server searches documents from 3 characters, where a trigram index serves them.
-const MIN_SEARCH_CHARS = 3;
 
 /** The palette is for recognising a row, not browsing: more rows only cost time. */
 const SEARCH_RESULT_LIMIT = 4;
@@ -234,7 +231,7 @@ function PaletteBody({
   const debouncedQuery = useDebouncedValue(typed, 200);
   const canReadParties = authorize(roles, { party: ["read"] });
   const searches = DOCUMENT_SEARCHES.filter(({ permission }) => authorize(roles, permission));
-  const searchReady = debouncedQuery.length >= MIN_SEARCH_CHARS;
+  const searchReady = isDocumentSearch(debouncedQuery);
 
   const partyQuery = useQuery({ ...partyListOptions(orgSlug), enabled: canReadParties });
   const partiesPastBound = partyQuery.data?.hasMore === true;
@@ -354,7 +351,7 @@ function PaletteBody({
   const searching =
     sections.length === 0 &&
     searches.length > 0 &&
-    typed.length >= MIN_SEARCH_CHARS &&
+    isDocumentSearch(typed) &&
     (typed !== debouncedQuery || documentQueries.some((query) => query.isFetching));
 
   return (
@@ -366,7 +363,13 @@ function PaletteBody({
         placeholder="Type a command or search…"
       />
       <CommandList>
-        <CommandEmpty>{searching ? "Searching…" : `No results for “${typed}”.`}</CommandEmpty>
+        <CommandEmpty>
+          {searching
+            ? "Searching…"
+            : searches.length > 0 && !isDocumentSearch(typed)
+              ? `${DOCUMENT_SEARCH_PATTERN.hint} to search documents.`
+              : `No results for “${typed}”.`}
+        </CommandEmpty>
         {sections.map(({ group, items }, index) => (
           <Fragment key={group}>
             {/* cmdk hides a separator while the input has text unless told otherwise;

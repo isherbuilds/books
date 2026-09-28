@@ -622,6 +622,26 @@ for (const { list, ...register } of registers) {
 
 reads.push(
   {
+    // A term with no trigram would read the whole search index (10 s on 1 M
+    // documents), so validation must refuse it before any query runs.
+    name: "receipts_search_punctuation_refusal",
+    route: "receipts, palette",
+    kind: "refusal",
+    run: async () => {
+      const error = await client.receipt.list({ ...org, q: "---" }).then(
+        () => fail("a punctuation-only search was accepted"),
+        (error: unknown) => error,
+      );
+
+      check(
+        error instanceof ORPCError && error.code === "BAD_REQUEST",
+        `expected BAD_REQUEST, got ${String(error)}`,
+      );
+
+      return "BAD_REQUEST";
+    },
+  },
+  {
     name: "receipts_search_old_number_found",
     route: "receipts, palette",
     kind: "search",

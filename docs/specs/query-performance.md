@@ -162,9 +162,11 @@ common name 14 → 22 and 17 → 29. Sizes 225 and 228 MB. No clear gain at 3
 organizations, and one extension more; revisit when cross-organization search
 misses its target at many tenants.
 
-**Short terms.** A term under 3 characters has no trigram, so the GIN index can
-only scan itself whole: a review measured `qz` at 9.25 s. Register and palette
-search now start at 3 characters (`documentSearchQuery`).
+**Short terms.** A term without 3 letters or digits in a row has no trigram, so
+the GIN index can only scan itself whole: a review measured `qz` at 9.25 s and
+`---` at 10.06 s. Register and palette search need 3 letters or digits in a row
+(`documentSearchQuery`); a register shows "Enter at least 3 letters or digits"
+in the box and lists without a search until the term qualifies.
 
 **Full API benchmark, before and after.** 100 reads and 14 writes, each
 response checked, on one copy of the data: `main` against the copy converted to
@@ -205,11 +207,13 @@ scan of the widened `party_ledger_lines_org_party_idx` (18 MB).
 150,000 deep: the `OR` cursor filtered 150,001 rows in 20.4 ms; the row comparison
 is an Index Cond and takes 0.06 ms.
 
-**Cookie cache (decision 10): removed.** Sign-in sets `session_data` with
-`Max-Age=300`; a `/rpc` call with only the session token answered 200 with no
-`Set-Cookie`, and the web reads the session through `auth.api.getSession`,
-which drops refreshed cookies. So the cache served at most the first 5 minutes
-after sign-in and delayed a revocation by as much.
+**Cookie cache (decision 10): kept.** Sign-in sets `session_data` with
+`Max-Age=300`. Before this change, a `/rpc` call answered with no `Set-Cookie`,
+and the web read the session through `auth.api.getSession`, which dropped
+refreshed cookies, so the cache served only the first 5 minutes after sign-in.
+The owner chose to keep the cache: every adapter now forwards the `Set-Cookie`
+that resolving a session returns, so a request reads its session from the
+cookie, not the database. A revocation can take up to 5 minutes to apply.
 
 **Picker applied sums.** `settlementPaise` now nets reversals in one scan of a
 document's allocations (applies minus reversals) instead of an anti-join per
@@ -266,9 +270,10 @@ after 5,006 ms instead of waiting.
      now match across two adjacent fields, which is harmless.
    - `file` gets no trigram index: a GIN index would bring the same plan hazard
      for a page rarely searched. Moved to Explicitly Deferred.
-   - Terms under 3 characters cannot use a trigram index, and a rare one read the
-     whole index (9.25 s). `documentSearchQuery` requires 3 characters; the
-     registers ignore a shorter term and the palette starts at 3.
+   - A term without 3 letters or digits in a row (`ab`, `---`) cannot use a
+     trigram index and reads the whole index (9–10 s). `documentSearchQuery`
+     requires such a run; the registers show a hint and ignore a shorter term, and
+     the palette searches documents only once the term qualifies.
 3. **Party filter.** Change `documents_org_party_idx` to `(org_id, party_id, id)`. It
    is a superset of today's index, so it serves the party filter,
    `party.transactions` and every current user.

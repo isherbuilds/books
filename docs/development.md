@@ -47,7 +47,7 @@ bun run create-founder <name> <password>       # FOUNDING_EMAIL, the only Organi
 bun run create-user <email> <name> <password>  # an account without an invitation
 bun run db:seed
 bun run db:seed:demo # complete the practical cases in an older base seed
-bun run db:seed:mega # fill the 1M / 5M / 15M local stress targets
+bun run db:seed:mega # fill Meridian Traders to 1M documents
 ```
 
 Organization creation runs one bootstrap (`core/organizations.ts`): settings,
