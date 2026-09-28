@@ -242,10 +242,10 @@ test("an allocated receivables journal settles Priya, a party transfer nets the 
       accountSystemKey: "receivables",
     }),
   );
-  expect(discountDetail.allocations).toContainEqual(
+  expect(discountDetail.allocationsApplied).toContainEqual(
     expect.objectContaining({ otherDocumentId: invoice.id, amountPaise: 50_000n, reversed: false }),
   );
-  const allocation = required(discountDetail.allocations[0], "journal allocation");
+  const allocation = required(discountDetail.allocationsApplied[0], "journal allocation");
   expect(
     await db
       .select({ id: journalEntries.id })
@@ -339,7 +339,7 @@ test("an allocated receivables journal settles Priya, a party transfer nets the 
     1_000_000n,
   );
   expect(
-    (await fixture.api.journal.get({ ...claim, journalId: discountJournal.id })).allocations,
+    (await fixture.api.journal.get({ ...claim, journalId: discountJournal.id })).allocationsApplied,
   ).toContainEqual(expect.objectContaining({ otherDocumentId: invoice.id, reversed: true }));
 });
 
@@ -470,7 +470,7 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
   const journalDetail = await fixture.api.journal.get({ ...claim, journalId: transfer.id });
 
   const allocation = required(
-    journalDetail.allocations.find(({ otherDocumentId }) => otherDocumentId === receipt.id),
+    journalDetail.allocationsReceived.find(({ otherDocumentId }) => otherDocumentId === receipt.id),
     "Rahul journal settlement",
   );
 
