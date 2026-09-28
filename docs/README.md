@@ -21,17 +21,11 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
-- **[Query performance](./specs/query-performance.md)**: Verification. Built and
-  measured before and after on 1 M documents
-  ([results](./research/api-benchmark-2026-09-28.md)): trigram search with the
-  two-step register plan and a minimum of 3 letters or digits in a row,
-  party filter index, index-only balance sums, picker applied sums without the
-  reversal anti-join, size probes, file cursor, pool timeout, and a session
-  cookie cache that is renewed through every adapter. The register hint and
-  the palette were checked at desktop and 390 px in both themes (2026-09-28).
-  Open: merge PR 34. After merge, local databases need `bun run db:seed -- --reset`,
-  then `bun run db:seed:mega`. The reset deletes local data; confirm with the
-  owner immediately before running it.
+- **[Query performance](./specs/query-performance.md)**: Active. Merged in PR 34
+  ([results](./research/api-benchmark-2026-09-28.md)). Open: local databases
+  still hold the old migration baseline, so `bun run dev` fails until
+  `bun run db:seed -- --reset`, then `bun run db:seed:mega`. The reset deletes
+  local data; confirm with the owner immediately before running it.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
   allocation and opening-balance wait states use `WaveLoader`; types, lint and
   build pass. Check a loading state at desktop and mobile widths in both themes
