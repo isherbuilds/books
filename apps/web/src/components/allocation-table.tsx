@@ -323,6 +323,17 @@ export function AllocationTable({
                         <TableCell className="w-36">
                           <RegisteredFormField
                             name={`${name}.${row.id}`}
+                            rules={{
+                              validate: (value) => {
+                                if (!value || !NON_NEGATIVE_MONEY_PATTERN.test(value)) return true;
+
+                                const paise = enteredPaise(value);
+                                const remaining = remainingFor(row.id);
+                                const limit = remaining < row.openPaise ? remaining : row.openPaise;
+
+                                return paise <= limit || `Enter no more than ${formatMoney(limit)}`;
+                              },
+                            }}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="sr-only">Amount for {row.number}</FormLabel>
