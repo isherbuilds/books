@@ -105,13 +105,13 @@ export const Route = createFileRoute("/$orgSlug/")({
     const membership = await queryClient.query(membershipOptions(orgSlug));
 
     // Awaited, so the server renders the figures the client hydrates: a streamed
-    // prefetch read by `useQuery` lands before hydration and mismatches. `prefetchQuery`
-    // never throws; a failed read shows in its section.
+    // prefetch read by `useQuery` lands before hydration and mismatches. Catch
+    // failed prefetches so each section can show its own read error.
     await Promise.all([
       authorize(membership.roles, BANKS_PERMISSION) &&
-        queryClient.prefetchQuery(moneyBalanceOptions(orgSlug)),
+        queryClient.query(moneyBalanceOptions(orgSlug)).catch(() => {}),
       authorize(membership.roles, POSITION_PERMISSION) &&
-        queryClient.prefetchQuery(partyBalancesOptions(orgSlug)),
+        queryClient.query(partyBalancesOptions(orgSlug)).catch(() => {}),
     ]);
   },
   component: HomeRoute,

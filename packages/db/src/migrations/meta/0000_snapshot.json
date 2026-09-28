@@ -1,5 +1,5 @@
 {
-  "id": "6bcade26-e3bd-41db-924c-f3cd5473eb90",
+  "id": "c0632a4b-b8ea-4135-8bed-fdb6cb32bc99",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -618,6 +618,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
         "account_id": {
           "name": "account_id",
           "type": "text",
@@ -646,8 +652,8 @@
         }
       },
       "indexes": {
-        "journal_lines_org_account_idx": {
-          "name": "journal_lines_org_account_idx",
+        "journal_lines_org_account_date_idx": {
+          "name": "journal_lines_org_account_date_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -657,6 +663,18 @@
             },
             {
               "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -703,17 +721,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "journal_lines_org_id_entry_id_journal_entries_org_id_id_fk": {
-          "name": "journal_lines_org_id_entry_id_journal_entries_org_id_id_fk",
+        "journal_lines_org_id_entry_id_entry_date_journal_entries_org_id_id_entry_date_fk": {
+          "name": "journal_lines_org_id_entry_id_entry_date_journal_entries_org_id_id_entry_date_fk",
           "tableFrom": "journal_lines",
           "tableTo": "journal_entries",
           "columnsFrom": [
             "org_id",
-            "entry_id"
+            "entry_id",
+            "entry_date"
           ],
           "columnsTo": [
             "org_id",
-            "id"
+            "id",
+            "entry_date"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1333,6 +1353,39 @@
             },
             {
               "expression": "side",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "party_ledger_lines_org_party_date_idx": {
+          "name": "party_ledger_lines_org_party_date_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2103,6 +2156,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -2162,6 +2221,15 @@
           "columns": [
             "org_id",
             "id"
+          ]
+        },
+        "journal_entries_org_id_id_entry_date_unique": {
+          "name": "journal_entries_org_id_id_entry_date_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "id",
+            "entry_date"
           ]
         }
       },

@@ -21,16 +21,37 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
+- **Loading indicators**: Verification. The list, picker, invitation, join,
+  allocation and opening-balance wait states use `WaveLoader`; types, lint and
+  build pass. Check a loading state at desktop and mobile widths in both themes
+  after the local web and API proxy processes respond.
 - **Cooler light palette**: Verification. The public page renders at desktop and
   phone widths; the contrast test and production build pass. Check an authenticated
   console page in light and dark after the local migration records match this
   checkout and the web and API services start.
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 6
-  (reports: 6a trial balance and the latency proof first, then 6b–6d) and 7
-  (import: 7a opening items first, then 7b–7c) are specified and open. Also
-  open: CA acceptance of every implemented slice, and the slice 2 posting
-  p95 on native PostgreSQL at `db:seed:volume`. Slices 1–5, 8 and 9 are
-  implemented; their open runtime checks are listed below. Slice 9a's
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slice 7
+  (import: 7a opening items first, then 7b–7c) is specified and open. Also
+  open: CA acceptance of every implemented slice, and the slice 2 posting p95
+  on native PostgreSQL at `db:seed:volume`. Slices 1–6, 8 and 9 are
+  implemented; their open runtime checks are listed below. Slice 6 is
+  covered by the report, receipt and tenancy integration tests and the
+  report unit tests. Its pages (trial balance, P&L, balance sheet, account
+  ledger, day book, party Ledger downloads) passed at 1440 and 390 px in both
+  themes on Cedar Components: balance sheet → leaf → ledger → voucher, the
+  ledger closing equal to the balance sheet row, the P&L net equal to the
+  current-year row, and every report PDF answering `application/pdf`. At
+  210,000 journal lines on Docker PostgreSQL after `VACUUM ANALYZE`, through
+  the `--hot` dev API rather than a build, 365 days, p95: `trial_balance`
+  97–110 ms, `profit_and_loss` 105–115 ms, `balance_sheet` 113 ms, just above
+  the budget before the line-only aggregate change. At 2.2 million Meridian
+  journal lines on Docker PostgreSQL, warm direct calls before → after were
+  1.90 → 0.52 s for trial balance, 2.68 → 0.39 s for P&L, and 2.34 → 0.45 s
+  for balance sheet. A focused call through the dev API after the change took
+  about 0.4 s per report when warm. The balance sheet `EXPLAIN ANALYZE` fell
+  from 4.14 s for the joined aggregate to 0.42 s for the line-only aggregate;
+  both returned identical account totals. Open: the native PostgreSQL run
+  against a build at the specified 210,000-line fixture, with
+  `EXPLAIN (ANALYZE, BUFFERS)`. Slice 9a's
   Journal form, record, Apply credit and party Ledger link passed at 1440
   and 390 px in both themes; open: the Opening Balance picker without
   `receivables`, the Journal Invoice picker after a reversed refund and Fill
@@ -44,6 +65,21 @@ Check UI items in the running app on desktop and mobile, in both themes.
   allocation link at 1440 and 390 px in both themes (the local database
   needs a reset to match the migration baseline first), and
   `party.openItems` with Journal debits under "Settlement reads at volume".
+- **Virtualized lists and paged ledgers**: Verification. Every `DataTable`, the
+  audit and files panels, the account ledger and the day book render through
+  `useVirtualRows`; keyset lists load the next 25 rows as they scroll into view.
+  Party ledger, account ledger and day book page oldest first on
+  `(entry_date, id)` with a top summary. On mega-volume Meridian (1.3M journal
+  lines) warm page queries take 0.1–3 ms; the summaries scan their period
+  (account 165–390 ms, day book 120–770 ms, party 14–80 ms). Checked at 1440
+  and 390 px in both themes: SSR first rows, auto-load, bounded mounted rows,
+  balances continuing across pages, the Closing row only after the last page, and
+  row focus kept when a Sheet closes. Open: confirm the Parties table and its
+  row highlight fill the bordered box at desktop width after the virtual spacer
+  fix, in both themes; the 5,000-party register (the local seed has 94 parties);
+  and period roll-ups if summaries miss the report budget on native PostgreSQL.
+  Open the Party Ledger and five report PDF links in the running app and confirm
+  they open without a Base UI native-button console warning.
 - **Released credits versus advances**: Active. Decide whether a credit
   released by reversing an allocation is classified explicitly or recorded as
   a released credit distinct from an advance, before any tax workflow reads
@@ -71,6 +107,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
   the arm is slow, drive both pickers from `party_ledger_lines_org_party_idx`
   (every settling document has one `post` line per party; the sign gives
   source or target) instead of adding an index.
+- **Mega volume seed**: Verification. `db:seed:mega` fills Meridian Traders,
+  Ridgeview Academy and Cedar Components to 1M, 5M and 15M total documents with
+  linked document, journal, ledger and allocation rows. Open: run on local
+  PostgreSQL, confirm final row counts, then measure register and report reads.
 - **[Keyboard focus](./design.md)**: Verification. One global rounded ring
   with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
   the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
@@ -84,13 +124,14 @@ Check UI items in the running app on desktop and mobile, in both themes.
   keyboard focus, edge placement and empty search results; mobile widths in
   both themes. The Mac locked before those checks could finish.
 - **[Navigation, Home and Reports](./design.md)**: Verification. The native
-  rail, collapsible groups, Home, Reports (four XLSX downloads), palette
+  rail, collapsible groups, Home, Reports (then four XLSX downloads; the
+  slice 6 index is under Accounting core), palette
   document search and the section-keeping org switcher were checked on
   desktop in both themes and on a 375 px drawer. Remaining: keyboard pass
-  through the collapsed groups and the drawer, and `account.moneyBalances`
-  (Home and Banking) timed at `db:seed:volume`. Account ledgers and a
-  Party hub are not built; they need new reads and stay out until slice 5
-  closes.
+  through the collapsed groups and the drawer; confirm Home keeps the same row
+  height as other links while the rail scrolls at a short viewport height, in
+  both themes; and `account.moneyBalances` (Home and Banking) timed at
+  `db:seed:volume`. A Party hub is not built.
 - **Review fixes**: Verification. Run the journal, invoice, auth integrity and
   settings integration tests when Docker is available. Check the Product menu
   and group-hover links with mouse and touch at desktop and mobile widths, in

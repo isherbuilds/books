@@ -1,30 +1,40 @@
+import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
-import { Input } from "@accly/ui/components/input";
-import { NativeSelect } from "@accly/ui/components/native-select";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { DownloadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { ListSection, PageBody, PageHeader } from "@/components/page";
-import { PRESETS, presetLabel, presetOf, presetRange } from "@/lib/date-presets";
+import { ReportPeriod } from "@/components/report-period";
+import { presetRange } from "@/lib/date-presets";
+import { membershipOptions, useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
-import { requireOrgPermission } from "@/lib/route-permission";
+import { saveFile } from "@/lib/reports";
 
-const REPORTS_PERMISSION = { export: ["read"] } as const;
+const EXPORT_PERMISSION = { export: ["read"] } as const;
+
+const FINANCIAL_PERMISSION = { report: ["readFinancial"] } as const;
 
 export const Route = createFileRoute("/$orgSlug/reports")({
   head: () => ({ meta: [{ title: "Reports · Accly Books" }] }),
   validateSearch: z.object({
     from: z.iso.date().optional().catch(undefined),
     to: z.iso.date().optional().catch(undefined),
-    day: z.iso.date().optional().catch(undefined),
   }),
-  loader: ({ context: { queryClient }, params: { orgSlug } }) =>
-    requireOrgPermission(queryClient, orgSlug, REPORTS_PERMISSION),
+  loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
+    const membership = await queryClient.query(membershipOptions(orgSlug));
+
+    if (
+      !authorize(membership.roles, EXPORT_PERMISSION) &&
+      !authorize(membership.roles, FINANCIAL_PERMISSION)
+    ) {
+      throw redirect({ to: "/$orgSlug", params: { orgSlug } });
+    }
+  },
   component: ReportsRoute,
 });
 
@@ -48,19 +58,34 @@ const PERIOD_REPORTS: readonly { key: PeriodReport; label: string; detail: strin
   },
 ];
 
-// The server returns the workbook as a File; a detached anchor saves it under the
-// name the server chose. The object URL is released after the download has started.
-function save(file: File) {
-  const url = URL.createObjectURL(file);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = file.name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+const FINANCIAL_REPORTS = [
+  {
+    to: "/$orgSlug/reports/trial-balance",
+    label: "Trial balance",
+    detail: "Opening, activity and closing balance by account",
+  },
+  {
+    to: "/$orgSlug/reports/profit-and-loss",
+    label: "Profit and loss",
+    detail: "Income, expenses and net profit",
+  },
+  {
+    to: "/$orgSlug/reports/balance-sheet",
+    label: "Balance sheet",
+    detail: "Assets, liabilities and equity as of a date",
+  },
+  {
+    to: "/$orgSlug/reports/account-ledger",
+    label: "Account ledger",
+    detail: "Entries and running balance for an account",
+  },
+  { to: "/$orgSlug/reports/day-book", label: "Day book", detail: "Entries posted during a period" },
+] as const;
 
 function ReportsRoute() {
   const { orgSlug } = Route.useParams();
+  const canExport = useCan(orgSlug, EXPORT_PERMISSION);
+  const canReadFinancial = useCan(orgSlug, FINANCIAL_PERMISSION);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { today, financialYearStart } = useOrgDateTime();
@@ -69,121 +94,65 @@ function ReportsRoute() {
   const fallback = presetRange("last-month", today, financialYearStart);
   const from = search.from ?? fallback.from;
   const to = search.to ?? fallback.to;
-  const day = search.day ?? today;
-  const preset = presetOf({ from, to }, today, financialYearStart);
 
   const periodDownload = useMutation({
     mutationFn: (key: PeriodReport) => orpc.export[key].call({ orgSlug, from, to }),
-    onSuccess: save,
+    onSuccess: saveFile,
     onError: (error) => toast.error(errorMessage(error, "Could not build the report")),
   });
 
-  const dayBook = useMutation({
-    mutationFn: () => orpc.export.dayBookXlsx.call({ orgSlug, date: day }),
-    onSuccess: save,
-    onError: (error) => toast.error(errorMessage(error, "Could not build the day book")),
-  });
-
-  const setSearch = (next: { from?: string; to?: string; day?: string }) =>
+  const setSearch = (next: { from?: string; to?: string }) =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, ...next }) });
 
   const pending = periodDownload.isPending ? periodDownload.variables : undefined;
 
   return (
     <>
-      <PageHeader title="Reports" description="Registers for filing and review, as XLSX" />
+      <PageHeader title="Reports" description="Financial statements and filing registers" />
       <PageBody>
-        <ListSection
-          label="Period registers"
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              <NativeSelect
-                aria-label="Period"
-                className="h-7 w-auto"
-                value={preset ?? "custom"}
-                onChange={(event) => {
-                  const picked = PRESETS.find((candidate) => candidate === event.target.value);
-
-                  if (picked) setSearch(presetRange(picked, today, financialYearStart));
-                }}
+        {canReadFinancial ? (
+          <ListSection label="Financial reports">
+            {FINANCIAL_REPORTS.map(({ to, label, detail }) => (
+              <Link
+                key={to}
+                to={to}
+                params={{ orgSlug }}
+                className="flex min-h-10 flex-wrap items-baseline gap-x-3 px-3 py-2 hover:bg-accent/70"
               >
-                {PRESETS.map((candidate) => (
-                  <option key={candidate} value={candidate}>
-                    {presetLabel(candidate, today, financialYearStart)}
-                  </option>
-                ))}
-                <option value="custom" disabled={preset !== undefined}>
-                  Custom
-                </option>
-              </NativeSelect>
-              <Input
-                type="date"
-                aria-label="From"
-                className="h-7 w-auto"
-                value={from}
-                max={to}
-                onChange={(event) => event.target.value && setSearch({ from: event.target.value })}
-              />
-              <Input
-                type="date"
-                aria-label="To"
-                className="h-7 w-auto"
-                value={to}
-                min={from}
-                onChange={(event) => event.target.value && setSearch({ to: event.target.value })}
-              />
-            </div>
-          }
-        >
-          <ul className="divide-y">
-            {PERIOD_REPORTS.map(({ key, label, detail }) => (
-              <li key={key} className="flex min-h-10 items-center gap-3 px-3 py-2">
-                <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-3">
-                  <span className="font-medium">{label}</span>
-                  <span className="truncate text-muted-foreground">{detail}</span>
-                </span>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={periodDownload.isPending}
-                  onClick={() => periodDownload.mutate(key)}
-                >
-                  <DownloadIcon data-icon="inline-start" />
-                  {pending === key ? "Building…" : "Download"}
-                </Button>
-              </li>
+                <span className="font-medium">{label}</span>
+                <span className="text-muted-foreground">{detail}</span>
+              </Link>
             ))}
-          </ul>
-        </ListSection>
-
-        <ListSection
-          label="Day book"
-          action={
-            <Input
-              type="date"
-              aria-label="Day"
-              className="h-7 w-auto"
-              value={day}
-              max={today}
-              onChange={(event) => event.target.value && setSearch({ day: event.target.value })}
-            />
-          }
-        >
-          <div className="flex min-h-10 items-center gap-3 px-3 py-2">
-            <span className="min-w-0 flex-1 text-muted-foreground">
-              Every ledger line posted on the day, with its document and narration
-            </span>
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={dayBook.isPending}
-              onClick={() => dayBook.mutate()}
+          </ListSection>
+        ) : null}
+        {canExport ? (
+          <>
+            <ListSection
+              label="Period registers"
+              action={<ReportPeriod period={{ from, to }} onChange={setSearch} compact />}
             >
-              <DownloadIcon data-icon="inline-start" />
-              {dayBook.isPending ? "Building…" : "Download"}
-            </Button>
-          </div>
-        </ListSection>
+              <ul className="divide-y">
+                {PERIOD_REPORTS.map(({ key, label, detail }) => (
+                  <li key={key} className="flex min-h-10 items-center gap-3 px-3 py-2">
+                    <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-3">
+                      <span className="font-medium">{label}</span>
+                      <span className="truncate text-muted-foreground">{detail}</span>
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={periodDownload.isPending}
+                      onClick={() => periodDownload.mutate(key)}
+                    >
+                      <DownloadIcon data-icon="inline-start" />
+                      {pending === key ? "Building…" : "Download"}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </ListSection>
+          </>
+        ) : null}
       </PageBody>
     </>
   );

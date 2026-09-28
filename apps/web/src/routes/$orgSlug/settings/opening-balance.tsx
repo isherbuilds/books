@@ -12,6 +12,7 @@ import { DetailRow } from "@/components/detail-row";
 import { OpeningBalanceForm } from "@/components/opening-balance-form";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { PostedLines } from "@/components/posted-lines";
+import { WaveLoader } from "@/components/wave-loader";
 import { invalidateOpeningBalanceState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { openingBalanceOptions } from "@/lib/opening-balance";
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/$orgSlug/settings/opening-balance")({
   head: () => ({ meta: [{ title: "Opening balance · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { openingBalance: ["read"] });
-    await queryClient.prefetchQuery(openingBalanceOptions(orgSlug));
+    await queryClient.query(openingBalanceOptions(orgSlug)).catch(() => {});
   },
   component: OpeningBalanceRoute,
 });
@@ -97,7 +98,9 @@ function OpeningBalanceRoute() {
           </div>
         </PageBody>
       ) : openingBalance.isPending ? (
-        <PageBody />
+        <PageBody>
+          <WaveLoader label="Loading opening balance" className="m-auto" />
+        </PageBody>
       ) : canPost ? (
         <OpeningBalanceForm orgSlug={orgSlug} />
       ) : (

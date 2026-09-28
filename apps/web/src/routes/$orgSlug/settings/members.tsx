@@ -39,7 +39,7 @@ import { DataTable, DATA_TABLE_FEATURES } from "@/components/data-table/data-tab
 import { RowActionsMenu } from "@/components/data-table/row-actions-menu";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { focusSearch } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateMembership, invalidateRoster } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
@@ -63,7 +63,7 @@ export const Route = createFileRoute("/$orgSlug/settings/members")({
   validateSearch: z.object({ q: searchQuery.catch(undefined) }),
   loaderDeps: ({ search: { q } }) => ({ q }),
   loader: async ({ context: { queryClient }, deps: { q }, params: { orgSlug } }) => {
-    await queryClient.prefetchInfiniteQuery(memberListOptions(orgSlug, q));
+    await queryClient.infiniteQuery(memberListOptions(orgSlug, q)).catch(() => {});
   },
   component: MembersRoute,
 });
@@ -491,7 +491,6 @@ function MemberDirectory({ orgSlug, q }: { orgSlug: string; q: string | undefine
           />
         }
       />
-      <LoadMore query={roster} shown={rows.length} />
     </PageBody>
   );
 }

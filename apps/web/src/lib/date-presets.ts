@@ -9,7 +9,7 @@
 // A list URL carries the two dates and nothing else. The preset is a label the range is
 // matched back to, never a stored value: `?from=2026-04-01&to=2027-03-31` reads the same
 // to the server, a bookmark and the operator, and no page has to agree on a vocabulary.
-import { formatBusinessDate } from "@accly/api/lib/business-date";
+import { financialYearStartYear, formatBusinessDate } from "@accly/api/lib/business-date";
 
 /** A fully specified range produced by a preset or the calendar. */
 export type DateRange = { from: string; to: string };
@@ -27,13 +27,11 @@ function day(year: number, month: number, date: number): string {
 }
 
 /**
- * The financial year containing `today`, as `financialYearStart` months into the
- * calendar. `financialYearOf` in the API numbers documents by the same rule.
+ * The financial year containing `today`, shifted by `offset` years from the shared
+ * business-date rule used by document numbering and the balance sheet.
  */
 function financialYear(today: string, startMonth: number, offset: number): DateRange {
-  const year = Number(today.slice(0, 4));
-  const month = Number(today.slice(5, 7));
-  const startYear = (month >= startMonth ? year : year - 1) + offset;
+  const startYear = financialYearStartYear(today, startMonth) + offset;
 
   return {
     from: day(startYear, startMonth, 1),

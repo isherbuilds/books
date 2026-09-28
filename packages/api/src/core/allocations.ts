@@ -74,7 +74,7 @@ export function settlementPaise(orgId: string, role: "source" | "target", partyI
 
   const capacity = sql`coalesce((${db
     .select({
-      amount: sql`case when ${documents.type} = 'journal'
+      amount: sql`case when "documents"."type" = 'journal'
         then greatest(${journalAmount}, 0)
         else abs(${partyLedgerLines.amountPaise}) end`,
     })

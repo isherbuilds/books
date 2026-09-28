@@ -1,14 +1,13 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { creditOf, debitOf, formatBalance, formatMoney, isZeroMoney } from "@accly/api/core/money";
-import type { AppRouter } from "@accly/api/routers/index";
-import type { RouterClient } from "@orpc/server";
+import type { AppRouterClient } from "@accly/api/routers/index";
 import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES } from "@/components/data-table/data-table";
 
 type StatementLine = Awaited<
-  ReturnType<RouterClient<AppRouter>["party"]["statement"]>
->["lines"][number];
+  ReturnType<AppRouterClient["party"]["ledgerLines"]>
+>["rows"][number] & { balancePaise: bigint };
 
 function particulars(line: StatementLine): string {
   if (line.kind === "reverse") return "Cancellation";

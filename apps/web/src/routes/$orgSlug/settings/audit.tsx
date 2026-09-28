@@ -11,7 +11,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ScrollTextIcon } from "lucide-react";
 
-import { ListState, LoadMore, PageBody, PageHeader, Panel } from "@/components/page";
+import { ListFooter, ListState, PageBody, PageHeader, Panel } from "@/components/page";
+import { useVirtualRows } from "@/components/data-table/use-virtual-rows";
 import { orpc } from "@/lib/orpc";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -95,7 +96,7 @@ export const Route = createFileRoute("/$orgSlug/settings/audit")({
   head: () => ({ meta: [{ title: "Audit log · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { audit: ["read"] });
-    await queryClient.prefetchInfiniteQuery(auditQuery(orgSlug));
+    await queryClient.infiniteQuery(auditQuery(orgSlug)).catch(() => {});
   },
   component: AuditRoute,
 });
@@ -107,6 +108,13 @@ function AuditRoute() {
 
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
 
+  const virtual = useVirtualRows<HTMLTableSectionElement, HTMLTableRowElement>({
+    count: entries.length,
+    estimateSize: 72,
+    getItemKey: (index) => String(entries[index]!.id),
+    nextPage: audit,
+  });
+
   return (
     <>
       <PageHeader
@@ -116,7 +124,7 @@ function AuditRoute() {
       <SettingsTabs orgSlug={orgSlug} />
 
       <PageBody>
-        <Panel label="Entries" footer={<LoadMore query={audit} shown={entries.length} />}>
+        <Panel label="Entries" footer={<ListFooter query={audit} shown={entries.length} />}>
           <ListState
             query={audit}
             errorTitle="Could not load the audit trail"
@@ -141,12 +149,18 @@ function AuditRoute() {
                   <TableHead>Details</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {entries.map((entry) => {
+              <TableBody ref={virtual.listRef}>
+                {virtual.paddingTop > 0 ? (
+                  <TableRow aria-hidden style={{ height: virtual.paddingTop }}>
+                    <TableCell colSpan={5} className="p-0" />
+                  </TableRow>
+                ) : null}
+                {virtual.virtualRows.map((item) => {
+                  const entry = entries[item.index]!;
                   const details = describeMeta(entry.meta);
 
                   return (
-                    <TableRow key={entry.id}>
+                    <TableRow key={entry.id} data-index={item.index} ref={virtual.measureElement}>
                       <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                         {formatDateTime(entry.createdAt, timeZone)}
                       </TableCell>
@@ -181,6 +195,11 @@ function AuditRoute() {
                     </TableRow>
                   );
                 })}
+                {virtual.paddingBottom > 0 ? (
+                  <TableRow aria-hidden style={{ height: virtual.paddingBottom }}>
+                    <TableCell colSpan={5} className="p-0" />
+                  </TableRow>
+                ) : null}
               </TableBody>
             </Table>
           </ListState>

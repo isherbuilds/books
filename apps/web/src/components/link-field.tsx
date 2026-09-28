@@ -10,6 +10,7 @@ import { useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import { isCreateItem, linkRows, type CreateItem } from "@/lib/link-rows";
 import { errorReason } from "@/lib/orpc-error";
+import { WaveLoader } from "@/components/wave-loader";
 
 type LinkStatus = "pending" | "error" | "overflow" | "ready";
 
@@ -48,22 +49,12 @@ type LinkFieldProps<T> = {
 };
 
 // Design §9: the empty row says what would be here.
-function statusText(
-  status: LinkStatus,
-  noun: string,
-  needle: string,
-  canCreate: boolean,
-  complete: boolean,
-) {
-  if (status === "pending") return `Loading ${noun}…`;
-
+function statusText(status: LinkStatus, noun: string, needle: string, canCreate: boolean) {
   if (status === "error") return `Could not load ${noun}`;
 
   if (status === "overflow") {
     return `More than 5,000 ${noun}. Picking is unavailable until the list is smaller.`;
   }
-
-  if (!complete) return `Searching ${noun}…`;
 
   if (needle) return `No ${noun} match “${needle}”`;
 
@@ -214,9 +205,14 @@ export function LinkField<T>({
         inputValue={query}
         onInputValueChange={changeQuery}
         emptyContent={
-          <p className="px-3 py-4 text-center">
-            {statusText(status, noun, needle, canCreate, complete)}
-          </p>
+          status === "pending" || !complete ? (
+            <WaveLoader
+              label={status === "pending" ? `Loading ${noun}` : `Searching ${noun}`}
+              className="justify-center px-3 py-4"
+            />
+          ) : (
+            <p className="px-3 py-4 text-center">{statusText(status, noun, needle, canCreate)}</p>
+          )
         }
         open={open}
         onOpenChange={setOpen}

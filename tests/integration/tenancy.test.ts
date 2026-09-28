@@ -708,6 +708,10 @@ const GUARDED_CALLS = {
   "party.balances": (api, claim) => api.party.balances({ ...claim }),
   "party.statement": (api, claim) =>
     api.party.statement({ ...claim, partyId: crypto.randomUUID() }),
+  "party.ledgerLines": (api, claim) =>
+    api.party.ledgerLines({ ...claim, partyId: crypto.randomUUID() }),
+  "party.ledgerSummary": (api, claim) =>
+    api.party.ledgerSummary({ ...claim, partyId: crypto.randomUUID() }),
   "account.list": (api, claim) => api.account.list({ ...claim }),
   "paymentMethod.list": (api, claim) => api.paymentMethod.list({ ...claim }),
   "paymentMethod.create": (api, claim) =>
@@ -903,7 +907,55 @@ const GUARDED_CALLS = {
     }),
   "receipt.cancel": (api, claim) =>
     api.receipt.cancel({ ...claim, receiptId: crypto.randomUUID(), reason: "intrusion" }),
-  "export.dayBookXlsx": (api, claim) => api.export.dayBookXlsx({ ...claim, date: "2026-09-12" }),
+  "report.trialBalance": (api, claim) =>
+    api.report.trialBalance({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "report.profitAndLoss": (api, claim) =>
+    api.report.profitAndLoss({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "report.balanceSheet": (api, claim) => api.report.balanceSheet({ ...claim, asOf: "2026-04-30" }),
+  "report.accountLedger": (api, claim) =>
+    api.report.accountLedger({
+      ...claim,
+      accountId: crypto.randomUUID(),
+      from: "2026-04-01",
+      to: "2026-04-30",
+    }),
+  "report.accountLedgerLines": (api, claim) =>
+    api.report.accountLedgerLines({
+      ...claim,
+      accountId: crypto.randomUUID(),
+      from: "2026-04-01",
+      to: "2026-04-30",
+    }),
+  "report.accountLedgerSummary": (api, claim) =>
+    api.report.accountLedgerSummary({
+      ...claim,
+      accountId: crypto.randomUUID(),
+      from: "2026-04-01",
+      to: "2026-04-30",
+    }),
+  "report.dayBook": (api, claim) =>
+    api.report.dayBook({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "report.dayBookEntries": (api, claim) =>
+    api.report.dayBookEntries({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "report.dayBookSummary": (api, claim) =>
+    api.report.dayBookSummary({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "export.trialBalanceXlsx": (api, claim) =>
+    api.export.trialBalanceXlsx({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "export.profitAndLossXlsx": (api, claim) =>
+    api.export.profitAndLossXlsx({ ...claim, from: "2026-04-01", to: "2026-04-30" }),
+  "export.balanceSheetXlsx": (api, claim) =>
+    api.export.balanceSheetXlsx({ ...claim, asOf: "2026-04-30" }),
+  "export.accountLedgerXlsx": (api, claim) =>
+    api.export.accountLedgerXlsx({
+      ...claim,
+      accountId: crypto.randomUUID(),
+      from: "2026-04-01",
+      to: "2026-04-30",
+    }),
+  "export.partyStatementXlsx": (api, claim) =>
+    api.export.partyStatementXlsx({ ...claim, partyId: crypto.randomUUID() }),
+  "export.dayBookXlsx": (api, claim) =>
+    api.export.dayBookXlsx({ ...claim, from: "2026-09-12", to: "2026-09-12" }),
   "payment.post": (api, claim) =>
     api.payment.post({
       ...claim,

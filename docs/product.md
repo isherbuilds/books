@@ -86,10 +86,11 @@ per entity.
   cleanup; Parties with ledger, Items with dated GST rates, Invoices with
   drafts, Bills, Payments, Credit and Debit Notes, Receipts with allocations,
   Journals, the Opening Balance, period locks with exceptions, the chart of
-  accounts, money accounts and payment methods, day book, TDS register and
-  GST registers XLSX.
+  accounts, money accounts and payment methods; in-app trial balance, profit
+  and loss, balance sheet, account ledger and day book with XLSX and PDF,
+  party statement exports, and TDS and GST registers XLSX.
 - **Next**: the open [accounting-core slices](./specs/accounting-core.md#slices)
-  (6, 7 and 9). Runtime and CA acceptance status is in the
+  (7). Runtime and CA acceptance status is in the
   [work registry](./README.md#work-lifecycle).
 - **Evidence-gated**: the table below. This work gets no placeholder route,
   table, permission or navigation entry. It starts only with an observed or paid

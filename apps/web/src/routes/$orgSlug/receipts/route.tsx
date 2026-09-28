@@ -23,10 +23,11 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
+import { WaveLoader } from "@/components/wave-loader";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -64,8 +65,8 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
 
     await Promise.all([
       authorize(membership.roles, { paymentMethod: ["read"] }) &&
-        queryClient.prefetchQuery(paymentMethodListOptions(orgSlug)),
-      queryClient.prefetchInfiniteQuery(receiptListOptions(orgSlug, deps)),
+        queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
+      queryClient.infiniteQuery(receiptListOptions(orgSlug, deps)).catch(() => {}),
     ]);
   },
   component: ReceiptsRoute,
@@ -216,11 +217,13 @@ function ReceiptsRoute() {
                       ))
                     ) : (
                       <DropdownMenuItem disabled>
-                        {methods.isPending
-                          ? "Loading…"
-                          : methods.isError
-                            ? "Could not load payment methods"
-                            : "No payment methods"}
+                        {methods.isPending ? (
+                          <WaveLoader label="Loading payment methods" />
+                        ) : methods.isError ? (
+                          "Could not load payment methods"
+                        ) : (
+                          "No payment methods"
+                        )}
                       </DropdownMenuItem>
                     )}
                   </FilterSubmenu>
@@ -263,7 +266,6 @@ function ReceiptsRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={receipts} shown={rows.length} />
         {/* The record Sheet opens over the list, which stays mounted. */}
         <Outlet />
       </PageBody>

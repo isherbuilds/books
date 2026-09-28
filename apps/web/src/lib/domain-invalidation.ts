@@ -42,6 +42,11 @@ export async function invalidateSettlementState(
     queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.journal.get.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.ledgerLines.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.party.ledgerSummary.key({ input: { orgSlug } }),
+    }),
+    queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.balances.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.openItems.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
@@ -97,6 +102,7 @@ export async function invalidateOpeningBalanceState(
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
     }),
+    queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
   ]);
 }
 
@@ -125,6 +131,7 @@ export async function invalidateAccountState(
 ): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: orpc.account.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.paymentMethod.key({ input: { orgSlug } }) }),
     invalidateItems(queryClient, orgSlug),

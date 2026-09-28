@@ -23,6 +23,8 @@ export const MAX_INVOICE_QUANTITY = 1_000_000;
 // Calendar-valid, not shape-valid: `2026-02-31` must fail here, not in Postgres.
 export const dateOnly = z.iso.date();
 
+export const ledgerCursor = z.object({ entryDate: dateOnly, id: z.uuid() });
+
 export const entryLineFields = {
   accountId: z.uuid(),
   side: z.enum(ENTRY_SIDES),

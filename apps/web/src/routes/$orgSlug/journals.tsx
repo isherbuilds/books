@@ -18,7 +18,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { journalListOptions } from "@/lib/journals";
 import { useCan } from "@/lib/membership";
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/$orgSlug/journals")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { journal: ["read"] });
-    await queryClient.prefetchInfiniteQuery(journalListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(journalListOptions(orgSlug, deps)).catch(() => {});
   },
   component: JournalsRoute,
 });
@@ -148,7 +148,6 @@ function JournalsRoute() {
           errorTitle="Could not load journals"
           empty={empty}
         />
-        <LoadMore query={journals} shown={rows.length} />
       </PageBody>
 
       {date.popover}

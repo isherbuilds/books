@@ -19,7 +19,7 @@ import {
   type ActiveFilter,
   OptionFilter,
 } from "@/components/list-filter";
-import { ListToolbar, LoadMore, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { billListOptions } from "@/lib/bills";
 import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/$orgSlug/bills")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { bill: ["read"] });
-    await queryClient.prefetchInfiniteQuery(billListOptions(orgSlug, deps));
+    await queryClient.infiniteQuery(billListOptions(orgSlug, deps)).catch(() => {});
   },
   component: BillsRoute,
 });
@@ -153,7 +153,6 @@ function BillsRoute() {
           empty={empty}
           activeRowId={activeRowId}
         />
-        <LoadMore query={bills} shown={rows.length} />
         <Outlet />
       </PageBody>
       {date.popover}

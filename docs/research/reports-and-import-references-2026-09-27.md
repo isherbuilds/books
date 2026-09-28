@@ -6,6 +6,9 @@ date; pin a commit when implementing against them. Vendor behaviour supports
 the shapes below; it does not prove our latency, statutory fitness or
 cutover correctness.
 
+For current product behavior, recent user complaints and Indian record duties,
+see the [report fit check](./report-fit-and-indian-records-2026-09-27.md).
+
 ## Reports (slice 6)
 
 - **Trial balance.** ERPNext takes a fiscal year and `from`/`to`, and shows

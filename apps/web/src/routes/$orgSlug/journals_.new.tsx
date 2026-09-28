@@ -11,8 +11,8 @@ export const Route = createFileRoute("/$orgSlug/journals_/new")({
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { journal: ["post"] });
     await Promise.all([
-      queryClient.prefetchQuery(journalAccountOptions(orgSlug)),
-      queryClient.prefetchQuery(partyPickerOptions(orgSlug)),
+      queryClient.query(journalAccountOptions(orgSlug)).catch(() => {}),
+      queryClient.query(partyPickerOptions(orgSlug)).catch(() => {}),
     ]);
   },
   component: NewJournalRoute,
