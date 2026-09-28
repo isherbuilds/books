@@ -72,8 +72,11 @@ cancelled Receipts, both Note types, an Opening Balance and a cash deposit
 Journal. Run `db:seed:demo` after an older base seed; it finds its marked cases
 before writing, so a rerun completes a partial seed without duplicates.
 
-`db:seed:mega` fills Meridian Traders, Ridgeview Academy and Cedar Components
-to 1,000,000, 5,000,000 and 15,000,000 total documents. Each 20-document
+`db:seed:mega` fills Meridian Traders to 1,000,000 total documents, the volume
+the query-performance measurements use; the other organizations keep their base
+and demo seeds. Document ids are UUIDv7-shaped and dates rise with the document
+number across the financial year, so newest-first `id` order matches production.
+Each 20-document
 cycle includes Invoices, Receipts, Bills, Credit Notes, Debit Notes and
 Payments. The rows include balanced journal entries, party ledger entries,
 settlement allocations, multiple receipts and payments against one document,
@@ -82,9 +85,9 @@ and cancelled documents with reversal entries. It uses batched PostgreSQL
 each batch and resumes from its last committed batch. Run `db:seed` first.
 These are synthetic posted rows for volume reads and reports. Use
 `db:seed:demo` for workflow correctness cases. The mega seed only connects to
-`localhost:55446/postgres` and refuses locked organizations. The 21 million
-document target creates about 140 million rows across documents, document
-lines, journal entries and lines, party ledger lines and allocations.
+`localhost:55446/postgres` and refuses locked organizations. The fill writes
+about 6.5 million rows across documents, document lines, journal entries and
+lines, party ledger lines and allocations, in about 10 minutes.
 
 To stop the local PostgreSQL and SeaweedFS containers and delete their volumes,
 run `bun run db:down:clean -- --confirm-delete-local-volumes`. This removes the
@@ -107,7 +110,7 @@ local database and file-store data. The command refuses non-local Docker context
 | `bun run db:migrate`                                      | Apply migrations                                                            |
 | `bun run db:seed -- --reset`                              | Reset and seed; deletes local data                                          |
 | `bun run db:seed:volume`                                  | 100,000 receipts each for Meridian Traders and Ridgeview Academy by default |
-| `bun run db:seed:mega`                                    | Fill the three organizations to 1M / 5M / 15M total documents               |
+| `bun run db:seed:mega`                                    | Fill Meridian Traders to 1M total documents                                 |
 | `bun run db:down:clean -- --confirm-delete-local-volumes` | Stop local services and delete their volumes                                |
 | `bun run db:seed:demo`                                    | Add or complete the practical Cedar Components cases                        |
 | `bun run db:studio`                                       | Drizzle Studio                                                              |
@@ -115,13 +118,18 @@ local database and file-store data. The command refuses non-local Docker context
 `benchmark:server`, `benchmark:rpc`, `benchmark:browser` and
 `benchmark:navigation` measure a running build. `benchmark:browser` times hard
 page loads; `benchmark:navigation` times in-app route changes. `benchmark:rpc`
-measures first-page reads for invoices, receipts, bills, credit notes, debit
-notes, payments and reports; party filters, register search and the Receipt
-pickers; and reports. It picks its party ids and search terms from the data at
-start-up. Set `PERF_SCENARIOS` to a comma-separated list of scenario names to
-repeat only the reads a change targets. Set `PERF_ORG_SLUG` to `meridian-traders`,
-`ridgeview-academy` or `cedar-components` to compare the 1M, 5M and 15M
-organizations; it defaults to Meridian Traders. Quote a performance number
+times every API read by route: session and settings, masters, balances, party
+tabs and pickers, each register's pages, party filter and searches, document
+views, reports, day book, exports and oversized-report refusals. It checks
+every response before it counts, so a wrong answer stops the run. Set
+`PERF_WRITES=1` to add inserts, updates, draft upserts and deletes, posts,
+cancels and allocations; these write real documents into the fixture. It picks
+its ids and search terms from the data. `PERF_SCENARIOS` runs only the named
+scenarios and refuses an unknown name; `PERF_RPC_REQUESTS` (30) and
+`PERF_RPC_WARMUP` (5) set the counts; `PERF_OTHER_ORG_TERM` adds a search for
+another organization's party name. `PERF_ORG_SLUG` defaults to `meridian-traders`, the mega-seeded
+organization. The JSON report goes to
+stdout and one checked line per scenario to stderr. Quote a performance number
 only on `db:seed:volume` data or more.
 
 **Check policy.** Validation and deployment are manual. GitHub Actions is

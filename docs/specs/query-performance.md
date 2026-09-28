@@ -135,6 +135,93 @@ outcome:
 
 The first call after a restart is the slowest in every row.
 
+### Second pass measured (2026-09-28)
+
+**Cross-organization search.** The first GIN index had no `org_id`. PostgreSQL
+estimates an `ILIKE` over the whole table, so a term common in one organization
+looks common in all. Ridgeview searching "Vardhman", a Meridian party with 49,988
+documents and none at Ridgeview, walked all 320,296 Ridgeview receipts: 6.0–16.5 s
+with the first PR's index, and 2.6–3.7 s with `org_id` in the index, because the
+plan did not change. Forcing the index read instead is as bad for a common term:
+`MV2` and `MV26-27` took 0.9–3.9 s, because a bitmap collects every match before
+it sorts.
+
+The fix is `registerPage` (`lib/settlements.ts`): walk the newest 1,000 documents
+of the register, then read the trigram index for older ones only if the page is
+not full. Through the branch API on `accly_perf`, 58 checks
+(2 organizations, receipts, invoices and journals, 8 terms, two pages each)
+returned exactly the rows of the single query, in 5–191 ms. Ridgeview "Vardhman":
+15–39 ms. Worst case measured in SQL: an older-history term with 9,062 matches
+(Meridian "Vardhman" forced past the window), 196–350 ms warm and 1.7 s cold.
+
+**`org_id` in the trigram index (btree_gin): rejected.** Both indexes were
+timed through `registerPage` on `accly_perf`, warm median of 5, ms plain → with
+`org_id`: exact number 149 → 70 (Meridian) and 147 → 130 (Ridgeview); another
+organization's name 54 → 38 and 40 → 12; number fragment 3 → 14 and 5 → 21; own
+common name 14 → 22 and 17 → 29. Sizes 225 and 228 MB. No clear gain at 3
+organizations, and one extension more; revisit when cross-organization search
+misses its target at many tenants.
+
+**Short terms.** A term under 3 characters has no trigram, so the GIN index can
+only scan itself whole: a review measured `qz` at 9.25 s. Register and palette
+search now start at 3 characters (`documentSearchQuery`).
+
+**Full API benchmark, before and after.** 100 reads and 14 writes, each
+response checked, on one copy of the data: `main` against the copy converted to
+`main`'s schema, this branch against the final schema ([results](../research/api-benchmark-2026-09-28.md)).
+p50 before → after: register search for a number, fragment or miss 337–1,069 →
+5–11 ms; party filters on bills and payments 292–316 → 6–8 ms; Open items and
+Open credits 478 and 498 → 168 and 65 ms; money balances 368 → 87 ms; party
+balances 86 → 40 ms; account ledger summary 202 → 37 ms; oversized ledger XLSX
+refusal 2,567 (p95 6,926) → 10 ms. Statements stay at about 300 ms. Costs: a
+common term sparse among the newest 1,000 documents 9–10 → 27–41 ms; a payment
+post about 1.5 ms more.
+
+**Stored balances: rejected again.** Per-account day totals fed by append-only
+deltas and compaction were built, then reverted before measurement: reports open
+a few times a day at about 300 ms, every posting would pay an extra insert, and a
+second copy of the ledger can drift. TigerBeetle's design was checked against its
+source and Jepsen's analysis
+([TigerBeetle architecture](../research/tigerbeetle-architecture-2026-09-28.md));
+its ideas that fit, balanced entries enforced at the core and reversals instead
+of deletes, are already here. Period-close snapshots, as ERPNext v15 stores them,
+remain the next step if a real organization's statements pass the gate.
+
+**Balance sums.** `benchmark:rpc`, 20 requests after 20 warm-up, dev database,
+p50 ms before → after. The after run used probe indexes of the same shape.
+
+| Scenario                        | Meridian  | Ridgeview                   |
+| ------------------------------- | --------- | --------------------------- |
+| `money_balances`                | 662 → 101 | **3,154 (p95 6,375) → 161** |
+| `account_ledger_summary` (cash) | 691 → 40  | 340 → 59                    |
+| `party_balances`                | 112 → 42  | 141 → 59                    |
+| `party_ledger_summary`          | 9 → 8     | 15 → 8                      |
+
+In `psql`, cold: Meridian's cash balance 3.9 s → 316 ms; the receivables ledger
+summary (550 k lines) 830 → 412 ms; `party.balances` 435 → 64 ms, an index-only
+scan of the widened `party_ledger_lines_org_party_idx` (18 MB).
+
+**File cursor.** 180,000 synthetic files in a rolled-back transaction, a page
+150,000 deep: the `OR` cursor filtered 150,001 rows in 20.4 ms; the row comparison
+is an Index Cond and takes 0.06 ms.
+
+**Cookie cache (decision 10): removed.** Sign-in sets `session_data` with
+`Max-Age=300`; a `/rpc` call with only the session token answered 200 with no
+`Set-Cookie`, and the web reads the session through `auth.api.getSession`,
+which drops refreshed cookies. So the cache served at most the first 5 minutes
+after sign-in and delayed a revocation by as much.
+
+**Picker applied sums.** `settlementPaise` now nets reversals in one scan of a
+document's allocations (applies minus reversals) instead of an anti-join per
+apply: a reversal copies its apply's source, target and amount, and
+`allocations_org_reverses_idx` allows one per apply. On the busiest Meridian
+party both pickers returned identical rows before and after. The per-row
+anti-join had become a merge join over every reversal of the organization, about
+0.15 ms for each of 5,300 candidate claims.
+
+**Pool.** With all 10 connections held by `pg_sleep(8)`, the next query failed
+after 5,006 ms instead of waiting.
+
 ## Scenarios
 
 1. **Before:** opening a small party's Transactions tab on Ridgeview takes about
@@ -169,14 +256,19 @@ The first call after a restart is the slowest in every row.
 2. **One search column.**
    - `documents` gains a stored generated column `search_text`: number, reference,
      narration and the printed party name joined with spaces, each wrapped in
-     `coalesce`. It gets one GIN `gin_trgm_ops` index.
-   - `documentListWhere` (`lib/settlements.ts`) replaces its four `ILIKE`s with one
-     `ILIKE` on `search_text`, using the same `likePattern`.
+     `coalesce`. It gets one GIN `gin_trgm_ops` index; `org_id` in it was
+     measured and rejected (see "Second pass measured").
+   - `registerPage` (`lib/settlements.ts`) replaces the four `ILIKE`s with one
+     `ILIKE` on `search_text`, using the same `likePattern`, in two steps: the
+     newest 1,000 documents first, then the index for older ones only when the
+     page is not full (see "Second pass measured").
    - One index and one predicate replace four, and results do not change. A term can
      now match across two adjacent fields, which is harmless.
-   - `file` gains a GIN trigram index on `name`.
-   - Terms under 3 characters cannot use a trigram index. They keep today's walk,
-     which is fast because short terms match often. The palette minimum stays at 2.
+   - `file` gets no trigram index: a GIN index would bring the same plan hazard
+     for a page rarely searched. Moved to Explicitly Deferred.
+   - Terms under 3 characters cannot use a trigram index, and a rare one read the
+     whole index (9.25 s). `documentSearchQuery` requires 3 characters; the
+     registers ignore a shorter term and the palette starts at 3.
 3. **Party filter.** Change `documents_org_party_idx` to `(org_id, party_id, id)`. It
    is a superset of today's index, so it serves the party filter,
    `party.transactions` and every current user.
@@ -184,14 +276,16 @@ The first call after a restart is the slowest in every row.
    - Append `debit, credit` to `journal_lines_org_account_date_idx`, giving
      `(org_id, account_id, entry_date, id, debit, credit)`. Drizzle 0.45 has no
      `INCLUDE`, so these are trailing key columns.
-   - Append `amount_paise` to `party_ledger_lines_org_party_date_idx`.
+   - Append `amount_paise` to `party_ledger_lines_org_party_date_idx`, and to
+     `party_ledger_lines_org_party_idx` for `party.balances`.
    - The account ledger keyset still seeks the same prefix.
    - This targets `moneyBalances`, `accountLedgerSummary`, the account ledger
      opening, `party.ledgerSummary` and `party.balances`. It does not target
      TB/P&L/BS: tested, no gain.
 5. **Drop dead unique indexes.** `journal_lines_org_id_id_unique` (781 MB) and
    `party_ledger_lines_org_id_id_unique` (308 MB) back no foreign key; the schema was
-   searched. Each posted line pays for them, so remove both.
+   searched. Each posted line pays for them, so remove both. `file_org_id_id_unique`
+   backs no foreign key either and goes too.
 6. **Reversal check.** `reversalOf` (`core/allocations.ts`) drops
    `eq(reversal.kind, "reverse")`. `allocations_kind_check` makes a non-null
    `reverses_allocation_id` mean `kind = 'reverse'`, so the results do not change. No
@@ -286,7 +380,7 @@ entry_date, id)` index through `assertReportFits` (`lib/reports.ts`).
   - Owns/Touches: `docs/specs/query-performance.md` (Evidence and Decisions only)
   - Interfaces: produces the final index shapes consumed by S2.
 
-- [ ] **S2: Schema and search, one reset** (first PR: `pg_trgm`, `search_text`
+- [x] **S2: Schema and search, one reset** (first PR: `pg_trgm`, `search_text`
       and the party index, with the baseline regenerated; the balance-sum, file-name
       and dead-unique index changes remain, and need S1 numbers first)
   - Acceptance:
@@ -360,7 +454,7 @@ types, input)` signature unchanged.
   - Interfaces: `reportTooLarge(limit)` unchanged. The probe is one helper in
     `lib/reports.ts`, extracted only if two shapes share it.
 
-- [ ] **S5: File cursor row comparison**
+- [x] **S5: File cursor row comparison**
   - Acceptance:
     - `file.list` deep page: Index Cond on `file_org_created_idx` with a row
       comparison, under 5 ms at 180 k files. That needs a synthetic fill in a
@@ -371,7 +465,7 @@ types, input)` signature unchanged.
   - Owns/Touches: `packages/api/src/routers/file.ts` (cursor predicate only)
   - Interfaces: `file.list` input and output unchanged.
 
-- [ ] **S6: Pool timeout; cookie cache**
+- [x] **S6: Pool timeout; cookie cache**
   - Acceptance:
     - `connectionTimeoutMillis` is set.
     - A starved pool raises an error instead of waiting forever: prove it with
@@ -429,6 +523,11 @@ types, input)` signature unchanged.
   paid documents. Gate: measured on a mostly paid fixture.
 - **Day book summary over a full year** (1–4.7 s). The default range is one day.
   Gate: a user-reported need for wide ranges.
+- **File name search index.** 380 ms at 180 k files. Gate: a user-reported slow
+  search on Settings → Files.
+- **A search term common only in old history** (for example last year's number
+  prefix) still reads every older match in the second step. Gate: a measured p95
+  over 500 ms on a real organization's search.
 - **Prepared statements**, which would save about 1 ms of planning. Not worth the
   API surface.
 

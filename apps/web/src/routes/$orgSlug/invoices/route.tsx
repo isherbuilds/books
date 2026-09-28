@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
@@ -31,7 +31,7 @@ const STATUSES = ["draft", "posted", "cancelled", "open", "overdue"] as const;
 const STATUS_LABELS = { ...DOCUMENT_STATE_LABELS, open: "Open", overdue: "Overdue" };
 
 const invoiceSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   status: z.enum(STATUSES).optional().catch(undefined),
   ...periodSearch,

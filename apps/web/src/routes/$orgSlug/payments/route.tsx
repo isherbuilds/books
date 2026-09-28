@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -39,7 +39,7 @@ const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
   // Seeds the new payment's party; kept apart from the `partyId` list filter.
   payeeId: z.uuid().optional().catch(undefined),
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
   state: z.enum(STATES).optional().catch(undefined),

@@ -86,12 +86,17 @@ export function settlementPaise(orgId: string, role: "source" | "target", partyI
 
   const counterpart = alias(documents, "allocation_counterpart");
 
+  // A reversal copies its apply's source, target and amount, and an apply has at most
+  // one (`allocations_org_reverses_idx` is unique), so applies minus reversals is the
+  // active total. One scan of the document's allocations; no reversal anti-join per row.
   const applied = db
-    .select({ amount: sql`coalesce(sum(${allocations.amountPaise}), 0)` })
+    .select({
+      amount: sql`coalesce(sum(case when ${allocations.kind} = 'apply' then ${allocations.amountPaise} else -${allocations.amountPaise} end), 0)`,
+    })
     .from(allocations)
     .where(
       and(
-        activeApply(orgId),
+        eq(allocations.orgId, orgId),
         eq(own, documents.id),
         partyId
           ? or(

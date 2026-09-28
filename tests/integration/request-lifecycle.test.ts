@@ -93,8 +93,16 @@ test("procedure calls sharing one request share one membership join", async () =
   const owner = await createTestUser("shared-request");
   const organization = await createOrganization(owner, "shared-request");
 
-  const session = await auth.api.getSession({ headers: owner.headers });
-  const getSession = spyOn(auth.api, "getSession").mockResolvedValue(session);
+  // Resolved once with `returnHeaders`, as `createRequestContext` asks, then served
+  // from the mock so only procedure queries count.
+  const resolved = await auth.api.getSession({ headers: owner.headers, returnHeaders: true });
+
+  const getSession = spyOn(auth.api, "getSession").mockImplementation(
+    // SAFETY: every caller in this test passes `returnHeaders: true`, the overload
+    // whose result `resolved` is; the spy's type is the plain overload.
+    (() => Promise.resolve(resolved)) as unknown as typeof auth.api.getSession,
+  );
+
   const select = spyOn(db, "select");
 
   try {

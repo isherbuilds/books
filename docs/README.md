@@ -21,12 +21,15 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
-- **[Query performance](./specs/query-performance.md)**: Active. Party filter
-  index, trigram search, the reversal probe and the ledger and statement size
-  probes are built and measured (see the spec). Open: the balance-sum indexes
-  (spec S1–S2 remainder), the file cursor, the pool timeout and the cookie cache.
-  After merge, local databases need `bun run db:seed -- --reset` for the new
-  baseline.
+- **[Query performance](./specs/query-performance.md)**: Verification. Built and
+  measured before and after on 1 M documents
+  ([results](./research/api-benchmark-2026-09-28.md)): trigram search with the
+  two-step register plan and a 3-character minimum, party filter index,
+  index-only balance sums, picker applied sums without the reversal anti-join,
+  size probes, file cursor, pool timeout, and a session cookie cache that is
+  renewed through every adapter. Open: the palette at desktop and 390 px in
+  both themes. After merge, local databases need `bun run db:seed -- --reset`,
+  then `db:seed:mega`.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
   allocation and opening-balance wait states use `WaveLoader`; types, lint and
   build pass. Check a loading state at desktop and mobile widths in both themes

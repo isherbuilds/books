@@ -1,4 +1,4 @@
-import { searchQuery } from "@accly/api/lib/schemas";
+import { documentSearchQuery } from "@accly/api/lib/schemas";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
@@ -22,7 +22,7 @@ import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const noteSearch = z.object({
-  q: searchQuery.catch(undefined),
+  q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   type: z.enum(["creditNote", "debitNote"]).optional().catch(undefined),
   ...periodSearch,

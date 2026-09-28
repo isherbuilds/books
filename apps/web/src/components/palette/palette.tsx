@@ -57,7 +57,8 @@ import { partyListOptions } from "@/lib/parties";
 const paletteHandle = createDialogHandle();
 
 /** Below this, a remote search matches most of the table, so it is not worth a round trip. */
-const MIN_SEARCH_CHARS = 2;
+// The server searches documents from 3 characters, where a trigram index serves them.
+const MIN_SEARCH_CHARS = 3;
 
 /** The palette is for recognising a row, not browsing: more rows only cost time. */
 const SEARCH_RESULT_LIMIT = 4;

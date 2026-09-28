@@ -125,6 +125,12 @@ export const pageLimit = z.number().int().min(1).max(100).default(25);
 
 export const searchQuery = z.string().trim().min(1).max(100).optional();
 
+/**
+ * A document register search. It needs 3 characters: a shorter term has no trigram,
+ * so no index can serve it, and a rare one would read the whole register.
+ */
+export const documentSearchQuery = z.string().trim().min(3).max(100).optional();
+
 export const settlementPostFields = {
   documentDate: dateOnly.optional(),
   amount: positiveMoney,
@@ -200,7 +206,7 @@ export const draftToken = z.object({ id: z.uuid(), version: z.number().int().min
 
 /** The keyset, period and search fields every document register takes. */
 export const documentPageFields = {
-  q: searchQuery,
+  q: documentSearchQuery,
   ...period,
   cursor: z.uuid().optional(),
   limit: pageLimit,

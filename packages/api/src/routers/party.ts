@@ -262,11 +262,6 @@ export async function partyStatement(
   const to = input.to ?? businessDate(new Date(), profile.timeZone);
   const range: ReportHeader["range"] = input.from ? { from: input.from, to } : { asOf: to };
 
-  const partyLines = and(
-    eq(partyLedgerLines.orgId, orgId),
-    eq(partyLedgerLines.partyId, input.partyId),
-  );
-
   // Read from `party_ledger_lines_org_party_date_idx` alone, in the statement's order.
   await assertReportFits(
     db
@@ -287,7 +282,12 @@ export async function partyStatement(
             ),
           })
           .from(partyLedgerLines)
-          .where(and(partyLines, lt(partyLedgerLines.entryDate, input.from)))
+          .where(
+            and(
+              partyStatementWhere(orgId, { partyId: input.partyId }),
+              lt(partyLedgerLines.entryDate, input.from),
+            ),
+          )
       : [{ total: 0n }],
     partyStatementRows(orgId, { ...input, to }, limit),
   ]);

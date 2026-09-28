@@ -20,6 +20,7 @@ import {
   lte,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -78,22 +79,85 @@ export function documentPeriod(input: { from?: string; to?: string }) {
   );
 }
 
-/** The keyset, party, period, number, reference, narration and party-name predicates every document register shares. */
-export function documentListWhere(
+/** The keyset, party and period predicates every document register shares. */
+function documentListWhere(
   orgId: string,
   types: readonly DocumentType[],
   input: DocumentListInput,
 ) {
-  const pattern = input.q ? likePattern(input.q) : undefined;
-
   return and(
     eq(documents.orgId, orgId),
     inArray(documents.type, [...types]),
     input.cursor ? lt(documents.id, input.cursor) : undefined,
     input.partyId ? eq(documents.partyId, input.partyId) : undefined,
     documentPeriod(input),
-    pattern ? ilike(documents.searchText, pattern) : undefined,
   );
+}
+
+// A search first walks this many of the newest documents, then reads the trigram
+// index for older ones only if the page is not full.
+const SEARCH_WINDOW = 1_000;
+
+/**
+ * One register page, newest first. `read` runs the register's own query with `where`
+ * and any filters of its own, ordered by `id` descending and limited to `limit + 1`.
+ *
+ * A search term matches a substring of `documents.search_text`. PostgreSQL estimates
+ * that match across every organization, so a term common elsewhere or in old history
+ * can make it walk a whole register that holds no match, and a forced index read
+ * collects every match of a common term. So the search walks the newest
+ * `SEARCH_WINDOW` documents, and reads the index for older documents only when that
+ * page is not full. `documentSearchQuery` guarantees the term has a trigram.
+ */
+export async function registerPage<T>(
+  orgId: string,
+  types: readonly DocumentType[],
+  input: DocumentListInput,
+  read: (where: SQL | undefined) => PromiseLike<T[]>,
+): Promise<{ rows: T[]; hasMore: boolean }> {
+  const listed = documentListWhere(orgId, types, input);
+
+  if (!input.q) return pageOf(await read(listed), input.limit);
+
+  const matches = ilike(documents.searchText, likePattern(input.q));
+
+  const [edge] = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.orgId, orgId),
+        inArray(documents.type, [...types]),
+        input.cursor ? lt(documents.id, input.cursor) : undefined,
+      ),
+    )
+    .orderBy(desc(documents.id))
+    .offset(SEARCH_WINDOW - 1)
+    .limit(1);
+
+  const recent = await read(and(listed, matches, edge ? gte(documents.id, edge.id) : undefined));
+
+  if (!edge || recent.length > input.limit) return pageOf(recent, input.limit);
+
+  // `= any(array(…))` runs the index read once, whole, instead of letting the planner
+  // walk the register again.
+  const older = db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.orgId, orgId),
+        inArray(documents.type, [...types]),
+        lt(documents.id, edge.id),
+        matches,
+      ),
+    );
+
+  const rest = await read(
+    and(listed, lt(documents.id, edge.id), sql`${documents.id} = any(array(${older}))`),
+  );
+
+  return pageOf([...recent, ...rest], input.limit);
 }
 
 export async function settlementDetail(
@@ -219,38 +283,38 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
   const today = businessDate(new Date(), await orgTimeZone(orgId));
   const { capacityPaise, balancePaise } = settlementPaise(orgId, "target", null);
 
-  const page = await db
-    .select({
-      id: documents.id,
-      number: documents.number,
-      documentDate: documents.documentDate,
-      dueDate: documents.dueDate,
-      state: documents.state,
-      totalPaise: documents.totalPaise,
-      reference: documents.reference,
-      partyName: printedPartyName,
-      capacityPaise,
-      outstandingPaise: balancePaise,
-    })
-    .from(documents)
-    .where(
-      and(
-        documentListWhere(orgId, [type], input),
-        input.status === "open" || input.status === "overdue"
-          ? and(
-              eq(documents.state, "posted"),
-              gt(balancePaise, 0n),
-              input.status === "overdue" ? lt(documents.dueDate, today) : undefined,
-            )
-          : input.status
-            ? eq(documents.state, input.status)
-            : undefined,
-      ),
-    )
-    .orderBy(desc(documents.id))
-    .limit(input.limit + 1);
-
-  const { rows, hasMore } = pageOf(page, input.limit);
+  const { rows, hasMore } = await registerPage(orgId, [type], input, (listed) =>
+    db
+      .select({
+        id: documents.id,
+        number: documents.number,
+        documentDate: documents.documentDate,
+        dueDate: documents.dueDate,
+        state: documents.state,
+        totalPaise: documents.totalPaise,
+        reference: documents.reference,
+        partyName: printedPartyName,
+        capacityPaise,
+        outstandingPaise: balancePaise,
+      })
+      .from(documents)
+      .where(
+        and(
+          listed,
+          input.status === "open" || input.status === "overdue"
+            ? and(
+                eq(documents.state, "posted"),
+                gt(balancePaise, 0n),
+                input.status === "overdue" ? lt(documents.dueDate, today) : undefined,
+              )
+            : input.status
+              ? eq(documents.state, input.status)
+              : undefined,
+        ),
+      )
+      .orderBy(desc(documents.id))
+      .limit(input.limit + 1),
+  );
 
   // Capacity and outstanding only decide the status; the register shows the status.
   return {
@@ -317,9 +381,9 @@ export const settlementListRow = {
   partyName: printedPartyName,
 };
 
-export function settlementListWhere(orgId: string, type: PostedType, input: SettlementListInput) {
+/** The Receipt and Payment registers' own filters, beside `registerPage`'s. */
+export function settlementListWhere(input: SettlementListInput) {
   return and(
-    documentListWhere(orgId, [type], input),
     input.paymentMethodIds ? inArray(documents.paymentMethodId, input.paymentMethodIds) : undefined,
     input.state ? eq(documents.state, input.state) : undefined,
     input.settlementKind ? eq(documents.settlementKind, input.settlementKind) : undefined,
