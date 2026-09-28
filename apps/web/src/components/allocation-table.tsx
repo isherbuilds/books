@@ -329,7 +329,8 @@ export function AllocationTable({
 
                                 const paise = enteredPaise(value);
                                 const remaining = remainingFor(row.id);
-                                const limit = remaining < row.openPaise ? remaining : row.openPaise;
+                                const available = remaining < row.openPaise ? remaining : row.openPaise;
+                                const limit = available > ZERO_MONEY ? available : ZERO_MONEY;
 
                                 return paise <= limit || `Enter no more than ${formatMoney(limit)}`;
                               },
