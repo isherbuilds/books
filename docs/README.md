@@ -49,9 +49,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   both themes when the concurrent Combobox edit and dependency update restore
   the local web app and type check.
 
-- **[Query performance](./specs/query-performance.md)**: Active. Merged in PR 34
-  ([results](./research/api-benchmark-2026-09-28.md)). Open: local databases
-  still hold the old migration baseline, so `bun run dev` fails until
+- **[Query performance](./specs/query-performance.md)**: Active. Open: S4's
+  party statement refusal timing and S7 close-out. Local databases still hold
+  the old migration baseline, so `bun run dev` fails until
   `bun run db:seed -- --reset`, then `bun run db:seed:mega`. The reset deletes
   local data; confirm with the owner immediately before running it.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
@@ -282,8 +282,13 @@ ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
   pass. A list whose refresh fails keeps its rows under a retry note; check it
   by dropping the network on a loaded list.
 - **Touch hover and motion**: Verification. Every `hover:` style is gated to
-  fine pointers in `globals.css`, and buttons, toggles and field messages no
-  longer animate. Open: a tap on a real phone leaves no stuck hover colour.
+  fine pointers in `globals.css`. Buttons, toggles, checkboxes, the Dialog
+  close button and calendar days change state without a transition; the login
+  buttons read `transition-duration: 0s` at 1440 and 390 px. Open: a pressed
+  toggle, checkbox and calendar day at desktop and mobile widths in both
+  themes, blocked until the local database is reset to the current migration
+  baseline (see Query performance); a tap on a real phone leaves no stuck hover
+  colour.
 - **Production hardening**: Verification.
   [Release evidence](./operations.md#production-hardening).
 - **Pilot readiness**: Active. A named owner records every

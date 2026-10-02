@@ -23,8 +23,10 @@ The slug is untrusted input. It is never session state and never falls back.
 - A missing claim fails validation, no session is `UNAUTHORIZED`, and no
   membership or grant is `FORBIDDEN`. A foreign slug looks like an unknown one.
 - Membership is memoized for one request, so revocation applies on the next.
-  Each procedure checks and audits its own denial.
-- SQL uses only `context.scope.orgId`. `userId` is attribution.
+  A role denial is audited centrally; a membership denial is only logged, so an
+  outsider never writes to that organization's audit trail.
+- SQL uses only `context.scope.orgId`. `userId` is attribution; the one
+  exception is `member.me`'s organization list, the caller's own memberships.
 - Every lookup, write and referenced id carries the tenant predicate. A foreign
   id is `NOT_FOUND`. A conditional state write may return one `CONFLICT` for a
   missing and a moved row. Prices and taxes come from server rows.

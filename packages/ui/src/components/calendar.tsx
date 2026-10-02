@@ -13,11 +13,6 @@ import {
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react";
 
-// Picking a range is the most frequent gesture on this control, and the shared button
-// cross-fades its background and dips on :active. Across a whole grid that reads as a
-// flicker, so calendar buttons opt out (docs/design.md §motion).
-const NO_MOTION = "transition-none active:scale-100";
-
 function Calendar({
   className,
   classNames,
@@ -58,13 +53,11 @@ function Calendar({
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant, size: "icon-sm" }),
-          NO_MOTION,
           "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_previous,
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant, size: "icon-sm" }),
-          NO_MOTION,
           "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_next,
         ),
@@ -184,7 +177,6 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        NO_MOTION,
         "relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 border-0 leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 data-[range-end=true]:rounded-(--cell-radius) data-[range-end=true]:rounded-r-(--cell-radius) data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-muted data-[range-middle=true]:text-foreground data-[range-start=true]:rounded-(--cell-radius) data-[range-start=true]:rounded-l-(--cell-radius) data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:text-foreground [&>span]:text-sm [&>span]:opacity-70",
         defaultClassNames.day,
         className,

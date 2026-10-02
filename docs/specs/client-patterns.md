@@ -87,8 +87,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     time; past the master's bound, the search runs on the server. Receipts,
     files, the audit log and Members use `useInfiniteQuery` on a keyset cursor
     with server filters; Members keeps its search `q` in the URL, and its
-    pending invitations come with the first page. Only the `LoadMore` button
-    grows a list; nothing loads on scroll. No virtualization until 5,000 rows break 200 ms.
+    pending invitations come with the first page. Lists mount only their
+    visible rows (`useVirtualRows`, TanStack Virtual) and fetch the next page
+    when the last row scrolls into view; the allocation grid alone grows by
+    its Load more button.
     A dated page opened without dates moves to its default period in the URL
     (`requirePeriod`): this month for Invoices, Bills, Receipts and Payments;
     this financial year for Notes, Journals and a party's Transactions and
@@ -119,8 +121,8 @@ command primitives, the tables, column menu, filters and date presets, and the
 detail views. Each file keeps its header and is listed in
 `THIRD_PARTY_NOTICES.md`. A commercial licence from Midday Labs comes before
 the first external release. Base UI, oRPC and router state replace Radix, tRPC,
-nuqs and zustand. Framer-motion, react-virtual, dnd-kit and optimistic
-financial rollback are not adopted.
+nuqs and zustand. Framer-motion, dnd-kit and optimistic financial rollback
+are not adopted.
 
 ## Slices
 

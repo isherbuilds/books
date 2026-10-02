@@ -1,6 +1,6 @@
 # Spec: Query performance at volume
 
-Status: ready
+Status: S1–S3, S5 and S6 implemented; S4's party statement timing and S7 open
 Authority: the owner's request of 2026-09-28 ("spec this out — all the above issues
 and audits and suggest to fix them"; search: trigram substring search, option 3).
 Supersedes: none. Patches the accounting-core Deferred entry "Period-close balance
@@ -239,7 +239,7 @@ after 5,006 ms instead of waiting.
    the time S1 records, and the reversal check reads only `allocations_org_reverses_idx`.
 5. **Before:** an account ledger XLSX over 100,000 lines runs up to 45 s, then fails.
    **After:** it fails with the same `REPORT_TOO_LARGE` message in under 300 ms. The
-   day book and party statement exports behave the same way.
+   party statement export behaves the same way; the day book is deferred.
 6. **Before:** a deep page of Settings → Files takes 234 ms. **After:** under 5 ms.
 7. **Before:** a request that cannot get a pool connection waits without limit.
    **After:** it fails loudly after a bounded wait.
@@ -357,9 +357,9 @@ entry_date, id)` index through `assertReportFits` (`lib/reports.ts`).
 
 ## Task Plan
 
-- [ ] **S1: Prove the indexes before the reset** (party and search proven; see
-      "S1 measured") (riskiest: extension, planner
-      choice on a GIN index without `org_id`)
+- [x] **S1: Prove the indexes before the reset** (party and search: "S1
+      measured"; balance sums: "Balance sums", every target met) (riskiest:
+      extension, planner choice on a GIN index without `org_id`)
   - Acceptance:
     - On the current mega data, after `VACUUM ANALYZE`, create each index from
       decisions 1–4 as a probe. Probe `search_text` as a GIN expression index on
@@ -385,18 +385,16 @@ entry_date, id)` index through `assertReportFits` (`lib/reports.ts`).
   - Owns/Touches: `docs/specs/query-performance.md` (Evidence and Decisions only)
   - Interfaces: produces the final index shapes consumed by S2.
 
-- [x] **S2: Schema and search, one reset** (first PR: `pg_trgm`, `search_text`
-      and the party index, with the baseline regenerated; the balance-sum, file-name
-      and dead-unique index changes remain, and need S1 numbers first)
+- [x] **S2: Schema and search, one reset** (the file-name index moved to
+      Explicitly Deferred)
   - Acceptance:
     - `runMigrations` creates `pg_trgm`.
     - Drizzle schema changes: `documents.search_text` and its GIN index,
-      `documents_org_party_idx` as `(org_id, party_id, id)`, the two widened ledger
-      indexes, the file-name GIN index, and the two dead unique indexes removed.
+      `documents_org_party_idx` as `(org_id, party_id, id)`, the three widened
+      ledger indexes, and the three dead unique indexes removed.
     - One regenerated baseline, the database reset with confirmation, and the mega
       fixture refilled.
     - `documentListWhere` uses `search_text`.
-    - `file.list` search uses its index.
     - `benchmark:rpc`, including the new scenarios, meets S1's targets.
     - Register search results match today's on the integration tests.
   - Verify:
@@ -435,12 +433,12 @@ types, input)` signature unchanged.
   - Interfaces: `reversalOf`, `activeApply` and `allocationReversed` signatures
     unchanged.
 
-- [ ] **S4: Exports fail fast; tax registers bounded** (first PR: ledger and
-      statement probes; day book dropped, tax bound deferred)
+- [ ] **S4: Exports fail fast** (ledger and statement probes built; the day
+      book probe and the tax register bound are Explicitly Deferred)
   - Acceptance:
-    - Account ledger XLSX and PDF, day book XLSX and PDF, and party statement XLSX
-      and PDF: when over the limit, each throws `REPORT_TOO_LARGE` in under 300 ms on
-      Meridian's receivables account and Ridgeview's top party.
+    - Account ledger and party statement XLSX and PDF: when over the limit, each
+      throws `REPORT_TOO_LARGE` in under 300 ms on Meridian's receivables account
+      and Ridgeview's top party. Open: the party statement timing.
     - Within the limit, the output is unchanged.
     - The day book keeps its line limits; see decision 7.
   - Verify:

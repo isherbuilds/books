@@ -842,7 +842,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `allocations.invoiceId` keeps its name: a Journal credit allocates only
      to Invoices (`applyAllocations`), never to an opening claim.
      `party.openItems` and `party.openCredits` list the items with the others,
-     oldest first, and their rows gain `reference` (nullable). A note cannot
+     oldest first by their legacy `documentDate`, while the party statement
+     places them on the cutover date of their ledger line; their rows gain
+     `reference` (nullable). A note cannot
      name an opening claim (it has no lines). Refunding an opening credit by
      Payment is Deferred with unused advances.
    - **Cancel.** Items cancel only with their Opening Balance.
@@ -865,15 +867,15 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      with its header on row 1 and data from row 2; every sheet but `Read me`
      may be empty:
 
-     | Sheet           | Columns (\* required)                                                                                  | Rules                                                                                     |
-     | --------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-     | `Read me`       | Instructions; `B1` holds the template version `1`                                                      | Another version is `TEMPLATE_VERSION`                                                     |
-     | `Opening`       | Opening date\*                                                                                         | One row; required when either of the last two sheets has rows; not in the future          |
-     | `Accounts`      | Name\*, Parent\*, GST supply class                                                                     | Parent is a group's code or name or a type (Assets, …); `account.create` rules            |
-     | `Parties`       | Name\*, Roles\*, GSTIN, PAN, State code, Address, City, PIN code, Email, Phone                         | Roles comma-separated; `party.create` rules, GSTIN derivation included                    |
-     | `Items`         | Name\*, Income account\*, Unit price\*, HSN/SAC, Unit, Tax code                                        | `item.create` rules; Unit price may be zero                                               |
-     | `Trial balance` | Account\*, Debit, Credit                                                                               | Exactly one amount above zero; Opening Balance account rules, except the two control rows |
-     | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\* | Unique by Party, Side, Type and Reference; Due date on claims only, not before Date       |
+     | Sheet           | Columns (\* required)                                                                                  | Rules                                                                                                           |
+     | --------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+     | `Read me`       | Instructions; `B1` holds the template version `1`                                                      | Another version is `TEMPLATE_VERSION`                                                                           |
+     | `Opening`       | Opening date\*                                                                                         | One row; required when either of the last two sheets has rows; not in the future                                |
+     | `Accounts`      | Name\*, Parent\*, GST supply class                                                                     | Parent is a group's code or name or a type (Assets, …); `account.create` rules                                  |
+     | `Parties`       | Name\*, Roles\*, GSTIN, PAN, State code, Address, City, PIN code, Email, Phone                         | Roles comma-separated; `party.create` rules, GSTIN derivation included                                          |
+     | `Items`         | Name\*, Income account\*, Unit price\*, HSN/SAC, Unit, Tax code                                        | `item.create` rules; Unit price may be zero                                                                     |
+     | `Trial balance` | Account\*, Debit, Credit                                                                               | Exactly one amount above zero; Opening Balance account rules, except the two control rows                       |
+     | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\* | Unique by Party, Side, Type and Reference (trimmed, case-insensitive); Due date on claims only, not before Date |
 
      A cell is text, a number or a date. `readImportWorkbook` reads each
      cell's `type` from `sheet.cells` (a `formula`, `error` or `richText` cell
@@ -884,7 +886,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      at most"; Excel stores pasted sums as `1234.5600000000002`). Text with a
      thousands separator is refused. A date cell arrives as a `Date` at UTC
      midnight and converts with `toISOString().slice(0, 10)`; a date may also be
-     `YYYY-MM-DD` text. Unknown sheets or columns are refused. A sheet holds
+     `YYYY-MM-DD` text. Text cells are trimmed. A row with every cell blank is
+     skipped. Each header names a template column; an unknown, missing required
+     or repeated header is refused, as is an unknown sheet. A sheet holds
      at most 5,000 data rows (`MASTER_LIST_LIMIT`): `readXlsx` reads with
      `maxRows` of 5,002 (header plus one row over), and a 5,001st data row is
      `SHEET_TOO_LARGE`. `maxRows` alone skips the rest silently, so nothing
@@ -1050,7 +1054,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      nets). Import is enabled only after a clean Check of the chosen file;
      choosing another file clears it. Success shows the summary with links to
      Opening balance and Parties and invalidates the master, settlement and
-     settings queries. Visible to members holding the import grant.
+     settings queries. Visible to members holding the `import` router's grant.
    - Acceptance: the 7b workbook imports from the page; a workbook with one
      bad row shows its error and imports nothing.
    - Verify: `bun run check-types`; the page exercised in the app at 1440 and

@@ -87,7 +87,7 @@ taxablePaise, cgstPaise, sgstPaise, igstPaise, roundOffPaise, totalPaise }`,
   of at least 1, valid rate). It sends the quote 300 ms after the last change,
   as a react-query query keyed by that input with `placeholderData` set to the
   previous result, so the panel does not flash. With no complete line, the
-  panel shows zeros and sends nothing. A quote refusal shows its message under
+  panel shows the subtotal and a Total of "—", and sends nothing. A quote refusal shows its message under
   the panel; field errors still come from save and post.
 - **Settle contract.** `invoice.post` takes `settle: { payments: [{
 paymentMethodId, amount, reference? }] }` with 1–4 lines, each amount above
