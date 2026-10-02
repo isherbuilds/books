@@ -1,4 +1,4 @@
-import type { LockKind } from "@accly/db/schema/period-locks";
+import type { LockKind } from "@accly/db/schema/lock-kinds";
 
 import { orpc } from "@/lib/orpc";
 

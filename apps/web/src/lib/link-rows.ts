@@ -64,8 +64,9 @@ export function linkRows<T>({
 
   if (needle === "" && selected !== null) {
     const key = getKey(selected);
+    const others = all.slice(0, LINK_ROW_LIMIT + 1).filter((item) => getKey(item) !== key);
 
-    return [selected, ...all.filter((item) => getKey(item) !== key)].slice(0, LINK_ROW_LIMIT);
+    return [selected, ...others].slice(0, LINK_ROW_LIMIT);
   }
 
   const matches = all.slice(0, LINK_ROW_LIMIT);

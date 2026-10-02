@@ -1,4 +1,4 @@
-import type { AccountType, SupplyClass } from "@accly/db/schema/accounts";
+import type { AccountType, SupplyClass } from "@accly/db/schema/account-kinds";
 import { Badge } from "@accly/ui/components/badge";
 import { createColumnHelper } from "@tanstack/react-table";
 import { LockIcon } from "lucide-react";

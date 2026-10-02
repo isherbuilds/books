@@ -1,4 +1,4 @@
-import { ENTRY_SIDES, type EntrySide } from "@accly/db/schema/document-lines";
+import { ENTRY_SIDES, type EntrySide } from "@accly/db/schema/entry-sides";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { z } from "zod";
 

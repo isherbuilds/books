@@ -53,9 +53,9 @@ function BillSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
   const bill = useSuspenseQuery(billDetailOptions(orgSlug, billId)).data;
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [amendOpen, setAmendOpen] = useState(false);
-  const [applyOpen, setApplyOpen] = useState(false);
+
+  const [activeOverlay, setActiveOverlay] = useState<"cancel" | "amend" | "apply" | null>(null);
+
   const canEdit = useCan(orgSlug, { bill: ["create"] }) && bill.state === "draft";
 
   // The server refuses cancelling or amending while any allocation targets this bill.
@@ -110,12 +110,12 @@ function BillSheetRoute() {
     orpc.bill.cancel.mutationOptions({
       onSuccess: async () => {
         await invalidateSettlement();
-        setCancelOpen(false);
+        setActiveOverlay(null);
         toast.success("Bill cancelled");
       },
       onError: refused(
         "Could not cancel the bill",
-        () => setCancelOpen(false),
+        () => setActiveOverlay(null),
         invalidateSettlement,
       ),
     }),
@@ -136,14 +136,18 @@ function BillSheetRoute() {
     orpc.bill.amend.mutationOptions({
       onSuccess: async (draft) => {
         await invalidateSettlement();
-        setAmendOpen(false);
+        setActiveOverlay(null);
         toast.success("Bill cancelled and draft created");
         void navigate({
           to: "/$orgSlug/bills/$billId/edit",
           params: { orgSlug, billId: draft.id },
         });
       },
-      onError: refused("Could not amend the bill", () => setAmendOpen(false), invalidateSettlement),
+      onError: refused(
+        "Could not amend the bill",
+        () => setActiveOverlay(null),
+        invalidateSettlement,
+      ),
     }),
   );
 
@@ -321,7 +325,7 @@ function BillSheetRoute() {
             <SheetActionsMenu>
               <DropdownMenuGroup>
                 {canApply ? (
-                  <DropdownMenuItem onClick={() => setApplyOpen(true)}>
+                  <DropdownMenuItem onClick={() => setActiveOverlay("apply")}>
                     Apply credit
                   </DropdownMenuItem>
                 ) : null}
@@ -339,13 +343,18 @@ function BillSheetRoute() {
                   </DropdownMenuItem>
                 ) : null}
                 {canAmend ? (
-                  <DropdownMenuItem onClick={() => setAmendOpen(true)}>Amend</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveOverlay("amend")}>
+                    Amend
+                  </DropdownMenuItem>
                 ) : null}
               </DropdownMenuGroup>
               {canCancel ? (
                 <>
                   {canApply || canNote || canAmend ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem variant="destructive" onClick={() => setCancelOpen(true)}>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setActiveOverlay("cancel")}
+                  >
                     Cancel bill
                   </DropdownMenuItem>
                 </>
@@ -369,7 +378,7 @@ function BillSheetRoute() {
         </SheetFooter>
       ) : null}
       <ReasonDialog
-        open={cancelOpen}
+        open={activeOverlay === "cancel"}
         pending={cancel.isPending}
         title="Cancel bill"
         description="This posts a reversal. The bill remains in the register for audit history."
@@ -377,11 +386,11 @@ function BillSheetRoute() {
         keepLabel="Keep bill"
         confirmLabel="Cancel bill"
         pendingLabel="Cancelling…"
-        onClose={() => setCancelOpen(false)}
+        onClose={() => setActiveOverlay(null)}
         onConfirm={(reason) => cancel.mutate({ orgSlug, billId, reason })}
       />
       <ReasonDialog
-        open={amendOpen}
+        open={activeOverlay === "amend"}
         pending={amend.isPending}
         title="Amend bill"
         description="Cancel this bill and create a new draft with its details. Reverse any allocations first."
@@ -389,10 +398,10 @@ function BillSheetRoute() {
         keepLabel="Keep bill"
         confirmLabel="Amend bill"
         pendingLabel="Amending…"
-        onClose={() => setAmendOpen(false)}
+        onClose={() => setActiveOverlay(null)}
         onConfirm={(reason) => amend.mutate({ orgSlug, billId, reason })}
       />
-      {applyOpen && bill.partyId ? (
+      {activeOverlay === "apply" && bill.partyId ? (
         <ApplyCreditDialog
           orgSlug={orgSlug}
           side="payable"
@@ -402,7 +411,7 @@ function BillSheetRoute() {
             number: bill.number ?? "Draft",
             outstandingPaise: bill.outstandingPaise,
           }}
-          onClose={() => setApplyOpen(false)}
+          onClose={() => setActiveOverlay(null)}
         />
       ) : null}
     </RecordSheet>

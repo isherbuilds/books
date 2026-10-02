@@ -1,5 +1,6 @@
 import type { DbTransaction } from "@accly/db";
-import { accounts, type AccountType, type SupplyClass } from "@accly/db/schema/accounts";
+import { accounts } from "@accly/db/schema/accounts";
+import { type AccountType, type SupplyClass } from "@accly/db/schema/account-kinds";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { LegalType } from "@accly/db/schema/organization-settings";
 

@@ -1,10 +1,6 @@
 import { db } from "@accly/db";
-import {
-  ACCOUNT_TYPES,
-  accounts,
-  SUPPLY_CLASSES,
-  type AccountType,
-} from "@accly/db/schema/accounts";
+import { accounts } from "@accly/db/schema/accounts";
+import { ACCOUNT_TYPES, SUPPLY_CLASSES, type AccountType } from "@accly/db/schema/account-kinds";
 import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { MONEY_KINDS } from "@accly/db/schema/money-kinds";

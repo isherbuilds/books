@@ -56,7 +56,21 @@ test("an untyped field lists its saved value first, even past the limit", () => 
   const many = Array.from({ length: 12 }, (_, index): Row => ({ name: `Shah ${index}` }));
   const saved = many[10]!;
 
+  let keyReads = 0;
+
+  const getKey = (row: Row) => {
+    keyReads++;
+
+    return row.name;
+  };
+
   expect(
-    linkRows(options("Shah 10", { items: many, selected: saved, selectedLabel: "Shah 10" })),
+    linkRows(
+      options("Shah 10", { items: many, selected: saved, selectedLabel: "Shah 10", getKey }),
+    ),
   ).toEqual([saved, ...many.slice(0, 5)]);
+  expect(keyReads).toBeLessThanOrEqual(8);
+  expect(
+    linkRows(options("Shah 1", { items: many, selected: many[1]!, selectedLabel: "Shah 1" })),
+  ).toEqual([many[1]!, many[0]!, ...many.slice(2, 6)]);
 });

@@ -1,5 +1,5 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
-import { LOCK_KINDS, type LockKind } from "@accly/db/schema/period-locks";
+import { LOCK_KINDS, type LockKind } from "@accly/db/schema/lock-kinds";
 import { Button } from "@accly/ui/components/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";

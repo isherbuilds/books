@@ -9,7 +9,14 @@ import {
 } from "@accly/api/core/money";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { Button } from "@accly/ui/components/button";
-import { Combobox } from "@accly/ui/components/combobox";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@accly/ui/components/combobox";
 import {
   Dialog,
   DialogContent,
@@ -88,7 +95,6 @@ export function ApplyCreditDialog({
   const creditInputId = useId();
   const [chosen, setChosen] = useState<Credit | null>(null);
   const [text, setText] = useState("");
-  const [listOpen, setListOpen] = useState(false);
   const form = useZodForm(applyCreditSchema, { defaultValues: { amount: "" } });
   const amount = useWatch({ control: form.control, name: "amount" });
 
@@ -220,71 +226,93 @@ export function ApplyCreditDialog({
                       <Label htmlFor={creditInputId}>Credit</Label>
                       <Combobox<Credit | LoadMoreRow>
                         items={options}
-                        getItemKey={(option) => (isLoadMore(option) ? "__load-more" : option.id)}
-                        getItemLabel={(option) =>
+                        filteredItems={options}
+                        itemToStringLabel={(option) =>
                           isLoadMore(option) ? "Load more" : option.number
                         }
-                        renderItem={(option) =>
-                          isLoadMore(option) ? (
-                            <span className="w-full text-center text-muted-foreground">
-                              {credits.isFetchingNextPage ? (
-                                <WaveLoader
-                                  label="Loading more credits"
-                                  className="justify-center"
-                                />
-                              ) : credits.isFetchNextPageError ? (
-                                "Could not load more. Try again"
-                              ) : (
-                                `${rows.length} shown · Load more`
-                              )}
-                            </span>
-                          ) : (
-                            <>
-                              <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
-                              <span className="min-w-0 truncate">
-                                <span className="text-muted-foreground">
-                                  {creditLabel(option.type)} ·{" "}
-                                </span>
-                                <span className="font-mono">{option.number}</span>
-                                <span className="text-muted-foreground tabular-nums">
-                                  {" "}
-                                  · {formatBusinessDay(option.documentDate)}
-                                </span>
-                              </span>
-                              <span className="ml-auto shrink-0 tabular-nums">
-                                {formatMoney(option.unappliedPaise)}
-                              </span>
-                            </>
-                          )
+                        isItemEqualToValue={(option, value) =>
+                          !isLoadMore(option) && !isLoadMore(value) && option.id === value.id
                         }
-                        onSelect={pick}
+                        onValueChange={(option, details) => {
+                          if (option && pick(option) === false) details.cancel();
+                        }}
                         autoHighlight
+                        loopFocus
                         value={selected}
                         inputValue={text}
-                        onInputValueChange={setText}
-                        emptyContent={
-                          credits.isPending ? (
-                            <WaveLoader
-                              label="Loading credits"
-                              className="justify-center px-3 py-4"
-                            />
-                          ) : (
-                            <p className="px-3 py-4 text-center">{emptyText}</p>
-                          )
-                        }
-                        open={listOpen}
-                        onOpenChange={setListOpen}
-                        showTrigger
-                        inputProps={{
-                          id: creditInputId,
-                          placeholder: "Search by number",
-                          autoComplete: "off",
-                          // The server's searchQuery cap.
-                          maxLength: 100,
-                          // Uncommitted text never stands in for the picked credit.
-                          onBlur: () => setText(selected?.number ?? ""),
+                        onInputValueChange={(next, details) => {
+                          if (details.reason === "escape-key" && chosen) {
+                            details.allowPropagation();
+
+                            return;
+                          }
+
+                          if (details.reason !== "item-press") {
+                            if (chosen && next !== chosen.number) setChosen(null);
+                            setText(next);
+                          }
                         }}
-                      />
+                      >
+                        <ComboboxInput
+                          id={creditInputId}
+                          placeholder="Search by number"
+                          autoComplete="off"
+                          maxLength={100}
+                          onBlur={() => setText(selected?.number ?? "")}
+                        />
+                        <ComboboxContent>
+                          <ComboboxEmpty>
+                            {credits.isPending ? (
+                              <WaveLoader
+                                label="Loading credits"
+                                className="justify-center px-3 py-4"
+                              />
+                            ) : (
+                              <p className="px-3 py-4 text-center">{emptyText}</p>
+                            )}
+                          </ComboboxEmpty>
+                          <ComboboxList>
+                            {(option: Credit | LoadMoreRow) => (
+                              <ComboboxItem
+                                key={isLoadMore(option) ? "__load-more" : option.id}
+                                value={option}
+                              >
+                                {isLoadMore(option) ? (
+                                  <span className="w-full text-center text-muted-foreground">
+                                    {credits.isFetchingNextPage ? (
+                                      <WaveLoader
+                                        label="Loading more credits"
+                                        className="justify-center"
+                                      />
+                                    ) : credits.isFetchNextPageError ? (
+                                      "Could not load more. Try again"
+                                    ) : (
+                                      `${rows.length} shown · Load more`
+                                    )}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
+                                    <span className="min-w-0 truncate">
+                                      <span className="text-muted-foreground">
+                                        {creditLabel(option.type)} ·{" "}
+                                      </span>
+                                      <span className="font-mono">{option.number}</span>
+                                      <span className="text-muted-foreground tabular-nums">
+                                        {" "}
+                                        · {formatBusinessDay(option.documentDate)}
+                                      </span>
+                                    </span>
+                                    <span className="ml-auto shrink-0 tabular-nums">
+                                      {formatMoney(option.unappliedPaise)}
+                                    </span>
+                                  </>
+                                )}
+                              </ComboboxItem>
+                            )}
+                          </ComboboxList>
+                        </ComboboxContent>
+                      </Combobox>
                     </div>
 
                     <RegisteredFormField

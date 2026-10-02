@@ -1,6 +1,7 @@
 import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { documentLines, type EntrySide } from "@accly/db/schema/document-lines";
+import { documentLines } from "@accly/db/schema/document-lines";
+import { type EntrySide } from "@accly/db/schema/entry-sides";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
 import { and, asc, eq, inArray } from "drizzle-orm";

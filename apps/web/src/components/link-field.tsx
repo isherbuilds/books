@@ -2,10 +2,17 @@
 // Row, empty-state and "Create" composition adapted from
 // packages/ui/src/components/{combobox-dropdown,combobox,command}.tsx, on Base UI.
 
-import { Combobox } from "@accly/ui/components/combobox";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@accly/ui/components/combobox";
 import { Input } from "@accly/ui/components/input";
 import { ClientOnly } from "@tanstack/react-router";
-import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
+import { CheckIcon, PlusIcon } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import { isCreateItem, linkRows, type CreateItem } from "@/lib/link-rows";
@@ -36,7 +43,7 @@ type LinkFieldProps<T> = {
   value: T | null;
   onSelect: (item: T | null) => void;
   onCreate?: (seed: string) => void;
-  /** An optional field: shows a clear button, and emptied text plus Enter or Tab clears it. */
+  /** An optional field: emptied text plus Enter or Tab clears it. */
   clearable?: boolean;
   placeholder?: string;
   inputRef?: Ref<HTMLInputElement>;
@@ -115,6 +122,7 @@ export function LinkField<T>({
   const changeQuery = (text: string) => {
     const untouched = text === selectedLabel;
 
+    if (value && !untouched) onSelect(null);
     setTyped(untouched ? null : text);
     onSearch?.(untouched ? "" : text.trim());
   };
@@ -155,86 +163,100 @@ export function LinkField<T>({
   return (
     <ClientOnly
       fallback={
-        <div className="relative">
-          <Input
-            ref={inputRef}
-            id={id}
-            placeholder={placeholder}
-            defaultValue={selectedLabel}
-            aria-invalid={ariaInvalid}
-            disabled
-            className="pr-8"
-          />
-          <ChevronsUpDownIcon className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        </div>
+        <Input
+          ref={inputRef}
+          id={id}
+          placeholder={placeholder}
+          defaultValue={selectedLabel}
+          aria-invalid={ariaInvalid}
+          disabled
+        />
       }
     >
       <Combobox<T | CreateItem>
         items={rows}
-        getItemKey={(item) => (isCreateItem(item) ? `__create:${item.__create}` : getKey(item))}
-        getItemLabel={(item) => (isCreateItem(item) ? `Create “${item.__create}”` : getLabel(item))}
-        renderItem={(item) => {
-          if (isCreateItem(item)) {
-            return (
-              <>
-                <PlusIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate">Create “{item.__create}”</span>
-              </>
-            );
-          }
-
-          const description = getDescription?.(item);
-          const code = getCode?.(item);
-
-          return (
-            <>
-              <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
-              <span className="min-w-0 truncate">{getLabel(item)}</span>
-              {description ? (
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">{description}</span>
-              ) : null}
-              {code ? (
-                <span className="ml-auto shrink-0 font-mono text-muted-foreground">{code}</span>
-              ) : null}
-            </>
-          );
-        }}
-        onSelect={choose}
+        filteredItems={rows}
         autoHighlight
+        loopFocus
         value={value}
-        inputValue={query}
-        onInputValueChange={changeQuery}
-        emptyContent={
-          status === "pending" || (status === "ready" && !complete) ? (
-            <WaveLoader
-              label={status === "pending" ? `Loading ${noun}` : `Searching ${noun}`}
-              className="justify-center px-3 py-4"
-            />
-          ) : (
-            <p className="px-3 py-4 text-center">{statusText(status, noun, needle, canCreate)}</p>
-          )
+        isItemEqualToValue={(item, selected) =>
+          !isCreateItem(item) && !isCreateItem(selected) && getKey(item) === getKey(selected)
         }
+        itemToStringLabel={(item) =>
+          isCreateItem(item) ? `Create “${item.__create}”` : getLabel(item)
+        }
+        inputValue={query}
+        onInputValueChange={(next, details) => {
+          if (details.reason === "escape-key" && value) {
+            details.allowPropagation();
+          } else if (details.reason !== "item-press") {
+            changeQuery(next);
+          }
+        }}
+        onValueChange={(item) => {
+          if (item) choose(item);
+        }}
         open={open}
         onOpenChange={setOpen}
-        showTrigger
-        onClear={clearable ? () => onSelect(null) : undefined}
         onItemHighlighted={(item) => {
           highlighted.current = item;
         }}
-        inputRef={inputRef}
-        inputProps={{
-          id,
-          placeholder,
-          autoFocus,
-          autoComplete: "off",
-          "aria-invalid": ariaInvalid,
-          "aria-describedby": ariaDescribedBy,
-          "aria-required": ariaRequired,
-          onKeyDown: handleKeyDown,
-          // Uncommitted text never stands in for the stored value.
-          onBlur: () => changeQuery(selectedLabel),
-        }}
-      />
+      >
+        <ComboboxInput
+          ref={inputRef}
+          id={id}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          autoComplete="off"
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
+          aria-required={ariaRequired}
+          onKeyDown={handleKeyDown}
+          onBlur={() => changeQuery(selectedLabel)}
+        />
+        <ComboboxContent>
+          <ComboboxEmpty>
+            {status === "pending" || (status === "ready" && !complete) ? (
+              <WaveLoader
+                label={status === "pending" ? `Loading ${noun}` : `Searching ${noun}`}
+                className="justify-center px-3 py-4"
+              />
+            ) : (
+              <p className="px-3 py-4 text-center">{statusText(status, noun, needle, canCreate)}</p>
+            )}
+          </ComboboxEmpty>
+          <ComboboxList>
+            {(item: T | CreateItem) => {
+              if (isCreateItem(item)) {
+                return (
+                  <ComboboxItem key={`__create:${item.__create}`} value={item}>
+                    <PlusIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 truncate">Create “{item.__create}”</span>
+                  </ComboboxItem>
+                );
+              }
+
+              const description = getDescription?.(item);
+              const code = getCode?.(item);
+
+              return (
+                <ComboboxItem key={getKey(item)} value={item}>
+                  <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
+                  <span className="min-w-0 truncate">{getLabel(item)}</span>
+                  {description ? (
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {description}
+                    </span>
+                  ) : null}
+                  {code ? (
+                    <span className="ml-auto shrink-0 font-mono text-muted-foreground">{code}</span>
+                  ) : null}
+                </ComboboxItem>
+              );
+            }}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
     </ClientOnly>
   );
 }

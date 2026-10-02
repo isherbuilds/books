@@ -1,11 +1,9 @@
 import type { DbTransaction } from "@accly/db";
-import { accounts, type SupplyClass } from "@accly/db/schema/accounts";
+import { accounts } from "@accly/db/schema/accounts";
+import { type SupplyClass } from "@accly/db/schema/account-kinds";
 import { allocations } from "@accly/db/schema/allocations";
-import {
-  documentLines,
-  type AdjustmentKind,
-  type EntrySide,
-} from "@accly/db/schema/document-lines";
+import { documentLines, type AdjustmentKind } from "@accly/db/schema/document-lines";
+import { type EntrySide } from "@accly/db/schema/entry-sides";
 import { documents, type PrintSnapshot } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { organizationSettings } from "@accly/db/schema/organization-settings";

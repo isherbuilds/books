@@ -1,7 +1,8 @@
 import { db } from "@accly/db";
 import { member, user } from "@accly/db/schema/auth";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
-import { LOCK_KINDS, lockExceptions, periodLocks } from "@accly/db/schema/period-locks";
+import { lockExceptions, periodLocks } from "@accly/db/schema/period-locks";
+import { LOCK_KINDS } from "@accly/db/schema/lock-kinds";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";

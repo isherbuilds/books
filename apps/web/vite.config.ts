@@ -22,7 +22,13 @@ export default defineConfig(({ command }) => ({
     // file path that the bundled server no longer has, so every receipt PDF was a 500.
     // Its `unwasm` entry imports the module the way Nitro bundles it. Dev leaves
     // the dependency external, so its .wasm file remains available on disk.
-    alias: command === "build" ? [{ find: /^takumi-pdf$/, replacement: "takumi-pdf/next" }] : [],
+    alias: [
+      {
+        find: /^@radix-ui\/react-dialog$/,
+        replacement: resolve(import.meta.dirname, "src/lib/cmdk-dialog-stub.ts"),
+      },
+      ...(command === "build" ? [{ find: /^takumi-pdf$/, replacement: "takumi-pdf/next" }] : []),
+    ],
   },
   build: {
     // The production CSP allows `font-src 'self'` only, so a font Vite would inline as

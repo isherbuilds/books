@@ -1,5 +1,5 @@
 import { searchQuery } from "@accly/api/lib/schemas";
-import { ACCOUNT_TYPES, type AccountType } from "@accly/db/schema/accounts";
+import { ACCOUNT_TYPES, type AccountType } from "@accly/db/schema/account-kinds";
 import { Button } from "@accly/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";

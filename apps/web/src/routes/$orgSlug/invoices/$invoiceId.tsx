@@ -53,10 +53,11 @@ function InvoiceSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone, today } = useOrgDateTime();
   const invoice = useSuspenseQuery(invoiceDetailOptions(orgSlug, invoiceId)).data;
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [amendOpen, setAmendOpen] = useState(false);
-  const [applyOpen, setApplyOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
+
+  const [activeOverlay, setActiveOverlay] = useState<
+    "cancel" | "amend" | "apply" | "receipt" | null
+  >(null);
+
   const isDraft = invoice.state === "draft";
   const canEdit = useCan(orgSlug, { invoice: ["create"] }) && isDraft;
 
@@ -120,7 +121,7 @@ function InvoiceSheetRoute() {
       onSuccess: async (draft) => {
         // Settlement state covers invoice reads, drafts included.
         await invalidateSettlement();
-        setAmendOpen(false);
+        setActiveOverlay(null);
         toast.success("Invoice draft ready");
         void navigate({
           to: "/$orgSlug/invoices/$invoiceId/edit",
@@ -129,7 +130,7 @@ function InvoiceSheetRoute() {
       },
       onError: refused(
         "Could not amend the invoice",
-        () => setAmendOpen(false),
+        () => setActiveOverlay(null),
         invalidateSettlement,
       ),
     }),
@@ -139,12 +140,12 @@ function InvoiceSheetRoute() {
     orpc.invoice.cancel.mutationOptions({
       onSuccess: async () => {
         await invalidateSettlement();
-        setCancelOpen(false);
+        setActiveOverlay(null);
         toast.success("Invoice cancelled");
       },
       onError: refused(
         "Could not cancel the invoice",
-        () => setCancelOpen(false),
+        () => setActiveOverlay(null),
         invalidateSettlement,
       ),
     }),
@@ -391,7 +392,7 @@ function InvoiceSheetRoute() {
             <SheetActionsMenu>
               <DropdownMenuGroup>
                 {canApply ? (
-                  <DropdownMenuItem onClick={() => setApplyOpen(true)}>
+                  <DropdownMenuItem onClick={() => setActiveOverlay("apply")}>
                     Apply credit
                   </DropdownMenuItem>
                 ) : null}
@@ -409,13 +410,18 @@ function InvoiceSheetRoute() {
                   </DropdownMenuItem>
                 ) : null}
                 {canAmend ? (
-                  <DropdownMenuItem onClick={() => setAmendOpen(true)}>Amend</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveOverlay("amend")}>
+                    Amend
+                  </DropdownMenuItem>
                 ) : null}
               </DropdownMenuGroup>
               {canCancel ? (
                 <>
                   {canApply || canPostNote || canAmend ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem variant="destructive" onClick={() => setCancelOpen(true)}>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setActiveOverlay("cancel")}
+                  >
                     Cancel invoice
                   </DropdownMenuItem>
                 </>
@@ -434,7 +440,7 @@ function InvoiceSheetRoute() {
             </a>
           ) : null}
           {canRecordReceipt ? (
-            <Button type="button" onClick={() => setReceiptOpen(true)}>
+            <Button type="button" onClick={() => setActiveOverlay("receipt")}>
               Record receipt
             </Button>
           ) : null}
@@ -443,7 +449,7 @@ function InvoiceSheetRoute() {
 
       {/* Inside the Sheet, so Base UI treats each as nested: Esc closes it alone. */}
       <ReasonDialog
-        open={cancelOpen}
+        open={activeOverlay === "cancel"}
         pending={cancel.isPending}
         title="Cancel invoice"
         description="This posts a reversal. The invoice remains in the register for audit history."
@@ -451,11 +457,11 @@ function InvoiceSheetRoute() {
         keepLabel="Keep invoice"
         confirmLabel="Cancel invoice"
         pendingLabel="Cancelling…"
-        onClose={() => setCancelOpen(false)}
+        onClose={() => setActiveOverlay(null)}
         onConfirm={(reason) => cancel.mutate({ orgSlug, invoiceId, reason })}
       />
       <ReasonDialog
-        open={amendOpen}
+        open={activeOverlay === "amend"}
         pending={amend.isPending}
         title="Amend invoice"
         description="This cancels the invoice and opens a copy as a draft. Reverse allocations before amending."
@@ -463,11 +469,11 @@ function InvoiceSheetRoute() {
         keepLabel="Keep invoice"
         confirmLabel="Amend invoice"
         pendingLabel="Amending…"
-        onClose={() => setAmendOpen(false)}
+        onClose={() => setActiveOverlay(null)}
         onConfirm={(reason) => amend.mutate({ orgSlug, invoiceId, reason })}
       />
 
-      {applyOpen && invoice.partyId ? (
+      {activeOverlay === "apply" && invoice.partyId ? (
         <ApplyCreditDialog
           orgSlug={orgSlug}
           side="receivable"
@@ -477,11 +483,11 @@ function InvoiceSheetRoute() {
             number: invoice.number ?? invoice.id,
             outstandingPaise: invoice.outstandingPaise,
           }}
-          onClose={() => setApplyOpen(false)}
+          onClose={() => setActiveOverlay(null)}
         />
       ) : null}
 
-      {receiptOpen && invoice.partyId ? (
+      {activeOverlay === "receipt" && invoice.partyId ? (
         <ReceiptOverlay
           orgSlug={orgSlug}
           today={today}
@@ -495,7 +501,7 @@ function InvoiceSheetRoute() {
             outstandingPaise: invoice.outstandingPaise,
           }}
           open
-          onClose={() => setReceiptOpen(false)}
+          onClose={() => setActiveOverlay(null)}
         />
       ) : null}
     </RecordSheet>

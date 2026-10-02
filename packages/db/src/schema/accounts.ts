@@ -10,15 +10,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { ACCOUNT_TYPES, SUPPLY_CLASSES } from "./account-kinds";
 import { organization } from "./auth";
-
-export const ACCOUNT_TYPES = ["asset", "liability", "equity", "income", "expense"] as const;
-
-export type AccountType = (typeof ACCOUNT_TYPES)[number];
-
-export const SUPPLY_CLASSES = ["taxable", "exempt", "nil", "nonGst", "notASupply"] as const;
-
-export type SupplyClass = (typeof SUPPLY_CLASSES)[number];
 
 export const accounts = pgTable(
   "accounts",

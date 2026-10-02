@@ -21,6 +21,34 @@ The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
+- **Combobox input simplification**: Verification. Invoice party and item picks
+  keep one input mounted; Enter selects, Tab reaches the next control, and
+  typing over a saved choice clears it. Empty search results render in the
+  list. The Apply Credit picker selects a receipt and focuses Amount; editing
+  that choice disables Apply credit. Checked on desktop and at 390 px in both
+  themes. Against the prior picker on the same local fixture, 24 alternating
+  invoice party searches took 18.7 → 13.7 ms median and 31.4 → 30.7 ms p95
+  from input event to the second animation frame in Chrome dev mode. The
+  LinkField client chunk fell from 16.52 to 14.61 kB gzip; the three picker
+  files fell from 755 to 686 lines. Remaining: exercise Load more with a party
+  that has over one page of open credits.
+
+- **Client bundle trim**: Verification. Client gzip JS fell 669.1 → 648.2 kB
+  (`bun --bun vite build`, sum of `assets/*.js` at gzip -9). Drizzle left the
+  client: the account, lock and entry-side lists moved to dependency-free
+  `*-kinds.ts` files, as `settlement-kinds.ts` did (−10.5 kB). cmdk's
+  never-used Radix `Command.Dialog` no longer drags Radix Dialog, remove-scroll
+  and aria-hidden in: `vite.config.ts` aliases it to a throwing stub (−10.4 kB).
+  Palette opens, filters and closes on Esc in the dev app with no console
+  errors. Remaining: check at 390 px and in dark theme.
+
+- **Apply Credit form cleanup**: Verification. The credit picker now uses the
+  Combobox's own open state. Lint and format passed; the web production build
+  passed before the concurrent Combobox edit landed.
+  Check selection, Load more, and keyboard use at desktop and mobile widths in
+  both themes when the concurrent Combobox edit and dependency update restore
+  the local web app and type check.
+
 - **[Query performance](./specs/query-performance.md)**: Active. Merged in PR 34
   ([results](./research/api-benchmark-2026-09-28.md)). Open: local databases
   still hold the old migration baseline, so `bun run dev` fails until

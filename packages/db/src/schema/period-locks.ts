@@ -2,10 +2,7 @@ import { sql } from "drizzle-orm";
 import { bigint, check, date, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 import { organization, user } from "./auth";
-
-export const LOCK_KINDS = ["general", "tax"] as const;
-
-export type LockKind = (typeof LOCK_KINDS)[number];
+import { LOCK_KINDS } from "./lock-kinds";
 
 // Append-only history. Settings own the current dates; the identity orders the
 // latest change metadata per Organization and kind without application clocks.

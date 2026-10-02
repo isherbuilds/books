@@ -1,6 +1,6 @@
 import { dateOnly, reason } from "@accly/api/lib/schemas";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
-import type { LockKind } from "@accly/db/schema/period-locks";
+import type { LockKind } from "@accly/db/schema/lock-kinds";
 import { Button } from "@accly/ui/components/button";
 import {
   Dialog,

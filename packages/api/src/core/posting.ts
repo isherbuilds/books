@@ -1,6 +1,6 @@
 import type { DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import type { EntrySide } from "@accly/db/schema/document-lines";
+import type { EntrySide } from "@accly/db/schema/entry-sides";
 import type { AdvanceSupply } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";

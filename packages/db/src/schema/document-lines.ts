@@ -14,17 +14,14 @@ import {
 import { accounts } from "./accounts";
 import { organization } from "./auth";
 import { documents } from "./documents";
+import { ENTRY_SIDES } from "./entry-sides";
 import { items } from "./items";
 import { parties } from "./parties";
 import { taxRates } from "./tax-rates";
 
-export const ENTRY_SIDES = ["debit", "credit"] as const;
-
 export const ADJUSTMENT_KINDS = ["fee", "writeOff", "tds"] as const;
 
 export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number];
-
-export type EntrySide = (typeof ENTRY_SIDES)[number];
 
 export const documentLines = pgTable(
   "document_lines",

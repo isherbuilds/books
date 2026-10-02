@@ -1,5 +1,5 @@
 import { shortName } from "@accly/api/lib/schemas";
-import { ACCOUNT_TYPES, SUPPLY_CLASSES } from "@accly/db/schema/accounts";
+import { ACCOUNT_TYPES, SUPPLY_CLASSES } from "@accly/db/schema/account-kinds";
 import { Button } from "@accly/ui/components/button";
 import {
   Form,

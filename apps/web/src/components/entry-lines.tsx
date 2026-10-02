@@ -6,7 +6,7 @@ import {
   isPositiveMoney,
 } from "@accly/api/core/money";
 import type { AppRouterClient } from "@accly/api/routers/index";
-import type { EntrySide } from "@accly/db/schema/document-lines";
+import type { EntrySide } from "@accly/db/schema/entry-sides";
 import { Button } from "@accly/ui/components/button";
 import {
   FormControl,

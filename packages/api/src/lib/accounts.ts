@@ -1,5 +1,6 @@
 import { db, type DbTransaction } from "@accly/db";
-import { accounts, type AccountType, type SupplyClass } from "@accly/db/schema/accounts";
+import { accounts } from "@accly/db/schema/accounts";
+import { type AccountType, type SupplyClass } from "@accly/db/schema/account-kinds";
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, notExists, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

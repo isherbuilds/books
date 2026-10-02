@@ -1,4 +1,4 @@
-import type { AccountType } from "@accly/db/schema/accounts";
+import type { AccountType } from "@accly/db/schema/account-kinds";
 
 import { impossible } from "../lib/conflict";
 import type { AccountActivity, ReportHeader } from "../lib/reports";
