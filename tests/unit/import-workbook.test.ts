@@ -16,6 +16,7 @@ test("a number cell reads a large amount exactly and refuses a third decimal", a
           ["Cash in Hand", 1234567890.09, null],
           ["Capital Account", null, 1.005],
           ["Capital Account", null, 600000000000.005],
+          ["Capital Account", null, 10000000000000],
         ],
       },
     ],
@@ -30,5 +31,6 @@ test("a number cell reads a large amount exactly and refuses a third decimal", a
   expect(errors.map((error) => [error.row, error.code])).toEqual([
     [3, "AMOUNT_INVALID"],
     [4, "AMOUNT_INVALID"],
+    [5, "AMOUNT_INVALID"],
   ]);
 });

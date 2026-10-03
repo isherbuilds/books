@@ -890,7 +890,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within 0.01 paise of
      an integer, is that many paise, else `AMOUNT_INVALID` ("two decimal places
      at most"; Excel stores pasted sums as `1234.5600000000002`). A third
-     decimal is at least 0.1 paise off, so it is refused, never rounded. Text with a
+     decimal is at least 0.1 paise off, so it is refused, never rounded. A
+     number at or above 1e15 paise is refused, matching the text pattern's 13
+     rupee digits. Text with a
      thousands separator is refused. A date cell arrives as a `Date` at UTC
      midnight and converts with `toISOString().slice(0, 10)`; a date may also be
      `YYYY-MM-DD` text. Text cells are trimmed. A row with every cell blank is

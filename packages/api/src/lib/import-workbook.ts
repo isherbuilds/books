@@ -218,8 +218,9 @@ class SheetReader {
 
       // A third decimal is at least 0.1 paise off, and float noise stays under 0.01
       // paise below thousands of crores; a larger amount is refused, never rounded.
-      if (value >= 0 && Number.isSafeInteger(paise) && Math.abs(scaled - paise) < 0.01)
-        return BigInt(paise);
+      // Below 1e15 paise matches the text pattern's 13 rupee digits, so 5,000 rows
+      // cannot overflow a bigint total.
+      if (value >= 0 && paise < 1e15 && Math.abs(scaled - paise) < 0.01) return BigInt(paise);
     } else if (typeof value === "string" && NON_NEGATIVE_MONEY_PATTERN.test(value.trim())) {
       return parseMoney(value.trim());
     }
