@@ -50,10 +50,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   the local web app and type check.
 
 - **[Query performance](./specs/query-performance.md)**: Active. Open: S4's
-  party statement refusal timing and S7 close-out. Local databases still hold
-  the old migration baseline, so `bun run dev` fails until
-  `bun run db:seed -- --reset`, then `bun run db:seed:mega`. The reset deletes
-  local data; confirm with the owner immediately before running it.
+  party statement refusal timing and S7 close-out. The local database is on
+  the current baseline with `db:seed:volume`; run `bun run db:seed:mega` for
+  the mega-volume checks.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
   allocation and opening-balance wait states use `WaveLoader`; types, lint and
   build pass. Check a loading state at desktop and mobile widths in both themes
@@ -65,15 +64,15 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **[Accounting core](./specs/accounting-core.md)**: Active. Slices 7a–7c
   (opening items, workbook masters, Settings > Import) are implemented on
   `feat/import-tally-opening-items`; `tests/integration/import.test.ts` and
-  `request-lifecycle.test.ts` cover their acceptance. Open for slice 7:
-  - Verification: a workbook edited on disk after it was chosen should toast
-    "Choose it again" on Check (Chrome refuses the stale file). Needs a real
-    file chooser; the oversized and normal upload paths passed in the app.
-  - The development database needs an explicitly approved reset for the
-    regenerated baseline.
-  - The import volume p95 on 100,000+ seeded rows, measured before the pilot;
-    local statement counts are diagnostics only.
-  - 7d (TallyPrime XML) is gated on an anonymized real Tally export.
+  `request-lifecycle.test.ts` cover their acceptance. In the dev app, Check
+  and Import pass for valid and invalid workbooks, a file edited after it was
+  chosen toasts "Choose it again", and a numeric State code `7` saves as `07`.
+  On Meridian at `db:seed:volume` (production API build, 20 runs), a 1,000-party,
+  5,000-item `import.commit` takes p95 1.29 s and `import.check` 107 ms; 5,000
+  parties take p95 1.55 s and 132 ms. Bulk inserts of 1,000 rows into
+  `documents` and `party_ledger_lines` take most of that time; no single
+  statement is slow. Open for slice 7: 7d (TallyPrime XML) is gated on an
+  anonymized real Tally export.
 
   Also
   open: CA acceptance of every implemented slice, and the slice 2 posting p95
