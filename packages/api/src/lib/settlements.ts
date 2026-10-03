@@ -579,7 +579,12 @@ export async function openCredits(
               ),
               and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "payable")),
             ),
-        input.q ? ilike(documents.searchText, likePattern(input.q)) : undefined,
+        input.q
+          ? or(
+              ilike(documents.number, likePattern(input.q)),
+              ilike(documents.reference, likePattern(input.q)),
+            )
+          : undefined,
         afterDateCursor(orgId, input.cursor),
         gt(unappliedPaise, 0n),
       ),

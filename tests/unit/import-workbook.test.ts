@@ -15,6 +15,7 @@ test("a number cell reads a large amount exactly and refuses a third decimal", a
           // Float noise passes a fixed 1e-6 tolerance from about ₹10 crore.
           ["Cash in Hand", 1234567890.09, null],
           ["Capital Account", null, 1.005],
+          ["Capital Account", null, 600000000000.005],
         ],
       },
     ],
@@ -26,5 +27,8 @@ test("a number cell reads a large amount exactly and refuses a third decimal", a
   );
 
   expect(workbook.trialBalance.map((row) => row.debitPaise)).toEqual([parseMoney("1234567890.09")]);
-  expect(errors.map((error) => [error.row, error.code])).toEqual([[3, "AMOUNT_INVALID"]]);
+  expect(errors.map((error) => [error.row, error.code])).toEqual([
+    [3, "AMOUNT_INVALID"],
+    [4, "AMOUNT_INVALID"],
+  ]);
 });

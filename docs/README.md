@@ -71,10 +71,8 @@ Check UI items in the running app on desktop and mobile, in both themes.
     file chooser; the oversized and normal upload paths passed in the app.
   - The development database needs an explicitly approved reset for the
     regenerated baseline.
-  - The import volume p95 on 100,000+ seeded rows; local statement counts are
-    diagnostics only. One local `import.commit` of 1,000 parties and 5,000
-    opening items took 1.6–7.2 s across three runs on a fresh test
-    organization (2026-10-02), so measure it before the pilot.
+  - The import volume p95 on 100,000+ seeded rows, measured before the pilot;
+    local statement counts are diagnostics only.
   - 7d (TallyPrime XML) is gated on an anonymized real Tally export.
 
   Also

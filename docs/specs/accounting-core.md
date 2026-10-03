@@ -887,10 +887,10 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      cell's `type` and value from `sheet.cells` in sparse mode (a `formula`,
      `error` or `richText` cell is `CELL_INVALID`). A money cell is text
      matching the `money` pattern, or a number: a negative number is
-     `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within float noise (1e-6, or 1e-14 of
-     the amount when larger) of an
-     integer, is that many paise, else `AMOUNT_INVALID` ("two decimal places
-     at most"; Excel stores pasted sums as `1234.5600000000002`). Text with a
+     `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within 0.01 paise of
+     an integer, is that many paise, else `AMOUNT_INVALID` ("two decimal places
+     at most"; Excel stores pasted sums as `1234.5600000000002`). A third
+     decimal is at least 0.1 paise off, so it is refused, never rounded. Text with a
      thousands separator is refused. A date cell arrives as a `Date` at UTC
      midnight and converts with `toISOString().slice(0, 10)`; a date may also be
      `YYYY-MM-DD` text. Text cells are trimmed. A row with every cell blank is
@@ -939,7 +939,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      count. Codes beyond those named above: `CELL_REQUIRED`, `DATE_INVALID`,
      `HEADER_UNKNOWN`, `HEADER_MISSING`, `HEADER_REPEATED`, `SHEET_UNKNOWN`,
      `ROW_EXTRA`, `DUE_DATE_INVALID`, `ITEM_REPEATED`, `ITEM_DATE_AFTER_OPENING`,
-     `ACCOUNT_UNKNOWN`, `PARTY_UNKNOWN`, `PARTY_AMBIGUOUS`, and
+     `ACCOUNT_UNKNOWN`, `PARTY_UNKNOWN`, `PARTY_AMBIGUOUS`, `PARTY_INACTIVE`, and
      `TRIAL_BALANCE_EMPTY` when the Opening Balance would have no line.
    - **Procedures** (`import` router; grant
      `{ account: create, party: create, item: create, openingBalance: post }`,
@@ -1122,10 +1122,10 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `YYYYMMDD` dates. Aliases are not masters.
    - Groups: a custom group maps through its reserved ancestor. Bank
      Accounts → `Bank Accounts`; Cash-in-hand → `Cash`; Current Assets,
-     Deposits (Asset), Loans & Advances (Asset), Stock-in-hand → `Current
-Assets`; Fixed Assets, Investments, Misc. Expenses (ASSET) → Assets;
-     Current Liabilities, Duties & Taxes, Provisions → `Current
-Liabilities`; Loans (Liability), Secured Loans, Unsecured Loans, Bank
+     Deposits (Asset), Loans & Advances (Asset), Stock-in-hand →
+     `Current Assets`; Fixed Assets, Investments, Misc. Expenses (ASSET) →
+     Assets; Current Liabilities, Duties & Taxes, Provisions →
+     `Current Liabilities`; Loans (Liability), Secured Loans, Unsecured Loans, Bank
      OD A/c → Liabilities; Capital Account, Reserves & Surplus and the
      `Profit & Loss A/c` ledger → Equity; Sales Accounts, Direct and
      Indirect Incomes → Income; Purchase Accounts, Direct and Indirect

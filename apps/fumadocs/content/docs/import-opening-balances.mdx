@@ -79,9 +79,9 @@ This sheet holds the instructions rather than records to import.
 
 ### Opening
 
-| Column       | Required                                             | Accepted values                                      | Example      |
-| ------------ | ---------------------------------------------------- | ---------------------------------------------------- | ------------ |
-| Opening date | When **Trial balance** or **Opening items** has rows | One date, not in the future; enter only one data row | `2026-03-31` |
+| Column       | Required                                              | Accepted values                                      | Example      |
+| ------------ | ----------------------------------------------------- | ---------------------------------------------------- | ------------ |
+| Opening date | When **Trial balance** or **Opening items** have rows | One date, not in the future; enter only one data row | `2026-03-31` |
 
 ### Accounts
 
@@ -103,7 +103,7 @@ Only include parties you need to create.
 | Roles      | Yes                      | One or more of `customer`, `vendor`, `tenant`, `donor`, `employee`, `government`, separated by commas | `customer,vendor`                     |
 | GSTIN      | No                       | A valid GSTIN; fills the state code and PAN                                                           | Leave blank for an unregistered party |
 | PAN        | No                       | A valid PAN; if GSTIN is supplied, must match it                                                      | `ABCDE1234F`                          |
-| State code | Unless supplied by GSTIN | Two-digit GST state code; keep any leading zero                                                       | `27` for Maharashtra                  |
+| State code | Unless supplied by GSTIN | Two-digit GST state code; `7` reads as `07`                                                           | `27` for Maharashtra                  |
 | Address    | No                       | Address text                                                                                          | `12 Market Road`                      |
 | City       | No                       | City name                                                                                             | `Pune`                                |
 | PIN code   | No                       | A valid six-digit Indian PIN code                                                                     | `411001`                              |

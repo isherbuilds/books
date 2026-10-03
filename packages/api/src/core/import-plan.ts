@@ -153,7 +153,7 @@ export async function validateImport(
   if (hasOpening && workbook.openingDate === null && !errors.some((row) => row.sheet === "Opening"))
     error("Opening", null, "Opening date", "OPENING_DATE_REQUIRED", "Enter the opening date.");
 
-  if (workbook.openingDate !== null && workbook.openingDate > today)
+  if (hasOpening && workbook.openingDate !== null && workbook.openingDate > today)
     error(
       "Opening",
       2,
@@ -293,7 +293,12 @@ export async function validateImport(
     referencedNames.length === 0 && incomingGstins.length === 0
       ? []
       : await tx
-          .select({ id: parties.id, normalizedName: parties.normalizedName, gstin: parties.gstin })
+          .select({
+            id: parties.id,
+            normalizedName: parties.normalizedName,
+            gstin: parties.gstin,
+            active: parties.active,
+          })
           .from(parties)
           .where(
             and(
@@ -314,6 +319,9 @@ export async function validateImport(
     partiesByName.set(key, [...(partiesByName.get(key) ?? []), id]);
 
   for (const party of orgParties) addParty(party.normalizedName, party.id);
+
+  // Receipts and Payments refuse an inactive party, so its items could never settle.
+  const inactive = new Set(orgParties.flatMap((party) => (party.active ? [] : [party.id])));
 
   const partyNames = new Set(partiesByName.keys());
   const gstins = new Set(orgParties.flatMap((party) => (party.gstin ? [party.gstin] : [])));
@@ -537,6 +545,17 @@ export async function validateImport(
         found.length === 0
           ? `No party is named ${row.party}.`
           : `${found.length} parties are named ${row.party}: rename one first.`,
+      );
+      continue;
+    }
+
+    if (inactive.has(found[0]!)) {
+      error(
+        "Opening items",
+        row.row,
+        "Party",
+        "PARTY_INACTIVE",
+        `${row.party} is inactive: mark it active first.`,
       );
       continue;
     }

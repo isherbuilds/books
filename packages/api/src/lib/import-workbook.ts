@@ -216,12 +216,9 @@ class SheetReader {
       const scaled = value * 100;
       const paise = Math.round(scaled);
 
-      // A double carries about 15 digits, so the allowed noise grows with the amount.
-      if (
-        value >= 0 &&
-        Number.isSafeInteger(paise) &&
-        Math.abs(scaled - paise) < Math.max(1e-6, scaled * 1e-14)
-      )
+      // A third decimal is at least 0.1 paise off, and float noise stays under 0.01
+      // paise below thousands of crores; a larger amount is refused, never rounded.
+      if (value >= 0 && Number.isSafeInteger(paise) && Math.abs(scaled - paise) < 0.01)
         return BigInt(paise);
     } else if (typeof value === "string" && NON_NEGATIVE_MONEY_PATTERN.test(value.trim())) {
       return parseMoney(value.trim());
@@ -373,7 +370,8 @@ export async function readImportWorkbook(
     const fields = {
       gstin: reader.text("Parties", row, "GSTIN") ?? undefined,
       pan: reader.text("Parties", row, "PAN") ?? undefined,
-      stateCode: reader.text("Parties", row, "State code") ?? undefined,
+      // Excel stores a typed 07 as the number 7; no state code has one digit.
+      stateCode: reader.text("Parties", row, "State code")?.padStart(2, "0") ?? undefined,
       address: reader.text("Parties", row, "Address") ?? undefined,
       city: reader.text("Parties", row, "City") ?? undefined,
       pinCode: reader.text("Parties", row, "PIN code") ?? undefined,

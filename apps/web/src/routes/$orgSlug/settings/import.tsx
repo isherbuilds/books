@@ -30,7 +30,11 @@ import { requireOrgPermission } from "@/lib/route-permission";
 import { SettingsTabs } from "./route";
 
 type ImportResult =
-  | { kind: "checked"; result: Awaited<ReturnType<AppRouterClient["import"]["check"]>> }
+  | {
+      kind: "checked";
+      file: File;
+      result: Awaited<ReturnType<AppRouterClient["import"]["check"]>>;
+    }
   | { kind: "imported"; result: Awaited<ReturnType<AppRouterClient["import"]["commit"]>> };
 
 export const Route = createFileRoute("/$orgSlug/settings/import")({
@@ -61,14 +65,18 @@ function ImportRoute() {
   });
 
   const check = useMutation({
-    mutationFn: (chosen: File) => orpc.import.check.call({ orgSlug, file: chosen }),
+    mutationFn: async (chosen: File) => {
+      const copy = await readWorkbook(chosen);
+
+      return { file: copy, result: await orpc.import.check.call({ orgSlug, file: copy }) };
+    },
     onMutate: () => setResult(null),
-    onSuccess: (checked) => setResult({ kind: "checked", result: checked }),
+    onSuccess: (checked) => setResult({ kind: "checked", ...checked }),
     onError: (error) => toast.error(errorMessage(error, "Could not check the workbook")),
   });
 
   const commit = useMutation({
-    mutationFn: (chosen: File) => orpc.import.commit.call({ orgSlug, file: chosen }),
+    mutationFn: (checked: File) => orpc.import.commit.call({ orgSlug, file: checked }),
     onMutate: () => setResult(null),
     onSuccess: async (imported) => {
       setResult({ kind: "imported", result: imported });
@@ -86,8 +94,9 @@ function ImportRoute() {
 
   const pending = template.isPending || check.isPending || commit.isPending;
 
-  // Choosing or clearing a file clears the result, so a result is always this file's.
-  const canImport = result?.kind === "checked" && result.result.errorCount === 0;
+  // Choosing or clearing a file clears the result, and the file input is disabled while
+  // Check reads and sends it. Import sends the bytes Check validated.
+  const ready = result?.kind === "checked" && result.result.errorCount === 0 ? result.file : null;
   const errors = result?.kind === "checked" && result.result.errorCount > 0 ? result.result : null;
   const summary = errors ? null : result?.result.summary;
 
@@ -127,21 +136,21 @@ function ImportRoute() {
             <Button
               variant="outline"
               disabled={pending || !file}
-              onClick={() => file && upload(file, (copy) => check.mutate(copy))}
+              onClick={() => file && check.mutate(file)}
             >
               {check.isPending ? "Checking…" : "Check"}
             </Button>
             <Button
-              disabled={pending || !canImport}
+              disabled={pending || !ready}
               onClick={() => {
-                if (!file || !canImport) return;
+                if (!ready) return;
 
                 confirm({
                   title: "Import workbook?",
                   description:
                     "This creates the workbook’s masters and posts any opening balances. Imported masters cannot be deleted.",
                   confirmLabel: "Import workbook",
-                  run: () => upload(file, (copy) => commit.mutate(copy)),
+                  run: () => commit.mutate(ready),
                 });
               }}
             >
@@ -246,19 +255,16 @@ function ImportRoute() {
 }
 
 /**
- * Reads the chosen file into memory before sending it. Above the server's body limit
- * an upload fails before oRPC can explain why, and Chrome refuses a file edited on
- * disk after it was chosen; both read as plain messages here instead.
+ * Reads the chosen file into memory, so Import sends the bytes Check validated. Above
+ * the server's body limit an upload fails before oRPC can explain why, and Chrome
+ * refuses a file edited on disk after it was chosen; both read as plain messages here.
  */
-function upload(file: File, send: (copy: File) => void): void {
-  if (file.size > MAX_IMPORT_FILE_BYTES) {
-    toast.error(FILE_TOO_LARGE_MESSAGE);
+async function readWorkbook(file: File): Promise<File> {
+  if (file.size > MAX_IMPORT_FILE_BYTES) throw new Error(FILE_TOO_LARGE_MESSAGE);
 
-    return;
-  }
+  const bytes = await file.arrayBuffer().catch(() => {
+    throw new Error("The workbook changed after you chose it. Choose it again.");
+  });
 
-  file.arrayBuffer().then(
-    (bytes) => send(new File([bytes], file.name, { type: file.type })),
-    () => toast.error("The workbook changed after you chose it. Choose it again."),
-  );
+  return new File([bytes], file.name, { type: file.type });
 }

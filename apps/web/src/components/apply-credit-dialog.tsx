@@ -1,4 +1,3 @@
-import type { AppPermission } from "@accly/auth/access";
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { openingItemLabel } from "@accly/api/lib/opening-item-label";
 import { AmountInput } from "@/components/amount-input";
@@ -76,13 +75,6 @@ const creditLabel = (type: Credit["type"]) =>
           : type === "journal"
             ? "Journal"
             : "Receipt";
-
-/** What a reader needs to open this dialog: apply, and see the party's credits. */
-export const APPLY_CREDIT_GRANT: AppPermission = {
-  allocation: ["apply"],
-  party: ["read"],
-  note: ["read"],
-};
 
 const applyCreditSchema = z.object({
   amount: positiveAmount,

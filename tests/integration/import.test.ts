@@ -437,10 +437,22 @@ test("import reports master errors by cell and rejects the whole workbook withou
 
   const { api } = fixture;
   const claim = { orgSlug: fixture.organization.slug };
-  await Promise.all([
+
+  const [, mehta] = await Promise.all([
     api.party.create({ ...claim, name: "Priya", roles: ["customer"], stateCode: "27" }),
     api.party.create({ ...claim, name: "Mehta Traders", roles: ["vendor"], stateCode: "27" }),
   ]);
+
+  await api.party.update({
+    ...claim,
+    partyId: mehta.id,
+    name: mehta.name,
+    roles: mehta.roles,
+    stateCode: mehta.stateCode,
+    active: false,
+    updatedAt: mehta.updatedAt.toISOString(),
+  });
+
   const before = await counts(fixture.organization.id);
 
   const file = await workbook(cutoverTrialBalance, {
@@ -462,6 +474,12 @@ test("import reports master errors by cell and rejects the whole workbook withou
         row: 2,
         column: "Income account",
         code: "ACCOUNT_UNKNOWN",
+      }),
+      expect.objectContaining({
+        sheet: "Opening items",
+        row: 4,
+        column: "Party",
+        code: "PARTY_INACTIVE",
       }),
     ]),
   );

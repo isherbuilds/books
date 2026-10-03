@@ -1,5 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
   DropdownMenuGroup,
@@ -23,7 +24,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AllocationsSection } from "@/components/allocations-section";
-import { ApplyCreditDialog, APPLY_CREDIT_GRANT } from "@/components/apply-credit-dialog";
+import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
 import { BillTdsRows } from "@/components/bill-form";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";

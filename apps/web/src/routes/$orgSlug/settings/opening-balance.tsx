@@ -2,6 +2,7 @@ import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
 import { openingItemLabel } from "@accly/api/lib/opening-item-label";
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +11,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ApplyCreditDialog, APPLY_CREDIT_GRANT } from "@/components/apply-credit-dialog";
+import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DATA_TABLE_FEATURES, DataTable } from "@/components/data-table/data-table";
 import { DetailRow } from "@/components/detail-row";
