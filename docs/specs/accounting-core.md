@@ -2,7 +2,8 @@
 
 Status: slices 1–3, 4a, 4b-i, 4b-ii, 5 (Journal, Opening Balance, locks),
 6 (reports, 6a–6d), 8 (chart of accounts) and 9 (party Journals, 9a and 9b)
-are implemented. Slice 7 (import, 7a–7c) is open and specified;
+are implemented. Slice 7 (import, 7a–7d) is open and specified; 7a, 7b and
+7c are implemented;
 remaining runtime and CA acceptance work is in the work registry.
 Authority: the founder's decisions. `docs/research` and Git keep the evidence
 behind them.
@@ -437,7 +438,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
      page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
      next page passes the last row's id as `cursor`, so no row is out of reach.
-     The optional credit `type` and the number search `q` filter before the page;
+     The optional credit `type` and the search `q` (number, reference or
+     narration) filter before the page;
      reading credits requires the Note read grant. They replace `invoice.openInvoices` and
      `receipt.unapplied`. `allocation.apply` takes
      `{ sourceDocumentId, targetDocumentId, amount }`.
@@ -788,7 +790,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
        trend gap-fills in SQL with `generate_series`
        (`a716b6c:packages/api/src/routers/dashboard.ts:96-110`).
 
-7. **Import.** Open, in three parts. One XLSX workbook creates masters and,
+7. **Import.** Open, in four parts. One XLSX workbook creates masters and,
    optionally, the Opening Balance with the party opening items that make up
    its control balances, all or nothing. It is the only path for Party opening
    balances: there is no per-Party opening field or form, before or with this
@@ -808,7 +810,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      the cutover), `dueDate` (claims only, optional), `reference` (the legacy
      number, required, 1–40) and `totalPaise` above zero. A number series is
      keyed by document type, so claims number from the fixed `OC` prefix and
-     credits from the fixed `OA` prefix, in the legacy date's financial year
+     credits from the fixed `OA` prefix, in the cutover's financial year
      (`OC25-26/4`, `OA25-26/1`). It has no lines or print snapshot, `affectsTax` false and no
      journal entry. It writes one party ledger `post` line dated the cutover
      (the Opening Balance `documentDate`), signed as the 4b-ii table:
@@ -857,8 +859,12 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      bill", "Opening credit" by side and type, unlinked), the party
      Transactions tab for a reader of `openingBalance`, the Receipt and
      Payment open-item grids, Apply credit, and Settings > Opening balance,
-     where `openingBalance.get` gains `items` of
+     where `openingBalance.items({ cursor?, limit })` pages the items oldest
+     legacy date first (keyset on date and id, 25 by default, with `hasMore`) as
      `{ id, type, number, partyName, exposureSide, reference, documentDate, dueDate, totalPaise, balancePaise }`.
+     `openingBalance.get` stays the header and lines. With 5,000 items beside
+     105,000 documents, one page reads at p95 24 ms and 7 KiB; the unpaged
+     list was p95 403 ms and 1.5 MB (2026-10-02, local, test database).
      Invoice and Bill lists, their open and overdue filters, and the GST and
      TDS registers are unchanged.
    - **Workbook.** One `.xlsx` of at most 5 MiB: `readImportWorkbook` checks
@@ -878,21 +884,25 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\* | Unique by Party, Side, Type and Reference (trimmed, case-insensitive); Due date on claims only, not before Date |
 
      A cell is text, a number or a date. `readImportWorkbook` reads each
-     cell's `type` from `sheet.cells` (a `formula`, `error` or `richText` cell
-     is `CELL_INVALID`) and its value from `sheet.rows`. A money cell is text
+     cell's `type` and value from `sheet.cells` in sparse mode (a `formula`,
+     `error` or `richText` cell is `CELL_INVALID`). A money cell is text
      matching the `money` pattern, or a number: a negative number is
-     `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within 1e-6 of an
+     `AMOUNT_INVALID`; otherwise it is scaled by 100 and, within float noise (1e-6, or 1e-14 of
+     the amount when larger) of an
      integer, is that many paise, else `AMOUNT_INVALID` ("two decimal places
      at most"; Excel stores pasted sums as `1234.5600000000002`). Text with a
      thousands separator is refused. A date cell arrives as a `Date` at UTC
      midnight and converts with `toISOString().slice(0, 10)`; a date may also be
      `YYYY-MM-DD` text. Text cells are trimmed. A row with every cell blank is
      skipped. Each header names a template column; an unknown, missing required
-     or repeated header is refused, as is an unknown sheet. A sheet holds
-     at most 5,000 data rows (`MASTER_LIST_LIMIT`): `readXlsx` reads with
-     `maxRows` of 5,002 (header plus one row over), and a 5,001st data row is
-     `SHEET_TOO_LARGE`. `maxRows` alone skips the rest silently, so nothing
-     is ever truncated.
+     or repeated header is refused, as is a nonblank cell below a blank header
+     or an unknown or repeated sheet (`SHEET_REPEATED`). A sheet holds at most
+     5,000 data rows (`MASTER_LIST_LIMIT`); a populated row past
+     Excel row 5,001 is `SHEET_TOO_LARGE`. Read the complete sheet, without
+     `maxRows`: blank XML rows count toward that parser limit and can hide
+     later balances. Sparse parsing never builds a dense grid. A workbook with
+     more than 20 MiB per decompressed ZIP entry is `WORKBOOK_INVALID`; that
+     bound also caps a sheet's stored cells. Nothing is truncated.
 
    - **Opening Balance accounts.** Trial balance rows resolve through
      `journalAccounts` with `controls` false, plus the two control rows: a GST
@@ -926,7 +936,11 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
    - **Errors.** `{ sheet, row, column, code, message }`, with the Excel row
      number, or `row` and `column` null for a workbook or balance error,
      sorted by sheet order and row; the first 500 are returned with the total
-     count.
+     count. Codes beyond those named above: `CELL_REQUIRED`, `DATE_INVALID`,
+     `HEADER_UNKNOWN`, `HEADER_MISSING`, `HEADER_REPEATED`, `SHEET_UNKNOWN`,
+     `ROW_EXTRA`, `DUE_DATE_INVALID`, `ITEM_REPEATED`, `ITEM_DATE_AFTER_OPENING`,
+     `ACCOUNT_UNKNOWN`, `PARTY_UNKNOWN`, `PARTY_AMBIGUOUS`, and
+     `TRIAL_BALANCE_EMPTY` when the Opening Balance would have no line.
    - **Procedures** (`import` router; grant
      `{ account: create, party: create, item: create, openingBalance: post }`,
      which owner and accountant hold). `import.template()` returns the empty
@@ -937,26 +951,46 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      reads settings `FOR UPDATE` (as the Opening Balance post does), runs the
      same validation inside one transaction, then writes accounts, parties,
      items, the Opening Balance with its control legs and the opening items,
-     in that order. Any error is `BAD_REQUEST` `IMPORT_INVALID` with
-     `data: { errors, errorCount }` and rolls everything back; a posted
+     in that order. Validation assigns each new master its id, so later rows
+     reference it before it is written. Any error is `BAD_REQUEST`
+     `IMPORT_INVALID` and rolls everything back; `check` lists the errors. A posted
      Opening Balance with a non-empty trial balance or items sheet is
      `CONFLICT`. `summary` is
      `{ accounts, parties, items, trialBalanceRows, openingClaims, openingCredits, debitPaise, creditPaise, receivablesPaise, payablesPaise }`.
      One audit row `import.commit` carries the summary, never row data.
+     HTTP `check` and `commit` allow the 5 MiB file plus 64 KiB of multipart
+     overhead; all other procedure bodies keep their 1 MiB limit.
      `import.template`, `import.check` and `import.commit` stay out of oRPC
      batching, as exports do (`apps/web/src/lib/orpc.ts`): a batch cannot
      carry a File either way.
-   - **Shared writers.** `createParty(tx, orgId, fields)` and
-     `createAccount(tx, orgId, input)` move out of their routers, which call
-     them; items reuse `itemValues`. Each keeps its advisory locks, code
-     generation and error codes.
+   - **Shared writers** (`packages/api/src/core/masters.ts`).
+     `createParties(tx, orgId, fields[], allowNamesake)` and
+     `createAccounts(tx, orgId, inputs[])` serve both the routers and import;
+     Items resolve account ids and tax codes once through `itemValues`.
+     Inserts use batches of 1,000. `claimParties` serializes an Organization's
+     party writers with one advisory lock, then checks name and GSTIN
+     collisions; one lock keeps a 5,000-party import inside PostgreSQL's shared
+     lock table.
+     Account code allocation and Item eligibility have one shared policy owner.
+     The import passes `allowNamesake` false and maps created ids by name,
+     without relying on `RETURNING` row order.
+     The workbook reader and template stay in `lib/import-workbook.ts`;
+     `core/import-plan.ts` owns database validation and the write plan.
+     Validation fetches only referenced Party names/GSTINs and incoming Item
+     names; empty reference sets skip those reads.
 
    **7a. Opening items, control legs and settlement** (riskiest: the ledger
-   invariant).
+   invariant). Implemented. Each item type's series, in the cutover's financial
+   year, reserves its numbers with one `reserveNumbers` statement, and the items
+   insert already posted, in batches of 1,000, as do document lines, so a full
+   trial balance stays below PostgreSQL's parameter limit. Opening items store
+   the financial year used by their number series. Settlement writes
+   invalidate the opening-item balances; opening cancellation invalidates party
+   reads as well as account balances and reports.
    - Scope: the two document types (schema, `documents_type_check`, the
      party and side check, the `OC` and `OA` series), their posting and cancellation,
      the control legs, the settlement and picker rules, the Payment
-     `documentId` rename, statement labels, `openingBalance.get` items and
+     `documentId` rename, statement labels, `openingBalance.items` and
      their list on Settings > Opening balance, and `import.commit` reading
      the `Read me`, `Opening`, `Trial balance` and `Opening items` sheets.
    - Acceptance, on a proprietorship Organization with Parties Priya and
@@ -1007,26 +1041,28 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      `packages/api/src/routers/party.ts` (labels, Transactions),
      `packages/api/src/routers/index.ts`, `apps/web/src/lib/orpc.ts`,
      `tests/integration/tenancy.test.ts`.
-   - Interfaces: `postOpening(tx, scope, { documentDate, lines, items })`
+   - Interfaces: `postOpening(tx, scope, settings, { documentDate, lines, items })`
      in `core/opening-items.ts` posts the Opening Balance with control legs
      and the items; `items` are
      `{ partyId, side, type: "openingClaim" | "openingCredit", reference, documentDate, dueDate, amountPaise }`.
      Items do not go through `postDocument`, which requires lines, records an
      entry and dates the ledger line by `documentDate`. `postOpening` posts
      the Opening Balance through `postEntryLines` on the import-only path,
-     then for each item inserts a `documents` row as `draft` with `partyId`,
-     `exposureSide`, `reference`, `dueDate` and `totalPaise`, writes its one
+     then reserves each series' numbers in one statement and, for each item,
+     inserts a posted, numbered `documents` row with `partyId`,
+     `exposureSide`, `reference`, `dueDate` and `totalPaise`, and its one
      `post` party ledger line with `entryDate` the Opening Balance
-     `documentDate` (the row `settlementPaise` reads), and calls
-     `postNumbered`. The period lock is checked once, for the Opening Balance
+     `documentDate` (the row `settlementPaise` reads). The period lock is checked once, for the Opening Balance
      on the cutover date. `openingBalance.cancel` checks active allocations on
      the items' ids before `reverseDocument` changes any state.
-     `readImportWorkbook(bytes)` returns parsed sheets and cell errors;
-     `validateImport(tx | db, orgId, workbook)` returns
+     `readImportWorkbook(file)` returns parsed sheets and cell errors;
+     `validateImport(tx | db, orgId, settings, read)` takes the reader's
+     result, refuses opening data beside a posted Opening Balance, and returns
      `{ errors, errorCount, summary, plan }`, and `commit` writes `plan`.
      Picker rows gain `reference: string | null`.
 
-   **7b. Masters, template and check.**
+   **7b. Masters, template and check.** Implemented. Validation assigns each
+   new master its id, so a plan references existing and new masters by id.
    - Scope: the `Accounts`, `Parties` and `Items` sheets with the
      resolution rules; `import.template` and `import.check`; the shared
      writers extracted and used by their routers.
@@ -1046,7 +1082,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      and the new `packages/api/src/core/masters.ts` for `createParty` and
      `createAccount`.
 
-   **7c. Import page.**
+   **7c. Import page.** Implemented. The Opening Balance page lists the items;
+   an open opening claim's row offers Apply credit (the Invoice dialog), so an
+   opening credit can settle it without a later document.
    - Settings > Import (`routes/$orgSlug/settings/import.tsx`, the owner
      client-patterns names): Download template; choose a file; Check lists
      the errors (Sheet, Row, Column, Message, with the total when above 500)
@@ -1061,6 +1099,79 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      390 px in both themes, including the error table.
    - Depends on: 7b. Owns: `apps/web/src/routes/$orgSlug/settings/import.tsx`.
      Touches: the settings navigation and `apps/web/src/lib/domain-invalidation.ts`.
+
+   **7d. Tally source.** Gated: not built until the release gate below is
+   met. Source chosen 2026-10-02: TallyPrime first, Zoho Books waits for a
+   pilot on it
+   ([evidence](../research/tally-import-source-2026-10-02.md)). Most Indian
+   books live in Tally, and one native file carries what the workbook needs:
+   Alt+E > Masters > All Masters, XML, Default (All Languages), with
+   "Export closing balance as opening balance" at the cutover date. Zoho
+   needs several module CSVs plus AR ageing, and no export of historical
+   payables or unmatched credits was verified.
+   - Shape: `import.check` and `import.commit` take either the template
+     `.xlsx` or a Tally `.xml` (5 MiB cap as the workbook) plus, for XML,
+     `openingDate`, since the export does not carry its closing date.
+     `readTallyMasters(bytes, openingDate)` returns the parsed workbook
+     `readImportWorkbook` returns, so `validateImport`, the plan and the
+     commit are unchanged. Its own errors use the workbook error shape with
+     `sheet` the master kind (`Groups`, `Ledgers`, `Stock items`), `row`
+     null and the message naming the Tally master.
+   - Reading: BOM-detected UTF-8 or UTF-16 (LE or BE); `LEDGER`, `GROUP`
+     and `STOCKITEM` under any `TALLYMESSAGE`; amounts negative for debit;
+     `YYYYMMDD` dates. Aliases are not masters.
+   - Groups: a custom group maps through its reserved ancestor. Bank
+     Accounts → `Bank Accounts`; Cash-in-hand → `Cash`; Current Assets,
+     Deposits (Asset), Loans & Advances (Asset), Stock-in-hand → `Current
+Assets`; Fixed Assets, Investments, Misc. Expenses (ASSET) → Assets;
+     Current Liabilities, Duties & Taxes, Provisions → `Current
+Liabilities`; Loans (Liability), Secured Loans, Unsecured Loans, Bank
+     OD A/c → Liabilities; Capital Account, Reserves & Surplus and the
+     `Profit & Loss A/c` ledger → Equity; Sales Accounts, Direct and
+     Indirect Incomes → Income; Purchase Accounts, Direct and Indirect
+     Expenses → Expenses. Branch/Divisions and Suspense A/c are
+     `TALLY_GROUP_UNSUPPORTED`: the CA regroups them in Tally first.
+   - Ledgers: one under Sundry Debtors is a `Parties` row with role
+     customer, under Sundry Creditors supplier, with `PARTYGSTIN` (else the
+     last `LEDGSTREGDETAILS.LIST` GSTIN), `INCOMETAXNUMBER`, `LEDSTATENAME`
+     as its State code, `ADDRESS.LIST` lines joined, `PINCODE`, `EMAIL` and
+     `LEDGERMOBILE` else `LEDGERPHONE`. Its `BILLALLOCATIONS.LIST` rows are
+     opening items: under debtors a debit is a receivable claim and a credit
+     a receivable credit; under creditors a credit is a payable claim and a
+     debit a payable credit. `NAME` is the Reference, `BILLDATE` the Date,
+     and a `BILLCREDITPERIOD` of whole days gives the Due date. A party
+     whose allocations do not sum to its balance (bill-wise off, or an On
+     Account residual) is `TALLY_BILLS_MISMATCH`. The party balances become
+     the `receivables` and `payables` trial balance rows. Every other
+     ledger is an `Accounts` row under its mapped parent plus a `Trial
+balance` row for a non-zero balance; a name matching an existing
+     account maps to it instead. A non-zero income or expense balance is
+     `TALLY_MID_YEAR`: 7d supports a financial-year-boundary cutover until a
+     mid-year export is checked.
+   - Stock items: an `Items` row with HSN, the GST rate as of the opening
+     date as its Tax code, unit price zero (a Tally valuation rate is not a
+     selling price), and the Income account the only Sales Accounts ledger,
+     else `ITEM_ACCOUNT_REQUIRED`. Opening stock value stays a trial
+     balance figure; quantities are not imported.
+   - Refused: a foreign-currency ledger (`TALLY_CURRENCY_UNSUPPORTED`).
+     Cost centres are not carried, and the summary says so.
+   - Release gate: an anonymized native export from a pilot's Tally at a
+     year boundary, including a part-paid invoice, a supplier bill, an
+     advance, an On Account residual and a Unicode name, checked against
+     that company's trial balance and outstanding reports as at the cutover.
+     The mapping above follows Tally's documentation and a third-party
+     loader's schema; whether closing-as-opening keeps part-paid residuals,
+     due dates and advance flags is unverified, and the fixture confirms or
+     corrects every rule before code is written.
+   - Acceptance: a Tally XML fixture of the 7a figures (Priya under Sundry
+     Debtors with `INV-88` and `ADV-3`, Mehta Traders under Sundry
+     Creditors with `B-17`, Cash and Capital ledgers) checks to the same
+     summary as the 7a workbook and commits the same balances; the same
+     file with `ADV-3` removed is `TALLY_BILLS_MISMATCH` and writes nothing.
+   - Depends on: 7b, and 7c for the page's opening date. Owns:
+     `packages/api/src/lib/tally-masters.ts` (new). Touches:
+     `packages/api/src/routers/import.ts`, the import page and
+     `tests/integration/import.test.ts`.
 
 8. **Chart of accounts.** Implemented. Owner and accountant manage posting leaves across
    Assets, Liabilities, Equity, Income and Expenses. Templates establish the

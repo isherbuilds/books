@@ -1,4 +1,5 @@
 import { ZERO_MONEY, enteredPaise, isPositiveMoney, parseMoney } from "@accly/api/core/money";
+import { openingItemLabel } from "@accly/api/lib/opening-item-label";
 import {
   Form,
   FormControl,
@@ -200,7 +201,11 @@ export function PaymentForm({
     exposureSide === "payable"
       ? (items.data?.pages
           .flatMap((page) => page.rows)
-          .map((row) => ({ ...row, label: "Bill", openPaise: row.outstandingPaise })) ?? [])
+          .map((row) => ({
+            ...row,
+            label: row.type === "openingClaim" ? openingItemLabel(row.type, "payable") : "Bill",
+            openPaise: row.outstandingPaise,
+          })) ?? [])
       : (credits.data?.pages
           .flatMap((page) => page.rows)
           .map((row) => ({
@@ -360,7 +365,7 @@ export function PaymentForm({
       settlementKind: "against",
       exposureSide: "payable",
       partyId: values.partyId,
-      allocations: selected.map(({ id, amount }) => ({ billId: id, amount })),
+      allocations: selected.map(({ id, amount }) => ({ documentId: id, amount })),
     };
 
     if (writeOffs.length) payableInput.writeOffs = writeOffs;

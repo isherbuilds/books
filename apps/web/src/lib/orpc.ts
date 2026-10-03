@@ -46,8 +46,8 @@ const getORPCClient = createIsomorphicFn()
       plugins: [
         new BatchLinkPlugin({
           groups: [{ condition: () => true, context: {} }],
-          // A batch response cannot carry a File, so the XLSX exports travel alone.
-          exclude: ({ path }) => path[0] === "export",
+          // A batch cannot carry a File either way, so XLSX exports and imports travel alone.
+          exclude: ({ path }) => path[0] === "export" || path[0] === "import",
         }),
       ],
     });
@@ -59,8 +59,8 @@ const client = getORPCClient();
 
 export const orpc = createTanstackQueryUtils(client);
 
-// Newest-first keyset paging for every register list: the next cursor is the last
-// row's id while the server reports more.
+// Keyset paging for every list and picker: the next cursor is the last row's id while
+// the server reports more.
 export const keysetPaging = {
   initialPageParam: undefined,
   getNextPageParam: (last: { hasMore: boolean; rows: { id: string }[] }) =>

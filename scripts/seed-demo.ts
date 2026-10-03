@@ -592,7 +592,7 @@ export async function seedDemo(): Promise<void> {
       documentDate: daysFromToday(0),
       reference: `${MARK}-SUPPLIER-PAY`,
       amount: "10000.00",
-      allocations: [{ billId: materialsBill, amount: "10000.00" }],
+      allocations: [{ documentId: materialsBill, amount: "10000.00" }],
     }),
   );
   await ensureDocument(orgId, "payment", `${MARK}-SUPPLIER-ADVANCE`, () =>

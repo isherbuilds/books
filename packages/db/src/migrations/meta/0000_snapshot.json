@@ -1,5 +1,5 @@
 {
-  "id": "2aa9e6ad-bff7-4f73-b3ff-e6cf06419e56",
+  "id": "e67d472c-f839-44be-9927-d00fdc6acb52",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2761,7 +2761,11 @@
       "checkConstraints": {
         "documents_type_check": {
           "name": "documents_type_check",
-          "value": "\"documents\".\"type\" in ('receipt', 'payment', 'invoice', 'bill', 'creditNote', 'debitNote', 'journal', 'openingBalance')"
+          "value": "\"documents\".\"type\" in ('receipt', 'payment', 'invoice', 'bill', 'creditNote', 'debitNote', 'journal', 'openingBalance', 'openingClaim', 'openingCredit')"
+        },
+        "documents_opening_item_check": {
+          "name": "documents_opening_item_check",
+          "value": "\"documents\".\"type\" not in ('openingClaim', 'openingCredit') or (\"documents\".\"party_id\" is not null and \"documents\".\"exposure_side\" is not null)"
         },
         "documents_state_check": {
           "name": "documents_state_check",

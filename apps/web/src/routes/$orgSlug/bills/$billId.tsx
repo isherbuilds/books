@@ -23,7 +23,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AllocationsSection } from "@/components/allocations-section";
-import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
+import { ApplyCreditDialog, APPLY_CREDIT_GRANT } from "@/components/apply-credit-dialog";
 import { BillTdsRows } from "@/components/bill-form";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
@@ -70,7 +70,7 @@ function BillSheetRoute() {
     useCan(orgSlug, { bill: ["cancel"] }) && bill.state === "posted" && allocationsReversed;
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
+    useCan(orgSlug, APPLY_CREDIT_GRANT) &&
     bill.state === "posted" &&
     bill.partyId !== null &&
     isPositiveMoney(bill.outstandingPaise);

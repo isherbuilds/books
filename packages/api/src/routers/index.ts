@@ -6,6 +6,7 @@ import { auditRouter } from "./audit";
 import { billRouter } from "./bill";
 import { exportRouter } from "./export";
 import { fileRouter } from "./file";
+import { importRouter } from "./import";
 import { invoiceRouter } from "./invoice";
 import { itemRouter } from "./item";
 import { journalRouter } from "./journal";
@@ -28,6 +29,7 @@ export const appRouter = {
   bill: billRouter,
   export: exportRouter,
   file: fileRouter,
+  import: importRouter,
   invoice: invoiceRouter,
   item: itemRouter,
   journal: journalRouter,

@@ -62,8 +62,22 @@ Check UI items in the running app on desktop and mobile, in both themes.
   phone widths; the contrast test and production build pass. Check an authenticated
   console page in light and dark after the local migration records match this
   checkout and the web and API services start.
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slice 7
-  (import: 7a opening items first, then 7b–7c) is specified and open. Also
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 7a–7c
+  (opening items, workbook masters, Settings > Import) are implemented on
+  `feat/import-tally-opening-items`; `tests/integration/import.test.ts` and
+  `request-lifecycle.test.ts` cover their acceptance. Open for slice 7:
+  - Verification: a workbook edited on disk after it was chosen should toast
+    "Choose it again" on Check (Chrome refuses the stale file). Needs a real
+    file chooser; the oversized and normal upload paths passed in the app.
+  - The development database needs an explicitly approved reset for the
+    regenerated baseline.
+  - The import volume p95 on 100,000+ seeded rows; local statement counts are
+    diagnostics only. One local `import.commit` of 1,000 parties and 5,000
+    opening items took 1.6–7.2 s across three runs on a fresh test
+    organization (2026-10-02), so measure it before the pilot.
+  - 7d (TallyPrime XML) is gated on an anonymized real Tally export.
+
+  Also
   open: CA acceptance of every implemented slice, and the slice 2 posting p95
   on native PostgreSQL at `db:seed:volume`. Slices 1–6, 8 and 9 are
   implemented; their open runtime checks are listed below. Slice 6 is
@@ -96,6 +110,7 @@ ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
   allocation link at 1440 and 390 px in both themes (the local database
   needs a reset to match the migration baseline first), and
   `party.openItems` with Journal debits under "Settlement reads at volume".
+
 - **Virtualized lists and paged ledgers**: Verification. Every `DataTable`, the
   audit and files panels, the account ledger and the day book render through
   `useVirtualRows`; keyset lists load the next 25 rows as they scroll into view.

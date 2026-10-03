@@ -886,12 +886,18 @@ const GUARDED_CALLS = {
       ],
     }),
   "openingBalance.get": (api, claim) => api.openingBalance.get({ ...claim }),
+  "openingBalance.items": (api, claim) => api.openingBalance.items({ ...claim }),
   "openingBalance.cancel": (api, claim) =>
     api.openingBalance.cancel({
       ...claim,
       openingBalanceId: crypto.randomUUID(),
       reason: "Intrusion",
     }),
+  "import.commit": (api, claim) =>
+    api.import.commit({ ...claim, file: new File([], "intrusion.xlsx") }),
+  "import.check": (api, claim) =>
+    api.import.check({ ...claim, file: new File([], "intrusion.xlsx") }),
+  "import.template": (api, claim) => api.import.template({ ...claim }),
   "allocation.apply": (api, claim) =>
     api.allocation.apply({
       ...claim,

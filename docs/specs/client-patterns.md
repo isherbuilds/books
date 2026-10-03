@@ -186,8 +186,7 @@ are not adopted.
        `limit + 1` page, in one query
        (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The
        window reads every match before `LIMIT`; measure at pilot volume.
-5. **Remaining forms.** Payment, Bill and note forms are implemented; import
-   remains open.
+5. **Remaining forms.** Payment, Bill, note and import forms are implemented.
    - Acceptance: Journal, Opening Balance and lock/Lock Exception forms are
      implemented. `components/entry-lines.tsx` is shared by the Journal and
      Opening Balance forms. The routes are
@@ -204,8 +203,9 @@ are not adopted.
      section Link Field), Bill (lines with `itcEligible`, an optional TDS
      section, due date, and the Invoice settlement display and cancellation
      flow), and Credit and Debit Notes against a source Document are
-     implemented. Import remains open as accounting-core slice 7c: template
-     download, upload, row errors listed, nothing written on any error.
+     implemented. Import is accounting-core slice 7c (Settings > Import):
+     template download, Check before Import, row errors listed, nothing
+     written on any error.
      Payment offers Against only to roles that can read Bills and Notes; its
      Credit Note refund picker filters on the server before the page.
      Sheet-hosted document forms use `DocumentForm` with the four posting

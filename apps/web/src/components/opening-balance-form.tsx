@@ -114,8 +114,8 @@ export function OpeningBalanceForm({ orgSlug }: { orgSlug: string }) {
                   <Input {...field} required type="date" max={today} />
                 </FormControl>
                 <FormDescription>
-                  The day before your first entry here. Party balances (receivables, payables and
-                  advances) cannot go on this document, and Accly Books cannot record them yet.
+                  The day before your first entry here. Use Import for party balances (receivables,
+                  payables and advances).
                 </FormDescription>
                 <FormMessage />
               </FormItem>

@@ -1,38 +1,20 @@
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { ACCOUNT_TYPES, SUPPLY_CLASSES, type AccountType } from "@accly/db/schema/account-kinds";
+import { ACCOUNT_TYPES } from "@accly/db/schema/account-kinds";
 import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
-import { MONEY_KINDS } from "@accly/db/schema/money-kinds";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { accountCreateFields, accountNameTaken, createAccounts } from "../core/masters";
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
 import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
-import { uniqueViolationConstraint } from "../lib/db-errors";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { editToken, shortName } from "../lib/schemas";
-
-// Templates own code 3000 and 6800–6999.
-const ACCOUNT_CODE_RANGES: Record<AccountType, readonly [number, number]> = {
-  asset: [1200, 1999],
-  liability: [2000, 2999],
-  equity: [3001, 3999],
-  income: [5000, 5999],
-  expense: [6000, 6799],
-};
-
-function accountNameTaken(error: unknown): never {
-  if (uniqueViolationConstraint(error) === "accounts_org_active_name_idx") {
-    throw conflict("ACCOUNT_NAME_TAKEN", "An account with this name already exists.");
-  }
-
-  throw error;
-}
 
 export const accountRouter = {
   list: orgProcedure(
@@ -70,115 +52,21 @@ export const accountRouter = {
   }),
 
   // A new posting account, either at the root of its type or under an existing group.
-  create: orgProcedure(
-    { account: ["create"] },
-    orgInput.extend({
-      name: shortName.max(120),
-      supplyClass: z.enum(SUPPLY_CLASSES).optional(),
-      parent: z.union([
-        z.object({ type: z.enum(ACCOUNT_TYPES) }),
-        z.object({ accountId: z.uuid() }),
-      ]),
-    }),
-  ).handler(async ({ context, input }) => {
-    const { orgId } = context.scope;
+  create: orgProcedure({ account: ["create"] }, orgInput.extend(accountCreateFields)).handler(
+    async ({ context, input }) => {
+      const { orgId } = context.scope;
 
-    let parentId: string | null = null;
-    let type: AccountType;
-    let codeRange: readonly [number, number];
+      const { name, supplyClass, parent } = input;
 
-    if ("type" in input.parent) {
-      type = input.parent.type;
-      codeRange = ACCOUNT_CODE_RANGES[type];
-    } else {
-      const [parent] = await db
-        .select({
-          id: accounts.id,
-          code: accounts.code,
-          type: accounts.type,
-          systemKey: accounts.systemKey,
-          active: accounts.active,
-          isLeaf: sql<boolean>`${isLeaf(orgId)}`,
-        })
-        .from(accounts)
-        .where(and(eq(accounts.orgId, orgId), eq(accounts.id, input.parent.accountId)))
-        .limit(1);
-
-      if (!parent) throw new ORPCError("NOT_FOUND", { message: "Account not found." });
-
-      if (!parent.active || parent.isLeaf) {
-        throw badRequest("ACCOUNT_PARENT_INVALID", "Choose an active account group.");
-      }
-
-      parentId = parent.id;
-      type = parent.type;
-      codeRange = MONEY_KINDS.some((kind) => kind === parent.systemKey)
-        ? [Number(parent.code) + 1, Number(parent.code) + 99]
-        : ACCOUNT_CODE_RANGES[type];
-    }
-
-    if (type === "income" && input.supplyClass === undefined) {
-      throw badRequest("SUPPLY_CLASS_REQUIRED", "Income accounts require a GST supply class.");
-    }
-
-    if (type !== "income" && input.supplyClass !== undefined) {
-      throw badRequest(
-        "SUPPLY_CLASS_NOT_ALLOWED",
-        "Only income accounts may have a GST supply class.",
+      const [created] = await db.transaction((tx) =>
+        createAccounts(tx, orgId, [{ id: Bun.randomUUIDv7(), name, supplyClass, parent }]),
       );
-    }
-
-    const [rangeStart, rangeEnd] = codeRange;
-
-    const [last] = await db
-      .select({ code: sql<number | null>`max(cast(${accounts.code} as integer))` })
-      .from(accounts)
-      .where(
-        and(
-          eq(accounts.orgId, orgId),
-          eq(accounts.type, type),
-          sql`cast(${accounts.code} as integer) between ${rangeStart} and ${rangeEnd}`,
-        ),
-      );
-
-    const nextCode = (last?.code ?? rangeStart - 1) + 1;
-
-    if (nextCode > rangeEnd) {
-      throw badRequest(
-        "ACCOUNT_CODES_FULL",
-        "This account type or group has no free account codes.",
-      );
-    }
-
-    const code = String(nextCode);
-
-    try {
-      const [created] = await db
-        .insert(accounts)
-        .values({
-          id: Bun.randomUUIDv7(),
-          orgId,
-          name: input.name,
-          parentId,
-          code,
-          type,
-          supplyClass: input.supplyClass ?? null,
-        })
-        .returning();
 
       if (!created) throw impossible("Account insert returned no row");
 
       return created;
-    } catch (error) {
-      if (uniqueViolationConstraint(error) === "accounts_org_code_idx") {
-        throw new ORPCError("CONFLICT", {
-          message: "Another account took that code at the same moment. Try again.",
-        });
-      }
-
-      accountNameTaken(error);
-    }
-  }),
+    },
+  ),
 
   update: orgProcedure(
     { account: ["update"] },

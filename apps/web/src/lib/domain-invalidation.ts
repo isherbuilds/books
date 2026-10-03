@@ -41,6 +41,9 @@ export async function invalidateSettlementState(
     queryClient.invalidateQueries({ queryKey: orpc.bill.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.note.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.journal.get.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({
+      queryKey: orpc.openingBalance.items.key({ input: { orgSlug } }),
+    }),
     queryClient.invalidateQueries({ queryKey: orpc.party.statement.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.party.ledgerLines.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
@@ -90,19 +93,18 @@ export async function invalidateJournalState(
   ]);
 }
 
-// Opening balances move their document read and account balances together.
+// Opening balances also move imported party items, their history and balances.
 export async function invalidateOpeningBalanceState(
   queryClient: QueryInvalidator,
   orgSlug: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: orpc.openingBalance.get.key({ input: { orgSlug } }),
-    }),
+    queryClient.invalidateQueries({ queryKey: orpc.openingBalance.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({
       queryKey: orpc.account.moneyBalances.key({ input: { orgSlug } }),
     }),
     queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.party.key({ input: { orgSlug } }) }),
   ]);
 }
 
@@ -178,6 +180,19 @@ export async function invalidateSettings(
     queryClient.invalidateQueries({ queryKey: orpc.journal.accounts.key({ input: { orgSlug } }) }),
     queryClient.invalidateQueries({ queryKey: orpc.report.key({ input: { orgSlug } }) }),
     invalidateInvoiceQuotes(queryClient, orgSlug),
+  ]);
+}
+
+// The account set covers items, money balances and reports. Add the party reads
+// and Opening Balance once; import writes no settings or register document.
+export async function invalidateImportState(
+  queryClient: QueryInvalidator,
+  orgSlug: string,
+): Promise<void> {
+  await Promise.all([
+    invalidateAccountState(queryClient, orgSlug),
+    queryClient.invalidateQueries({ queryKey: orpc.party.key({ input: { orgSlug } }) }),
+    queryClient.invalidateQueries({ queryKey: orpc.openingBalance.key({ input: { orgSlug } }) }),
   ]);
 }
 

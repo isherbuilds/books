@@ -24,7 +24,7 @@ import { toast } from "sonner";
 
 import { AllocationsSection } from "@/components/allocations-section";
 import { ClaimStatus, struck } from "@/components/document-columns";
-import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
+import { ApplyCreditDialog, APPLY_CREDIT_GRANT } from "@/components/apply-credit-dialog";
 import { ReasonDialog } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -75,7 +75,7 @@ function InvoiceSheetRoute() {
   const canPostNote = useCan(orgSlug, { note: ["post"] }) && invoice.state === "posted";
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
+    useCan(orgSlug, APPLY_CREDIT_GRANT) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
     isPositiveMoney(invoice.outstandingPaise);
@@ -494,6 +494,7 @@ function InvoiceSheetRoute() {
           invoice={{
             id: invoice.id,
             number: invoice.number ?? invoice.id,
+            reference: invoice.reference,
             documentDate: invoice.documentDate,
             dueDate: invoice.dueDate,
             partyId: invoice.partyId,

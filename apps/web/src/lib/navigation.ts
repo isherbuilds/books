@@ -1,4 +1,4 @@
-import type { AppPermission } from "@accly/auth/access";
+import { IMPORT_GRANT, type AppPermission } from "@accly/auth/access";
 import {
   BookOpenTextIcon,
   ContactRoundIcon,
@@ -161,6 +161,7 @@ type SettingsTab = NavEntry<
   | "/$orgSlug/settings/organization"
   | "/$orgSlug/settings/members"
   | "/$orgSlug/settings/opening-balance"
+  | "/$orgSlug/settings/import"
   | "/$orgSlug/settings/locks"
   | "/$orgSlug/settings/files"
   | "/$orgSlug/settings/audit"
@@ -181,6 +182,11 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     to: "/$orgSlug/settings/opening-balance",
     label: "Opening balance",
     permission: { openingBalance: ["read"] },
+  },
+  {
+    to: "/$orgSlug/settings/import",
+    label: "Import",
+    permission: IMPORT_GRANT,
   },
   { to: "/$orgSlug/settings/locks", label: "Locks", permission: { lock: ["read"] } },
   { to: "/$orgSlug/settings/files", label: "Files", permission: { file: ["read"] } },

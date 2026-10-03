@@ -56,6 +56,7 @@ export const journalRouter = {
         documentDate: input.documentDate,
         narration: input.narration,
         reference: input.reference ?? null,
+        controls: ["receivables"],
         lines: input.lines.map((line) => ({
           ...line,
           allocations: line.allocations?.map(({ invoiceId, amount }) => ({
@@ -171,7 +172,7 @@ export const journalRouter = {
     const settings = await orgSettings(orgId);
 
     return capMasterList(
-      await journalAccounts(db, orgId, { gstin: settings.gstin, controls: true }),
+      await journalAccounts(db, orgId, { gstin: settings.gstin, controls: ["receivables"] }),
     );
   }),
 

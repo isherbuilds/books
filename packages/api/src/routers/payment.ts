@@ -66,7 +66,7 @@ const postInput = z.union([
     exposureSide: z.literal("payable"),
     partyId: z.uuid(),
     allocations: z
-      .array(z.strictObject({ billId: z.uuid(), amount: positiveMoney }))
+      .array(z.strictObject({ documentId: z.uuid(), amount: positiveMoney }))
       .min(1)
       .max(50),
     writeOffs: z
@@ -238,8 +238,8 @@ export const paymentRouter = {
             accountId: null,
             amountPaise: input.amount,
             tds: null,
-            allocations: input.allocations.map(({ billId, amount }) => ({
-              documentId: billId,
+            allocations: input.allocations.map(({ documentId, amount }) => ({
+              documentId,
               amountPaise: amount,
             })),
             writeOffs,

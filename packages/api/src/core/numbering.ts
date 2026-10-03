@@ -16,9 +16,62 @@ export function financialYearOf(documentDate: string, startMonth: number): strin
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
+/**
+ * Takes the next `count` consecutive numbers of one series in a single statement. The
+ * increment commits or rolls back with the caller's documents, so each series stays
+ * consecutive with no gaps; the series row stays locked until the commit.
+ */
+export async function reserveNumbers(
+  tx: DbTransaction,
+  orgId: string,
+  documentType: DocumentType,
+  financialYear: string,
+  prefix: string,
+  count: number,
+): Promise<string[]> {
+  const [series] = await tx
+    .insert(numberSeries)
+    .values({ orgId, documentType, financialYear, prefix, next: count + 1 })
+    .onConflictDoUpdate({
+      target: [
+        numberSeries.orgId,
+        numberSeries.documentType,
+        numberSeries.financialYear,
+        numberSeries.prefix,
+      ],
+      set: { next: sql`${numberSeries.next} + ${count}` },
+    })
+    .returning({ next: numberSeries.next });
+
+  if (!series) {
+    throw new Error(`Number series update returned no row for ${documentType} ${financialYear}`);
+  }
+
+  // `next` is one past the last reserved sequence. "2026-27" prints as "26-27" to keep
+  // the number within GST's 16 characters.
+  const first = series.next - count;
+
+  const numbers = Array.from(
+    { length: count },
+    (_, index) => `${prefix}${financialYear.slice(2)}/${first + index}`,
+  );
+
+  // GST Rules 46 and 50 cap a number at 16 characters; the last is the longest. The
+  // throw rolls the increment back with the documents; a new prefix starts a new series.
+  const last = numbers.at(-1);
+
+  if (last !== undefined && last.length > 16) {
+    throw badRequest(
+      "NUMBER_SERIES_FULL",
+      `This number series is full at ${last}. Change the prefix to start a new series.`,
+    );
+  }
+
+  return numbers;
+}
+
 // Numbers and posts a draft. Callers run it last, so the series row lock covers these
-// two statements and the commit, not the whole post. The increment commits or rolls
-// back with the document, so each series stays consecutive with no gaps.
+// two statements and the commit, not the whole post.
 export async function postNumbered(
   tx: DbTransaction,
   orgId: string,
@@ -27,36 +80,9 @@ export async function postNumbered(
   financialYear: string,
   prefix: string,
 ): Promise<string> {
-  const [series] = await tx
-    .insert(numberSeries)
-    .values({ orgId, documentType, financialYear, prefix, next: 2 })
-    .onConflictDoUpdate({
-      target: [
-        numberSeries.orgId,
-        numberSeries.documentType,
-        numberSeries.financialYear,
-        numberSeries.prefix,
-      ],
-      set: { next: sql`${numberSeries.next} + 1` },
-    })
-    .returning({ next: numberSeries.next });
+  const [number] = await reserveNumbers(tx, orgId, documentType, financialYear, prefix, 1);
 
-  if (!series) {
-    throw new Error(`Number series update returned no row for ${documentType} ${financialYear}`);
-  }
-
-  // A new row stores 2 and an existing row is incremented, so the sequence is next - 1.
-  // "2026-27" prints as "26-27" to keep the number within GST's 16 characters.
-  const number = `${prefix}${financialYear.slice(2)}/${series.next - 1}`;
-
-  // GST Rules 46 and 50 cap a number at 16 characters. The throw rolls the increment
-  // back with the document; a new prefix starts a new series.
-  if (number.length > 16) {
-    throw badRequest(
-      "NUMBER_SERIES_FULL",
-      `This number series is full at ${number}. Change the prefix to start a new series.`,
-    );
-  }
+  if (!number) throw new Error(`No number reserved for ${documentType} ${financialYear}`);
 
   const [posted] = await tx
     .update(documents)
