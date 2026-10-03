@@ -6,8 +6,13 @@ const previousSkip = process.env.SKIP_ENV_VALIDATION;
 
 process.env.SKIP_ENV_VALIDATION = "true";
 
-const { invalidateCashState, invalidateInvoiceDrafts, invalidateSettlementState } =
-  await import("../../apps/web/src/lib/domain-invalidation");
+const {
+  invalidateCashState,
+  invalidateInvoiceDrafts,
+  invalidateSettlementState,
+  invalidateOpeningBalanceState,
+  invalidateImportState,
+} = await import("../../apps/web/src/lib/domain-invalidation");
 
 if (previousSkip === undefined) {
   delete process.env.SKIP_ENV_VALIDATION;
@@ -37,13 +42,32 @@ test("each invalidation set scopes to the org and widens only for what the write
   const settlement = recordingInvalidator();
   await invalidateSettlementState(settlement.client, "org-a");
   expect(settlement.keys.some((key) => key.includes('"receipt"'))).toBe(true);
+  expect(settlement.keys.some((key) => key.includes('"openingBalance","items"'))).toBe(true);
   expect(settlement.keys.some((key) => key.includes('"account","moneyBalances"'))).toBe(false);
 
   const cash = recordingInvalidator();
   await invalidateCashState(cash.client, "org-a");
   expect(cash.keys.some((key) => key.includes('"account","moneyBalances"'))).toBe(true);
 
-  for (const key of [...drafts.keys, ...settlement.keys, ...cash.keys]) {
+  const opening = recordingInvalidator();
+  await invalidateOpeningBalanceState(opening.client, "org-a");
+  expect(opening.keys.some((key) => key.includes('["party"]'))).toBe(true);
+
+  const imported = recordingInvalidator();
+  await invalidateImportState(imported.client, "org-a");
+  expect(new Set(imported.keys).size).toBe(imported.keys.length);
+  expect(imported.keys.some((key) => key.includes('"settings"'))).toBe(false);
+  expect(imported.keys.some((key) => key.includes('"receipt"'))).toBe(false);
+  expect(imported.keys.some((key) => key.includes('["party"]'))).toBe(true);
+  expect(imported.keys.some((key) => key.includes('["openingBalance"]'))).toBe(true);
+
+  for (const key of [
+    ...drafts.keys,
+    ...settlement.keys,
+    ...cash.keys,
+    ...opening.keys,
+    ...imported.keys,
+  ]) {
     expect(key).toContain('"orgSlug":"org-a"');
     expect(key).not.toContain('"receiptId"');
   }

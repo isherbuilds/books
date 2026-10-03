@@ -41,6 +41,7 @@ export type OpenDocument = {
   id: string;
   label: string;
   number: string;
+  reference: string | null;
   documentDate: string;
   dueDate: string | null;
   openPaise: bigint;
@@ -301,7 +302,9 @@ export function AllocationTable({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Document</TableHead>
-                      <TableHead className="text-right">{openHeading}</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">
+                        {openHeading}
+                      </TableHead>
                       <TableHead className="w-36 text-right">Allocate</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -312,13 +315,23 @@ export function AllocationTable({
                           <p className="font-mono">
                             <span className="font-sans text-muted-foreground">{row.label} · </span>
                             {row.number}
+                            {row.reference ? (
+                              <span className="font-sans text-muted-foreground">
+                                {" "}
+                                · {row.reference}
+                              </span>
+                            ) : null}
                           </p>
                           <p className="text-muted-foreground tabular-nums">
                             {formatBusinessDay(row.documentDate)}
                             {row.dueDate ? ` · Due ${formatBusinessDay(row.dueDate)}` : null}
                           </p>
+                          {/* Phones drop the amount column, so the amount input keeps its width. */}
+                          <p className="tabular-nums sm:hidden">
+                            {openHeading} {formatMoney(row.openPaise)}
+                          </p>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="hidden text-right tabular-nums sm:table-cell">
                           {formatMoney(row.openPaise)}
                         </TableCell>
                         <TableCell className="w-36">
@@ -327,7 +340,7 @@ export function AllocationTable({
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="sr-only">Amount for {row.number}</FormLabel>
-                                <div className="flex items-center gap-1">
+                                <div className="flex min-w-32 items-center gap-1">
                                   <FormControl>
                                     <AmountInput {...field} className="h-7 min-w-0" />
                                   </FormControl>

@@ -5,30 +5,75 @@ description: Configure an organization and use files and audit safely
 
 ## Set up the organization
 
-Follow the in-app **Setup path**:
+Review **Settings → Organization** to confirm the legal name, address, tax
+identifiers, financial-year start, and document prefixes. These values shape
+printed document numbers. Business dates use India Standard Time.
 
-1. **Organization** — confirm legal name, address, tax identifiers,
-   financial-year start, and document prefixes. These values shape printed
-   document numbers. Business dates use India Standard Time.
-2. **Banks** — add each bank account and cash box, then the payment methods
-   that land in them, such as UPI, bank transfer, card, cheque, and cash.
-3. **Members** — invite each person by email address, then assign the role they
-   need:
-   - **Owner** — everything. Only an owner manages members, invitations, and
+Follow the in-app **Setup path**. The steps shown depend on your role:
+
+1. **Add bank accounts and payment methods** — open **Banking** and add each
+   bank account and cash box, then the payment methods that land in them, such
+   as UPI, bank transfer, card, cheque, and cash.
+2. **Enter opening balances** — carry over balances from your previous books
+   on the cutover date. Choose one of the routes below.
+3. **Review the team** — open **Settings → Members**. The owner invites each
+   person by email address and assigns the role they need:
+   - **Owner** — everything, including posting and cancelling opening balances
+     and importing a workbook. Only an owner manages members, invitations, and
      settings, and uploads or deletes files.
    - **Accountant** — manages parties, bank accounts, and payment methods;
-     records and cancels receipts; reads bank balances and the audit history.
-   - **Chartered Accountant** — reads everything, including bank balances and
-     the audit history; never records or cancels.
+     records and cancels receipts; posts and cancels opening balances; can
+     import a workbook; reads bank balances and the audit history.
+   - **Chartered Accountant** — reads everything, including opening balances,
+     bank balances and the audit history; never records or cancels, and cannot
+     import a workbook.
    - **Operator** — records receipts and reads parties; never cancels, creates
-     parties, or exports.
+     parties, or exports, and cannot post opening balances or import a workbook.
 
    The owner can change a person's role, remove them, or revoke a pending
    invitation.
 
+The **Settings** tabs are **Organization**, **Members**, **Opening balance**,
+**Import**, **Locks**, **Files**, and **Audit**. You see only the tabs your role
+allows.
+
 Review identifiers and prefixes with the responsible person before
 live use. Changing configuration later does not rewrite documents already
 issued.
+
+## Bring in opening balances
+
+Choose one route before you begin recording new transactions:
+
+- **Settings → Import** — an **Owner** or **Accountant** can bring accounts,
+  parties, items, a trial balance, and unpaid invoices, bills, and credits in
+  from an Excel workbook. **Check** writes nothing. Import is all-or-nothing:
+  if there is an error, nothing is written. Follow
+  [Move from your old books](/import-opening-balances) for the template, checks,
+  and full worked example.
+- **Settings → Opening balance** — for a few ledger lines without party
+  balances, an **Owner** or **Accountant** can enter the **As at** date and
+  debit and credit balances, then choose **Post opening balance**. Debit and
+  credit totals must match. Use **Import**, not this form, for unpaid customer
+  invoices, vendor bills, or party credits.
+
+For example, start the April–March financial year on 1 April 2026 with balances
+as at **31 March 2026**:
+
+| Account             | Debit          | Credit         |
+| ------------------- | -------------- | -------------- |
+| Cash in Hand        | ₹20,000.00     | —              |
+| Accounts Receivable | ₹8,000.00      | —              |
+| Accounts Payable    | —              | ₹5,000.00      |
+| Capital Account     | —              | ₹23,000.00     |
+| **Total**           | **₹28,000.00** | **₹28,000.00** |
+
+Priya's unpaid **INV-88** of ₹10,000.00 less her advance **ADV-3** of ₹2,000.00
+backs the ₹8,000.00 receivable. Mehta Traders' unpaid bill **B-17** backs the
+₹5,000.00 payable. This example needs **Import** so the individual outstanding
+items come in with their matching account balances. See the
+[full walk-through](/import-opening-balances) to enter the workbook and settle
+these items after import.
 
 ## Files
 

@@ -1,20 +1,24 @@
 import { db } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
-import { ORPCError } from "@orpc/server";
-import { and, eq } from "drizzle-orm";
+import { parties } from "@accly/db/schema/parties";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
+import { settlementPaise } from "../core/allocations";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
+import {
+  assertNoOpeningBalance,
+  OPENING_BALANCE_PREFIX,
+  reverseOpening,
+} from "../core/opening-items";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { balancedEntryLines, dateOnly, entryLineFields, reason } from "../lib/schemas";
-import { cancelDocument, orgSettings } from "../lib/settlements";
-
-const OPENING_BALANCE_PREFIX = "OB";
+import { balancedEntryLines, dateOnly, entryLineFields, pageLimit, reason } from "../lib/schemas";
+import { afterDateCursor, cancelDocument, orgSettings, pageOf } from "../lib/settlements";
 
 const lineSchema = z.strictObject(entryLineFields);
 
@@ -41,31 +45,15 @@ export const openingBalanceRouter = {
           );
         }
 
-        const [existing] = await tx
-          .select({ id: documents.id, number: documents.number })
-          .from(documents)
-          .where(
-            and(
-              eq(documents.orgId, scope.orgId),
-              eq(documents.type, "openingBalance"),
-              eq(documents.state, "posted"),
-            ),
-          )
-          .limit(1);
+        await assertNoOpeningBalance(tx, scope.orgId);
 
-        if (existing) {
-          throw new ORPCError("CONFLICT", {
-            message: `Opening balance ${postedNumber(existing.number, existing.id)} is already posted. Cancel it first.`,
-          });
-        }
-
-        // The partial unique index remains the final guarantee if another write path is added.
         return postEntryLines(tx, scope, settings, {
           type: "openingBalance",
           prefix: OPENING_BALANCE_PREFIX,
           documentDate: input.documentDate,
           narration: "Opening balances",
           reference: null,
+          controls: [],
           lines: input.lines,
         });
       });
@@ -126,10 +114,77 @@ export const openingBalanceRouter = {
     };
   }),
 
+  // The posted opening items, oldest legacy date first, one keyset page at a time,
+  // each with what remains open.
+  items: orgProcedure(
+    { openingBalance: ["read"] },
+    orgInput.extend({ cursor: z.uuid().optional(), limit: pageLimit }),
+  ).handler(async ({ context, input }) => {
+    const { orgId } = context.scope;
+    const claim = settlementPaise(orgId, "target", null).balancePaise;
+    const credit = settlementPaise(orgId, "source", null).balancePaise;
+
+    const rows = await db
+      .select({
+        id: documents.id,
+        type: documents.type,
+        number: documents.number,
+        partyId: parties.id,
+        partyName: parties.name,
+        exposureSide: documents.exposureSide,
+        reference: documents.reference,
+        documentDate: documents.documentDate,
+        dueDate: documents.dueDate,
+        totalPaise: documents.totalPaise,
+        // CASE runs only the taken branch's subqueries.
+        balancePaise:
+          sql<bigint>`case when ${documents.type} = 'openingClaim' then ${claim} else ${credit} end`.mapWith(
+            BigInt,
+          ),
+      })
+      .from(documents)
+      .innerJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, documents.partyId)))
+      .where(
+        and(
+          eq(documents.orgId, orgId),
+          inArray(documents.type, ["openingClaim", "openingCredit"]),
+          eq(documents.state, "posted"),
+          afterDateCursor(orgId, input.cursor),
+        ),
+      )
+      .orderBy(asc(documents.documentDate), asc(documents.id))
+      .limit(input.limit + 1);
+
+    const page = pageOf(rows, input.limit);
+
+    return {
+      hasMore: page.hasMore,
+      rows: page.rows.map((item) => {
+        if (item.exposureSide === null || item.reference === null)
+          throw impossible(`opening item ${item.id} lacks its side or reference`);
+
+        return {
+          ...item,
+          // SAFETY: the query keeps only the two opening item types.
+          type: item.type as "openingClaim" | "openingCredit",
+          exposureSide: item.exposureSide,
+          reference: item.reference,
+          number: postedNumber(item.number, item.id),
+        };
+      }),
+    };
+  }),
+
   cancel: orgProcedure(
     { openingBalance: ["cancel"] },
     orgInput.extend({ openingBalanceId: z.uuid(), reason }),
   ).handler(({ context, input }) =>
-    cancelDocument(context.scope, ["openingBalance"], input.openingBalanceId, input.reason),
+    cancelDocument(
+      context.scope,
+      ["openingBalance"],
+      input.openingBalanceId,
+      input.reason,
+      reverseOpening,
+    ),
   ),
 };

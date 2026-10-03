@@ -145,7 +145,9 @@ type PartyDocumentType =
   | "receipt"
   | "payment"
   | "journal"
-  | "openingBalance";
+  | "openingBalance"
+  | "openingClaim"
+  | "openingCredit";
 
 // One route table for party registers and accounting reports. Allocations have
 // journal entries but no document record to open.
@@ -166,17 +168,18 @@ export function documentLink(orgSlug: string, type: string, id: string): LinkOpt
       return { to: "/$orgSlug/payments/$paymentId", params: { orgSlug, paymentId: id } };
     case "journal":
       return { to: "/$orgSlug/journals/$journalId", params: { orgSlug, journalId: id } };
+    // Opening items are listed on the Opening Balance page.
     case "openingBalance":
+    case "openingClaim":
+    case "openingCredit":
       return { to: "/$orgSlug/settings/opening-balance", params: { orgSlug } };
-    case "allocation":
-      return undefined;
     default:
       return undefined;
   }
 }
 
 // Each party document opens over its register filtered to that party. Journal
-// and opening balance records are pages rather than filtered register Sheets.
+// and opening records are pages rather than filtered register Sheets.
 export function partyDocumentLink(
   orgSlug: string,
   partyId: string,
@@ -185,5 +188,5 @@ export function partyDocumentLink(
 ): LinkOptions {
   const link = documentLink(orgSlug, type, id);
 
-  return type === "journal" || type === "openingBalance" ? link : { ...link, search: { partyId } };
+  return type === "journal" || type.startsWith("opening") ? link : { ...link, search: { partyId } };
 }

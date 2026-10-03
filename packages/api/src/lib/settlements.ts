@@ -209,11 +209,12 @@ export async function cancelDocument(
   types: readonly PostedType[],
   documentId: string,
   reason: string,
+  reverse: typeof reverseDocument = reverseDocument,
 ): Promise<typeof documents.$inferSelect> {
   const cancelled = await db.transaction(async (tx) => {
     const settings = await orgSettings(scope.orgId, tx);
 
-    return reverseDocument(tx, scope, settings, types, documentId, reason);
+    return reverse(tx, scope, settings, types, documentId, reason);
   });
 
   audit({
@@ -420,10 +421,11 @@ export function documentSettlement(
 type PickerPage = { cursor?: string; limit: number };
 
 /**
- * Rows after the cursor document in the pickers' oldest-first (date, id) order. A
- * posted document's date never changes, so a cursor keeps its place between pages.
+ * Rows after the cursor document in oldest-first (date, id) order, for the pickers and
+ * the opening items. A posted document's date never changes, so a cursor keeps its
+ * place between pages.
  */
-function afterPickerCursor(orgId: string, cursor: string | undefined) {
+export function afterDateCursor(orgId: string, cursor: string | undefined) {
   if (!cursor) return undefined;
 
   const position = db
@@ -447,6 +449,7 @@ export async function openItems(
       id: documents.id,
       type: documents.type,
       number: documents.number,
+      reference: documents.reference,
       documentDate: documents.documentDate,
       dueDate: documents.dueDate,
       outstandingPaise,
@@ -487,9 +490,13 @@ export async function openItems(
                 eq(documents.settlementKind, "against"),
                 eq(documents.exposureSide, "receivable"),
               ),
+              and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "receivable")),
             )
-          : eq(documents.type, "bill"),
-        afterPickerCursor(orgId, input.cursor),
+          : or(
+              eq(documents.type, "bill"),
+              and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "payable")),
+            ),
+        afterDateCursor(orgId, input.cursor),
         gt(outstandingPaise, 0n),
       ),
     )
@@ -522,6 +529,7 @@ export async function openCredits(
       id: documents.id,
       type: documents.type,
       number: documents.number,
+      reference: documents.reference,
       documentDate: documents.documentDate,
       unappliedPaise,
     })
@@ -560,6 +568,7 @@ export async function openCredits(
                 eq(documents.type, "receipt"),
                 inArray(documents.settlementKind, ["advance", "against"]),
               ),
+              and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "receivable")),
             )
           : or(
               eq(documents.type, "debitNote"),
@@ -568,9 +577,15 @@ export async function openCredits(
                 inArray(documents.settlementKind, ["advance", "against"]),
                 eq(documents.exposureSide, "payable"),
               ),
+              and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "payable")),
             ),
-        input.q ? ilike(documents.number, likePattern(input.q)) : undefined,
-        afterPickerCursor(orgId, input.cursor),
+        input.q
+          ? or(
+              ilike(documents.number, likePattern(input.q)),
+              ilike(documents.reference, likePattern(input.q)),
+            )
+          : undefined,
+        afterDateCursor(orgId, input.cursor),
         gt(unappliedPaise, 0n),
       ),
     )

@@ -29,6 +29,8 @@ export const DOCUMENT_TYPES = [
   "debitNote",
   "journal",
   "openingBalance",
+  "openingClaim",
+  "openingCredit",
 ] as const;
 
 export const DOCUMENT_STATES = ["draft", "posted", "cancelled"] as const;
@@ -150,7 +152,12 @@ export const documents = pgTable(
       ),
     check(
       "documents_type_check",
-      sql`${table.type} in ('receipt', 'payment', 'invoice', 'bill', 'creditNote', 'debitNote', 'journal', 'openingBalance')`,
+      sql`${table.type} in ('receipt', 'payment', 'invoice', 'bill', 'creditNote', 'debitNote', 'journal', 'openingBalance', 'openingClaim', 'openingCredit')`,
+    ),
+    // An opening item is a party's exposure on one side; settlement reads both.
+    check(
+      "documents_opening_item_check",
+      sql`${table.type} not in ('openingClaim', 'openingCredit') or (${table.partyId} is not null and ${table.exposureSide} is not null)`,
     ),
     check("documents_state_check", sql`${table.state} in ('draft', 'posted', 'cancelled')`),
     check(

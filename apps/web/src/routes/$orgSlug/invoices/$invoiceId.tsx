@@ -1,5 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
   DropdownMenuGroup,
@@ -75,7 +76,7 @@ function InvoiceSheetRoute() {
   const canPostNote = useCan(orgSlug, { note: ["post"] }) && invoice.state === "posted";
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
+    useCan(orgSlug, APPLY_CREDIT_GRANT) &&
     invoice.state === "posted" &&
     invoice.partyId !== null &&
     isPositiveMoney(invoice.outstandingPaise);
@@ -494,6 +495,7 @@ function InvoiceSheetRoute() {
           invoice={{
             id: invoice.id,
             number: invoice.number ?? invoice.id,
+            reference: invoice.reference,
             documentDate: invoice.documentDate,
             dueDate: invoice.dueDate,
             partyId: invoice.partyId,

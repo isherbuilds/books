@@ -194,6 +194,10 @@ function roleOf(document: LockedDocument, position: "source" | "target"): Side |
         (document.exposureSide === "payable" ? position === "source" : position === "target")
         ? document.exposureSide
         : null;
+    case "openingClaim":
+      return position === "target" ? document.exposureSide : null;
+    case "openingCredit":
+      return position === "source" ? document.exposureSide : null;
     default:
       return null;
   }

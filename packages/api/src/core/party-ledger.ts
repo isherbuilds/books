@@ -1,6 +1,6 @@
 import type { DbTransaction } from "@accly/db";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 type PartyLedgerLineInput = Pick<
   typeof partyLedgerLines.$inferInsert,
@@ -22,11 +22,12 @@ export async function writePartyLedgerLine(
 export async function reversePartyLedgerLines(
   tx: DbTransaction,
   orgId: string,
-  documentId: string,
+  documentIds: readonly string[],
   entryDate: string,
 ): Promise<void> {
   const postedLines = await tx
     .select({
+      documentId: partyLedgerLines.documentId,
       partyId: partyLedgerLines.partyId,
       side: partyLedgerLines.side,
       amountPaise: partyLedgerLines.amountPaise,
@@ -35,7 +36,7 @@ export async function reversePartyLedgerLines(
     .where(
       and(
         eq(partyLedgerLines.orgId, orgId),
-        eq(partyLedgerLines.documentId, documentId),
+        inArray(partyLedgerLines.documentId, [...documentIds]),
         eq(partyLedgerLines.kind, "post"),
       ),
     );
@@ -46,7 +47,7 @@ export async function reversePartyLedgerLines(
     postedLines.map((line) => ({
       id: Bun.randomUUIDv7(),
       orgId,
-      documentId,
+      documentId: line.documentId,
       partyId: line.partyId,
       side: line.side,
       kind: "reverse" as const,

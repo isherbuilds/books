@@ -7,6 +7,7 @@ import "zod/compile";
 import { drainAuditWrites } from "@accly/api/audit";
 import { createRequestContext, type ORPCContext } from "@accly/api/lib/context";
 import { appRouter } from "@accly/api/routers/index";
+import { MAX_IMPORT_FILE_BYTES } from "@accly/api/lib/import-limits";
 import { auth } from "@accly/auth";
 import { db } from "@accly/db";
 import { env } from "@accly/env/server";
@@ -93,6 +94,9 @@ function limitBody(maxSize: number) {
 
 const procedureBodyLimit = limitBody(1024 * 1024);
 
+// File payload plus bounded multipart metadata. Other procedures keep the 1 MiB cap.
+const importBodyLimit = limitBody(MAX_IMPORT_FILE_BYTES + 64 * 1024);
+
 // Auth bodies are a few credentials; nothing legitimate comes near this.
 app.use("/api/auth/*", limitBody(64 * 1024));
 
@@ -154,7 +158,12 @@ function mount(
   prefix: "/rpc" | "/api-reference",
   handler: Pick<RPCHandler<ORPCContext>, "handle">,
 ): void {
-  app.use(`${prefix}/*`, procedureBodyLimit);
+  app.use(`${prefix}/*`, (c, next) => {
+    const isImportUpload =
+      c.req.path === `${prefix}/import/check` || c.req.path === `${prefix}/import/commit`;
+
+    return (isImportUpload ? importBodyLimit : procedureBodyLimit)(c, next);
+  });
   app.use(`${prefix}/*`, async (c) => {
     const context = await createLoggedRequestContext(c);
     const result = await handler.handle(c.req.raw, { prefix, context });

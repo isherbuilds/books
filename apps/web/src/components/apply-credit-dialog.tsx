@@ -1,4 +1,5 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
+import { openingItemLabel } from "@accly/api/lib/opening-item-label";
 import { AmountInput } from "@/components/amount-input";
 import {
   enteredPaise,
@@ -69,9 +70,11 @@ const creditLabel = (type: Credit["type"]) =>
       ? "Debit Note"
       : type === "payment"
         ? "Payment"
-        : type === "journal"
-          ? "Journal"
-          : "Receipt";
+        : type === "openingCredit"
+          ? openingItemLabel(type, null)
+          : type === "journal"
+            ? "Journal"
+            : "Receipt";
 
 const applyCreditSchema = z.object({
   amount: positiveAmount,
@@ -98,7 +101,7 @@ export function ApplyCreditDialog({
   const form = useZodForm(applyCreditSchema, { defaultValues: { amount: "" } });
   const amount = useWatch({ control: form.control, name: "amount" });
 
-  // Typed text searches numbers on the server; the picked credit's own number does not.
+  // Typed text searches numbers and references on the server; the picked credit's own number does not.
   const needle = chosen && text === chosen.number ? "" : text.trim();
   const q = useDebouncedValue(needle, 300);
 
@@ -255,7 +258,7 @@ export function ApplyCreditDialog({
                       >
                         <ComboboxInput
                           id={creditInputId}
-                          placeholder="Search by number"
+                          placeholder="Search number or reference"
                           autoComplete="off"
                           maxLength={100}
                           onBlur={() => setText(selected?.number ?? "")}
@@ -298,6 +301,12 @@ export function ApplyCreditDialog({
                                         {creditLabel(option.type)} ·{" "}
                                       </span>
                                       <span className="font-mono">{option.number}</span>
+                                      {option.reference ? (
+                                        <span className="text-muted-foreground">
+                                          {" "}
+                                          · {option.reference}
+                                        </span>
+                                      ) : null}
                                       <span className="text-muted-foreground tabular-nums">
                                         {" "}
                                         · {formatBusinessDay(option.documentDate)}

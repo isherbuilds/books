@@ -2,6 +2,11 @@ import { beforeAll, expect, spyOn, test } from "bun:test";
 
 import { app } from "../../apps/server/src/index";
 import { auth } from "@accly/auth";
+import { createORPCClient } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
+import type { AppRouterClient } from "@accly/api/routers/index";
+import { MAX_IMPORT_FILE_BYTES } from "@accly/api/lib/import-limits";
+import { writeXlsx } from "hucre/xlsx";
 import { db } from "@accly/db";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { member } from "@accly/db/schema/auth";
@@ -50,6 +55,51 @@ test("procedure endpoints reject an oversized body before resolving authenticati
       expect(response.status).toBe(413);
     }
 
+    expect(getSession).toHaveBeenCalledTimes(0);
+  } finally {
+    getSession.mockRestore();
+  }
+});
+
+test("import uploads accept large workbooks and reject oversized bodies before authentication", async () => {
+  const owner = await createTestUser("import-upload");
+  const organization = await createOrganization(owner, "import-upload");
+
+  const workbook = await writeXlsx({
+    sheets: [
+      {
+        name: "Read me",
+        rows: [["Instructions", "1"]],
+        // Background bytes are stored without compression, so the valid ZIP exceeds 1 MiB.
+        backgroundImage: new Uint8Array(1_100_000),
+      },
+    ],
+  });
+
+  const api: AppRouterClient = createORPCClient(
+    new RPCLink({
+      url: "http://localhost/rpc",
+      headers: { cookie: owner.cookie },
+      fetch: async (request) => app.request(request),
+    }),
+  );
+
+  const checked = await api.import.check({
+    orgSlug: organization.slug,
+    file: new File([new Uint8Array(workbook)], "large.xlsx"),
+  });
+
+  expect(checked.errorCount).toBe(0);
+
+  const getSession = spyOn(auth.api, "getSession");
+
+  try {
+    const response = await app.request("http://localhost/rpc/import/commit", {
+      method: "POST",
+      body: new Uint8Array(MAX_IMPORT_FILE_BYTES + 64 * 1024 + 1),
+    });
+
+    expect(response.status).toBe(413);
     expect(getSession).toHaveBeenCalledTimes(0);
   } finally {
     getSession.mockRestore();

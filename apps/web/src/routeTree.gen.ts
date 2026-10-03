@@ -59,6 +59,7 @@ import { Route as OrgSlugReportsTrialBalanceRouteImport } from './routes/$orgSlu
 import { Route as OrgSlugSettingsIndexRouteImport } from './routes/$orgSlug/settings/index'
 import { Route as OrgSlugSettingsAuditRouteImport } from './routes/$orgSlug/settings/audit'
 import { Route as OrgSlugSettingsFilesRouteImport } from './routes/$orgSlug/settings/files'
+import { Route as OrgSlugSettingsImportRouteImport } from './routes/$orgSlug/settings/import'
 import { Route as OrgSlugSettingsLocksRouteImport } from './routes/$orgSlug/settings/locks'
 import { Route as OrgSlugSettingsMembersRouteImport } from './routes/$orgSlug/settings/members'
 import { Route as OrgSlugSettingsOpeningBalanceRouteImport } from './routes/$orgSlug/settings/opening-balance'
@@ -336,6 +337,11 @@ const OrgSlugSettingsFilesRoute = OrgSlugSettingsFilesRouteImport.update({
   path: '/files',
   getParentRoute: () => OrgSlugSettingsRouteRoute,
 } as any)
+const OrgSlugSettingsImportRoute = OrgSlugSettingsImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => OrgSlugSettingsRouteRoute,
+} as any)
 const OrgSlugSettingsLocksRoute = OrgSlugSettingsLocksRouteImport.update({
   id: '/locks',
   path: '/locks',
@@ -495,6 +501,7 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
+  '/$orgSlug/settings/import': typeof OrgSlugSettingsImportRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
@@ -562,6 +569,7 @@ export interface FileRoutesByTo {
   '/$orgSlug/reports/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
+  '/$orgSlug/settings/import': typeof OrgSlugSettingsImportRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
@@ -634,6 +642,7 @@ export interface FileRoutesById {
   '/$orgSlug/reports_/trial-balance': typeof OrgSlugReportsTrialBalanceRoute
   '/$orgSlug/settings/audit': typeof OrgSlugSettingsAuditRoute
   '/$orgSlug/settings/files': typeof OrgSlugSettingsFilesRoute
+  '/$orgSlug/settings/import': typeof OrgSlugSettingsImportRoute
   '/$orgSlug/settings/locks': typeof OrgSlugSettingsLocksRoute
   '/$orgSlug/settings/members': typeof OrgSlugSettingsMembersRoute
   '/$orgSlug/settings/opening-balance': typeof OrgSlugSettingsOpeningBalanceRoute
@@ -706,6 +715,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
+    | '/$orgSlug/settings/import'
     | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
@@ -773,6 +783,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/reports/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
+    | '/$orgSlug/settings/import'
     | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
@@ -844,6 +855,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/reports_/trial-balance'
     | '/$orgSlug/settings/audit'
     | '/$orgSlug/settings/files'
+    | '/$orgSlug/settings/import'
     | '/$orgSlug/settings/locks'
     | '/$orgSlug/settings/members'
     | '/$orgSlug/settings/opening-balance'
@@ -1236,6 +1248,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugSettingsFilesRouteImport
       parentRoute: typeof OrgSlugSettingsRouteRoute
     }
+    '/$orgSlug/settings/import': {
+      id: '/$orgSlug/settings/import'
+      path: '/import'
+      fullPath: '/$orgSlug/settings/import'
+      preLoaderRoute: typeof OrgSlugSettingsImportRouteImport
+      parentRoute: typeof OrgSlugSettingsRouteRoute
+    }
     '/$orgSlug/settings/locks': {
       id: '/$orgSlug/settings/locks'
       path: '/locks'
@@ -1430,6 +1449,7 @@ const OrgSlugReceiptsRouteRouteWithChildren =
 interface OrgSlugSettingsRouteRouteChildren {
   OrgSlugSettingsAuditRoute: typeof OrgSlugSettingsAuditRoute
   OrgSlugSettingsFilesRoute: typeof OrgSlugSettingsFilesRoute
+  OrgSlugSettingsImportRoute: typeof OrgSlugSettingsImportRoute
   OrgSlugSettingsLocksRoute: typeof OrgSlugSettingsLocksRoute
   OrgSlugSettingsMembersRoute: typeof OrgSlugSettingsMembersRoute
   OrgSlugSettingsOpeningBalanceRoute: typeof OrgSlugSettingsOpeningBalanceRoute
@@ -1440,6 +1460,7 @@ interface OrgSlugSettingsRouteRouteChildren {
 const OrgSlugSettingsRouteRouteChildren: OrgSlugSettingsRouteRouteChildren = {
   OrgSlugSettingsAuditRoute: OrgSlugSettingsAuditRoute,
   OrgSlugSettingsFilesRoute: OrgSlugSettingsFilesRoute,
+  OrgSlugSettingsImportRoute: OrgSlugSettingsImportRoute,
   OrgSlugSettingsLocksRoute: OrgSlugSettingsLocksRoute,
   OrgSlugSettingsMembersRoute: OrgSlugSettingsMembersRoute,
   OrgSlugSettingsOpeningBalanceRoute: OrgSlugSettingsOpeningBalanceRoute,

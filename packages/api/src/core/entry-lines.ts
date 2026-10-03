@@ -28,6 +28,12 @@ type PostEntryLinesInput = {
   narration: string;
   reference: string | null;
   prefix: string;
+  /**
+   * The party controls the lines may name. A Journal names receivables with a
+   * party; only an imported Opening Balance names both, as party-less legs its
+   * opening items derive.
+   */
+  controls: readonly ("receivables" | "payables")[];
   lines: readonly EntryLine[];
 };
 
@@ -43,7 +49,7 @@ export async function postEntryLines(
   const resolvedAccounts = await journalAccounts(tx, scope.orgId, {
     gstin: null,
     ids: accountIds,
-    controls: input.type === "journal",
+    controls: input.controls,
   });
 
   if (resolvedAccounts.length !== accountIds.length) {
@@ -82,7 +88,7 @@ export async function postEntryLines(
   for (const line of input.lines) {
     const systemKey = accountById.get(line.accountId)?.systemKey;
 
-    if (systemKey === "receivables" && !line.partyId) {
+    if (systemKey === "receivables" && input.type === "journal" && !line.partyId) {
       throw badRequest("PARTY_REQUIRED", "Choose a party for each receivables line.");
     }
 

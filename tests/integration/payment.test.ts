@@ -374,7 +374,7 @@ test("against payment settles a bill with write-off and fee, and reversal reopen
     amount: "95.00",
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
-    allocations: [{ billId: bill.id, amount: "100.00" }],
+    allocations: [{ documentId: bill.id, amount: "100.00" }],
     writeOffs: [{ accountId: incomeAccount.id, amount: "5.00" }],
     fee: { accountId: expenseAccount.id, amount: "2.00" },
   };
@@ -477,7 +477,7 @@ test("against payment remainder is an available supplier advance", async () => {
     amount: "120.00",
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
-    allocations: [{ billId: bill.id, amount: "100.00" }],
+    allocations: [{ documentId: bill.id, amount: "100.00" }],
   });
 
   expect((await postingOf(organization.id, payment.id, "post")).lines).toEqual(

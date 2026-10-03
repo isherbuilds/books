@@ -1,3 +1,4 @@
+import { openingItemLabel } from "@accly/api/lib/opening-item-label";
 import {
   ZERO_MONEY,
   enteredPaise,
@@ -133,6 +134,7 @@ const SERVER_FIELDS = {
 export type ReceiptInvoice = {
   id: string;
   number: string;
+  reference: string | null;
   documentDate: string;
   dueDate: string | null;
   partyId: string;
@@ -196,7 +198,14 @@ export function ReceiptForm({
       .flatMap((page) => page.rows)
       .map((row) => ({
         ...row,
-        label: row.type === "invoice" ? "Invoice" : row.type === "journal" ? "Journal" : "Payment",
+        label:
+          row.type === "openingClaim"
+            ? openingItemLabel(row.type, "receivable")
+            : row.type === "invoice"
+              ? "Invoice"
+              : row.type === "journal"
+                ? "Journal"
+                : "Payment",
         openPaise: row.outstandingPaise,
       })) ?? [];
 
@@ -217,6 +226,7 @@ export function ReceiptForm({
           id: invoice.id,
           label: "Invoice",
           number: invoice.number,
+          reference: invoice.reference,
           documentDate: invoice.documentDate,
           dueDate: invoice.dueDate,
           openPaise: invoice.outstandingPaise,

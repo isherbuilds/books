@@ -125,7 +125,10 @@ printed fields, no print claims Tax Invoice or Bill of Supply.
   docs and an owner.
 - A pilot cutover imports masters and opening balances, never historic
   invoices. The old system becomes read-only.
-- Handover is XLSX and PDF. A one-way Tally adapter is evidence-gated.
+- Handover is XLSX and PDF. A one-way Tally adapter is evidence-gated:
+  TallyPrime XML is the chosen first source (2026-10-02,
+  [slice 7d](./specs/accounting-core.md#slices)), built only once a real
+  anonymized export proves its mapping. Zoho Books waits for a pilot on it.
 
 ## Invariants
 

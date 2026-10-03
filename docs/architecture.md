@@ -5,8 +5,9 @@ Bun and Turborepo: TanStack Start (`apps/web`), Hono and oRPC (`apps/server`,
 (`packages/auth`), private S3 storage (`packages/storage`) and Base UI
 components (`packages/ui`). HTTP, web SSR, the receipt PDF route and tests call
 one `appRouter` with the same request context and guard. RPC bodies stop at 1
-MiB and auth bodies at 64 KiB. A 5xx reaches the browser as its code alone; the
-server logs the detail. Development reference pages never mount in production.
+MiB, except `import.check` and `import.commit`: a 5 MiB file plus 64 KiB
+of multipart overhead. Auth bodies stop at 64 KiB. A 5xx reaches the browser
+as its code alone; the server logs the detail. Development reference pages never mount in production.
 
 ## Tenancy and authorization
 
@@ -230,7 +231,9 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
   party ledger lines and entry are reversed. Ordinary documents reverse on
   today's business date in the Organization time zone; Opening Balance reverses
-  on its original cutover so a replacement corrects historical balances.
+  on its original cutover so a replacement corrects historical balances, and
+  cancels its imported opening items (party ledger lines only, no entry) with
+  it, refused while any item has an active allocation.
   The reversal date must pass the period lock. A refusal rolls back the state
   change; `cancelledAt` remains the actual cancellation instant.
 - Every ledger writer reads `organization_settings` `FOR SHARE` (or stronger)
@@ -255,7 +258,8 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
 - A number is prefix, short financial year, `/` and sequence: `RCT26-27/1`. A
   prefix has 1–4 letters, digits, `-` or `/`, stored in upper case because
   GSTR-1 and the IRP compare numbers without case. The series key is (org,
-  type, financial year, prefix). `postNumbered` refuses a number longer than 16
+  type, financial year, prefix). `reserveNumbers` (behind `postNumbered`, and
+  in bulk for imported opening items) refuses a number longer than 16
   characters (GST Rules 46 and 50) with `BAD_REQUEST` `NUMBER_SERIES_FULL`; the
   owner then changes the prefix, which starts a new consecutive series.
 - There is no balances table: balances are sums of journal lines, as in ERPNext

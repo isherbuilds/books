@@ -1,5 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
   DropdownMenuGroup,
@@ -70,7 +71,7 @@ function BillSheetRoute() {
     useCan(orgSlug, { bill: ["cancel"] }) && bill.state === "posted" && allocationsReversed;
 
   const canApply =
-    useCan(orgSlug, { allocation: ["apply"], party: ["read"], note: ["read"] }) &&
+    useCan(orgSlug, APPLY_CREDIT_GRANT) &&
     bill.state === "posted" &&
     bill.partyId !== null &&
     isPositiveMoney(bill.outstandingPaise);

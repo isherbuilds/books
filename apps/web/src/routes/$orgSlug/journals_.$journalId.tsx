@@ -54,16 +54,17 @@ function JournalPage() {
   const canCancel = useCan(orgSlug, { journal: ["cancel"] }) && !cancelled;
   const [cancelOpen, setCancelOpen] = useState(false);
 
-  const paletteActions: PaletteItem[] = canCancel && !cancellationBlocked
-    ? [
-        {
-          id: `journal:${journal.id}:cancel`,
-          label: "Cancel journal",
-          group: "action",
-          run: () => setCancelOpen(true),
-        },
-      ]
-    : [];
+  const paletteActions: PaletteItem[] =
+    canCancel && !cancellationBlocked
+      ? [
+          {
+            id: `journal:${journal.id}:cancel`,
+            label: "Cancel journal",
+            group: "action",
+            run: () => setCancelOpen(true),
+          },
+        ]
+      : [];
 
   usePaletteActions(paletteActions);
 

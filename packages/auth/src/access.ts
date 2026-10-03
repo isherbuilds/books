@@ -145,6 +145,21 @@ export const ORG_ROLES = [
 
 export type AppPermission = Parameters<typeof roles.owner.authorize>[0];
 
+/** What an import needs: a workbook creates masters and posts the Opening Balance at once. */
+export const IMPORT_GRANT = {
+  account: ["create"],
+  party: ["create"],
+  item: ["create"],
+  openingBalance: ["post"],
+} as const satisfies AppPermission;
+
+/** What Apply credit needs: apply, and read the party's credits. */
+export const APPLY_CREDIT_GRANT = {
+  allocation: ["apply"],
+  party: ["read"],
+  note: ["read"],
+} as const satisfies AppPermission;
+
 // Better Auth stores roles comma-joined and authorizes them as a union, so mirror
 // that rather than reading the first entry, and reject an undefined role instead of
 // silently downgrading it.

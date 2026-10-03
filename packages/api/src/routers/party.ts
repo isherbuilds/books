@@ -2,16 +2,17 @@ import { authorize, type AppPermission } from "@accly/auth/access";
 import { db } from "@accly/db";
 import type { DbTransaction } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
-import { PARTY_ROLES, parties } from "@accly/db/schema/parties";
+import { parties } from "@accly/db/schema/parties";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { claimParties, createParties, partyInputFields, partyValues } from "../core/masters";
 import { businessDate } from "../lib/business-date";
 import { conflict, impossible, nextEditToken } from "../lib/conflict";
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
-import { normalizedName } from "../lib/normalized-name";
+import { openingItemLabel } from "../lib/opening-item-label";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import {
   afterCursor,
@@ -25,36 +26,13 @@ import { documentPeriod, openCredits, openItems, pageOf } from "../lib/settlemen
 import {
   editToken,
   deriveFromGstin,
-  indianPinCode,
   likePattern,
-  masterName,
-  optionalGstin,
   ledgerCursor,
-  optionalPan,
-  optionalStateCode,
   orderedPeriod,
   pageLimit,
   period,
   searchQuery,
 } from "../lib/schemas";
-
-const partyInputFields = {
-  name: masterName,
-  roles: z
-    .array(z.enum(PARTY_ROLES))
-    .min(1)
-    .refine((roles) => new Set(roles).size === roles.length, "Party roles must be unique"),
-  gstin: optionalGstin,
-  pan: optionalPan,
-  stateCode: optionalStateCode,
-  address: z.string().trim().min(1).max(500).optional(),
-  city: z.string().trim().min(1).max(120).optional(),
-  pinCode: indianPinCode.optional(),
-  email: z.email().optional(),
-  phone: z.string().trim().min(1).max(30).optional(),
-};
-
-type PartyFields = z.infer<z.ZodObject<typeof partyInputFields>> & { stateCode: string };
 
 export type PartyRecord = typeof parties.$inferSelect;
 
@@ -71,6 +49,16 @@ const STATEMENT_TYPE_LABELS = {
   openingBalance: "Opening Balance",
 } as const;
 
+/** A statement row's label; opening items read by their type and side. */
+function statementLabel(row: {
+  documentType: keyof typeof STATEMENT_TYPE_LABELS | "openingClaim" | "openingCredit";
+  side: "receivable" | "payable";
+}): string {
+  return row.documentType === "openingClaim" || row.documentType === "openingCredit"
+    ? openingItemLabel(row.documentType, row.side)
+    : STATEMENT_TYPE_LABELS[row.documentType];
+}
+
 // The documents a party's Transactions tab lists, each shown only to a reader of its
 // type: an operator sees invoices, receipts and payments, but no bills or notes.
 const TRANSACTION_TYPES = [
@@ -80,6 +68,8 @@ const TRANSACTION_TYPES = [
   "debitNote",
   "receipt",
   "payment",
+  "openingClaim",
+  "openingCredit",
 ] as const;
 
 type TransactionType = (typeof TRANSACTION_TYPES)[number];
@@ -91,6 +81,8 @@ const TRANSACTION_READS: Record<TransactionType, AppPermission> = {
   debitNote: { note: ["read"] },
   receipt: { receipt: ["read"] },
   payment: { payment: ["read"] },
+  openingClaim: { openingBalance: ["read"] },
+  openingCredit: { openingBalance: ["read"] },
 };
 
 async function requireParty(
@@ -111,77 +103,6 @@ async function requireParty(
   if (!party) throw new ORPCError("NOT_FOUND", { message: "Party not found." });
 
   return party;
-}
-
-function partyValues(fields: PartyFields) {
-  return {
-    ...fields,
-    normalizedName: normalizedName(fields.name),
-    gstin: fields.gstin ?? null,
-    pan: fields.pan ?? null,
-    address: fields.address ?? null,
-    city: fields.city ?? null,
-    pinCode: fields.pinCode ?? null,
-    email: fields.email ?? null,
-    phone: fields.phone ?? null,
-  };
-}
-
-// Serializes writers of one normalized name, then refuses a namesake unless the caller
-// confirmed it.
-async function claimPartyName(
-  tx: DbTransaction,
-  orgId: string,
-  normalizedName: string,
-  allowNamesake: boolean,
-  exceptId?: string,
-): Promise<void> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${orgId} || ':party:' || ${normalizedName}))`,
-  );
-
-  if (allowNamesake) return;
-
-  const [namesake] = await tx
-    .select({ id: parties.id })
-    .from(parties)
-    .where(
-      and(
-        eq(parties.orgId, orgId),
-        eq(parties.normalizedName, normalizedName),
-        exceptId ? ne(parties.id, exceptId) : undefined,
-      ),
-    )
-    .limit(1);
-
-  if (namesake) throw conflict("PARTY_NAME_COLLISION", "A party with this name already exists.");
-}
-
-// One Party per GSTIN is an application rule, not a unique index, so it can follow GST
-// practice. The lock serializes writers of one GSTIN; names are always claimed first.
-async function claimGstin(
-  tx: DbTransaction,
-  orgId: string,
-  gstin: string | null,
-  exceptId?: string,
-): Promise<void> {
-  if (!gstin) return;
-
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${orgId} || ':gstin:' || ${gstin}))`);
-
-  const [taken] = await tx
-    .select({ id: parties.id })
-    .from(parties)
-    .where(
-      and(
-        eq(parties.orgId, orgId),
-        eq(parties.gstin, gstin),
-        exceptId ? ne(parties.id, exceptId) : undefined,
-      ),
-    )
-    .limit(1);
-
-  if (taken) throw conflict("PARTY_GSTIN_TAKEN", "A party with this GSTIN already exists.");
 }
 
 export type PartyStatementReport = {
@@ -221,6 +142,7 @@ function partyStatementRows(
       number: documents.number,
       settlementKind: documents.settlementKind,
       reference: documents.reference,
+      side: partyLedgerLines.side,
     })
     .from(partyLedgerLines)
     .innerJoin(
@@ -300,7 +222,7 @@ export async function partyStatement(
   const lines = rows.map((row) => {
     balancePaise += row.amountPaise;
 
-    return { ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType], balancePaise };
+    return { ...row, typeLabel: statementLabel(row), balancePaise };
   });
 
   return {
@@ -336,7 +258,7 @@ async function partyLedgerPage(
   const { rows, hasMore } = pageOf(detail, input.limit);
 
   return {
-    rows: rows.map((row) => ({ ...row, typeLabel: STATEMENT_TYPE_LABELS[row.documentType] })),
+    rows: rows.map((row) => ({ ...row, typeLabel: statementLabel(row) })),
     hasMore,
   };
 }
@@ -402,25 +324,19 @@ export const partyRouter = {
   ).handler(async ({ context, input }) => {
     const { scope } = context;
     const { orgSlug: _claim, allowNamesake, ...partyFieldsInput } = input;
-    const values = partyValues(partyFieldsInput);
 
-    const party = await db.transaction(async (tx) => {
-      await claimPartyName(tx, scope.orgId, values.normalizedName, allowNamesake);
-      await claimGstin(tx, scope.orgId, values.gstin);
+    const [created] = await db.transaction((tx) =>
+      createParties(
+        tx,
+        scope.orgId,
+        [{ ...partyFieldsInput, id: Bun.randomUUIDv7() }],
+        allowNamesake,
+      ),
+    );
 
-      const [created] = await tx
-        .insert(parties)
-        .values({ ...values, id: Bun.randomUUIDv7(), orgId: scope.orgId })
-        .returning();
+    if (!created) throw impossible("Party insert returned no row");
 
-      if (!created) {
-        throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create party." });
-      }
-
-      return created;
-    });
-
-    return party;
+    return created;
   }),
 
   update: orgProcedure(
@@ -449,8 +365,7 @@ export const partyRouter = {
     const values = partyValues(partyFieldsInput);
 
     const party = await db.transaction(async (tx) => {
-      await claimPartyName(tx, scope.orgId, values.normalizedName, allowNamesake, partyId);
-      await claimGstin(tx, scope.orgId, values.gstin, partyId);
+      await claimParties(tx, scope.orgId, [values], allowNamesake, partyId);
 
       // One compare-and-swap: a missing row and a newer one both mean the editor's
       // copy is stale, so neither needs a second read to tell them apart.
@@ -576,6 +491,7 @@ export const partyRouter = {
         documentDate: documents.documentDate,
         state: documents.state,
         reference: documents.reference,
+        exposureSide: documents.exposureSide,
         totalPaise: documents.totalPaise,
       })
       .from(documents)

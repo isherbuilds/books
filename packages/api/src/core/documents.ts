@@ -17,6 +17,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
+import { insertChunks } from "../lib/insert-chunks";
 import type { Scope } from "../lib/procedures/factory";
 import {
   activeAllocationsOf,
@@ -423,15 +424,16 @@ export async function writeDraft(
       );
   }
 
-  await tx.insert(documentLines).values(
-    input.lines.map((line, index) => ({
-      id: Bun.randomUUIDv7(),
-      orgId: scope.orgId,
-      documentId: draft.id,
-      position: index + 1,
-      ...line,
-    })),
-  );
+  // An imported Opening Balance can have 5,000 lines.
+  const lines = input.lines.map((line, index) => ({
+    id: Bun.randomUUIDv7(),
+    orgId: scope.orgId,
+    documentId: draft.id,
+    position: index + 1,
+    ...line,
+  }));
+
+  for (const chunk of insertChunks(lines)) await tx.insert(documentLines).values(chunk);
 
   if (posting.type === "bill") {
     if (posting.tdsPaise > 0n && !input.tdsSectionId) {
@@ -859,7 +861,7 @@ export async function reverseDocument(
     { entryDate, narration: reason },
   );
 
-  await reversePartyLedgerLines(tx, scope.orgId, documentId, entryDate);
+  await reversePartyLedgerLines(tx, scope.orgId, [documentId], entryDate);
 
   return cancelled;
 }
