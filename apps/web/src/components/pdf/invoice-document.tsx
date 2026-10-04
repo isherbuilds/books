@@ -45,7 +45,6 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
   const hasMrp = data.lines.some((line) => line.mrpPaise !== null);
   const hasSplitTax = !isZeroMoney(cgstPaise) || !isZeroMoney(sgstPaise);
   const hasIgst = !isZeroMoney(igstPaise);
-  const hasZeroTax = note !== null && !hasSplitTax && !hasIgst;
 
   const stateLabel = (code: string) => `${INDIAN_STATES[code] ?? code} (${code})`;
 
@@ -130,7 +129,6 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
           {hasSplitTax ? <span style={numericCell}>CGST</span> : null}
           {hasSplitTax ? <span style={numericCell}>SGST</span> : null}
           {hasIgst ? <span style={numericCell}>IGST</span> : null}
-          {hasZeroTax ? <span style={numericCell}>GST</span> : null}
         </div>
         {data.lines.map((line, index) => (
           <div
@@ -168,20 +166,11 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
             ) : null}
             <span style={numericCell}>{formatMoney(line.amountPaise)}</span>
             <span style={numericCell}>
-              {line.rateBasisPoints === null
-                ? note
-                  ? "0%"
-                  : "—"
-                : `${line.rateBasisPoints / 100}%`}
+              {line.rateBasisPoints === null ? "—" : `${line.rateBasisPoints / 100}%`}
             </span>
             {hasSplitTax ? <span style={numericCell}>{formatMoney(line.cgstPaise)}</span> : null}
             {hasSplitTax ? <span style={numericCell}>{formatMoney(line.sgstPaise)}</span> : null}
             {hasIgst ? <span style={numericCell}>{formatMoney(line.igstPaise)}</span> : null}
-            {hasZeroTax ? (
-              <span style={numericCell}>
-                {formatMoney(line.cgstPaise + line.sgstPaise + line.igstPaise)}
-              </span>
-            ) : null}
           </div>
         ))}
       </section>
