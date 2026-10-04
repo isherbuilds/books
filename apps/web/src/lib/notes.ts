@@ -9,6 +9,8 @@ type NoteListFilters = Omit<
 
 export type NoteListRow = Awaited<ReturnType<AppRouterClient["note"]["list"]>>["rows"][number];
 
+export type NoteDetail = Awaited<ReturnType<AppRouterClient["note"]["get"]>>;
+
 export type NoteSource =
   | Awaited<ReturnType<AppRouterClient["invoice"]["get"]>>
   | Awaited<ReturnType<AppRouterClient["bill"]["get"]>>;

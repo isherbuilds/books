@@ -118,8 +118,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    invoice API requires `item_id` on every line. `TAXABLE_ACCOUNT_LINE`
    remains for Journals.
 6. **Print class**: an Invoice with any line carrying a Tax Rate prints Tax
-   Invoice; otherwise it prints Bill of Supply, which covers exempt and nil
-   lines and every line of an unregistered Organization. A Receipt prints
+   Invoice, including mixed invoices; otherwise it prints Bill of Supply,
+   which covers exempt and nil lines and every line of an unregistered
+   Organization. Notes print Credit Note or Debit Note; a Receipt prints
    Receipt. Printed fields are data that the CA approves.
 7. **Locks.** From slice 5, posting on or before the general lock needs an
    exception. An exception clears the general lock only; the tax lock is
@@ -272,8 +273,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    round-off is a debit. Its Party ledger line is the positive receivable.
    `affectsTax` is true when the Organization is registered and any line
    Account is not `notASupply`. The returned `printClass` is `taxInvoice` when
-   any line has a Tax Rate, otherwise `billOfSupply`; it does not change the
-   PDF title (see Invoice PDF below). `invoice.get` and `bill.get` return
+   any line has a Tax Rate, otherwise `billOfSupply`; the PDF heading follows
+   that class (call 6). `invoice.get` and `bill.get` return
    `totals` (taxable, CGST, SGST and IGST) summed on the server, which the
    detail, the draft editor and the PDF show. CA acceptance of the GST seed is
    open.
@@ -461,7 +462,7 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      lines, never `advanceSupply`. The TDS register includes Bills.
    - **Invoice PDF** at `/api/$orgSlug/invoices/$invoiceId/pdf`, as the
      Receipt PDF: `invoice.get`, the print snapshot and the stored lines. The
-     title is "Invoice" until the CA approves print classes (Product). It
+     heading is "Tax Invoice" or "Bill of Supply" by call 6. It
      prints the Party as "Bill to" and, when the Invoice names an address of
      delivery, "Ship to" with its state name and code (rule 46(o); the address
      lives only in the print snapshot, see `invoice-ship-to.md`). A Tax
@@ -470,12 +471,19 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      46(q)). Line HSN/SAC meets rule 46, so there is no HSN summary table; the
      GSTR-1 register carries that summary. One PDF link opens it inline; the
      browser viewer prints and saves.
+   - **Note PDF** at `/api/$orgSlug/notes/$noteId/pdf` uses `note.get` with
+     `note:read` and the Invoice layout. It prints "Credit Note" or "Debit Note",
+     the supplier and recipient snapshot names, addresses and GSTINs, note number
+     and date, original Invoice or Bill number and date (plus the supplier invoice
+     reference for Bills), each line's taxable value, GST rate and amounts,
+     place of supply and the Authorised signatory line (Rule 53(1A)).
+     The note record's PDF link opens the browser viewer to print or save.
    - **Web.** Bills and Payments under Purchases; Credit and Debit Notes
      under a Notes list; Bill pages as the Invoice (line grid); the Payment
      form a Sheet; a note is a page picked from its source record. The
      Invoice form adds Discount and Counter sale; the Receipt form adds
      adjustments; record Sheets add Amend, Apply credit (both sides) and the
-     Invoice PDF.
+     Invoice and Note PDFs.
 
    **Released credits versus advances.** Reversing an allocation on a fully
    allocated `against` Receipt posts `invoiceToAdvance`, yet the Receipt stored
@@ -1568,7 +1576,7 @@ Each row is a build item until its code lands; the
 | D5  | **A supplier invoice number is unique per supplier and financial year** among posted, uncancelled Bills (`BILL_NUMBER_TAKEN`). Receipts get no duplicate check.                                                                                                                                                                                                                                                                                                                                                                                               | ERPNext "Check Supplier Invoice Number Uniqueness" (same scope); Zoho blocks a repeated bill number per vendor and year.                                                                  |
 | D6  | **A Receipt can refund a supplier**: a `refund` settlement on a vendor's unapplied Debit Notes and Payment advances, mirroring the Payment that refunds Credit Notes.                                                                                                                                                                                                                                                                                                                                                                                         | Zoho Vendor Credits and Payments Made both offer Refund.                                                                                                                                  |
 | D7  | **A Debit Note against a Bill with TDS reverses TDS in proportion** to the taxable value it returns.                                                                                                                                                                                                                                                                                                                                                                                                                                                          | ERPNext returns recompute withholding on the negative net total.                                                                                                                          |
-| D8  | **Print titles follow the law**: an Invoice prints Tax Invoice or Bill of Supply by call 6 (the current fixed "INVOICE" heading is a bug), and Credit and Debit Notes get a PDF with the Rule 53(1A) particulars and the original invoice number and date.                                                                                                                                                                                                                                                                                                    | CGST s.31, Rules 46, 49 and 53(1A); India Compliance prints Tax Invoice and Credit/Debit Note headings.                                                                                   |
+| D8  | **Print titles follow the law**: Invoices print Tax Invoice or Bill of Supply by call 6; Credit and Debit Notes print their own headings with the Rule 53(1A) particulars and original Invoice or Bill number and date. Record pages open the PDFs for printing or saving.                                                                                                                                                                                                                                                                                    | CGST s.31, Rules 46, 49 and 53(1A); India Compliance prints Tax Invoice and Credit/Debit Note headings.                                                                                   |
 | D9  | **Payment Method stays one name bound to one money account**, with no receipt-only or payment-only flag. The earlier payment-mode question closes without a schema change.                                                                                                                                                                                                                                                                                                                                                                                    | ERPNext Mode of Payment has no direction field; Zoho modes are one shared list.                                                                                                           |
 | D10 | **A released credit is an advance of its source document** again: reversing an allocation returns the amount to the source's unapplied balance under its own `advanceSupply` (call 16). It has no tax effect while `taxableService` advances are refused; GST advance documents, when built, re-open the GST adjustment as India Compliance does.                                                                                                                                                                                                             | ERPNext UnReconcile returns the amount as unallocated on the Payment Entry; Zoho adds it back as an Excess Payment credit.                                                                |
 | D11 | **Home and Banking balances stop at today's business date**, like the balance sheet. Future-dated documents stay allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                     | Neither product blocks future accounting dates; bounding the balance removes the Banking versus balance-sheet mismatch.                                                                   |

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { computeTax, roundOff } from "@accly/api/core/tax";
+import { computeTax, invoicePrintTitle, roundOff } from "@accly/api/core/tax";
 
 test("tax splits intra-state GST and keeps inter-state GST whole", () => {
   const lines = [{ taxablePaise: 10_000n, rateBasisPoints: 1_800 }];
@@ -55,4 +55,11 @@ test("a line without a rate carries no tax and round-off is a signed adjustment"
   expect(roundOff(12_349n)).toBe(-49n);
   expect(roundOff(12_350n)).toBe(50n);
   expect(roundOff(12_351n)).toBe(49n);
+});
+
+test("invoice PDF titles follow the stored supply print class", () => {
+  // Registered taxable and mixed supplies carry taxInvoice, even if rounded tax is zero.
+  expect(invoicePrintTitle("taxInvoice")).toBe("Tax Invoice");
+  // Exempt, nil-rated and unregistered supplies carry billOfSupply.
+  expect(invoicePrintTitle("billOfSupply")).toBe("Bill of Supply");
 });

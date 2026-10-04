@@ -122,7 +122,13 @@ test("credit notes reverse income and GST, settle the invoice, and cap cumulativ
   expect(detail).toMatchObject({
     state: "posted",
     totalPaise: 472_000n,
-    against: { id: invoice.id, type: "invoice", number: invoice.number },
+    against: {
+      id: invoice.id,
+      type: "invoice",
+      number: invoice.number,
+      documentDate: "2026-09-12",
+    },
+    totals: { taxablePaise: 400_000n, cgstPaise: 36_000n, sgstPaise: 36_000n, igstPaise: 0n },
     unappliedPaise: 0n,
   });
   expect(detail.lines[0]).toMatchObject({
@@ -130,6 +136,7 @@ test("credit notes reverse income and GST, settle the invoice, and cap cumulativ
     amountPaise: 400_000n,
     cgstPaise: 36_000n,
     sgstPaise: 36_000n,
+    rateBasisPoints: 1800,
   });
   expect(detail.allocations).toContainEqual(
     expect.objectContaining({
@@ -262,7 +269,17 @@ test("debit note against a bill reduces its payable outstanding", async () => {
   });
 
   const detail = await api.note.get({ orgSlug: organization.slug, noteId: note.id });
-  expect(detail).toMatchObject({ totalPaise: 59_000n, unappliedPaise: 0n });
+  expect(detail).toMatchObject({
+    totalPaise: 59_000n,
+    unappliedPaise: 0n,
+    against: {
+      number: bill.number,
+      documentDate: "2026-09-12",
+      reference: "BILL-NOTE-1",
+    },
+    totals: { taxablePaise: 50_000n, cgstPaise: 4500n, sgstPaise: 4500n, igstPaise: 0n },
+  });
+  expect(detail.lines[0]).toMatchObject({ rateBasisPoints: 1800 });
   const listed = await api.note.list({ orgSlug: organization.slug, type: "debitNote" });
   expect(listed.rows).toContainEqual(
     expect.objectContaining({ id: note.id, againstNumber: bill.number, unappliedPaise: 0n }),
