@@ -30,7 +30,7 @@ import { amendDocument, postedNumber, reverseDocument } from "../core/documents"
 import { formatDecimal } from "../core/money";
 import type { DocumentPosting } from "../core/posting";
 import { businessDate } from "./business-date";
-import { conflict, impossible } from "./conflict";
+import { impossible } from "./conflict";
 import type { Scope } from "./procedures/factory";
 import {
   documentListFields,
@@ -109,7 +109,7 @@ const SEARCH_WINDOW = 1_000;
 /**
  * One register page, newest document date first. `read` runs the register's own query
  * with `where` and its own filters, ordered by `(document_date, id)` descending and
- * limited to `limit + 1`. The cursor stays a document id.
+ * limited to `limit + 1`. The cursor stays a document id (`dateCursor`).
  *
  * A search term matches a substring of `documents.search_text`. PostgreSQL estimates
  * that match across every organization, so a term common elsewhere or in old history
@@ -124,22 +124,7 @@ export async function registerPage<T>(
   input: DocumentListInput,
   read: (where: SQL | undefined) => PromiseLike<T[]>,
 ): Promise<{ rows: T[]; hasMore: boolean }> {
-  let cursor: SQL | undefined;
-
-  if (input.cursor) {
-    const [position] = await db
-      .select({ documentDate: documents.documentDate, id: documents.id })
-      .from(documents)
-      .where(and(eq(documents.orgId, orgId), eq(documents.id, input.cursor)));
-
-    if (!position) {
-      throw conflict("STALE_CURSOR", "This list changed. Reload it and try again.");
-    }
-
-    // Bind the resolved position so deletion after this read cannot empty the page.
-    cursor = sql`(${documents.documentDate}, ${documents.id}) < (${position.documentDate}::date, ${position.id})`;
-  }
-
+  const cursor = dateCursor(orgId, input.cursor, "before");
   const listed = documentListWhere(orgId, types, input, cursor);
 
   if (!input.q) return pageOf(await read(listed), input.limit);
@@ -454,11 +439,12 @@ export function documentSettlement(
 type PickerPage = { cursor?: string; limit: number };
 
 /**
- * Rows after the cursor document in oldest-first (date, id) order, for the pickers and
- * the opening items. A posted document's date never changes, so a cursor keeps its
- * place between pages.
+ * Rows past the cursor document in (date, id) order: `after` for the oldest-first
+ * pickers and opening items, `before` for the newest-first registers. The position
+ * is read inside the page's own statement. A posted document's date never changes,
+ * so a cursor keeps its place between pages.
  */
-export function afterDateCursor(orgId: string, cursor: string | undefined) {
+export function dateCursor(orgId: string, cursor: string | undefined, side: "after" | "before") {
   if (!cursor) return undefined;
 
   const position = db
@@ -466,7 +452,9 @@ export function afterDateCursor(orgId: string, cursor: string | undefined) {
     .from(documents)
     .where(and(eq(documents.orgId, orgId), eq(documents.id, cursor)));
 
-  return sql`(${documents.documentDate}, ${documents.id}) > (${position})`;
+  return side === "after"
+    ? sql`(${documents.documentDate}, ${documents.id}) > (${position})`
+    : sql`(${documents.documentDate}, ${documents.id}) < (${position})`;
 }
 
 /** One page of the claims still open for the party and side, oldest first. */
@@ -529,7 +517,7 @@ export async function openItems(
               eq(documents.type, "bill"),
               and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "payable")),
             ),
-        afterDateCursor(orgId, input.cursor),
+        dateCursor(orgId, input.cursor, "after"),
         gt(outstandingPaise, 0n),
       ),
     )
@@ -618,7 +606,7 @@ export async function openCredits(
               ilike(documents.reference, likePattern(input.q)),
             )
           : undefined,
-        afterDateCursor(orgId, input.cursor),
+        dateCursor(orgId, input.cursor, "after"),
         gt(unappliedPaise, 0n),
       ),
     )

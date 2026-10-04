@@ -758,17 +758,6 @@ test("receipt list filters narrow the keyset and party totals count posted recei
   expect(secondPage.rows.map(({ id }) => id)).toEqual([cash.id, bank.id]);
   expect(secondPage.hasMore).toBe(false);
 
-  const staleCursor = await expectORPCCode(
-    api.receipt.list({
-      orgSlug: organization.slug,
-      partyId: buyer.id,
-      cursor: crypto.randomUUID(),
-    }),
-    "CONFLICT",
-  );
-
-  expect(staleCursor.data).toMatchObject({ reason: "STALE_CURSOR" });
-
   const ids = async (filters: Partial<Parameters<AppRouterClient["receipt"]["list"]>[0]>) =>
     (
       await api.receipt.list({ orgSlug: organization.slug, partyId: buyer.id, ...filters })
