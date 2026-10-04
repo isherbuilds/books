@@ -73,7 +73,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
   retain the draft exemption. Date/id indexes serve type and
   party filters; the obsolete type/id index is removed, while the party/id index
   stays for `party.transactions`. Both temporary measurement indexes were dropped;
-  no migrations or seed ran.
+  the baseline was regenerated; no seed ran.
+  End-to-end, the same `receipt.list` API interaction on Ridgeview's 100,019 receipts,
+  October period, 10 timed calls after warm-up: before, first page p50 14.8 s with 5 of 10 calls failing on the statement timeout (HTTP 500);
+  after, first page p50 62–145 ms across three runs, no errors. Second page and largest-party October page p50 23–125 ms before and after (noise on a loaded machine).
+  The RPC benchmark's page-order check now follows (document date, id) for registers.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
   allocation and opening-balance wait states use `WaveLoader`; types, lint and
   build pass. Check a loading state at desktop and mobile widths in both themes
