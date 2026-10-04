@@ -2,7 +2,7 @@ import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
@@ -68,6 +68,26 @@ export const paymentMethodRouter = {
 
     return db
       .transaction(async (tx) => {
+        // The exact-name index cannot serialize UPI versus upi; cover the check and insert.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${orgId} || ':payment-methods'))`,
+        );
+
+        const [duplicate] = await tx
+          .select({ id: paymentMethods.id })
+          .from(paymentMethods)
+          .where(
+            and(
+              eq(paymentMethods.orgId, orgId),
+              sql`lower(btrim(${paymentMethods.name})) = lower(${input.name})`,
+            ),
+          )
+          .limit(1);
+
+        if (duplicate) {
+          throw conflict("DUPLICATE", "A payment method with this name already exists.");
+        }
+
         await lockMoneyAccount(tx, orgId, input.accountId);
 
         const [created] = await tx

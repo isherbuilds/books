@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { parseMoney } from "@accly/api/core/money";
 import { readImportWorkbook, TEMPLATE_VERSION } from "@accly/api/lib/import-workbook";
+import { optionalGstin } from "@accly/api/lib/schemas";
 import { writeXlsx } from "hucre/xlsx";
 
 test("a number cell reads a large amount exactly and refuses a third decimal", async () => {
@@ -33,4 +34,9 @@ test("a number cell reads a large amount exactly and refuses a third decimal", a
     [4, "AMOUNT_INVALID"],
     [5, "AMOUNT_INVALID"],
   ]);
+});
+
+test("the shared GSTIN schema accepts a valid checksum and rejects a wrong check character", () => {
+  expect(optionalGstin.parse(" 27aapfu0939f1zv ")).toBe("27AAPFU0939F1ZV");
+  expect(optionalGstin.safeParse("27AAPFU0939F1ZW").success).toBe(false);
 });

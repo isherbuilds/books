@@ -385,7 +385,7 @@ test("missing organization settings is an integrity failure, not a stale lock co
 
 test("the tax lock follows affectsTax and cancellation reverses on the original date", async () => {
   const fixture = await createAccountingFixture(founder, "tax-lock", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
     timeZone: "UTC",

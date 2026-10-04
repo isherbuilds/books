@@ -80,7 +80,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     ...claim,
     name: "Priya / Long-form Consulting Services",
     roles: ["customer"],
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     address: "42 Market Road, Mumbai",
     stateCode: "27",
   });
@@ -400,7 +400,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   expect(statementStrings).toContain("Priya / Long-form Consulting Services");
   expect(statementStrings).toContain(required(statement.lines[0]?.number, "invoice number"));
   expect(statementStrings).toContain(required(statement.lines[1]?.number, "receipt number"));
-  expect(statementStrings).toContain("27ABCDE1234F1Z5");
+  expect(statementStrings).toContain("27ABCDE1234F1Z0");
   expect(statementStrings).toContain("42 Market Road, Mumbai");
   expect(statementStrings).toContain("State code");
   expect(statementStrings).toContain(">27<");

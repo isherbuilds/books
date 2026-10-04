@@ -42,7 +42,8 @@ Clear the GSTIN to see and edit them again. They keep the values the GSTIN gave 
   ![The Organization form without a GSTIN](./images/organization-no-gstin.webp)
 </Frame>
 
-A GSTIN must have 15 characters in the GST pattern and start with a real state code.
+A GSTIN must have 15 characters in the GST pattern, a valid last check character,
+and start with a real state code.
 If the first two digits are not a state, **Save settings** shows "GSTIN must start
 with a valid Indian state code".
 
@@ -51,9 +52,9 @@ with a valid Indian state code".
 </Frame>
 
 :::warning[Check the GSTIN against your certificate]
-Accly Books checks the pattern and the state code, but not the last character (the
-check digit). A mistyped GSTIN with the right shape is accepted. Copy it from your GST
-registration certificate.
+Accly Books checks the pattern, state code and last check character. This catches
+typing mistakes, but does not confirm that the registration exists or is active.
+Copy the number from your GST registration certificate.
 :::
 
 ### What a GSTIN changes
@@ -108,12 +109,13 @@ How numbering works:
 - The [Opening Balance](/glossary#opening-balance) uses the fixed prefix `OB`, and
   imported [opening items](/glossary#opening-item) (unpaid invoices, bills and credits
   from your old books) use `OC` (opening claim) and `OA` (opening credit). You cannot change these.
+  These three prefixes are reserved and cannot be used for another document type.
 
 :::tip
-Give each document type a different prefix. Your GST returns list invoices, [credit
-notes](/glossary#credit-note) and [debit notes](/glossary#debit-note) (documents that
-correct an invoice or bill) by number, and two types with the same prefix would print the
-same numbers.
+Each document type must have a different prefix. Saving two types with the same
+prefix is refused on the duplicate field, even if you change the case or add surrounding
+spaces. Your GST returns list invoices, [credit notes](/glossary#credit-note) and
+[debit notes](/glossary#debit-note) by number, so their numbers must not collide.
 :::
 
 ## Financial year
@@ -137,14 +139,15 @@ posted with.
 
 ## Common errors
 
-| Message                                                             | What to do                                                                 |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| "GSTIN must start with a valid Indian state code"                   | Check the first two digits against your GST certificate                    |
-| "Use a valid GSTIN"                                                 | The GSTIN does not have the 15-character GST pattern. Check each character |
-| "Enter the PAN"                                                     | With no GSTIN, PAN is required                                             |
-| "Use a valid 6-digit PIN code"                                      | Type six digits, not starting with 0                                       |
-| "Use 1 to 4 letters, digits, '-' or '/'"                            | Shorten the prefix or remove spaces and other symbols                      |
-| "The fiscal year start cannot change after a document is numbered." | Keep the month. Start a new organization if the year really differs        |
+| Message                                                             | What to do                                                                           |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| "GSTIN must start with a valid Indian state code"                   | Check the first two digits against your GST certificate                              |
+| "Use a valid GSTIN"                                                 | Check the 15-character pattern and last check character against your GST certificate |
+| "Enter the PAN"                                                     | With no GSTIN, PAN is required                                                       |
+| "Use a valid 6-digit PIN code"                                      | Type six digits, not starting with 0                                                 |
+| "Use 1 to 4 letters, digits, '-' or '/'"                            | Shorten the prefix or remove spaces and other symbols                                |
+| "Each document type must use a different prefix."                   | Choose a prefix not used by another document type                                    |
+| "The fiscal year start cannot change after a document is numbered." | Keep the month. Start a new organization if the year really differs                  |
 
 ## Related pages
 
