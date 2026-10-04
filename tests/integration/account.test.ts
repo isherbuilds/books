@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 
+import { businessDate } from "@accly/api/lib/business-date";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { journalLines } from "@accly/db/schema/journal-lines";
@@ -224,4 +225,81 @@ test("the chart protects system accounts, posting leaves and money leaves in use
     accountantApi.account.create({ orgSlug, parent: { accountId: leaf.id }, name: "Pens" }),
     "ACCOUNT_PARENT_INVALID",
   );
+});
+
+test("Home and Banking balances exclude future receipts and reconcile with dated reports", async () => {
+  const timeZone = "Asia/Kolkata";
+
+  const {
+    api,
+    organization: org,
+    methods,
+  } = await createAccountingFixture(founder, "account-as-of-today", { timeZone });
+
+  const claim = { orgSlug: org.slug };
+  const today = businessDate(new Date(), timeZone);
+  const midnight = new Date(`${today}T00:00:00Z`).getTime();
+  const yesterday = new Date(midnight - 86_400_000).toISOString().slice(0, 10);
+  const tomorrow = new Date(midnight + 86_400_000).toISOString().slice(0, 10);
+
+  const method = required(
+    methods.find(({ name }) => name === "Bank transfer"),
+    "bank method",
+  );
+
+  const party = await api.party.create({
+    ...claim,
+    name: "Advance customer",
+    roles: ["customer"],
+    stateCode: "27",
+  });
+
+  const receipt = {
+    ...claim,
+    settlementKind: "advance" as const,
+    advanceSupply: "exempt" as const,
+    partyId: party.id,
+    paymentMethodId: method.id,
+  };
+
+  await api.receipt.post({ ...receipt, amount: "500.00", documentDate: tomorrow });
+  expect(
+    (await api.account.moneyBalances(claim)).find(({ id }) => id === method.accountId),
+  ).toMatchObject({ balancePaise: 0n });
+  expect(await api.party.balances(claim)).toEqual([]);
+
+  await api.receipt.post({ ...receipt, amount: "100.00", documentDate: yesterday });
+  await api.receipt.post({ ...receipt, amount: "200.00", documentDate: today });
+
+  const [money, parties, sheet, ledger, statement, futureSheet, futureStatement] =
+    await Promise.all([
+      api.account.moneyBalances(claim),
+      api.party.balances(claim),
+      api.report.balanceSheet({ ...claim, asOf: today }),
+      api.report.accountLedger({
+        ...claim,
+        accountId: method.accountId,
+        from: yesterday,
+        to: today,
+      }),
+      api.party.statement({ ...claim, partyId: party.id, to: today }),
+      api.report.balanceSheet({ ...claim, asOf: tomorrow }),
+      api.party.statement({ ...claim, partyId: party.id, to: tomorrow }),
+    ]);
+
+  const bank = required(
+    money.find(({ id }) => id === method.accountId),
+    "bank balance",
+  );
+
+  expect(bank.balancePaise).toBe(30_000n);
+  // This isolated organization has no assets other than the receipts' bank balance.
+  expect(sheet.assetsPaise).toBe(bank.balancePaise);
+  expect(ledger.closingPaise).toBe(bank.balancePaise);
+  expect(ledger.lines.map(({ entryDate }) => entryDate)).toEqual([yesterday, today]);
+  expect(parties).toEqual([{ partyId: party.id, balancePaise: statement.closingPaise }]);
+  expect(statement.closingPaise).toBe(-30_000n);
+  // Future dates stay valid, and explicit report dates still include them.
+  expect(futureSheet.assetsPaise).toBe(80_000n);
+  expect(futureStatement.closingPaise).toBe(-80_000n);
 });

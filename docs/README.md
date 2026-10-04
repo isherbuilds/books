@@ -24,8 +24,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **[User-guide walkthrough findings](./research/docs-walkthrough-findings-2026-10-04.md)**:
   Active. 17 major findings, plus minor and polish items, from running every workflow
   for the rebuilt guide in `apps/docs`. Every design question is decided in
-  [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
-  is building them. Start with reversal and allocation dating against locks (D1,
+  [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04). D11's
+  Home, Banking and party-list balances now stop at today's Organization business
+  date; its account integration test and dated-index plans remain to be checked.
+  The remaining decisions still need building. Start with reversal and allocation dating against locks (D1,
   D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
   and the blank party on Pay/Refund (M6, a bug).
 
