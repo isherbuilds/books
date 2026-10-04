@@ -225,3 +225,72 @@ test("the chart protects system accounts, posting leaves and money leaves in use
     "ACCOUNT_PARENT_INVALID",
   );
 });
+
+test("an unused income account can change its supply class", async () => {
+  const orgSlug = organization.slug;
+
+  const income = await accountantApi.account.create({
+    orgSlug,
+    parent: { type: "income" },
+    name: "Unused Membership Fees",
+    supplyClass: "taxable",
+  });
+
+  const changed = await accountantApi.account.update({
+    orgSlug,
+    accountId: income.id,
+    name: income.name,
+    supplyClass: "exempt",
+    updatedAt: income.updatedAt.toISOString(),
+  });
+
+  expect(changed.supplyClass).toBe("exempt");
+
+  const rows = await accountantApi.account.list({ orgSlug, type: "income" });
+
+  expect(rows.find(({ id }) => id === income.id)?.supplyClass).toBe("exempt");
+});
+
+test("an income account with a posting cannot change its supply class", async () => {
+  const orgSlug = organization.slug;
+
+  const income = await accountantApi.account.create({
+    orgSlug,
+    parent: { type: "income" },
+    name: "Posted Membership Fees",
+    supplyClass: "exempt",
+  });
+
+  const money = required(fixture.methods[0], "payment method").accountId;
+
+  await accountantApi.journal.post({
+    orgSlug,
+    documentDate: "2026-04-01",
+    narration: "Membership fees",
+    lines: [
+      { accountId: money, side: "debit", amount: "100.00" },
+      { accountId: income.id, side: "credit", amount: "100.00" },
+    ],
+  });
+
+  await expectReason(
+    accountantApi.account.update({
+      orgSlug,
+      accountId: income.id,
+      name: income.name,
+      supplyClass: "taxable",
+      updatedAt: income.updatedAt.toISOString(),
+    }),
+    "ACCOUNT_IN_USE",
+  );
+
+  const renamed = await accountantApi.account.update({
+    orgSlug,
+    accountId: income.id,
+    name: "Posted Membership Income",
+    supplyClass: "exempt",
+    updatedAt: income.updatedAt.toISOString(),
+  });
+
+  expect(renamed.supplyClass).toBe("exempt");
+});

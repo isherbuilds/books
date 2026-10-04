@@ -28,6 +28,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   is building them. Start with reversal and allocation dating against locks (D1,
   D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
   and the blank party on Pay/Refund (M6, a bug).
+  D13 and D15 are built; verification remains for the GST seed-date unit test,
+  account integration tests and income-account supply-class editing on desktop
+  and mobile in both themes.
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and

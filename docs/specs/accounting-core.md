@@ -38,8 +38,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   inline from one starts with that role.
 - **Account**: `type`, `parentId` and an optional `systemKey`. Income accounts
   carry `supplyClass` (`taxable`, `exempt`, `nil`, `nonGst`, `notASupply`).
-  Interest is `exempt`; `notASupply` covers donations, grants, dividends,
-  capital receipts and insurance claims. Templates seed the chart;
+  Interest and trust/society Fees are `exempt`; professional Rent Received is
+  `taxable`. `notASupply` covers donations, grants, dividends, capital receipts
+  and insurance claims. Templates seed the chart;
   `account.create` adds posting leaves at a type root or under an existing
   group, with generated codes. A user never creates, retypes or archives a
   system account, or converts a posting account into a group.
@@ -51,9 +52,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 - **Tax Rate**: `code`, `name`, an integer `rateBasisPoints` from 0 to 10,000,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited, and
   `(Organization, code, effectiveFrom)` is unique. `seedTaxRates` gives each
-  Organization GST5, GST12 and GST18 from 2017-07-01, GST28 until 2026-01-31,
-  and GST40 from 2025-09-22. There is no GST0: the income Account's supply
-  class decides nil and exempt supplies.
+  Organization GST5, GST12, GST18 and GST28 from 2017-07-01. GST12 ends
+  2025-09-21; GST28 remains for tobacco goods until 2026-01-31; GST40 starts
+  2025-09-22. There is no GST0: the income Account's supply class decides nil
+  and exempt supplies.
 - **Money account** and **Payment Method**: see
   [Architecture](../architecture.md#money-accounts).
 - **Document** header: `number`, `financialYear`, `documentDate`,
@@ -1205,8 +1207,10 @@ balance` row for a non-zero balance; a name matching an existing
      each referenced account until their writes commit. Restoring an Item or
      Payment Method does not check its account, as in ERPNext and Zoho Books:
      posting to an archived account is refused.
-   - `supplyClass` never changes after creation: posted lines took their tax
-     treatment from it. A wrong class is archived and recreated.
+   - `account.update` can change an income account's `supplyClass` only while
+     it has no posted journal lines (`ACCOUNT_IN_USE` otherwise). The
+     organization-scoped existence check runs under the account's update lock.
+     Once used, a wrong class is archived and recreated.
    - Every new organization's core template includes `6810 Discount Allowed`
      and `6820 Bad Debts Written Off` for slice 9.
    - Web: Accounting > Chart of accounts shows desktop columns Name, Parent
@@ -1214,8 +1218,9 @@ balance` row for a non-zero balance; a name matching an existing
      present. Only archived rows show an Inactive badge. New account picks its
      parent from a `NativeSelect` grouped by type (a type's top level or an
      existing group), then Name, and GST supply class for income. For editors,
-     each row opens its Rename Sheet (`?edit=`); Mark inactive / Mark active is
-     a button in that Sheet for posting leaves, as for Parties and Items.
+     each row opens its Edit Sheet (`?edit=`), with Name and GST supply class
+     for income accounts. Mark inactive / Mark active is a button in that Sheet
+     for posting leaves, as for Parties and Items.
      Read-only rows have no edit link. Banking's Add account
      opens that same Sheet in Banking under Bank Accounts, then continues to Add
      payment method with the new account chosen.
@@ -1573,9 +1578,9 @@ Each row is a build item until its code lands; the
 | D10 | **A released credit is an advance of its source document** again: reversing an allocation returns the amount to the source's unapplied balance under its own `advanceSupply` (call 16). It has no tax effect while `taxableService` advances are refused; GST advance documents, when built, re-open the GST adjustment as India Compliance does.                                                                                                                                                                                                             | ERPNext UnReconcile returns the amount as unallocated on the Payment Entry; Zoho adds it back as an Excess Payment credit.                                                                |
 | D11 | **Home and Banking balances stop at today's business date**, like the balance sheet. Future-dated documents stay allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                     | Neither product blocks future accounting dates; bounding the balance removes the Banking versus balance-sheet mismatch.                                                                   |
 | D12 | **No negative-cash block or warning**, no future-lock-date block, and inactive parties and accounts may keep a balance (inactive blocks new documents only; reactivate to settle).                                                                                                                                                                                                                                                                                                                                                                            | ERPNext and Zoho allow all three by default.                                                                                                                                              |
-| D13 | **GST rates**: GST12 ends 2025-09-21 with the rest of the 12% slab; GST28 stays only for the tobacco goods to 2026-01-31; GST40 starts 2025-09-22. 3%, 0.25% and 1.5% arrive when a pilot sells those goods.                                                                                                                                                                                                                                                                                                                                                  | GST Council press release, September 2025.                                                                                                                                                |
+| D13 | **GST rates (built)**: GST12 ends 2025-09-21 with the rest of the 12% slab; GST28 stays only for the tobacco goods to 2026-01-31; GST40 starts 2025-09-22. 3%, 0.25% and 1.5% arrive when a pilot sells those goods.                                                                                                                                                                                                                                                                                                                                          | GST Council press release, September 2025.                                                                                                                                                |
 | D14 | **TDS stays half-up to the rupee** per deduction, so deposits by challan (whole rupees) match the ledger.                                                                                                                                                                                                                                                                                                                                                                                                                                                     | No statutory per-deduction rule found; ERPNext offers rupee rounding as an option.                                                                                                        |
-| D15 | **Chart templates**: the trust and society "Fees" account is `exempt`, and the professional "Rent Received" is `taxable` (commercial letting). A supply class can change while the account has no posted lines.                                                                                                                                                                                                                                                                                                                                               | Education services are exempt; renting commercial property is taxable.                                                                                                                    |
+| D15 | **Chart templates (built)**: the trust and society "Fees" account is `exempt`, and the professional "Rent Received" is `taxable` (commercial letting). A supply class can change while the account has no posted lines; otherwise `ACCOUNT_IN_USE` refuses the edit.                                                                                                                                                                                                                                                                                          | Education services are exempt; renting commercial property is taxable.                                                                                                                    |
 | D16 | **Small integrity rules**: two document types cannot share a prefix; a GSTIN's check character is validated; payment method names are unique ignoring case. Back-dated documents keep taking the next number (GST requires unique, consecutive numbers per year, not date order).                                                                                                                                                                                                                                                                             | CGST Rule 46(b); ERPNext and Zoho number by creation order.                                                                                                                               |
 
 ### CA acceptance
