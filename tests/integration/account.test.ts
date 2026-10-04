@@ -2,6 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
+import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -226,7 +227,7 @@ test("the chart protects system accounts, posting leaves and money leaves in use
   );
 });
 
-test("an unused income account can change its supply class", async () => {
+test("an unused income account changes its supply class and clears its items' GST rates", async () => {
   const orgSlug = organization.slug;
 
   const income = await accountantApi.account.create({
@@ -234,6 +235,14 @@ test("an unused income account can change its supply class", async () => {
     parent: { type: "income" },
     name: "Unused Membership Fees",
     supplyClass: "taxable",
+  });
+
+  const item = await accountantApi.item.create({
+    orgSlug,
+    name: "Membership",
+    unitPrice: "100.00",
+    incomeAccountId: income.id,
+    taxCode: "GST18",
   });
 
   const changed = await accountantApi.account.update({
@@ -249,6 +258,14 @@ test("an unused income account can change its supply class", async () => {
   const rows = await accountantApi.account.list({ orgSlug, type: "income" });
 
   expect(rows.find(({ id }) => id === income.id)?.supplyClass).toBe("exempt");
+
+  // A non-taxable item carries no GST rate, so its next edit is not refused.
+  const [stored] = await db
+    .select({ taxCode: items.taxCode })
+    .from(items)
+    .where(and(eq(items.orgId, organization.id), eq(items.id, item.id)));
+
+  expect(stored?.taxCode).toBeNull();
 });
 
 test("an income account with a posting cannot change its supply class", async () => {
