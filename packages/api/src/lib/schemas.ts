@@ -8,6 +8,7 @@ import {
   parseBasisPoints,
   parseMoney,
 } from "../core/money";
+import { OPENING_BALANCE_PREFIX, OPENING_ITEM_PREFIX } from "../core/number-prefixes";
 import { INDIAN_STATES } from "./indian-states";
 import { normalizedName } from "./normalized-name";
 
@@ -132,7 +133,7 @@ export function distinctDocumentPrefixes(
   settings: Record<(typeof DOCUMENT_PREFIX_FIELDS)[number], string>,
   context: z.RefinementCtx,
 ): void {
-  const prefixes = new Set<string>();
+  const prefixes = new Set<string>([OPENING_BALANCE_PREFIX, ...Object.values(OPENING_ITEM_PREFIX)]);
 
   for (const field of DOCUMENT_PREFIX_FIELDS) {
     const prefix = settings[field].trim().toUpperCase();

@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 
 import { drainAuditWrites } from "@accly/api/audit";
+import { OPENING_ITEM_PREFIX } from "@accly/api/core/number-prefixes";
 import { appRouter, type AppRouterClient } from "@accly/api/routers/index";
 import { auth } from "@accly/auth";
 
@@ -75,6 +76,25 @@ test("settings refuse document prefixes shared after trimming and ignoring case"
       expect.objectContaining({
         code: "custom",
         path: ["creditNotePrefix"],
+        params: { reason: "PREFIX_TAKEN" },
+      }),
+    ]),
+  });
+
+  const fixedPrefixRefusal = await expectORPCCode(
+    api.settings.update({
+      orgSlug: organization.slug,
+      ...settings,
+      invoicePrefix: ` ${OPENING_ITEM_PREFIX.openingClaim.toLowerCase()} `,
+    }),
+    "BAD_REQUEST",
+  );
+
+  expect(fixedPrefixRefusal.data).toMatchObject({
+    issues: expect.arrayContaining([
+      expect.objectContaining({
+        code: "custom",
+        path: ["invoicePrefix"],
         params: { reason: "PREFIX_TAKEN" },
       }),
     ]),

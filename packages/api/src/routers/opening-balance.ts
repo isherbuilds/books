@@ -9,11 +9,8 @@ import { settlementPaise } from "../core/allocations";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
-import {
-  assertNoOpeningBalance,
-  OPENING_BALANCE_PREFIX,
-  reverseOpening,
-} from "../core/opening-items";
+import { OPENING_BALANCE_PREFIX } from "../core/number-prefixes";
+import { assertNoOpeningBalance, reverseOpening } from "../core/opening-items";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";

@@ -264,6 +264,7 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   owner then changes the prefix, which starts a new consecutive series.
   Settings refuse a prefix shared by two document types after trimming and ignoring
   case (a `BAD_REQUEST` input issue on the duplicate field, `params.reason: PREFIX_TAKEN`).
+  The fixed opening-document prefixes `OB`, `OC` and `OA` are reserved by the same check.
 - There is no balances table: balances are sums of journal lines, as in ERPNext
   and Odoo. A period-close snapshot is
   [deferred](./specs/accounting-core.md#deferred).
