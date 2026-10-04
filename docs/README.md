@@ -27,8 +27,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
   [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
   is building them. D1–D3 are built and verified: lock, allocation, opening-balance,
   report and payment integration tests pass with type, lint, format and docs-build checks;
-  no UI surface changed. GST journals (D4), duplicate bills (D5) and the blank party
-  on Pay/Refund (M6, a bug) are built on their own branches.
+  no UI surface changed.
+  D4 is built and verified: journal, opening-balance, import, lock and unit tests pass;
+  the Journal account picker offers CGST Output Payable at 1440 and 390 px in both themes.
+  Duplicate bills (D5) and the blank party on Pay/Refund (M6, a bug) are built on their own branches.
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and
