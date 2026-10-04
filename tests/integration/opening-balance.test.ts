@@ -365,6 +365,13 @@ test("an Opening Balance and business on its date racing never both post", async
   ]);
 
   expect(outcomes.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+  expect(outcomes.find(({ status }) => status === "rejected")).toMatchObject({
+    reason: {
+      data: {
+        reason: expect.stringMatching(/^(BEFORE_OPENING_BALANCE|OPENING_BALANCE_AFTER_BUSINESS)$/),
+      },
+    },
+  });
 });
 
 test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
