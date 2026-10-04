@@ -47,7 +47,7 @@ three values and add its web origin to `s3.allowedOrigins`, never a wildcard.
 bun run create-founder <name> <password>       # FOUNDING_EMAIL, the only Organization creator
 bun run create-user <email> <name> <password>  # an account without an invitation
 bun run db:seed
-bun run db:seed:demo # complete the practical cases in an older base seed
+bun run db:seed:demo # add or complete the practical cases
 bun run db:seed:mega # fill Meridian Traders to 1M documents
 ```
 
@@ -70,8 +70,8 @@ local, interstate and B2B sales, a split-payment counter sale, an overdue part-p
 Invoice, an advance applied to an Invoice, eligible and ineligible Bill ITC,
 contractor TDS, direct and against Payments, a supplier advance, direct and
 cancelled Receipts, both Note types, an Opening Balance and a cash deposit
-Journal. Run `db:seed:demo` after an older base seed; it finds its marked cases
-before writing, so a rerun completes a partial seed without duplicates.
+Journal. `db:seed:demo` finds its marked cases before writing, so a rerun completes
+a partial seed without duplicates.
 
 `db:seed:mega` fills Meridian Traders to 1,000,000 total documents, the volume
 the query-performance measurements use; the other organizations keep their base
@@ -152,10 +152,8 @@ stays pinned. Check each Better Auth release for schema changes before an upgrad
 
 ## Code rules
 
-- Take the simplest happy path. Extract a helper at the second real call site;
-  delete unused exports.
-- Fail loudly on config, auth, money and data-integrity errors. No silent
-  defaults or broad catches.
+Follow the [repository hard rules](../AGENTS.md#hard-rules).
+
 - Money is `bigint` paise end to end. Rounding is half-up through the one
   `divideHalfUp` in `core/money.ts`, which tax, round-off and TDS share.
   Display with `formatMoney` and write plain text with `formatDecimal`. Input is
@@ -168,13 +166,10 @@ stays pinned. Check each Better Auth release for schema changes before an upgrad
   aliases and `satisfies`.
 - `null` means absent; `undefined` means omitted. Never both in one contract.
 - Comment why the obvious approach is wrong.
-- Never hand-edit or hand-write a migration, and never hand-edit
-  `routeTree.gen.ts`. The schema is the only migration source: change it, then
-  run `bun run db:generate`. Before any environment keeps data, delete the
-  baseline, regenerate it and reset with `bun run db:seed -- --reset`, with explicit approval
-  to delete local data. Once an environment keeps data, history is append-only:
-  retain its recorded baseline and generate incremental migrations.
-- No secret or server-only import reaches client assets.
+- Never hand-edit `routeTree.gen.ts`. Migration generation follows the
+  [repository migration rule](../AGENTS.md#hard-rules): regenerate the
+  pre-production baseline, then reset with `bun run db:seed -- --reset` only
+  with explicit approval immediately before deleting local data.
 
 ### React and forms
 
@@ -200,25 +195,14 @@ Nothing goes to `localStorage` or `sessionStorage`.
 - Subscribe narrowly: `useFieldArray`, `Watch`, exact field names.
 - A failed submit goes to the field the server named (`applyOrpcFieldError`);
   toast the rest.
-- If the page cannot render without a query, use `loadRouteQuery` and
-  `useSuspenseQuery`, and fail to the route boundary. Otherwise prefetch with
-  `.catch(() => {})`, read with `useQuery`, and show an `ErrorNote` in place.
-  Never both for one procedure.
-- Live lists add `OPERATIONAL_INFINITE_REFETCH`. The time zone and today's
-  business date come from `useOrgDateTime`; `settings.get` needs
-  `settings:read`.
-- A failed read renders `ErrorNote`; a list whose refresh fails keeps its rows
-  (`ListState`). A failed write goes through `handleWriteError`: a CONFLICT or
-  a lost response settles the screen (dismiss and refetch), and every other
-  refusal reaches its field or toasts `errorMessage(error, "Could not …")`.
-  Never print `error.message` raw.
-- Writes invalidate through `lib/domain-invalidation.ts`. Remote type-ahead
-  debounces before the query key. Filter locally only a complete, bounded list.
+- Query loading, refresh, read/write errors and invalidation follow
+  [Client patterns](./specs/client-patterns.md#queries-and-invalidation).
 
 ## Tests
 
 Pure logic goes in `tests/unit`. Anything that touches a router, auth or the
 database goes in `tests/integration`, on real PostgreSQL through `clientFor`.
+Tests wipe only a database whose name ends in `_test`.
 Prefer one workflow test to many micro-tests. Use top-level `test(...)` and no
 shared mutable setup; factories mint unique users and Organizations. Assert oRPC
 codes, invariants and state, not copy. Use `eventually` and

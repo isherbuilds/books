@@ -111,11 +111,10 @@ per entity.
 
 Use exact staff words in navigation and exact record names in code, never a
 generic Transaction, Entry or Account; the [glossary](../CONTEXT.md) holds the
-exact terms. A Member is a User's roles in one Organization;
-neither is tenant scope. A Party is any counterparty. Money received before
-supply is an advance: a liability until an allocation applies it. Never label a
-Receipt as the itemized bill. Invoice print headings follow accounting-core call 6:
-Tax Invoice or Bill of Supply. The pilot CA still approves printed fields.
+exact terms. Membership and scope follow
+[Architecture](./architecture.md#tenancy-and-authorization); accounting and print
+language follow [Accounting core](./specs/accounting-core.md#canonical-language)
+and its [print classes](./specs/accounting-core.md#architecture-calls).
 
 ## Delivery rules
 
@@ -126,17 +125,17 @@ Tax Invoice or Bill of Supply. The pilot CA still approves printed fields.
 - A pilot cutover imports masters and opening balances, never historic
   invoices. The old system becomes read-only.
 - Handover is XLSX and PDF. A one-way Tally adapter is evidence-gated:
-  TallyPrime XML is the chosen first source (2026-10-02,
-  [slice 7d](./specs/accounting-core.md#slices)), built only once a real
+  TallyPrime XML is the chosen first source
+  ([slice 7d](./specs/accounting-core.md#slices)), built only once a real
   anonymized export proves its mapping. Zoho Books waits for a pilot on it.
 
 ## Invariants
 
-- Every domain row has `orgId NOT NULL`; every query uses verified scope.
-- Posted documents never change. A correction is a linked document or a
-  reversal.
-- Money, tax, quantities, numbering, configuration and references fail loudly.
-- Balances come from journal lines, never from editable summaries.
+- Tenancy follows [Architecture](./architecture.md#tenancy-and-authorization).
+- Ledger and correction rules follow
+  [Accounting core](./specs/accounting-core.md#architecture-calls).
+- Money, tax, quantities, numbering, configuration and references fail loudly
+  under the [integrity rules](./development.md#code-rules).
 - AI proposes through the same authorized commands as a person, and model output
   is untrusted input. AI never writes the ledger directly and never bypasses
   tenancy, authorization, provenance, consent or review.
