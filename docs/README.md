@@ -23,9 +23,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
 
 - **[User-guide walkthrough findings](./research/docs-walkthrough-findings-2026-10-04.md)**:
   Active. 17 major findings, plus minor and polish items, from running every workflow
-  for the rebuilt guide in `apps/docs`. Triage the majors first: reversal and
-  allocation dating against locks (M1–M2), postings before the cutover (M3), GST
-  settlement (M4), duplicate bills (M5) and the blank party on Pay/Refund (M6).
+  for the rebuilt guide in `apps/docs`. Every design question is decided in
+  [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
+  is building them. Start with reversal and allocation dating against locks (D1,
+  D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
+  and the blank party on Pay/Refund (M6, a bug).
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and
@@ -145,11 +147,6 @@ ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
   miss the report budget on native PostgreSQL. Open the Party Ledger and five
   report PDF links in the running app and confirm they open without a Base UI
   native-button console warning.
-- **Released credits versus advances**: Active. Decide whether a credit
-  released by reversing an allocation is classified explicitly or recorded as
-  a released credit distinct from an advance, before any tax workflow reads
-  `advanceSupply`. The same applies to a Payment `against` remainder released
-  to `supplierAdvances` ([decision](./specs/accounting-core.md#slices)).
 - **Settlement reads at volume**: Verification. Every read of outstanding or
   unapplied goes through `settlementPaise`: per row, one indexed lookup of the
   document's single `post` party ledger line (a unique index) less its active

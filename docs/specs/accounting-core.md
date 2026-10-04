@@ -127,10 +127,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    lock follows `affectsTax`, stored at post, which marks any document in a GST
    register, exempt direct Receipts included. `allocation.apply` and
    `allocation.reverse` check the lock on their entry date.
-   A cancellation is checked on its reversal date. Ordinary documents reverse
-   on today's business date in the Organization's time zone. **Opening Balance
-   reverses on its original cutover date**, so cancellation and replacement
-   correct historical balances. A locked cutover needs an authorized exception
+   A cancellation is checked on its reversal date. **Every document reverses
+   on its own `documentDate`** (D1), the Opening Balance on its cutover date,
+   so cancellation and replacement correct historical balances. A locked cutover needs an authorized exception
    or reopening; keeping the period closed instead calls for a current-period
    Journal adjustment without cancelling the opening. Ledger rows remain
    append-only and `cancelledAt` records the actual cancellation instant
@@ -913,9 +912,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      advance balance goes to a leaf the CA names in `Accounts` (for example
      `GST payable at cutover` under Current Liabilities) and is cleared by
      Journal; a mid-year cutover carries year-to-date income and expense rows
-     into their leaves, taxable income into such a leaf. An imported GST
-     balance on a GST system account could never be cleared, since no Journal
-     or Payment may name one. Open question 1 records both. The 100-line cap
+     into their leaves, taxable income into such a leaf. From D4, GST
+     balances may sit on the GST system accounts at cutover and Journals clear
+     them. The 100-line cap
      of `openingBalance.post` belongs to the form; the import's Opening
      Balance is bounded by the sheet's 5,000 rows.
 
@@ -1369,7 +1368,7 @@ slice 9.
   and one credit; the totals are equal. The router refuses bad input as
   `BAD_REQUEST` before the core.
 - **Accounts.** Any active leaf, money leaves included. Refused: groups, GST
-  input, output and cess accounts, and `taxable` income when the Organization
+  input, output and cess accounts (admitted from D4), and `taxable` income when the Organization
   has a `gstin` (the call 16 guard). The party control accounts
   (`receivables`, `payables`, `customerAdvances`, `supplierAdvances`) are
   refused; slice 9a admits `receivables` with a required Party and keeps the
@@ -1466,7 +1465,7 @@ slice 9.
 
 | Not in the first Journal               | Gate                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- |
-| GST accounts and line tax              | The monthly GST-on-fee reclass gate                               |
+| Line tax (GST accounts arrive with D4) | The monthly GST-on-fee reclass gate                               |
 | Drafts and approval                    | Slice 4a drafts proven; more posters than reviewers               |
 | Recurring, templates, auto-reversal    | One Journal posted three months running, or a CA accrual workflow |
 | A Contra series or a Transfer document | The CA asks, or bank reconciliation opens                         |
@@ -1515,10 +1514,6 @@ slice 9.
   unregistered, consumer). Today a GSTIN decides B2B. Gate: the first SEZ,
   export or composition Party, together with the GSTR-1 tables and LUT rules
   that need it. The backfill is derivable from `gstin`.
-- **Payment mode apart from the money account.** A Payment Method is ERPNext's
-  Mode of Payment with its default account. Gate: the combined picker misses
-  the [speed gate](./client-patterns.md#speed-gate-h4), or a pilot user picks
-  a receipt-only method on a Payment.
 - **An Invoice Write Off action.** A bad debt is a slice 9a Journal: Dr
   `Bad Debts Written Off`, Cr `receivables` allocated to the Invoice. Gate:
   the CA writes off Invoices every month after slice 9a.
@@ -1540,10 +1535,6 @@ slice 9.
 - **Import updating existing masters, and Payment Method import.** Gate: a
   second cutover for one Organization, or a pilot with more than a handful of
   methods.
-- **GST and advance-account balances at cutover.** The Opening Balance refuses
-  GST accounts (slice 5), and slice 7 folds customer and supplier advances into
-  opening credits on the control accounts. Gate: the CA's answer to Open
-  question 1.
 - **Billing without General Accounting.** Gate: a hospital customer keeps
   Tally, or the hospital system joins this repository.
 - **Patient-to-Party link.** Gate: one shared Billing interaction proved from
@@ -1559,34 +1550,46 @@ Out of scope, each for its own spec: GST return JSON, Tally and Zoho exports,
 GSP filing, e-invoice, e-way bill, IMS, TDS returns, payroll, inventory
 valuation, multi-currency, MSME §37(2)(g) ageing and the agent read model.
 
-## Open questions
+## Decisions (2026-10-04)
 
-1. **CA acceptance**, recorded here with name and date: the call 16 table; the
-   13 TDS rows; the GST seed dates (GST28 ends 2026-01-31 and GST40 starts
-   2025-09-22, both from secondary sources; GST12 has no end date, so confirm
-   whether any supply still takes 12% after the 2025-09-22 rationalization); half-up rupee TDS versus exact
-   paise; the chart templates (the trust "Fees" account is `taxable`, the
-   professional "Rent Received" is `exempt`); and these worked examples, tax
-   excluded: a ₹10,000 advance with ₹4,000 applied to a ₹6,000 Invoice; a
-   Credit Note refunded by Payment; a supplier Debit Note against a Bill; a
-   Receipt shared by two Invoices, one allocation reversed, then cancelled; a
-   cutover with open Invoices and an advance for one Party; a TPA settlement
-   net of TDS with a disallowance; a dealer receipt net of TDS and a bank
-   charge; a school caution deposit; an IPD deposit. From slices 6 and 7: the
-   management P&L and balance sheet layout, with unclosed profit split into
-   current and earlier years; opening customer advances and supplier
-   on-account payments presented as opening credits on `receivables` and
-   `payables`, not on the advance accounts; and how GST ledger balances at
-   cutover enter the books while the Opening Balance refuses GST accounts.
-   None of these blocks building slices 6 and 7; each blocks CA acceptance.
-2. **Payment mode versus money account.** A Payment Method binds one name to
-   one account, and Receipt, Payment and a paid-now Invoice share one active
-   list, so a receipt-only card machine appears on Payment. ERPNext (Mode of
-   Payment plus Paid From/To) and Zoho Books (Payment Mode plus Deposit
-   To/Paid Through) keep the two apart. Candidate: a cash/bank account plus a
-   small mode list, with the likely account preselected. Measure it against
-   the combined picker on the [speed gate](./client-patterns.md#speed-gate-h4)
-   before any schema change.
+The open questions and the design choices behind the
+[walkthrough findings](../research/docs-walkthrough-findings-2026-10-04.md) are settled
+here from ERPNext v15 (source and docs) and Zoho Books India help. Where the two
+differ, the simpler rule wins; where this model differs from both, the row says why.
+Each row is a build item until its code lands; the
+[work registry](../README.md#work-lifecycle) tracks them. Revisit any row with the CA.
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Basis                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | **Every document reverses on its own date**, not today: a cancellation or amend writes its reversal dated the original `documentDate`, as the Opening Balance already does (call 7). The lock check therefore runs on the original date, so a document in a locked period cannot be cancelled or amended without an exception (books lock) or a reopened tax lock. Correct a filed invoice with a credit note. Ledger rows stay append-only; `cancelledAt` keeps the real instant. This closes findings M1 and the stale bank balance of a last-month cancel. | ERPNext default (Immutable Ledger off) reverses on the original posting date and `check_freezing_date` blocks the cancel; Zoho's lock blocks modifying locked-period transactions.        |
+| D2  | **An allocation is dated the later of its source and target document dates**, with no date field. Its reverse takes the same date. Both check the lock on that date (call 17).                                                                                                                                                                                                                                                                                                                                                                                | ERPNext "Reconciliation Takes Effect On" default computes the later of invoice and advance dates.                                                                                         |
+| D3  | **No posting dated on or before a posted Opening Balance's date**, except the Opening Balance and its opening items (`BEFORE_OPENING_BALANCE`).                                                                                                                                                                                                                                                                                                                                                                                                               | Deliberate difference: ERPNext has no cutover date and Zoho re-syncs opening balances after back-dated entries; this model has one cutover entry, so earlier documents would count twice. |
+| D4  | **Journals admit the GST ledger accounts** for payment and input-tax set-off (owner and accountant only, as all Journals). Such a line sets `affectsTax`, so the tax lock covers it. GST registers keep reading documents only. The **Opening Balance admits GST accounts** too, for balances at cutover.                                                                                                                                                                                                                                                     | India Compliance records GST payment and ITC set-off as Journal Entries on GST accounts; Zoho's GSTR-3B payment writes an offset journal; neither restricts GST balances in openings.     |
+| D5  | **A supplier invoice number is unique per supplier and financial year** among posted, uncancelled Bills (`BILL_NUMBER_TAKEN`). Receipts get no duplicate check.                                                                                                                                                                                                                                                                                                                                                                                               | ERPNext "Check Supplier Invoice Number Uniqueness" (same scope); Zoho blocks a repeated bill number per vendor and year.                                                                  |
+| D6  | **A Receipt can refund a supplier**: a `refund` settlement on a vendor's unapplied Debit Notes and Payment advances, mirroring the Payment that refunds Credit Notes.                                                                                                                                                                                                                                                                                                                                                                                         | Zoho Vendor Credits and Payments Made both offer Refund.                                                                                                                                  |
+| D7  | **A Debit Note against a Bill with TDS reverses TDS in proportion** to the taxable value it returns.                                                                                                                                                                                                                                                                                                                                                                                                                                                          | ERPNext returns recompute withholding on the negative net total.                                                                                                                          |
+| D8  | **Print titles follow the law**: an Invoice prints Tax Invoice or Bill of Supply by call 6 (the current fixed "INVOICE" heading is a bug), and Credit and Debit Notes get a PDF with the Rule 53(1A) particulars and the original invoice number and date.                                                                                                                                                                                                                                                                                                    | CGST s.31, Rules 46, 49 and 53(1A); India Compliance prints Tax Invoice and Credit/Debit Note headings.                                                                                   |
+| D9  | **Payment Method stays one name bound to one money account**, with no receipt-only or payment-only flag. The earlier payment-mode question closes without a schema change.                                                                                                                                                                                                                                                                                                                                                                                    | ERPNext Mode of Payment has no direction field; Zoho modes are one shared list.                                                                                                           |
+| D10 | **A released credit is an advance of its source document** again: reversing an allocation returns the amount to the source's unapplied balance under its own `advanceSupply` (call 16). It has no tax effect while `taxableService` advances are refused; GST advance documents, when built, re-open the GST adjustment as India Compliance does.                                                                                                                                                                                                             | ERPNext UnReconcile returns the amount as unallocated on the Payment Entry; Zoho adds it back as an Excess Payment credit.                                                                |
+| D11 | **Home and Banking balances stop at today's business date**, like the balance sheet. Future-dated documents stay allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                     | Neither product blocks future accounting dates; bounding the balance removes the Banking versus balance-sheet mismatch.                                                                   |
+| D12 | **No negative-cash block or warning**, no future-lock-date block, and inactive parties and accounts may keep a balance (inactive blocks new documents only; reactivate to settle).                                                                                                                                                                                                                                                                                                                                                                            | ERPNext and Zoho allow all three by default.                                                                                                                                              |
+| D13 | **GST rates**: GST12 ends 2025-09-21 with the rest of the 12% slab; GST28 stays only for the tobacco goods to 2026-01-31; GST40 starts 2025-09-22. 3%, 0.25% and 1.5% arrive when a pilot sells those goods.                                                                                                                                                                                                                                                                                                                                                  | GST Council press release, September 2025.                                                                                                                                                |
+| D14 | **TDS stays half-up to the rupee** per deduction, so deposits by challan (whole rupees) match the ledger.                                                                                                                                                                                                                                                                                                                                                                                                                                                     | No statutory per-deduction rule found; ERPNext offers rupee rounding as an option.                                                                                                        |
+| D15 | **Chart templates**: the trust and society "Fees" account is `exempt`, and the professional "Rent Received" is `taxable` (commercial letting). A supply class can change while the account has no posted lines.                                                                                                                                                                                                                                                                                                                                               | Education services are exempt; renting commercial property is taxable.                                                                                                                    |
+| D16 | **Small integrity rules**: two document types cannot share a prefix; a GSTIN's check character is validated; payment method names are unique ignoring case. Back-dated documents keep taking the next number (GST requires unique, consecutive numbers per year, not date order).                                                                                                                                                                                                                                                                             | CGST Rule 46(b); ERPNext and Zoho number by creation order.                                                                                                                               |
+
+### CA acceptance
+
+Still open, recorded here with name and date when the CA signs: the call 16 table;
+the 13 TDS rows; the management P&L and balance sheet layout, with unclosed profit
+split into current and earlier years; opening customer advances and supplier
+on-account payments presented as opening credits on `receivables` and `payables`;
+and these worked examples, tax excluded: a ₹10,000 advance with ₹4,000 applied to a
+₹6,000 Invoice; a Credit Note refunded by Payment; a supplier Debit Note against a
+Bill; a Receipt shared by two Invoices, one allocation reversed, then cancelled; a
+cutover with open Invoices and an advance for one Party; a TPA settlement net of TDS
+with a disallowance; a dealer receipt net of TDS and a bank charge; a school caution
+deposit; an IPD deposit. None blocks building; each blocks CA acceptance.
 
 ERPNext v15 and Zoho Books India reference check, 2026-09-24 (evidence in Git
 history): both use the same document-first sequence and separate sales,
