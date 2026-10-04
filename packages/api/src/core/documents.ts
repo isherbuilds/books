@@ -471,7 +471,7 @@ export async function writeDraft(
 
 // The caller holds this settings row FOR SHARE (or stronger) in the same
 // transaction before taking any document locks; Bills also lock their supplier
-// FOR UPDATE before entering here to serialize supplier-number checks.
+// FOR NO KEY UPDATE before entering here to serialize supplier-number checks.
 export async function postDocument(
   tx: DbTransaction,
   scope: Scope,

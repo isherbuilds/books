@@ -5,13 +5,14 @@ import { and, eq } from "drizzle-orm";
 /**
  * The active Party a document names, or null. Inside a posting transaction the row
  * is locked, so an archive waits for the post to commit; a draft save reads
- * through `db` and takes no lock. Bills take an exclusive lock for supplier numbers.
+ * through `db` and takes no lock. Bills use NO KEY UPDATE for supplier numbers,
+ * compatible with the KEY SHARE locks taken by document foreign-key checks.
  */
 export async function activeParty(
   executor: typeof db | DbTransaction,
   orgId: string,
   partyId: string,
-  mode: "share" | "update" = "share",
+  mode: "share" | "no key update" = "share",
 ): Promise<typeof parties.$inferSelect | null> {
   const query = executor
     .select()
