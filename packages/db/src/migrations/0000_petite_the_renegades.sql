@@ -482,6 +482,7 @@ CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("o
 CREATE UNIQUE INDEX "documents_org_number_idx" ON "documents" USING btree ("org_id","type","financial_year","number") WHERE "documents"."number" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_opening_balance_idx" ON "documents" USING btree ("org_id") WHERE "documents"."type" = 'openingBalance' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_type_date_id_idx" ON "documents" USING btree ("org_id","type","document_date","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "documents_bill_reference_idx" ON "documents" USING btree ("org_id","party_id","financial_year",lower("reference")) WHERE "documents"."type" = 'bill' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id","id");--> statement-breakpoint
 CREATE INDEX "documents_org_party_date_id_idx" ON "documents" USING btree ("org_id","party_id","document_date","id");--> statement-breakpoint
 CREATE INDEX "documents_search_text_idx" ON "documents" USING gin ("search_text" gin_trgm_ops);--> statement-breakpoint

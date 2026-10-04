@@ -33,6 +33,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   Remaining: D6 supplier refund Receipt and D7 proportional TDS on Debit Notes
   (M7/M8), M14–M17 (join page, phone invite form, password reset copy, join
   audit), and the minor/polish lists. M12 is closed by D12, not a blocker.
+  Open UI checks: change an unused income account's supply class at 1440 and
+  390 px in both themes. Recapture the Edit account, apply-credit ledger and
+  quarter-close screenshots (and the quarter-close table) on a re-seeded demo.
   Next: build D6/D7 and resolve the remaining findings against their owner docs.
 
 - **[Combobox input simplification](./specs/client-patterns.md)**: Verification.

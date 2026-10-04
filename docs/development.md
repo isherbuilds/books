@@ -47,7 +47,7 @@ three values and add its web origin to `s3.allowedOrigins`, never a wildcard.
 bun run create-founder <name> <password>       # FOUNDING_EMAIL, the only Organization creator
 bun run create-user <email> <name> <password>  # an account without an invitation
 bun run db:seed
-bun run db:seed:demo # add or complete the practical cases
+bun run db:seed:demo # add or complete the practical cases after db:seed
 bun run db:seed:mega # fill Meridian Traders to 1M documents
 ```
 

@@ -9,6 +9,7 @@ are not kept; each entry names the code that owns it and how to reproduce it. Th
 is evidence: the [work registry](../README.md#work-lifecycle) owns status, and each fix
 updates the owning spec or page. Design choices are settled in
 [accounting-core Decisions D1–D16](../specs/accounting-core.md#decisions-2026-10-04).
+Where a suggested fix below differs from a decision, the decision wins.
 
 What passed: role permissions match `access.ts` on the sidebar, settings, record
 actions and direct API calls; Cedar Components reconciles (trial balance, balance
