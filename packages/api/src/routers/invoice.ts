@@ -145,18 +145,30 @@ async function resolveInvoice(
 
   const rateByCode = await ratesByCode(executor, scope.orgId, taxCodes, documentDate);
 
-  if (taxCodes.some((code) => !rateByCode.has(code))) {
-    throw badRequest("TAX_RATE_MISSING", "An item has no GST rate effective on the invoice date.");
-  }
-
   // Every line is an Item (accounting-core call 5): the Item carries the income account
   // and the dated rate, and the line may override its description and price.
   const unresolvedLines = input.lines.map((line) => {
     const stored = itemById.get(line.itemId)!;
     const unitPricePaise = line.unitPrice ?? stored.item.unitPricePaise;
     const amountPaise = boundedPaise(BigInt(line.quantity) * unitPricePaise);
-    const rate = stored.item.taxCode ? rateByCode.get(stored.item.taxCode)! : undefined;
     const rateApplies = registered && stored.account.supplyClass === "taxable";
+
+    if (rateApplies && stored.item.taxCode === null) {
+      throw badRequest(
+        "ITEM_TAX_CODE_REQUIRED",
+        `The item "${stored.item.name}" needs a GST rate before it can be invoiced.`,
+      );
+    }
+
+    const rate =
+      rateApplies && stored.item.taxCode ? rateByCode.get(stored.item.taxCode) : undefined;
+
+    if (rateApplies && !rate) {
+      throw badRequest(
+        "TAX_RATE_MISSING",
+        "An item has no GST rate effective on the invoice date.",
+      );
+    }
 
     return {
       account: stored.account,
@@ -173,9 +185,9 @@ async function resolveInvoice(
         quantity: line.quantity,
         unitPricePaise,
         mrpPaise: stored.item.mrpPaise,
-        taxRateId: rateApplies ? rate!.id : null,
+        taxRateId: rate?.id ?? null,
       },
-      rateBasisPoints: rateApplies ? rate!.rateBasisPoints : null,
+      rateBasisPoints: rate?.rateBasisPoints ?? null,
     };
   });
 

@@ -49,6 +49,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   `active` flag. The form never preselects the income Account: its supply class
   decides the tax treatment. `taxCode` is required exactly when the income Account is
   `taxable`.
+  If an unused account changes from exempt to taxable, a registered
+  organization's invoice refuses Items still lacking a rate
+  (`ITEM_TAX_CODE_REQUIRED`); edit those Items before invoicing.
 - **Tax Rate**: `code`, `name`, an integer `rateBasisPoints` from 0 to 10,000,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited, and
   `(Organization, code, effectiveFrom)` is unique. `seedTaxRates` gives each

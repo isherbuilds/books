@@ -960,3 +960,39 @@ test("a percentage discount beyond the storable range is refused by quote, draft
   await expectReason(api.invoice.saveDraft(fields), "INVOICE_AMOUNT_TOO_LARGE");
   await expectReason(api.invoice.post(fields), "INVOICE_AMOUNT_TOO_LARGE");
 });
+
+test("an item needs a GST rate after its unused account becomes taxable", async () => {
+  const orgSlug = organization.slug;
+
+  const income = await api.account.create({
+    orgSlug,
+    parent: { type: "income" },
+    name: "Reclassified Service Income",
+    supplyClass: "exempt",
+  });
+
+  const item = await api.item.create({
+    orgSlug,
+    name: "Reclassified Service",
+    unitPrice: "100.00",
+    incomeAccountId: income.id,
+  });
+
+  await api.account.update({
+    orgSlug,
+    accountId: income.id,
+    name: income.name,
+    supplyClass: "taxable",
+    updatedAt: income.updatedAt.toISOString(),
+  });
+
+  await expectReason(
+    api.invoice.post({
+      orgSlug,
+      partyId: party.id,
+      placeOfSupplyStateCode: "27",
+      lines: [{ kind: "item", itemId: item.id, quantity: 1 }],
+    }),
+    "ITEM_TAX_CODE_REQUIRED",
+  );
+});
