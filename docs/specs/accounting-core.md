@@ -255,9 +255,10 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
    allocations use `party.openItems`; credits use `party.openCredits` (4b-ii).
    Document registers page newest document date first, then id, through
-   `(org_id, type, document_date, id)`; their cursor remains a document id.
-   A missing cursor document refuses with `CONFLICT` / `STALE_CURSOR`, so a
-   discarded draft cannot silently end pagination.
+   `(org_id, type, document_date, id)`; their cursor remains a document id,
+   resolved inside the page's statement (`dateCursor`). A cursor draft
+   discarded between pages ends the list until its next refetch.
+   The Notes register lists two types, so it sorts their two index ranges.
    Party-filtered registers use `(org_id, party_id, document_date, id)`. Only
    Invoice and Bill registers exempt drafts from the period.
    Open: CA acceptance, and posting p95

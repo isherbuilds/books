@@ -68,8 +68,7 @@ Check UI items in the running app on desktop and mobile, in both themes.
   Receipts): October bitmap scan + sort 8,328.1 ms (1,785 hit / 7,296 read) →
   party/date/id scan 32.2–84.4 ms (30–31 hit / 0–1 read); all-time 63.7 ms
   (98 hit / 44 read) → 2.6–8.3 ms (41 hit / 0 read).
-  Registers page newest document date first with the same id cursor (a missing
-  cursor document refuses with `STALE_CURSOR`); only Invoice and Bill periods
+  Registers page newest document date first with the same id cursor; only Invoice and Bill periods
   retain the draft exemption. Date/id indexes serve type and
   party filters; the obsolete type/id index is removed, while the party/id index
   stays for `party.transactions`. Both temporary measurement indexes were dropped;
