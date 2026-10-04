@@ -18,7 +18,6 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -46,7 +45,7 @@ import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
-import { partyPickerOptions, usePartyName } from "@/lib/parties";
+import type { PartyOption } from "@/lib/parties";
 
 const schema = z
   .object({
@@ -148,16 +147,27 @@ const defaults = (today: string, partyId: string | null, paymentMethodId = ""): 
 export function PaymentForm({
   orgSlug,
   today,
-  initialPartyId,
+  initialParty,
+  initialExposureSide,
   onClose,
 }: {
   orgSlug: string;
   today: string;
-  initialPartyId?: string;
+  initialParty?: PartyOption;
+  initialExposureSide?: "payable" | "receivable";
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const form = useZodForm(schema, { defaultValues: defaults(today, initialPartyId ?? null) });
+
+  const form = useZodForm(schema, {
+    defaultValues: {
+      ...defaults(today, initialParty?.id ?? null),
+      partyName: initialParty?.name ?? "",
+      settlementKind: initialExposureSide ? "against" : "advance",
+      exposureSide: initialExposureSide ?? "payable",
+    },
+  });
+
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
   const exposureSide = useWatch({ control: form.control, name: "exposureSide" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
@@ -173,7 +183,6 @@ export function PaymentForm({
   };
 
   const canSettle = useCan(orgSlug, { bill: ["read"], note: ["read"] });
-  const parties = useQuery(partyPickerOptions(orgSlug));
 
   const accounts = useQuery(accountListOptions(orgSlug));
   const spendAccounts = accounts.data && postableAccounts(accounts.data, ["expense", "asset"]);
@@ -225,13 +234,6 @@ export function PaymentForm({
   );
 
   const section = sections.data?.find((item) => item.id === tdsSectionId);
-
-  const initialPartyName = usePartyName(orgSlug, initialPartyId, parties.data?.rows);
-
-  useEffect(() => {
-    if (initialPartyName && form.getValues("partyId") === initialPartyId)
-      form.setValue("partyName", initialPartyName);
-  }, [initialPartyId, initialPartyName, form]);
 
   const post = useMutation(
     orpc.payment.post.mutationOptions({

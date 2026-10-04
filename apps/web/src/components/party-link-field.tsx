@@ -7,7 +7,7 @@ import {
 } from "@accly/ui/components/form";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type Ref } from "react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 
 import { LinkField } from "@/components/link-field";
 import { PartySheet } from "@/components/party-form";
@@ -112,6 +112,7 @@ export function DocumentPartyField({
   onPartyChange?: (party: PartyOption | null) => void;
 }) {
   const form = useFormContext<DocumentPartyValues>();
+  const partyName = useWatch({ control: form.control, name: "partyName", exact: true });
   const parties = useQuery(partyPickerOptions(orgSlug, role));
   const canCreate = useCan(orgSlug, { party: ["create"] });
   const [createSeed, setCreateSeed] = useState<string | null>(null);
@@ -138,7 +139,7 @@ export function DocumentPartyField({
                 orgSlug={orgSlug}
                 role={role}
                 parties={parties}
-                value={field.value ? { id: field.value, name: form.getValues("partyName") } : null}
+                value={field.value ? { id: field.value, name: partyName } : null}
                 onSelect={select}
                 onCreate={canCreate ? setCreateSeed : undefined}
                 clearable={clearable}

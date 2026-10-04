@@ -213,7 +213,7 @@ function NoteSheetRoute() {
                 void navigate({
                   to: "/$orgSlug/payments",
                   params: { orgSlug },
-                  search: { create: true, payeeId: note.partyId! },
+                  search: { create: true, payeeId: note.partyId!, payAgainst: "receivable" },
                 })
               }
             >
