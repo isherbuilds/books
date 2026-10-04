@@ -30,7 +30,7 @@ import { amendDocument, postedNumber, reverseDocument } from "../core/documents"
 import { formatDecimal } from "../core/money";
 import type { DocumentPosting } from "../core/posting";
 import { businessDate } from "./business-date";
-import { impossible } from "./conflict";
+import { conflict, impossible } from "./conflict";
 import type { Scope } from "./procedures/factory";
 import {
   documentListFields,
@@ -84,13 +84,21 @@ function documentListWhere(
   orgId: string,
   types: readonly DocumentType[],
   input: DocumentListInput,
+  cursor: SQL | undefined,
 ) {
+  // Only Invoices and Bills have drafts outside the period. An unnecessary draft
+  // OR prevents the other registers from seeking their date range in the index.
   return and(
     eq(documents.orgId, orgId),
     inArray(documents.type, [...types]),
-    input.cursor ? lt(documents.id, input.cursor) : undefined,
+    cursor,
     input.partyId ? eq(documents.partyId, input.partyId) : undefined,
-    documentPeriod(input),
+    types.some((type) => type === "invoice" || type === "bill")
+      ? documentPeriod(input)
+      : and(
+          input.from ? gte(documents.documentDate, input.from) : undefined,
+          input.to ? lte(documents.documentDate, input.to) : undefined,
+        ),
   );
 }
 
@@ -99,8 +107,9 @@ function documentListWhere(
 const SEARCH_WINDOW = 1_000;
 
 /**
- * One register page, newest first. `read` runs the register's own query with `where`
- * and any filters of its own, ordered by `id` descending and limited to `limit + 1`.
+ * One register page, newest document date first. `read` runs the register's own query
+ * with `where` and its own filters, ordered by `(document_date, id)` descending and
+ * limited to `limit + 1`. The cursor stays a document id.
  *
  * A search term matches a substring of `documents.search_text`. PostgreSQL estimates
  * that match across every organization, so a term common elsewhere or in old history
@@ -115,27 +124,47 @@ export async function registerPage<T>(
   input: DocumentListInput,
   read: (where: SQL | undefined) => PromiseLike<T[]>,
 ): Promise<{ rows: T[]; hasMore: boolean }> {
-  const listed = documentListWhere(orgId, types, input);
+  let cursor: SQL | undefined;
+
+  if (input.cursor) {
+    const [position] = await db
+      .select({ documentDate: documents.documentDate, id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.orgId, orgId), eq(documents.id, input.cursor)));
+
+    if (!position) {
+      throw conflict("STALE_CURSOR", "This list changed. Reload it and try again.");
+    }
+
+    // Bind the resolved position so deletion after this read cannot empty the page.
+    cursor = sql`(${documents.documentDate}, ${documents.id}) < (${position.documentDate}::date, ${position.id})`;
+  }
+
+  const listed = documentListWhere(orgId, types, input, cursor);
 
   if (!input.q) return pageOf(await read(listed), input.limit);
 
   const matches = ilike(documents.searchText, likePattern(input.q));
 
   const [edge] = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, documentDate: documents.documentDate })
     .from(documents)
-    .where(
-      and(
-        eq(documents.orgId, orgId),
-        inArray(documents.type, [...types]),
-        input.cursor ? lt(documents.id, input.cursor) : undefined,
-      ),
-    )
-    .orderBy(desc(documents.id))
+    .where(and(eq(documents.orgId, orgId), inArray(documents.type, [...types]), cursor))
+    .orderBy(desc(documents.documentDate), desc(documents.id))
     .offset(SEARCH_WINDOW - 1)
     .limit(1);
 
-  const recent = await read(and(listed, matches, edge ? gte(documents.id, edge.id) : undefined));
+  const edgePosition = edge ? sql`(${edge.documentDate}::date, ${edge.id})` : undefined;
+
+  const recent = await read(
+    and(
+      listed,
+      matches,
+      edgePosition
+        ? sql`(${documents.documentDate}, ${documents.id}) >= ${edgePosition}`
+        : undefined,
+    ),
+  );
 
   if (!edge || recent.length > input.limit) return pageOf(recent, input.limit);
 
@@ -148,13 +177,17 @@ export async function registerPage<T>(
       and(
         eq(documents.orgId, orgId),
         inArray(documents.type, [...types]),
-        lt(documents.id, edge.id),
+        sql`(${documents.documentDate}, ${documents.id}) < ${edgePosition}`,
         matches,
       ),
     );
 
   const rest = await read(
-    and(listed, lt(documents.id, edge.id), sql`${documents.id} = any(array(${older}))`),
+    and(
+      listed,
+      sql`(${documents.documentDate}, ${documents.id}) < ${edgePosition}`,
+      sql`${documents.id} = any(array(${older}))`,
+    ),
   );
 
   return pageOf([...recent, ...rest], input.limit);
@@ -313,7 +346,7 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
               : undefined,
         ),
       )
-      .orderBy(desc(documents.id))
+      .orderBy(desc(documents.documentDate), desc(documents.id))
       .limit(input.limit + 1),
   );
 

@@ -141,6 +141,14 @@ Query, form and invalidation rules are in
   reads the index for older ones only when the page is not full: PostgreSQL
   estimates a term's matches across every organization, so one plan alone can
   walk a whole register or collect every match of a common term.
+  Document registers order newest first on `(document_date, id)` through
+  `documents_org_type_date_id_idx`; an id cursor resolves its tenant-scoped date
+  once, then binds that position for tuple comparisons. A missing cursor document
+  refuses with `CONFLICT` / `STALE_CURSOR`, never an empty final page. Search window
+  boundaries use the same tuple.
+  Party-filtered registers use `documents_org_party_date_id_idx`; only Invoice and
+  Bill periods exempt drafts, so other registers seek their date range directly.
+  `party.transactions` keeps its creation-order cursor and `documents_org_party_idx`.
 - Balance sums read an index alone: `debit, credit` trail the account ledger
   index.
 - `amount_paise` trails both party ledger indexes, so party balances and

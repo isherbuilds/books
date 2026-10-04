@@ -265,6 +265,12 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
    the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
    allocations use `party.openItems`; credits use `party.openCredits` (4b-ii).
+   Document registers page newest document date first, then id, through
+   `(org_id, type, document_date, id)`; their cursor remains a document id.
+   A missing cursor document refuses with `CONFLICT` / `STALE_CURSOR`, so a
+   discarded draft cannot silently end pagination.
+   Party-filtered registers use `(org_id, party_id, document_date, id)`. Only
+   Invoice and Bill registers exempt drafts from the period.
    Open: CA acceptance, and posting p95
    under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
    receipts per organization).
