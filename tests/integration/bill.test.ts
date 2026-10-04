@@ -203,7 +203,7 @@ test("a draft retains its TDS section and dated tax code for editing", async () 
   });
 });
 
-test("amend cancels the bill and copies its editable data to a linked draft", async () => {
+test("amend copies the bill to a linked draft and releases its supplier number for reposting", async () => {
   const posted = await api.bill.post({
     orgSlug: organization.slug,
     partyId: vendor.id,
@@ -259,6 +259,95 @@ test("amend cancels the bill and copies its editable data to a linked draft", as
   expect(
     (await api.bill.get({ orgSlug: organization.slug, billId: updated.id })).amendedFromId,
   ).toBe(posted.id);
+
+  const reposted = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    reference: "SUP-AMEND",
+    documentDate: "2026-09-12",
+    draft: updated,
+    lines: [
+      { accountId: expense.id, description: "Corrected", amount: "200.00", itcEligible: false },
+    ],
+  });
+
+  expect((await api.bill.get({ orgSlug: organization.slug, billId: reposted.id })).state).toBe(
+    "posted",
+  );
+});
+
+test("concurrent bills refuse a repeated supplier number and leave the refused draft editable", async () => {
+  const input = {
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    documentDate: "2026-09-12",
+    reference: "SUP-DUPLICATE",
+    lines: [
+      { accountId: expense.id, description: "Services", amount: "100.00", itcEligible: false },
+    ],
+  };
+
+  const firstDraft = await api.bill.saveDraft(input);
+  const secondInput = { ...input, reference: "  sup-duplicate  " };
+  const secondDraft = await api.bill.saveDraft(secondInput);
+
+  const results = await Promise.allSettled([
+    api.bill.post({ ...input, draft: firstDraft }),
+    api.bill.post({ ...secondInput, draft: secondDraft }),
+  ]);
+
+  expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+
+  const refused = required(
+    results.find(({ status }) => status === "rejected"),
+    "refused bill",
+  );
+
+  if (refused.status !== "rejected") throw new Error("expected a refused bill");
+  expect(refused.reason).toMatchObject({
+    code: "BAD_REQUEST",
+    data: { reason: "BILL_NUMBER_TAKEN" },
+  });
+  const refusedDraft = results[0]?.status === "rejected" ? firstDraft : secondDraft;
+  expect((await api.bill.get({ orgSlug: organization.slug, billId: refusedDraft.id })).state).toBe(
+    "draft",
+  );
+});
+
+test("supplier numbers can repeat for another supplier or year and after cancellation", async () => {
+  const input = {
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    documentDate: "2026-09-12",
+    reference: "SUP-REUSABLE",
+    lines: [
+      { accountId: expense.id, description: "Services", amount: "100.00", itcEligible: false },
+    ],
+  };
+
+  const first = await api.bill.post(input);
+
+  const otherVendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Another Bill Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  const otherSupplierBill = await api.bill.post({ ...input, partyId: otherVendor.id });
+  const nextYearBill = await api.bill.post({ ...input, documentDate: "2027-04-01" });
+  await api.bill.cancel({
+    orgSlug: organization.slug,
+    billId: first.id,
+    reason: "Wrong bill",
+  });
+  const replacement = await api.bill.post(input);
+
+  for (const posted of [otherSupplierBill, nextYearBill, replacement]) {
+    expect((await api.bill.get({ orgSlug: organization.slug, billId: posted.id })).state).toBe(
+      "posted",
+    );
+  }
 });
 
 test("a TDS section requires the supplier PAN", async () => {

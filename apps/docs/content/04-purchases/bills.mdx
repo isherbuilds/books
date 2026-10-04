@@ -91,6 +91,12 @@ states), invoice
   </Step>
 </Steps>
 
+Posting refuses a supplier invoice number already posted for the same supplier
+in the same financial year. It ignores letter case and spaces at either end and
+shows the error on **Supplier invoice number**. Drafts can share a number; a
+cancelled bill does not reserve it. Another supplier or financial year can use
+the same number.
+
 <Frame caption="A bill for brass rod from a Gujarat supplier. Place of supply is Maharashtra, so the bill takes IGST.">
   ![New bill form with one line](./images/bills-new-form.webp)
 </Frame>

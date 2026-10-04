@@ -26,8 +26,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
   for the rebuilt guide in `apps/docs`. Every design question is decided in
   [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
   is building them. Start with reversal and allocation dating against locks (D1,
-  D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
+  D2), postings before the cutover (D3), GST journals (D4)
   and the blank party on Pay/Refund (M6, a bug).
+  Duplicate bills (D5): Verification; posting now refuses the repeated supplier
+  number on its field. Integration and running-form checks remain.
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and

@@ -92,7 +92,9 @@ async function resolveBill(
     throw badRequest("DUE_DATE_BEFORE_DOCUMENT", "Due date cannot be before the bill date.");
   }
 
-  const party = await activeParty(executor, scope.orgId, input.partyId);
+  // Settings are share-locked first; lock the supplier exclusively before checking
+  // its invoice numbers, so concurrent bill posts cannot both pass the check.
+  const party = await activeParty(executor, scope.orgId, input.partyId, "update");
 
   if (!party) throw badRequest("PARTY_INVALID", "Choose an active party in this organization.");
 
