@@ -9,6 +9,7 @@ import { sql, type AnyColumn } from "drizzle-orm";
 type ConflictReason =
   | "DUPLICATE"
   | "STALE_RECORD"
+  | "STALE_CURSOR"
   | "PARTY_NAME_COLLISION"
   | "PARTY_GSTIN_TAKEN"
   | "ITEM_NAME_TAKEN"

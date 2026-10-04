@@ -348,7 +348,7 @@ export const receiptRouter = {
           and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
         )
         .where(and(listed, settlementListWhere(input)))
-        .orderBy(desc(documents.id))
+        .orderBy(desc(documents.documentDate), desc(documents.id))
         .limit(input.limit + 1),
     );
   }),

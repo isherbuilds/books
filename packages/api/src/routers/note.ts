@@ -305,7 +305,7 @@ export const noteRouter = {
             and(eq(against.orgId, orgId), eq(against.id, documents.againstDocumentId)),
           )
           .where(listed)
-          .orderBy(desc(documents.id))
+          .orderBy(desc(documents.documentDate), desc(documents.id))
           .limit(input.limit + 1),
     );
 

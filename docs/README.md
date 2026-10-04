@@ -61,6 +61,19 @@ Check UI items in the running app on desktop and mobile, in both themes.
   party statement refusal timing and S7 close-out. The local database is on
   the current baseline with `db:seed:volume`; run `bun run db:seed:mega` for
   the mega-volume checks.
+  M10: Ridgeview's 100,019 Receipts, October 2026 default period, first 25 rows
+  (`LIMIT 26`), `EXPLAIN (ANALYZE, BUFFERS)`: backward primary-key scan discarded
+  171,906 rows, 3,421.9 ms (11,011 buffers hit / 20,226 read); date/id scan with
+  a seekable period 21.4 ms (23 hit / 7 read). Ridgeview's largest party (11,696
+  Receipts): October bitmap scan + sort 8,328.1 ms (1,785 hit / 7,296 read) →
+  party/date/id scan 32.2–84.4 ms (30–31 hit / 0–1 read); all-time 63.7 ms
+  (98 hit / 44 read) → 2.6–8.3 ms (41 hit / 0 read).
+  Registers page newest document date first with the same id cursor (a missing
+  cursor document refuses with `STALE_CURSOR`); only Invoice and Bill periods
+  retain the draft exemption. Date/id indexes serve type and
+  party filters; the obsolete type/id index is removed, while the party/id index
+  stays for `party.transactions`. Both temporary measurement indexes were dropped;
+  no migrations or seed ran.
 - **Loading indicators**: Verification. The list, picker, invitation, join,
   allocation and opening-balance wait states use `WaveLoader`; types, lint and
   build pass. Check a loading state at desktop and mobile widths in both themes

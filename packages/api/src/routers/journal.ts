@@ -154,7 +154,7 @@ export const journalRouter = {
         })
         .from(documents)
         .where(and(listed, input.state ? eq(documents.state, input.state) : undefined))
-        .orderBy(desc(documents.id))
+        .orderBy(desc(documents.documentDate), desc(documents.id))
         .limit(input.limit + 1),
     );
 

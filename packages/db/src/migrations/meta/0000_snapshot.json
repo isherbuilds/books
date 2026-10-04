@@ -1,5 +1,5 @@
 {
-  "id": "e67d472c-f839-44be-9927-d00fdc6acb52",
+  "id": "85e141e8-e90d-4dca-ae4a-27f426684490",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2490,8 +2490,8 @@
           "method": "btree",
           "with": {}
         },
-        "documents_org_type_date_idx": {
-          "name": "documents_org_type_date_idx",
+        "documents_org_type_date_id_idx": {
+          "name": "documents_org_type_date_id_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -2507,27 +2507,6 @@
             },
             {
               "expression": "document_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "documents_org_type_id_idx": {
-          "name": "documents_org_type_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2555,6 +2534,39 @@
             },
             {
               "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_org_party_date_id_idx": {
+          "name": "documents_org_party_date_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "document_date",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
