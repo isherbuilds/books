@@ -1,0 +1,78 @@
+---
+title: Accounting
+description: Post adjusting journals, write off bad debts, and close a period with locks and exceptions
+---
+
+Most entries in Accly Books come from [documents](/glossary#document), the business
+papers you record: an [invoice](/glossary#invoice) (a bill you send a customer)
+[posts](/glossary#post) the sale and the [GST](/glossary#gst) (Goods and Services Tax),
+and a [receipt](/glossary#receipt) posts the money you receive. To post is to write the
+entry into the books for good. Accounting covers the two tools that sit beside those
+documents. A [**journal**](/glossary#journal), a manual entry, posts what no document
+covers, such as [depreciation](/glossary#depreciation) (the share of an asset's cost
+used up in the period) or a [bad debt](/glossary#write-off) (money a customer will
+never pay). A [**lock**](/glossary#lock) closes a period to new entries after your CA
+(Chartered Accountant) has reviewed it and after you file the GST return.
+
+Find **Journals** under **Accounting** in the sidebar. Find **Locks** under
+**Settings → Locks**.
+
+<CardGroup>
+  <Card title="Journals" href="/accounting/journals">
+    Post a balanced debit and credit entry for depreciation, bank charges, transfers between cash
+    and bank, or a bad-debt write-off against a customer's invoice.
+  </Card>
+  <Card title="Locks" href="/accounting/locks">
+    Close the books and the tax period through a date, and let one person post a late correction for
+    a limited time.
+  </Card>
+</CardGroup>
+
+## When to use a journal and when to use a document
+
+Use a document whenever one fits. The document carries the [party](/glossary#party)
+(the customer or vendor), the GST and the print, and the reports group it correctly.
+Use a journal only for what is left, such as an [accrual](/glossary#accrual) (an
+expense or income that belongs to this period but is paid later) or a
+[contra](/glossary#contra) entry (money moved between your own cash and bank).
+
+| You want to                                                                            | Use                                                                    |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Bill a customer or record a sale with GST                                              | [Invoice](/sales/invoices)                                             |
+| Record a vendor's bill, including bank charges that carry GST                          | [Bill](/purchases/bills)                                               |
+| Receive or pay money, with a bank fee                                                  | [Receipt](/sales/receipts) or [Payment](/purchases/payments)           |
+| Take a part payment and write off the small rest of the invoice                        | [Receipt](/sales/receipts) with a write-off line                       |
+| Reduce an invoice for a return or a discount                                           | [Credit note](/sales/credit-notes)                                     |
+| Book depreciation, accruals, bank charges without GST, or a cash deposit into the bank | [Journal](/accounting/journals)                                        |
+| Write off a customer's unpaid invoice                                                  | [Journal](/accounting/journals#write-off-a-bad-debt) with a party line |
+| Stop anyone from changing a period you have closed                                     | [Lock](/accounting/locks)                                              |
+
+## Who can do what
+
+| Action                       | Owner | Accountant | Chartered Accountant | Operator |
+| ---------------------------- | ----- | ---------- | -------------------- | -------- |
+| See journals                 | Yes   | Yes        | Yes                  | No       |
+| Post and cancel journals     | Yes   | Yes        | No                   | No       |
+| See the locks                | Yes   | Yes        | Yes                  | No       |
+| Set or clear a lock          | Yes   | No         | Yes                  | No       |
+| Grant or revoke an exception | Yes   | No         | Yes                  | No       |
+
+Each member's [role](/glossary#roles) decides what they can do. See
+[Roles and access](/getting-started/roles-and-access) for the full table.
+
+## Closing a period, in short
+
+1. Post the period's adjusting journals: depreciation, accruals, bank charges,
+   write-offs.
+2. Ask your CA to review the [Trial balance](/reports/trial-balance) for the
+   period: the list of every account's balance, where the debits and credits must
+   agree ([trial balance](/glossary#trial-balance)).
+3. File the GST return ([GSTR-1](/glossary#gstr), the monthly or quarterly return of
+   your sales) from the GST outward and inward registers on [Reports](/reports).
+4. Set the **Books** lock and the **Tax period** lock to the last day of the period.
+5. For a late correction, grant a short [exception](/glossary#lock-exception), a
+   time-limited permission for one person to post into the locked period. Post the
+   correction and let the exception expire.
+
+[Closing a quarter](/scenarios/quarter-close) follows Cedar Components through
+these steps for April to June 2026.

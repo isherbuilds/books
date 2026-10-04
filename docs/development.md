@@ -26,7 +26,8 @@ only when investigating a measured interaction; instrumentation changes timings.
 ## Development URLs
 
 Web is `https://accly.localhost`, API `https://api.accly.localhost`, docs
-`https://docs.accly.localhost`. Production ports are in
+`https://docs.accly.localhost/docs`. A production web build serves the docs'
+static output at `/docs` on the app domain. Production ports are in
 [Operations](./operations.md#deployment-topology).
 
 ### The dev port block
@@ -137,7 +138,7 @@ disabled; this repository has no CI/CD workflows or required automated status
 checks. Run the checks appropriate to each change before pushing. `bun run
 check` is a local fixer because it writes formatting. A focused change runs the
 smallest existing checks that cover it. A docs-only change runs `bunx oxfmt
---check <files>`. End-user content runs `bun run --cwd apps/fumadocs build`. An
+--check <files>`. End-user content runs `bun run --cwd apps/docs build`. An
 SSR or UI change needs a production build and the running app. A read-only
 review never runs `check` or `test`.
 

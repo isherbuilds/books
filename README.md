@@ -21,7 +21,7 @@ bun run dev
 
 The root command starts PostgreSQL and SeaweedFS, applies migrations, and runs
 the web app, API, and end-user docs at `https://accly.localhost`,
-`https://api.accly.localhost`, and `https://docs.accly.localhost`. See
+`https://api.accly.localhost`, and `https://docs.accly.localhost/docs`. See
 [Development](docs/development.md) for accounts, worktrees, proxy bypass, and
 the canonical command list.
 
@@ -29,7 +29,7 @@ the canonical command list.
 
 Start at the [documentation index](docs/README.md) for the source-of-truth map
 and current work registry. Contributor and agent rules are in
-[AGENTS.md](AGENTS.md); end-user help lives in `apps/fumadocs`.
+[AGENTS.md](AGENTS.md); end-user help lives in `apps/docs`.
 
 ## License
 

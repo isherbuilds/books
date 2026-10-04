@@ -1,0 +1,74 @@
+---
+title: Purchases
+description: Book supplier bills with GST input credit and TDS, pay suppliers, and correct bills with debit notes
+---
+
+Purchases covers everything between you and your suppliers: the [bills](/glossary#bill)
+they send you, the money you pay them, and the [debit notes](/glossary#debit-note) you
+raise when goods come back short or a price comes down. Accly Books
+[posts](/glossary#post) each of these, that is, records it for good, to the
+[ledger](/glossary#ledger), the running record of every account. So your
+[payables](/glossary#payable) (what you owe suppliers), your
+[input tax credit](/glossary#itc) (ITC, the [GST](/glossary#gst) you paid that you may set against the GST you collect)
+and your [TDS Payable](/glossary#tds-payable) ([TDS](/glossary#tds), tax deducted at
+source, that you kept back from suppliers and now owe the government) are always up to date.
+
+Find these pages under **Purchases** in the sidebar: **Bills**, **Payments** and
+**Debit notes**.
+
+<CardGroup>
+  <Card title="Bills" href="/purchases/bills">
+    Book a supplier's invoice to an expense or asset account, with GST, input tax credit and TDS.
+    Save a draft, post, apply an advance, amend or cancel.
+  </Card>
+  <Card title="Payments" href="/purchases/payments">
+    Pay suppliers against their bills, pay an advance, pay an expense directly, refund a customer,
+    and record bank charges and small write-offs.
+  </Card>
+  <Card title="Debit notes" href="/purchases/debit-notes">
+    Reduce a posted bill for a purchase return, a short supply or a price reduction.
+  </Card>
+</CardGroup>
+
+## How the pieces fit
+
+| You want to                                  | Use                                                                                                                                 | What it does to the supplier's balance                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Book a supplier's invoice                    | [Bill](/purchases/bills)                                                                                                            | Raises what you owe (Cr, a [credit](/glossary#debit-credit))       |
+| Pay before the supplier bills you            | [Payment](/purchases/payments), kind **Advance**                                                                                    | Holds the money as an [advance](/glossary#advance) to the supplier |
+| Pay bills you have booked                    | [Payment](/purchases/payments), [settlement kind](/glossary#settlement-kind) **Against open items**                                 | Lowers what you owe                                                |
+| Use an advance against a new bill            | **Apply credit** ([allocation](/glossary#allocation), matching a credit to a bill) on the [bill](/purchases/bills#apply-an-advance) | No change: it moves the advance onto the bill                      |
+| Return goods, or the supplier lowers a price | [Debit note](/purchases/debit-notes)                                                                                                | Lowers what you owe                                                |
+| Pay an expense that has no bill              | [Payment](/purchases/payments#pay-an-expense-directly), **Direct**                                                                  | No change: it goes straight to the expense                         |
+
+## Who can do what
+
+| [Role](/glossary#roles) | Bills                | Payments                             | Debit notes  |
+| ----------------------- | -------------------- | ------------------------------------ | ------------ |
+| Owner, Accountant       | Create, post, cancel | Post every kind, cancel              | Post, cancel |
+| Operator                | No access            | Post **Advance** and **Direct** only | No access    |
+| Chartered Accountant    | View                 | View                                 | View         |
+
+An Operator cannot see bills, so the **Against open items** choice does not appear on
+their payment form. See [Roles and access](/getting-started/roles-and-access).
+
+## Before you start
+
+- Record each supplier as a [party](/glossary#party) (anyone you deal with) in
+  [Parties](/setup/parties), with the **Vendor** role and its **State**. A bill cannot
+  post without the supplier's state: Accly Books uses it to decide between CGST + SGST
+  and IGST ([the three parts of GST](/glossary#cgst-sgst-igst): central and state tax
+  within one state, integrated tax between states).
+- Record the supplier's **PAN** ([Permanent Account Number](/glossary#pan), the
+  income-tax ID) before you deduct TDS. A [GSTIN](/glossary#gstin), the 15-character GST
+  registration number, carries the PAN inside it.
+- Make sure the [chart of accounts](/glossary#chart-of-accounts), your list of
+  [accounts](/glossary#account), in [Chart of accounts](/setup/chart-of-accounts) has the expense or asset
+  accounts you buy into, such as **Purchases**, **Professional Fees** or **Plant and
+  Machinery**.
+- Set up a [payment method](/glossary#payment-method) (a named way money moves, tied to
+  one bank or cash account) in [Banking](/setup/banking) for each bank account or cash box you pay from.
+
+For a complete example, read the [purchase cycle](/scenarios/purchase-cycle) scenario:
+an advance, a goods bill, a consultant's bill with TDS, a debit note, the final payment
+and the TDS deposit.

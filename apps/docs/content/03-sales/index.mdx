@@ -1,0 +1,75 @@
+---
+title: Sales
+description: Bill customers, record the money they pay, correct invoices, and match credits to what they owe
+---
+
+Sales covers everything between you and your customers: the [invoices](/glossary#invoice)
+you raise, the money you receive ([receipts](/glossary#receipt)), the
+[credit notes](/glossary#credit-note) you issue for returns, and the matching of payments
+and credits to the invoices they settle ([allocation](/glossary#allocation)).
+
+Find these pages under **Sales** in the sidebar: **Invoices**, **Receipts** and
+**Credit notes**.
+
+<CardGroup>
+  <Card title="Invoices" href="/sales/invoices">
+    Bill a customer with items, discount and GST. Save a draft, post, print, take payment at the
+    counter, amend or cancel.
+  </Card>
+  <Card title="Receipts" href="/sales/receipts">
+    Record money received as an advance, against open invoices, or as direct income. Deduct bank
+    fees, write-offs and the customer's TDS.
+  </Card>
+  <Card title="Credit notes" href="/sales/credit-notes">
+    Reduce a posted invoice for a sales return or a price reduction, and refund the customer if the
+    invoice is already paid.
+  </Card>
+  <Card title="Apply credit" href="/sales/apply-credit">
+    Set an advance, a credit note or an opening credit against an invoice, and undo a wrong match.
+  </Card>
+</CardGroup>
+
+## How the pieces fit
+
+| You want to                                                                       | Use                                                                      | What it does to the customer's balance                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Bill a sale                                                                       | [Invoice](/sales/invoices)                                               | Raises what the customer owes (Dr, a [debit](/glossary#debit-credit))         |
+| Take money before you bill                                                        | [Receipt](/sales/receipts), kind **Advance**                             | Holds the money as the customer's [advance](/glossary#advance) (Cr, a credit) |
+| Take money for invoices you raised                                                | [Receipt](/sales/receipts), kind **Against open items**                  | Lowers what the customer owes                                                 |
+| Use an advance for a new invoice                                                  | [Apply credit](/sales/apply-credit)                                      | No change: it moves the advance onto the invoice                              |
+| Take back goods or lower a price                                                  | [Credit note](/sales/credit-notes)                                       | Lowers what the customer owes                                                 |
+| Sell at the counter and get paid at once ([counter sale](/glossary#counter-sale)) | [Invoice](/sales/invoices#counter-sale-paid-now) with **Record payment** | Raises and settles in one step                                                |
+
+Every [document](/glossary#document) is a [**draft**](/glossary#draft) (saved but not in your
+books; invoices only), [**posted**](/glossary#post) (recorded in your books) or
+**cancelled**. A posted document is never edited. To change it, you cancel it, which
+posts a [reversal](/glossary#reversal) (an equal and opposite entry), or issue a credit
+note. The register keeps the cancelled document for audit.
+
+## Who can do what
+
+| Action                                        | Owner | Accountant | Chartered Accountant | Operator |
+| --------------------------------------------- | ----- | ---------- | -------------------- | -------- |
+| See invoices and receipts                     | Yes   | Yes        | Yes                  | Yes      |
+| See credit notes                              | Yes   | Yes        | Yes                  | No       |
+| Create, save and post invoices; post receipts | Yes   | Yes        | No                   | Yes      |
+| Cancel or amend invoices; cancel receipts     | Yes   | Yes        | No                   | No       |
+| Post and cancel credit notes                  | Yes   | Yes        | No                   | No       |
+| Apply credit and reverse an allocation        | Yes   | Yes        | No                   | No       |
+
+These roles are explained in the [glossary](/glossary#roles). An operator who posts a receipt against invoices also makes those matches, because
+they come with the receipt. See [Roles and access](/getting-started/roles-and-access).
+
+## Before you start
+
+- Add the items you sell in [Items](/setup/items). Every invoice line is an item: the
+  item carries the [HSN or SAC](/glossary#hsn-sac) code (the GST classification code), the
+  income [account](/glossary#account) and the [GST](/glossary#gst) rate.
+- Add your customers in [Parties](/setup/parties), with [GSTIN](/glossary#gstin) (GST registration number) when they have one. The
+  party's state sets the default [place of supply](/glossary#place-of-supply), which decides
+  the type of GST.
+- Check your [payment methods](/glossary#payment-method) (Cash, [UPI](/glossary#upi-neft), Bank transfer, Card) in
+  [Banking](/setup/banking). Each one posts to its own cash or bank account.
+
+For a full month of sales from advance to collection, follow
+[A month of trading](/scenarios/trading-month).

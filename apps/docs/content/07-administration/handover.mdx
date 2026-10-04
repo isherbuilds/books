@@ -1,0 +1,143 @@
+---
+title: Handover
+description: Hand the books to a new owner or chartered accountant, and what to transfer and check
+---
+
+A handover passes responsibility for an organization's books to someone else:
+a new owner after a change in the business, a new accountant, or a new CA (Chartered Accountant) firm
+at the start of an audit. In Accly Books the books themselves never move. You
+change **who** has access and **what you give them** to start from.
+
+- **Who does it:** the **Owner**. The outgoing accountant or CA helps prepare
+  the reports.
+- **When:** at a period end that is agreed with the incoming person, usually a
+  month, quarter or [financial year](/glossary#financial-year) end (in India the
+  financial year runs April to March, so 31 March).
+
+## Before the handover date
+
+<Steps>
+<Step title="Finish the open work">
+
+On **Home**, open **Draft invoices** and **Draft bills** ([bills](/glossary#bill)
+are supplier invoices). A [draft](/glossary#draft) is saved but not final.
+[Post](/glossary#post) (make final) or delete each draft, so that nothing half-done sits in the books. Record all [receipts](/glossary#receipt) (money in) and
+[payments](/glossary#payment) (money out) up to the handover date.
+
+</Step>
+<Step title="Check money and party balances">
+
+Open **Banking** and compare each bank and cash balance with the bank statement
+and the cash count on the handover date. Open **To collect** and **To pay** on
+**Home** and confirm each open invoice and bill with the [party](/glossary#party)
+(customer or supplier) where needed.
+
+</Step>
+<Step title="Prepare the reports pack">
+
+An owner, accountant or CA opens **Reports** and downloads, for the period up
+to the handover date, each as Excel or PDF:
+
+- [Trial balance](/reports/trial-balance): every account's balance, which must
+  total equal on both sides ([glossary](/glossary#trial-balance))
+- [Profit and loss](/reports/profit-and-loss) (income less expenses for the period)
+  and [Balance sheet](/reports/balance-sheet) (what the business owns and owes on
+  a date); see the glossary for [P&L](/glossary#profit-and-loss) and
+  [balance sheet](/glossary#balance-sheet)
+- [Day book](/reports/day-book) for the period: every entry in date order
+  ([glossary](/glossary#day-book))
+- [Account ledger](/reports/account-ledger), every entry in one account
+  ([ledger](/glossary#ledger)), for bank, cash, [GST](/glossary#gst) (Goods and
+  Services Tax) and any account the incoming person asks about
+- A [party statement](/reports/party-ledger) from the party's **Ledger** tab for each party with a balance
+
+In each report, click an account to open its ledger, and a document number to
+open the document. An operator cannot open reports.
+
+</Step>
+<Step title="Close the period">
+
+The CA or the owner sets the **Books lock** ([lock](/glossary#lock): a date on or
+before which nobody can post) and, once the [GST returns](/glossary#gstr)
+(GSTR-1 and GSTR-3B) for the period are filed, the **Tax period lock** to the handover date. After that, no
+one can post into the handed-over period without a
+[lock exception](/glossary#lock-exception), a time-limited permission. See
+[Period locks](/accounting/locks).
+
+</Step>
+<Step title="Collect the papers">
+
+Upload the supporting papers to **Settings → Files**: bank statements, GST
+returns filed, [TDS](/glossary#tds) (tax deducted at source) certificates, loan and rent agreements. Name each file so it
+says what it is and which period it covers (see [Files](/administration/files)).
+
+</Step>
+<Step title="Review the audit log">
+
+Read **Settings → Audit**, the [audit log](/glossary#audit-log) of sensitive
+actions, for the period. Look at every [cancelled](/glossary#reversal) or amended
+document and its reason, every lock exception, and any run of **Denied**
+entries. Explain anything unusual in your handover note. See
+[Audit log](/administration/audit-log).
+
+</Step>
+</Steps>
+
+## Hand over to a new owner
+
+The organization must always have at least one owner, so add the new owner
+before the old one steps back.
+
+1. In **Settings → Members**, invite the new owner's email address with the
+   **Owner** role, and send them the link.
+2. The new owner opens the link, creates an account or signs in, and clicks
+   **Join**. Ask them to confirm they see **Settings → Organization**.
+3. The new owner reviews **Settings → Organization**: legal name, [PAN](/glossary#pan) (Permanent Account Number), address,
+   state, financial year and document prefixes. Changes there apply to new
+   documents only; they do not rewrite documents already issued.
+4. Then either the new owner removes the old owner, or the old owner changes
+   their own role, for example to **Chartered Accountant** for read-only access
+   during the transition.
+
+If you try to step back while you are the only owner, Accly Books refuses with
+"Could not update the roster" and nothing changes.
+
+## Hand over to a new CA or accountant
+
+1. Invite the new person with the **Chartered Accountant** or **Accountant**
+   role.
+2. After they join and you have checked that they can open the reports,
+   remove the outgoing person from **Settings → Members**.
+3. Give the new person the reports pack and the handover note.
+
+The outgoing person's documents and audit entries stay in the books after you
+remove them.
+
+## Tidy access
+
+- Remove everyone who has left the business.
+- Cancel pending invitations nobody will use.
+- Check each remaining person's role against
+  [Roles and access](/getting-started/roles-and-access).
+- Never share a sign-in. Each person uses their own account, so the audit log
+  shows who did what.
+
+## What does not move
+
+- **Passwords.** Each person sets their own when they join. Accly Books has no
+  password reset yet.
+- **The organization address.** The `/cedar-components` part of the address is
+  permanent.
+- **Deleting the organization.** An organization cannot be deleted from the
+  app.
+
+Have the incoming CA approve the account classifications (which [group](/glossary#group-account) each
+account sits under) and the printed fields
+on invoices and receipts before you rely on a report after the handover.
+
+## Related pages
+
+- [Members and invitations](/administration/members)
+- [Period locks](/accounting/locks)
+- [Reports](/reports)
+- [Quarter close](/scenarios/quarter-close)

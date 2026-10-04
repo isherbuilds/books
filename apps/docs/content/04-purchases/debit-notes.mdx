@@ -1,0 +1,151 @@
+---
+title: Debit notes
+description: Reduce a posted bill for a purchase return, a short supply or a price reduction, and use the credit against the supplier's bills
+---
+
+A [debit note](/glossary#debit-note) reduces a [bill](/glossary#bill) you have
+[posted](/glossary#post) (recorded for good). Raise one when you send goods back, when
+the supplier delivers less than they billed, or when the supplier agrees a lower price
+after the bill. It lowers what you owe the supplier, your [payable](/glossary#payable). It takes back the
+[input tax credit](/glossary#itc) (ITC, the GST you paid that you may set against GST you
+collect) on the reduced amount, and reduces the expense or asset you booked.
+
+Each debit note belongs to one bill. It uses that bill's lines, [GST](/glossary#gst) rates,
+[place of supply](/glossary#place-of-supply) (the state where the supply is delivered) and
+ITC choice, so the tax on the note always matches the bill.
+
+**Who can do it:** an Owner or Accountant posts and cancels debit notes; see
+[roles](/glossary#roles). A Chartered
+Accountant can open them. An Operator does not see them.
+
+## The debit note register
+
+Open **Purchases → Debit notes**. The page is titled **Notes** and opens filtered to
+**Debit note** for this [financial year](/glossary#financial-year) (April to March). It lists **Number**, **Against** (the bill),
+**Party**, **Date**, **Total**, **Unapplied** and **Status**: **Applied** when the whole
+note is set against bills, **Unapplied** when some [credit](/glossary#credit) is left to use, or **Cancelled**.
+Search by number, [party](/glossary#party) or reason.
+
+There is no **New** button here: you raise a debit note from the bill it reduces.
+
+<Frame caption="Debit notes for this year. DN26-27/3 still has ₹1,180.00 unapplied.">
+  ![Debit note register](./images/debit-notes-register.webp)
+</Frame>
+
+## Raise a debit note
+
+On 10 Jul 2026 Cedar Components finds that Gujarat Brass Rods delivered 480 kg of the
+500 kg billed on `GBR/0412/26-27`. The supplier agrees to credit 20 kg at ₹520, that is
+₹10,400 plus 18% IGST ([integrated GST](/glossary#cgst-sgst-igst), charged between
+states).
+
+<Steps>
+  <Step title="Open the bill">
+    In **Bills**, open the bill and choose **⋯ → Debit note**. The **New debit note** page opens,
+    headed with the bill number, supplier and bill date.
+  </Step>
+  <Step title="Set the note date">
+    **Note date** starts at today. Change it to the date of the return or the supplier's credit
+    note. It cannot be earlier than the bill date.
+  </Step>
+  <Step title="Enter the amount for each line">
+    **Source lines** lists the bill's lines with their **Taxable** value, GST **Rate** and **Tax**.
+    In **Amount**, type the taxable value to take off the line, before GST. **Full** enters the
+    line's whole taxable value. Leave a line empty to leave it unchanged. Below the lines,
+    **Selected taxable** adds up what you entered.
+  </Step>
+  <Step title="Give the reason">
+    Type the **Reason**: what came back or what changed, and the supplier's credit note number if
+    they sent one. The reason shows on the note and the register search finds it.
+  </Step>
+  <Step title="Post the note">
+    Click **Post note** (or <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>). The toast reads "Debit
+    note posted" and the note's record opens.
+  </Step>
+</Steps>
+
+<Frame caption="₹10,400.00 taken off the brass rod line for a 20 kg short supply.">
+  ![New debit note form](./images/debit-notes-form.webp)
+</Frame>
+
+The form does not show the GST or the note total before posting. Accly Books works the
+tax out from the bill line's rate when you post: here 18% IGST of ₹10,400 is ₹1,872, so
+the note is for ₹12,272.
+
+For a price reduction, enter the reduction in taxable value on each line it applies to.
+For a purchase return, enter the value of the returned quantity.
+
+## What happens in the books
+
+| Account                               | Debit      | Credit     |
+| ------------------------------------- | ---------- | ---------- |
+| Accounts Payable (Gujarat Brass Rods) | ₹12,272.00 |            |
+| Purchases                             |            | ₹10,400.00 |
+| IGST Input Credit                     |            | ₹1,872.00  |
+
+When the bill line had **ITC** cleared, the note credits the whole amount, tax included,
+back to the line's account. A ₹1,000 note on the Shreyas Caterers lunch bill credits
+**Staff Welfare** ₹1,180.
+
+The note appears in the GST inward register as a reduction of the input tax for its
+month. Report it as your supplier's [credit note](/glossary#credit-note) in your GST return
+([GSTR-3B](/glossary#gstr)).
+
+## Where the credit goes
+
+When you post, the note is applied to its own bill straight away, up to what is still
+[outstanding](/glossary#outstanding) (left to pay) on that bill. The bill's record lists it
+under **Allocations**; an [allocation](/glossary#allocation) matches a credit to a bill.
+
+<Frame caption="DN26-27/2 is applied in full to BILL26-27/4, so Unapplied shows ₹0.00.">
+  ![Debit note record applied to its bill](./images/debit-notes-record.webp)
+</Frame>
+
+If the bill was already paid, the credit stays **Unapplied** on the note. Use it against
+the supplier's next bill: open that bill, choose **⋯ → Apply credit** and pick the debit
+note in **Credit**. See [Apply an advance](/purchases/bills#apply-an-advance); debit notes
+appear in the same list.
+
+<Frame caption="A ₹1,180 debit note on a bill that was already paid stays unapplied.">
+  ![Unapplied debit note](./images/debit-notes-unapplied.webp)
+</Frame>
+
+## When the supplier refunds you
+
+Accly Books cannot yet record money a supplier pays back against a debit note. The note
+has no **Refund** action (only a customer's credit note has one), and a [receipt](/glossary#receipt) (a record of money received) cannot
+settle a supplier's balance.
+
+Until it can, keep the credit and apply it to the supplier's next bill. If the supplier
+sends the money and you will not buy from them again, ask your CA (Chartered Accountant) how to record the
+receipt. Do not post a direct receipt to an income account: the debit note has already
+reduced your purchases, so that would count the credit twice.
+
+## Limits
+
+- A note can take off at most what is left of each bill line after earlier notes. More
+  gives "The note exceeds what remains of "Brass rod IS 319, 20 mm, 500 kg @ ₹520/kg"."
+- The notes against a bill cannot add up to more than the bill total.
+- The note date cannot be before the bill date: "Note date cannot precede its source
+  document."
+- A debit note does not change the [TDS](/glossary#tds) (tax deducted at source) on the
+  bill. If you reduce a bill that carried TDS, ask your CA whether to
+  adjust [TDS Payable](/glossary#tds-payable) with a [journal](/glossary#journal), a manual
+  entry; see [Journals](/accounting/journals).
+- A bill with a posted debit note cannot be cancelled or amended until the note is
+  cancelled.
+
+## Cancel a debit note
+
+Open the note and click **Cancel note**. Type the **Reason** and click **Cancel note**.
+Cancelling posts the reverse entry ([reversal](/glossary#reversal), an equal and opposite
+entry), dated today, and removes the note's allocations, so
+the bill's outstanding goes back up. The note stays in the register marked
+**Cancelled**.
+
+## Related pages
+
+- [Bills](/purchases/bills): the bill a note reduces, and Apply credit
+- [Payments](/purchases/payments): pay what is left after the note
+- [Purchase cycle](/scenarios/purchase-cycle): a short supply in a full worked example
+- [Credit notes](/sales/credit-notes): the same correction on the sales side
