@@ -32,7 +32,10 @@ import { applyOrpcFieldError, errorMessage, errorReason } from "@/lib/orpc-error
 
 const accountName = shortName.max(120, "Keep the name under 120 characters");
 
-const renameSchema = z.object({ name: accountName });
+const updateSchema = z.object({
+  name: accountName,
+  supplyClass: z.enum(SUPPLY_CLASSES).optional(),
+});
 
 const createSchema = z.object({
   parent: z.string().min(1, "Choose where this account belongs."),
@@ -40,7 +43,7 @@ const createSchema = z.object({
   supplyClass: z.enum(SUPPLY_CLASSES).optional(),
 });
 
-function RenameAccountForm({
+function EditAccountForm({
   orgSlug,
   account,
   onClose,
@@ -50,16 +53,20 @@ function RenameAccountForm({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const form = useZodForm(renameSchema, { defaultValues: { name: account.name } });
+
+  const form = useZodForm(updateSchema, {
+    defaultValues: { name: account.name, supplyClass: account.supplyClass ?? undefined },
+  });
+
   // Captured with the initial field values: a background refetch must not swap the token
-  // under edits the user has not saved, or the server would accept a stale rename.
+  // under edits the user has not saved, or the server would accept stale changes.
   const [editToken] = useState(() => account.updatedAt.toISOString());
 
   const update = useMutation(
     orpc.account.update.mutationOptions({
       onSuccess: async () => {
         await invalidateAccountState(queryClient, orgSlug);
-        toast.success("Account renamed");
+        toast.success("Account saved");
         onClose();
       },
       onError: (error) => {
@@ -74,8 +81,8 @@ function RenameAccountForm({
         applyOrpcFieldError(
           form,
           error,
-          { ACCOUNT_NAME_TAKEN: "name" },
-          "Could not rename the account",
+          { ACCOUNT_NAME_TAKEN: "name", ACCOUNT_IN_USE: "supplyClass" },
+          "Could not save the account",
         );
       },
     }),
@@ -95,7 +102,13 @@ function RenameAccountForm({
   const saving = update.isPending || setActive.isPending;
 
   const onSubmit = form.handleSubmit((values) =>
-    update.mutate({ orgSlug, accountId: account.id, name: values.name, updatedAt: editToken }),
+    update.mutate({
+      orgSlug,
+      accountId: account.id,
+      name: values.name,
+      supplyClass: values.supplyClass !== account.supplyClass ? values.supplyClass : undefined,
+      updatedAt: editToken,
+    }),
   );
 
   return (
@@ -115,6 +128,27 @@ function RenameAccountForm({
                 </FormItem>
               )}
             />
+            {account.supplyClass !== null ? (
+              <RegisteredFormField
+                name="supplyClass"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST supply class</FormLabel>
+                    <FormControl>
+                      <NativeSelect {...field} required>
+                        {SUPPLY_CLASSES.map((value) => (
+                          <option key={value} value={value}>
+                            {SUPPLY_CLASS_LABELS[value]}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </FormControl>
+                    <FormDescription>Can change only before the first posting.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
           </SheetBody>
 
           <SheetFooter>
@@ -133,7 +167,7 @@ function RenameAccountForm({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <SubmitButton isSubmitting={saving}>Save name</SubmitButton>
+            <SubmitButton isSubmitting={saving}>Save</SubmitButton>
           </SheetFooter>
         </fieldset>
       </form>
@@ -329,7 +363,7 @@ export function AccountSheet({
       open
       onClose={onClose}
       saving={saving}
-      title={account ? "Rename account" : "Add account"}
+      title={account ? "Edit account" : "Add account"}
       description={
         account
           ? `${account.code} · ${ACCOUNT_TYPE_LABELS[account.type]}`
@@ -337,7 +371,7 @@ export function AccountSheet({
       }
     >
       {account ? (
-        <RenameAccountForm orgSlug={orgSlug} account={account} onClose={onClose} />
+        <EditAccountForm orgSlug={orgSlug} account={account} onClose={onClose} />
       ) : (
         <CreateAccountForm
           orgSlug={orgSlug}

@@ -1,6 +1,6 @@
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { ACCOUNT_TYPES } from "@accly/db/schema/account-kinds";
+import { ACCOUNT_TYPES, SUPPLY_CLASSES } from "@accly/db/schema/account-kinds";
 import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
@@ -9,7 +9,12 @@ import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { accountCreateFields, accountNameTaken, createAccounts } from "../core/masters";
+import {
+  accountCreateFields,
+  accountNameTaken,
+  accountSupplyError,
+  createAccounts,
+} from "../core/masters";
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
@@ -75,22 +80,72 @@ export const accountRouter = {
     orgInput.extend({
       accountId: z.uuid(),
       name: shortName.max(120),
+      supplyClass: z.enum(SUPPLY_CLASSES).optional(),
       updatedAt: editToken,
     }),
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const [updated] = await db
-      .update(accounts)
-      .set({ name: input.name, updatedAt: nextEditToken(accounts.updatedAt) })
-      .where(
-        and(
-          eq(accounts.orgId, orgId),
-          eq(accounts.id, input.accountId),
-          eq(accounts.updatedAt, new Date(input.updatedAt)),
-        ),
-      )
-      .returning()
+    const updated = await db
+      .transaction(async (tx) => {
+        if (input.supplyClass !== undefined) {
+          const [account] = await tx
+            .select({ type: accounts.type, supplyClass: accounts.supplyClass })
+            .from(accounts)
+            .where(
+              and(
+                eq(accounts.orgId, orgId),
+                eq(accounts.id, input.accountId),
+                eq(accounts.updatedAt, new Date(input.updatedAt)),
+              ),
+            )
+            .for("update");
+
+          if (!account) {
+            throw conflict("STALE_RECORD", "This account changed after you opened it.");
+          }
+
+          const supplyError = accountSupplyError(account.type, input.supplyClass);
+
+          if (supplyError) throw badRequest(supplyError.code, supplyError.message);
+
+          if (input.supplyClass !== account.supplyClass) {
+            // Posting holds a shared account lock; check its lines after taking this lock.
+            const [used] = await tx
+              .select({ id: journalLines.id })
+              .from(journalLines)
+              .where(
+                and(eq(journalLines.orgId, orgId), eq(journalLines.accountId, input.accountId)),
+              )
+              .limit(1);
+
+            if (used) {
+              throw badRequest(
+                "ACCOUNT_IN_USE",
+                "An account with posted journal lines cannot change its GST supply class.",
+              );
+            }
+          }
+        }
+
+        const [row] = await tx
+          .update(accounts)
+          .set({
+            name: input.name,
+            supplyClass: input.supplyClass,
+            updatedAt: nextEditToken(accounts.updatedAt),
+          })
+          .where(
+            and(
+              eq(accounts.orgId, orgId),
+              eq(accounts.id, input.accountId),
+              eq(accounts.updatedAt, new Date(input.updatedAt)),
+            ),
+          )
+          .returning();
+
+        return row;
+      })
       .catch(accountNameTaken);
 
     if (!updated) {

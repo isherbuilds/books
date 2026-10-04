@@ -163,10 +163,14 @@ item takes its GST treatment from its income account.
 
 The ready chart sets the class of its income accounts, for example **Sales** is
 Taxable and **Interest Income** is Exempt. A trust or society starts with **Fees** as
-Taxable; a school whose fees are exempt adds its own exempt fee account (see
-[Cut over from Tally](/scenarios/cutover-from-tally)). You cannot change the class after you save
-the account. If you chose the wrong class, mark the account inactive and add a new
-one.
+Exempt; the professional chart's **Rent Received** is Taxable for commercial letting.
+You can change the class in **Edit account** before the account's first posting.
+Once it has posted entries, mark the account inactive and add a new one if you
+chose the wrong class.
+
+If you change an account from Exempt to Taxable, choose a GST rate on each
+[item](/setup/items#gst-rate-and-the-income-account) that uses it before invoicing
+in a GST-registered organization.
 
 The desktop list does not show the class. Filter by **Type** → **Income** on a phone,
 where each card shows "GST supply class: …", or open an item that uses the account.
@@ -175,14 +179,15 @@ where each card shows "GST supply class: …", or open an item that uses the acc
   ![Chart of accounts on a phone](./images/chart-of-accounts-mobile.webp)
 </Frame>
 
-## Rename an account
+## Edit an account
 
-Click the account's row. The **Rename account** panel shows its code and type. Change
-**Name** and click **Save name**. You see "Account renamed". The code, type, parent and
-posted entries stay the same, and reports show the new name.
+Click the account's row. The **Edit account** panel shows its code and type. Change
+**Name** and click **Save**. You see "Account saved". For an income account, you can
+also change **GST supply class** while it has no posted entries. The code, type,
+parent and posted entries stay the same, and reports show the new name.
 
-<Frame caption="Rename an account, or mark it inactive.">
-  ![Rename account panel](./images/chart-of-accounts-rename.webp)
+<Frame caption="Edit an account's name, or mark it inactive.">
+  ![Account edit panel](./images/chart-of-accounts-rename.webp)
 </Frame>
 
 ## Mark an account inactive
@@ -221,8 +226,10 @@ Rules:
 - **Delete an account.** Mark it inactive instead.
 - **Add a group.** New accounts always take postings. Put them under an existing
   group or at the top level.
-- **Change the type, parent or supply class** after you save. Add a new account and
-  mark the old one inactive.
+- **Change the type or parent** after you save. Add a new account and mark the old
+  one inactive.
+- **Change the supply class after a posting.** Add a new account with the correct
+  class and mark the old one inactive.
 
 ## Related pages
 
