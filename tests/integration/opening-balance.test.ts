@@ -242,7 +242,7 @@ test("opening correction enforces the cutover lock and corrects historical balan
   expect(isolatedOpening.number).toMatch(/^OB\d{2}-\d{2}\/1$/);
 });
 
-test("posting on the opening date is refused while the day after posts", async () => {
+test("business and the Opening Balance refuse each other across the cutover date", async () => {
   const fixture = await createAccountingFixture(founder, "opening-date-boundary");
   const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
   const claim = { orgSlug: fixture.organization.slug };
@@ -252,7 +252,12 @@ test("posting on the opening date is refused while the day after posts", async (
     { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
   ];
 
-  await fixture.api.openingBalance.post({ ...claim, documentDate: "2026-03-31", lines });
+  const opening = await fixture.api.openingBalance.post({
+    ...claim,
+    documentDate: "2026-03-31",
+    lines,
+  });
+
   await expectReason(
     fixture.api.journal.post({
       ...claim,
@@ -272,6 +277,54 @@ test("posting on the opening date is refused while the day after posts", async (
 
   expect((await postingOf(fixture.organization.id, journal.id, "post")).entry.entryDate).toBe(
     "2026-04-01",
+  );
+
+  await fixture.api.openingBalance.cancel({
+    ...claim,
+    openingBalanceId: opening.id,
+    reason: "Replace the cutover",
+  });
+  await expectReason(
+    fixture.api.openingBalance.post({ ...claim, documentDate: "2026-04-01", lines }),
+    "OPENING_BALANCE_AFTER_BUSINESS",
+  );
+  await fixture.api.openingBalance.post({ ...claim, documentDate: "2026-03-31", lines });
+});
+
+test("a receipt on the cutover date blocks a later Opening Balance post", async () => {
+  const fixture = await createAccountingFixture(founder, "opening-after-receipt");
+  const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const income = required(
+    fixture.accounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "exempt income",
+  );
+
+  const method = required(
+    fixture.methods.find(({ accountId }) => accountId === cash.id),
+    "cash payment method",
+  );
+
+  await fixture.api.receipt.post({
+    ...claim,
+    settlementKind: "direct",
+    documentDate: "2026-03-31",
+    amount: "1.00",
+    paymentMethodId: method.id,
+    incomeAccountId: income.id,
+    narration: "Business posted before choosing the cutover",
+  });
+  await expectReason(
+    fixture.api.openingBalance.post({
+      ...claim,
+      documentDate: "2026-03-31",
+      lines: [
+        { accountId: cash.id, side: "debit", amount: "1.00" },
+        { accountId: openingEquity.id, side: "credit", amount: "1.00" },
+      ],
+    }),
+    "OPENING_BALANCE_AFTER_BUSINESS",
   );
 });
 

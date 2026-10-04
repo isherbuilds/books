@@ -447,7 +447,7 @@ test("the tax lock follows affectsTax and cancellation reverses on the original 
     claim.orgSlug,
     cash,
     exemptIncome,
-    today,
+    yesterday,
     "Journal does not affect tax",
   );
   await expectReason(

@@ -34,6 +34,9 @@ on 1 October 2026, enter **30 Sep 2026**.
 - It cannot fall in a [locked](/glossary#lock) period (see [Locks](/accounting/locks)).
 - Accly Books refuses new documents dated on or before a posted Opening Balance's
   cutover date. Opening items imported with it keep their legacy dates.
+- It also refuses an Opening Balance dated on or after an ordinary document you
+  have already posted. Choose a cutover date before those documents; the opening
+  balance and its imported opening items are exempt from this comparison.
 
 ## Enter balances with the form
 
@@ -101,7 +104,7 @@ date. On the page you see the number, **As at**, **Posted on**, **Total** (the s
 the debits), and the **Lines** with **Account**, **Description**, **Debit** and
 **Credit**.
 
-<Frame caption="Cedar Components' posted opening balance OB26-27/1 as at 5 Jul 2026.">
+<Frame caption="Cedar Components' posted opening balance and its As at date.">
   ![A posted opening balance](./images/opening-balance-posted.webp)
 </Frame>
 

@@ -43,6 +43,7 @@ const SERVER_FIELDS = {
   TAXABLE_ACCOUNT_LINE: "lines",
   LOCKED: "documentDate",
   OPENING_BALANCE_DATE_FUTURE: "documentDate",
+  OPENING_BALANCE_AFTER_BUSINESS: "documentDate",
 } satisfies Record<string, FieldPath<OpeningBalanceFormValues>>;
 
 const withoutReceivables = (rows: Awaited<ReturnType<AppRouterClient["journal"]["accounts"]>>) =>

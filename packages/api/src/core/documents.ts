@@ -12,7 +12,7 @@ import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
@@ -477,7 +477,27 @@ export async function postDocument(
   prefix: string,
   input: PostDocumentInput,
 ): Promise<{ id: string; number: string }> {
-  if (input.posting.type !== "openingBalance") {
+  // One cutover: business sits after it, whichever of the two posts first (D3).
+  if (input.posting.type === "openingBalance") {
+    const [business] = await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.orgId, scope.orgId),
+          eq(documents.state, "posted"),
+          notInArray(documents.type, ["openingBalance", "openingClaim", "openingCredit"]),
+          lte(documents.documentDate, input.documentDate),
+        ),
+      )
+      .limit(1);
+
+    if (business)
+      throw badRequest(
+        "OPENING_BALANCE_AFTER_BUSINESS",
+        "Documents are already posted on or before this date. Choose an earlier opening date.",
+      );
+  } else {
     const [opening] = await tx
       .select({ documentDate: documents.documentDate })
       .from(documents)
@@ -808,9 +828,6 @@ export async function reverseDocument(
   }
 
   // Every remaining row allocates from this document. Drizzle refuses an empty insert.
-  for (const row of active)
-    await assertPeriodOpen(tx, scope, settings, { entryDate: row.entryDate, affectsTax: false });
-
   if (active.length > 0) {
     await tx.insert(allocations).values(
       active.map((row) => ({
