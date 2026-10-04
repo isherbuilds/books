@@ -1,7 +1,7 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
-import { Button } from "@accly/ui/components/button";
+import { Button, buttonVariants } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import {
@@ -203,8 +203,19 @@ function NoteSheetRoute() {
           <DetailRow label="Round-off">{formatMoney(note.roundOffPaise)}</DetailRow>
         </dl>
       </SheetBody>
-      {canRefund || canCancel ? (
+      {note.state === "posted" || canRefund || canCancel ? (
         <SheetFooter>
+          {note.state === "posted" ? (
+            // The browser's PDF viewer prints and saves, so one link covers both.
+            <a
+              href={`/api/${orgSlug}/notes/${note.id}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              PDF
+            </a>
+          ) : null}
           {canRefund && note.partyId ? (
             <Button
               type="button"

@@ -114,8 +114,8 @@ generic Transaction, Entry or Account; the [glossary](../CONTEXT.md) holds the
 exact terms. A Member is a User's roles in one Organization;
 neither is tenant scope. A Party is any counterparty. Money received before
 supply is an advance: a liability until an allocation applies it. Never label a
-Receipt as the itemized bill. Until the pilot CA approves classifications and
-printed fields, no print claims Tax Invoice or Bill of Supply.
+Receipt as the itemized bill. Invoice print headings follow accounting-core call 6:
+Tax Invoice or Bill of Supply. The pilot CA still approves printed fields.
 
 ## Delivery rules
 

@@ -1,7 +1,9 @@
+import { invoicePrintTitle } from "@accly/api/core/tax";
 import { ORPCError } from "@orpc/server";
 
 import { InvoiceDocument } from "@/components/pdf/invoice-document";
 import type { InvoiceDetail } from "@/lib/invoices";
+import type { NoteDetail } from "@/lib/notes";
 import { renderPdf } from "@/lib/pdf-render";
 
 export async function renderInvoicePdf(
@@ -18,6 +20,34 @@ export async function renderInvoicePdf(
 
   return renderPdf(<InvoiceDocument data={printable} />, {
     fileName: `${data.number}.pdf`,
-    title: `Invoice ${data.number} · ${data.printSnapshot.organization.legalName}`,
+    title: `${invoicePrintTitle(data.printClass)} ${data.number} · ${data.printSnapshot.organization.legalName}`,
+  });
+}
+
+export async function renderNotePdf(
+  data: NoteDetail,
+): Promise<{ bytes: Uint8Array; fileName: string }> {
+  if (data.number === null) {
+    throw new ORPCError("NOT_FOUND", { message: "A draft note has no PDF." });
+  }
+
+  if (!data.printSnapshot) throw new Error(`Note ${data.number} has no print snapshot`);
+
+  if (!data.against?.number) throw new Error(`Note ${data.number} has no numbered source`);
+
+  // Rule 53(1A)(f): keep the original invoice's immutable delivery address.
+  const shipTo = data.type === "creditNote" ? data.against.printSnapshot?.shipTo : undefined;
+
+  const printable = {
+    ...data,
+    number: data.number,
+    printSnapshot: { ...data.printSnapshot, shipTo },
+  };
+
+  const title = data.type === "creditNote" ? "Credit Note" : "Debit Note";
+
+  return renderPdf(<InvoiceDocument data={printable} />, {
+    fileName: `${data.number}.pdf`,
+    title: `${title} ${data.number} · ${data.printSnapshot.organization.legalName}`,
   });
 }
