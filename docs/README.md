@@ -25,8 +25,10 @@ Check UI items in the running app on desktop and mobile, in both themes.
   Active. 17 major findings, plus minor and polish items, from running every workflow
   for the rebuilt guide in `apps/docs`. Every design question is decided in
   [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
-  is building and verifying them. D8 print titles and Note PDFs are in Verification:
-  open taxable, mixed and Bill of Supply Invoices and both Note PDFs in the app.
+  is building and verifying them. D8 is built and verified: note, invoice and tax tests pass;
+  served Credit Note, Debit Note and Tax Invoice PDFs carry the right headings and Rule 53(1A) particulars.
+  The note PDF link shows at 1440 and 390 px in both themes.
+  A Bill of Supply PDF was not exercised in the app (no such invoice locally); its title is covered by the unit test.
   Start with reversal and allocation dating against locks (D1,
   D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
   and the blank party on Pay/Refund (M6, a bug).
