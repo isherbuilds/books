@@ -138,16 +138,13 @@ export function distinctDocumentPrefixes(
   for (const field of DOCUMENT_PREFIX_FIELDS) {
     const prefix = settings[field].trim().toUpperCase();
 
-    if (prefixes.has(prefix)) {
+    if (prefixes.has(prefix))
       context.addIssue({
         code: "custom",
         path: [field],
         params: { reason: "PREFIX_TAKEN" },
         message: "Each document type must use a different prefix.",
       });
-
-      return;
-    }
 
     prefixes.add(prefix);
   }

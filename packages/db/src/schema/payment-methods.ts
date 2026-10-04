@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
@@ -30,6 +31,7 @@ export const paymentMethods = pgTable(
       foreignColumns: [accounts.orgId, accounts.id],
     }),
     unique("payment_methods_org_id_id_unique").on(table.orgId, table.id),
-    uniqueIndex("payment_methods_org_name_idx").on(table.orgId, table.name),
+    // Names are unique ignoring case: UPI and upi are one method.
+    uniqueIndex("payment_methods_org_name_idx").on(table.orgId, sql`lower(${table.name})`),
   ],
 );
