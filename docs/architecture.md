@@ -282,7 +282,11 @@ follows [call 5](./specs/accounting-core.md#architecture-calls).
 The chart has a Cash group (1000, `systemKey` `cash`) and a Bank Accounts group
 (1100, `bank`). Money sits in their leaves: 1001 Cash in Hand, 1101 Bank
 Account, and cash or bank leaves that `account.create` adds.
-`account.moneyBalances` returns each leaf with its group and balance on Banking.
+`account.moneyBalances` returns each leaf with its group and balance on Home and
+Banking, through today's business date in the Organization's time zone
+(`journal_lines.entry_date <= today`), like the balance sheet. `party.balances`
+uses the same bound for Home and party lists; statements retain their requested
+date range. Future-dated documents remain allowed without a warning.
 The complete chart supplies parent groups for account creation. A Payment Method names one active money
 leaf, so the method decides where money lands, as in ERPNext; there is no
 per-receipt deposit account. `paymentMethod.setActive` marks a method

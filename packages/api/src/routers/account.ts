@@ -5,15 +5,17 @@ import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
 import { accountCreateFields, accountNameTaken, createAccounts } from "../core/masters";
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
+import { businessDate } from "../lib/business-date";
 import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { reportProfile } from "../lib/reports";
 import { editToken, shortName } from "../lib/schemas";
 
 export const accountRouter = {
@@ -187,32 +189,40 @@ export const accountRouter = {
     return updated;
   }),
 
-  // Every cash box and bank account with its group and what it holds now, summed from
-  // journal lines. Inactive leaves are included: they keep their balance.
-  moneyBalances: orgProcedure({ report: ["readFinancial"] }, orgInput).handler(({ context }) => {
-    const { orgId } = context.scope;
+  // Cash and bank balances through today's business date, as on the balance sheet.
+  // Inactive leaves are included: they keep their balance.
+  moneyBalances: orgProcedure({ report: ["readFinancial"] }, orgInput).handler(
+    async ({ context }) => {
+      const { orgId } = context.scope;
+      const profile = await reportProfile(orgId);
+      const today = businessDate(new Date(), profile.timeZone);
 
-    return db
-      .select({
-        id: accounts.id,
-        code: accounts.code,
-        name: accounts.name,
-        active: accounts.active,
-        groupId: moneyGroup.id,
-        groupName: moneyGroup.name,
-        balancePaise:
-          sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
-            BigInt,
+      return db
+        .select({
+          id: accounts.id,
+          code: accounts.code,
+          name: accounts.name,
+          active: accounts.active,
+          groupId: moneyGroup.id,
+          groupName: moneyGroup.name,
+          balancePaise:
+            sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
+              BigInt,
+            ),
+        })
+        .from(accounts)
+        .innerJoin(moneyGroup, underMoneyGroup(orgId))
+        .leftJoin(
+          journalLines,
+          and(
+            eq(journalLines.orgId, orgId),
+            eq(journalLines.accountId, accounts.id),
+            lte(journalLines.entryDate, today),
           ),
-      })
-      .from(accounts)
-      .innerJoin(moneyGroup, underMoneyGroup(orgId))
-      .leftJoin(
-        journalLines,
-        and(eq(journalLines.orgId, orgId), eq(journalLines.accountId, accounts.id)),
-      )
-      .where(eq(accounts.orgId, orgId))
-      .groupBy(accounts.id, moneyGroup.id)
-      .orderBy(asc(moneyGroup.code), asc(accounts.code));
-  }),
+        )
+        .where(eq(accounts.orgId, orgId))
+        .groupBy(accounts.id, moneyGroup.id)
+        .orderBy(asc(moneyGroup.code), asc(accounts.code));
+    },
+  ),
 };
