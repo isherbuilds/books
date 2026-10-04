@@ -1,5 +1,5 @@
 {
-  "id": "e67d472c-f839-44be-9927-d00fdc6acb52",
+  "id": "d360d471-44f5-4b53-9e62-3d9d3010ad4f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2540,6 +2540,40 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_bill_reference_idx": {
+          "name": "documents_bill_reference_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "financial_year",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"reference\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"documents\".\"type\" = 'bill' and \"documents\".\"state\" = 'posted'",
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -137,6 +137,11 @@ export const documents = pgTable(
     index("documents_org_type_date_idx").on(table.orgId, table.type, table.documentDate),
     // The newest-first keyset of each document list, without filtering type on the heap.
     index("documents_org_type_id_idx").on(table.orgId, table.type, table.id),
+    // A supplier invoice number posts once per supplier and financial year (D5).
+    // Cancelling releases it; drafts are unchecked.
+    uniqueIndex("documents_bill_reference_idx")
+      .on(table.orgId, table.partyId, table.financialYear, sql`lower(${table.reference})`)
+      .where(sql`${table.type} = 'bill' and ${table.state} = 'posted'`),
     // A party's documents newest first: the party filter seeks them instead of
     // walking the whole register.
     index("documents_org_party_idx").on(table.orgId, table.partyId, table.id),
