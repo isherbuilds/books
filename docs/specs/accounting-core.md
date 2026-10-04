@@ -1410,8 +1410,9 @@ slice 9.
   their own get and list (not `settlementDetail`), the tenancy guarded-call
   table, a nav entry with `journal: ["read"]`, and audit on post and cancel.
   `journal.accounts` returns pickable accounts: active non-system leaves plus
-  the four journalable system accounts (`tdsPayable`, `tdsReceivable`,
-  `roundOff`, `openingEquity`), bounded by `MASTER_LIST_LIMIT`, and minus
+  the journalable system accounts (the eight GST input, output and cess
+  accounts, `tdsPayable`, `tdsReceivable`, `roundOff`, `openingEquity`),
+  bounded by `MASTER_LIST_LIMIT`, and minus
   `taxable` income when the Organization has a `gstin`. Opening Balance uses
   this same picker and cache key, including settings-change invalidation.
   A taxable account line
