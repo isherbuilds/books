@@ -266,7 +266,7 @@ test("receipt post rejects invalid settlements and enforces advance supply polic
 
   const gstOrganization = await createAccountingOrganization(founder.headers, {
     slug: `receipt-gst-${uniqueSuffix()}`,
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     timeZone: "UTC",
   });
 
@@ -504,6 +504,25 @@ test("receipt detail preserves the posted party and organization print snapshot"
         and(eq(paymentMethods.orgId, organization.id), eq(paymentMethods.id, bankTransfer.id)),
       );
   }
+});
+
+test("payment method names are unique after trimming and ignoring case", async () => {
+  const fixture = await createAccountingFixture(founder, "method-names");
+  const orgSlug = fixture.organization.slug;
+  const methods = await fixture.api.paymentMethod.list({ orgSlug });
+
+  const upi = required(
+    methods.find((method) => method.name === "UPI"),
+    "seeded UPI method",
+  );
+
+  const refusal = await expectORPCCode(
+    fixture.api.paymentMethod.create({ orgSlug, name: " upi ", accountId: upi.accountId }),
+    "CONFLICT",
+  );
+
+  expect(refusal.data).toMatchObject({ reason: "DUPLICATE" });
+  expect(await fixture.api.paymentMethod.list({ orgSlug })).toEqual(methods);
 });
 
 test("a second bank account takes its own method, receipts and balance", async () => {

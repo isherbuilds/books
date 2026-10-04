@@ -11,6 +11,7 @@ import { orgSettings } from "../lib/settlements";
 import {
   deriveOrganizationIdentity,
   documentPrefix,
+  distinctDocumentPrefixes,
   organizationProfileFields,
 } from "../lib/schemas";
 
@@ -58,7 +59,10 @@ export const settingsRouter = {
 
   update: orgProcedure(
     { settings: ["update"] },
-    orgInput.extend(editableSettings).transform(deriveOrganizationIdentity),
+    orgInput
+      .extend(editableSettings)
+      .superRefine(distinctDocumentPrefixes)
+      .transform(deriveOrganizationIdentity),
   ).handler(async ({ context, input }): Promise<SettingsFields> => {
     const { scope } = context;
     const { orgSlug: _claim, ...settings } = input;

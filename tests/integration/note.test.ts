@@ -37,7 +37,7 @@ beforeAll(async () => {
   const founder = await createFounderSession();
 
   const fixture = await createAccountingFixture(founder, "note", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
   });
@@ -73,7 +73,7 @@ beforeAll(async () => {
     name: "Note Customer",
     roles: ["customer"],
     stateCode: "27",
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
   });
   supplier = await api.party.create({
     orgSlug: organization.slug,

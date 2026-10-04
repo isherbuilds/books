@@ -110,7 +110,7 @@ export async function seedDemo(): Promise<void> {
         slug: SLUG,
         legalType: "company",
         legalName: "Cedar Components Pvt. Ltd.",
-        gstin: "27ABCDE1234F1Z5",
+        gstin: "27ABCDE1234F1Z0",
         financialYearStart: 4,
         timeZone: "Asia/Kolkata",
         address: "18 Industrial Estate",

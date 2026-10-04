@@ -55,6 +55,33 @@ test("settings are scoped by explicit input: defaults until saved, then the save
   expect(entry.orgId).toBe(organization.id);
 });
 
+test("settings refuse document prefixes shared after trimming and ignoring case", async () => {
+  const owner = await createTestUser("settings-prefix");
+  const organization = await createOrganization(owner, "settings-prefix");
+  const api = clientFor(owner);
+  const settings = await api.settings.get({ orgSlug: organization.slug });
+
+  const refusal = await expectORPCCode(
+    api.settings.update({
+      orgSlug: organization.slug,
+      ...settings,
+      creditNotePrefix: ` ${settings.invoicePrefix.toLowerCase()} `,
+    }),
+    "BAD_REQUEST",
+  );
+
+  expect(refusal.data).toMatchObject({
+    issues: expect.arrayContaining([
+      expect.objectContaining({
+        code: "custom",
+        path: ["creditNotePrefix"],
+        params: { reason: "PREFIX_TAKEN" },
+      }),
+    ]),
+  });
+  expect(await api.settings.get({ orgSlug: organization.slug })).toEqual(settings);
+});
+
 test("settings are invisible across orgs, and a foreign org is FORBIDDEN", async () => {
   const alice = await createTestUser("alice");
   const alpha = await createOrganization(alice, "alpha");

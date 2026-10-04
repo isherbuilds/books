@@ -1,6 +1,7 @@
 import {
   deriveOrganizationIdentity,
   documentPrefix,
+  distinctDocumentPrefixes,
   optionalGstin,
   optionalPan,
   optionalStateCode,
@@ -87,6 +88,7 @@ const formSchema = z
     debitNotePrefix: documentPrefix,
     journalPrefix: documentPrefix,
   })
+  .superRefine(distinctDocumentPrefixes)
   .transform(deriveOrganizationIdentity);
 
 function toFormValues(settings: SettingsFields) {
@@ -178,7 +180,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
               )}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <GstinField label="GSTIN (optional)" placeholder="27ABCDE1234F1Z5" />
+              <GstinField label="GSTIN (optional)" placeholder="27ABCDE1234F1Z0" />
               {gstin.trim() === "" ? (
                 <RegisteredFormField
                   name="pan"

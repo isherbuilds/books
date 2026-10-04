@@ -115,10 +115,10 @@ Query, form and invalidation rules are in
   that code owns, date ranges, the advance-supply presence rule).
 - Volatile and regulatory rules live in the application, in zod
   (`packages/api/src/lib/schemas.ts` and router inputs): supply classes, legal
-  types, state codes, Party roles, the TDS rate range, advance-supply values and
-  the document number format. A change to them needs no migration. Party GSTIN
-  uniqueness per Organization is an application check (`PARTY_GSTIN_TAKEN`),
-  not an index.
+  types, state codes, GSTIN mod-36 check characters, Party roles, the TDS rate range,
+  advance-supply values and the document number format. A change to them needs no
+  migration. Party GSTIN uniqueness per Organization is an application check
+  (`PARTY_GSTIN_TAKEN`), not an index.
 - Indexes lead with `org_id` and match the real filter, order and keyset.
 - Write with scoped `UPDATE ... RETURNING`. Edits compare-and-swap on the loaded
   `updatedAt` (`timestamptz(3)`). Zero rows is a stale-record `CONFLICT`, with
@@ -262,6 +262,8 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   in bulk for imported opening items) refuses a number longer than 16
   characters (GST Rules 46 and 50) with `BAD_REQUEST` `NUMBER_SERIES_FULL`; the
   owner then changes the prefix, which starts a new consecutive series.
+  Settings refuse a prefix shared by two document types after trimming and ignoring
+  case (a `BAD_REQUEST` input issue on the duplicate field, `params.reason: PREFIX_TAKEN`).
 - There is no balances table: balances are sums of journal lines, as in ERPNext
   and Odoo. A period-close snapshot is
   [deferred](./specs/accounting-core.md#deferred).
@@ -291,6 +293,8 @@ its account: posting refuses a method whose account is inactive, and Banking
 shows it as "Account inactive". New Organizations get Cash → Cash in Hand, and UPI, Bank transfer and
 Card → Bank Account. Direct receipts and payments cannot name a money account, a
 group or a system account (`postableAccounts`).
+Names are unique per Organization after trimming and ignoring case (`DUPLICATE`);
+creation serializes the name check and insert, retaining the exact-name unique index.
 
 Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
 Payment to it, from the bank statement. Record actual fees; never model per-bank

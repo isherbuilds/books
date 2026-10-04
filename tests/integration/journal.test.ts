@@ -652,7 +652,7 @@ test("journal posting refuses unbalanced lines and foreign parties", async () =>
 
 test("registered organizations hide and refuse taxable journal accounts", async () => {
   const fixture = await createAccountingFixture(founder, "journal-gstin", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
   });
