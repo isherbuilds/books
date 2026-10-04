@@ -91,6 +91,12 @@ states), invoice
   </Step>
 </Steps>
 
+Posting refuses a supplier invoice number already posted for the same supplier
+in the same financial year. It ignores letter case and spaces at either end and
+shows the error on **Supplier invoice number**. Drafts can share a number; a
+cancelled bill does not reserve it. Another supplier or financial year can use
+the same number.
+
 <Frame caption="A bill for brass rod from a Gujarat supplier. Place of supply is Maharashtra, so the bill takes IGST.">
   ![New bill form with one line](./images/bills-new-form.webp)
 </Frame>
@@ -336,9 +342,9 @@ tax-locked, or books-locked without an exception. For a filed period, agree a
 see [Locks](/accounting/locks).
 :::
 
-Accly Books does not stop you posting the same supplier invoice number twice for one
-supplier. Search the register by the supplier's invoice number before you book a bill you
-are unsure about.
+Posting refuses a supplier invoice number already posted for the same supplier
+and financial year, ignoring letter case and spaces at either end. The error
+appears on **Supplier invoice number**; drafts and cancelled bills do not reserve it.
 
 ## Common errors
 
