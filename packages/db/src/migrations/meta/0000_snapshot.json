@@ -1,5 +1,5 @@
 {
-  "id": "e67d472c-f839-44be-9927-d00fdc6acb52",
+  "id": "caf24adf-eafd-4009-880a-d15859f07c60",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1960,9 +1960,9 @@
               "nulls": "last"
             },
             {
-              "expression": "name",
-              "isExpression": false,
+              "expression": "lower(\"name\")",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],

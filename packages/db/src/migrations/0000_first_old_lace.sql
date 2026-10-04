@@ -475,7 +475,7 @@ CREATE UNIQUE INDEX "party_ledger_lines_org_document_party_kind_idx" ON "party_l
 CREATE UNIQUE INDEX "tax_rates_org_code_from_idx" ON "tax_rates" USING btree ("org_id","code","effective_from");--> statement-breakpoint
 CREATE INDEX "lock_exceptions_org_user_expires_idx" ON "lock_exceptions" USING btree ("org_id","user_id","expires_at");--> statement-breakpoint
 CREATE INDEX "period_locks_org_kind_id_idx" ON "period_locks" USING btree ("org_id","kind","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id",lower("name"));--> statement-breakpoint
 CREATE UNIQUE INDEX "journal_entries_org_document_kind_idx" ON "journal_entries" USING btree ("org_id","document_type","document_id","kind");--> statement-breakpoint
 CREATE UNIQUE INDEX "journal_entries_org_reverses_entry_idx" ON "journal_entries" USING btree ("org_id","reverses_entry_id") WHERE "journal_entries"."reverses_entry_id" is not null;--> statement-breakpoint
 CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("org_id","entry_date","id");--> statement-breakpoint
