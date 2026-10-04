@@ -92,7 +92,7 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
             <DetailRow label="Original document date">
               {formatBusinessDate(note.against.documentDate)}
             </DetailRow>
-            {note.against.reference ? (
+            {note.type === "debitNote" && note.against.reference ? (
               <DetailRow label="Supplier invoice">{note.against.reference}</DetailRow>
             ) : null}
             <DetailRow label="Reason">{note.narration}</DetailRow>
