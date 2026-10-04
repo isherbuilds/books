@@ -55,11 +55,14 @@ balance:
 | Cash (1000), Bank Accounts (1100)                    | Groups that hold your money accounts (see [Banking](/setup/banking))                                                                                            |
 
 You can rename a system account, but you cannot mark it inactive. You cannot pick
-**Accounts Payable** ([payable](/glossary#payable)), an advance account or a GST account in a [Journal](/accounting/journals)
+**Accounts Payable** ([payable](/glossary#payable)) or an advance account in a [Journal](/accounting/journals)
 (a manual [journal](/glossary#journal) entry) or the [Opening balance](/setup/opening-balance)
 (the [balances you start with](/glossary#opening-balance)). A Journal can use Accounts Receivable only
-with a [party](/glossary#party) (customer or vendor) on the line, and the Opening balance form cannot use it at all. This
-keeps each party's balance and your GST returns in step with the ledger.
+with a [party](/glossary#party) (customer or vendor) on the line, and the Opening balance form cannot use it at all.
+GST input, output and cess accounts are available in both: use them for
+cutover balances, GST payments and input-tax set-off. GST journals change
+the ledger balances, not the GST registers; see
+[GST settlement journals](/accounting/journals#record-a-gst-payment-or-input-tax-set-off).
 
 ### Account codes
 

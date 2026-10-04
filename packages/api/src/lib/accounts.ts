@@ -8,6 +8,17 @@ import { MONEY_KINDS } from "@accly/db/schema/money-kinds";
 
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
 
+export const GST_SYSTEM_KEYS = [
+  "cgstInput",
+  "sgstInput",
+  "igstInput",
+  "cessInput",
+  "cgstOutput",
+  "sgstOutput",
+  "igstOutput",
+  "cessOutput",
+] as const;
+
 const JOURNAL_SYSTEM_KEYS = ["tdsPayable", "tdsReceivable", "roundOff", "openingEquity"] as const;
 
 // Which accounts a document may name directly. Every read is scoped to the org.
@@ -71,8 +82,8 @@ export async function postableAccounts(
 
 /**
  * Journal lines may name active leaves of any account type, including money
- * leaves. Non-system leaves and the TDS payable/receivable, round-off and opening
- * equity system accounts are allowed, plus the party controls the caller names:
+ * leaves. Non-system leaves and the GST input/output, TDS payable/receivable,
+ * round-off and opening equity system accounts are allowed, plus the party controls the caller names:
  * Journals admit receivables, an imported Opening Balance both controls, the
  * Opening Balance form neither. New system keys are refused by default. Registered
  * organizations cannot journal taxable supply accounts. Unresolved ids are omitted.
@@ -110,7 +121,11 @@ export async function journalAccounts(
         eq(accounts.active, true),
         or(
           isNull(accounts.systemKey),
-          inArray(accounts.systemKey, [...JOURNAL_SYSTEM_KEYS, ...options.controls]),
+          inArray(accounts.systemKey, [
+            ...JOURNAL_SYSTEM_KEYS,
+            ...GST_SYSTEM_KEYS,
+            ...options.controls,
+          ]),
         ),
         options.gstin
           ? or(isNull(accounts.supplyClass), ne(accounts.supplyClass, "taxable"))

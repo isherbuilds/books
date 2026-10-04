@@ -125,7 +125,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    exception. An exception clears the general lock only; the tax lock is
    reopened by `lock.set` with an earlier date or null and a reason. The tax
    lock follows `affectsTax`, stored at post, which marks any document in a GST
-   register, exempt direct Receipts included. Allocations use the later source or
+   register (exempt direct Receipts included) and any Journal with a GST-account
+   line. Allocations use the later source or
    target document date; their reversals use that allocation date. Both check the lock.
    A cancellation is checked on its reversal date. **Every document reverses
    on its own `documentDate`** (D1), the Opening Balance on its cutover date,
@@ -909,15 +910,14 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      bound also caps a sheet's stored cells. Nothing is truncated.
 
    - **Opening Balance accounts.** Trial balance rows resolve through
-     `journalAccounts` with `controls` false, plus the two control rows: a GST
-     or advance account row is `ACCOUNT_INVALID`, and a `taxable` income row
-     on a registered Organization is `TAXABLE_ACCOUNT_LINE`. A legacy GST or
-     advance balance goes to a leaf the CA names in `Accounts` (for example
-     `GST payable at cutover` under Current Liabilities) and is cleared by
-     Journal; a mid-year cutover carries year-to-date income and expense rows
-     into their leaves, taxable income into such a leaf. From D4, GST
-     balances may sit on the GST system accounts at cutover and Journals clear
-     them. The 100-line cap
+     `journalAccounts` with both party controls admitted. GST input, output
+     and cess balances sit on their system accounts at cutover and Journals
+     clear them. Advance account rows remain `ACCOUNT_INVALID`; unused
+     customer or vendor advances are opening credit items in the net control
+     balance. A `taxable` income row on a registered Organization is
+     `TAXABLE_ACCOUNT_LINE`: a mid-year cutover carries year-to-date income
+     and expense rows into their leaves, taxable income into another leaf
+     the CA names. The 100-line cap
      of `openingBalance.post` belongs to the form; the import's Opening
      Balance is bounded by the sheet's 5,000 rows.
 
@@ -1370,14 +1370,17 @@ slice 9.
   9a a `receivables` credit line may carry `allocations`. At least one debit
   and one credit; the totals are equal. The router refuses bad input as
   `BAD_REQUEST` before the core.
-- **Accounts.** Any active leaf, money leaves included. Refused: groups, GST
-  input, output and cess accounts (admitted from D4), and `taxable` income when the Organization
-  has a `gstin` (the call 16 guard). The party control accounts
-  (`receivables`, `payables`, `customerAdvances`, `supplierAdvances`) are
-  refused; slice 9a admits `receivables` with a required Party and keeps the
-  other three refused. Opening Balance
-  keeps refusing them. Thus `affectsTax` is false, and a Journal writes party
-  ledger lines only for its `receivables` lines. The batch predicate `journalAccounts`
+- **Accounts.** Any active leaf, money leaves included. GST input, output and
+  cess system accounts are admitted for payments and input-tax set-off.
+  Groups and `taxable` income when the Organization has a `gstin` stay
+  refused (the call 16 guard). Journals admit `receivables` with a required
+  Party; `payables`, `customerAdvances` and `supplierAdvances` stay refused.
+  The Opening Balance form keeps refusing all party controls. A Journal
+  with any GST-account line sets `affectsTax` true; otherwise it is false.
+  Opening Balances keep `affectsTax` false, including GST cutover balances.
+  GST registers read documents of their existing supply types, not Journals
+  or Opening Balances. A Journal writes party ledger lines only for its
+  `receivables` lines. The batch predicate `journalAccounts`
   runs inside the posting transaction after a `FOR SHARE` read of
   `organization_settings`, so a concurrent GSTIN change cannot let a taxable
   line through. It is beside `postableAccounts` in `lib/accounts.ts` and reuses
@@ -1471,14 +1474,14 @@ slice 9.
   user-scoped until revoked or expired: removing membership denies all access,
   but re-admitting the same user does not revoke a still-live grant.
 
-| Not in the first Journal               | Gate                                                              |
-| -------------------------------------- | ----------------------------------------------------------------- |
-| Line tax (GST accounts arrive with D4) | The monthly GST-on-fee reclass gate                               |
-| Drafts and approval                    | Slice 4a drafts proven; more posters than reviewers               |
-| Recurring, templates, auto-reversal    | One Journal posted three months running, or a CA accrual workflow |
-| A Contra series or a Transfer document | The CA asks, or bank reconciliation opens                         |
-| Multi-currency, inter-company          | Their own spec; two live Organizations for one owner              |
-| Print, attachments, cost centres       | The CA asks, or a pilot report needs one                          |
+| Not in the first Journal                                | Gate                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------- |
+| Line tax calculation (GST ledger accounts are admitted) | The monthly GST-on-fee reclass gate                               |
+| Drafts and approval                                     | Slice 4a drafts proven; more posters than reviewers               |
+| Recurring, templates, auto-reversal                     | One Journal posted three months running, or a CA accrual workflow |
+| A Contra series or a Transfer document                  | The CA asks, or bank reconciliation opens                         |
+| Multi-currency, inter-company                           | Their own spec; two live Organizations for one owner              |
+| Print, attachments, cost centres                        | The CA asks, or a pilot report needs one                          |
 
 ## Deferred
 
@@ -1567,7 +1570,7 @@ differ, the simpler rule wins; where this model differs from both, the row says 
 Each row is a build item until its code lands; the
 [work registry](../README.md#work-lifecycle) tracks them. Revisit any row with the CA.
 
-D1–D3 are implemented; their integration checks await the coordinated verification run.
+D1–D4 are implemented; their integration checks await the coordinated verification run.
 
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Basis                                                                                                                                                                                     |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

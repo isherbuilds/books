@@ -368,15 +368,26 @@ test("an Opening Balance and business on its date racing never both post", async
 });
 
 test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
-  const fixture = await createAccountingFixture(founder, "opening-balance-refusals");
-  const { cash, openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
+  const fixture = await createAccountingFixture(founder, "opening-balance-refusals", {
+    gstin: "27ABCDE1234F1Z5",
+    stateCode: "27",
+    pan: "ABCDE1234F",
+  });
+
+  const { openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
+
+  const inputGst = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "cgstInput"),
+    "CGST input account",
+  );
+
   const claim = { orgSlug: fixture.organization.slug };
 
   const validInput = {
     ...claim,
     documentDate: "2026-04-01",
     lines: [
-      { accountId: cash.id, side: "debit" as const, amount: "1.00" },
+      { accountId: inputGst.id, side: "debit" as const, amount: "1.00" },
       { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
     ],
   };
@@ -387,6 +398,9 @@ test("opening balance refuses a future date, a second posted document, control a
   );
 
   const posted = await fixture.api.openingBalance.post(validInput);
+  expect((await fixture.api.openingBalance.get(claim))?.lines).toContainEqual(
+    expect.objectContaining({ accountId: inputGst.id, side: "debit", amountPaise: 100n }),
+  );
   await expectORPCCode(fixture.api.openingBalance.post(validInput), "CONFLICT");
 
   await fixture.api.openingBalance.cancel({

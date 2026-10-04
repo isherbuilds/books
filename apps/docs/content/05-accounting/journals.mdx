@@ -21,9 +21,9 @@ them. An Operator does not see journals.
 :::tip[Use the document first]
 If a document fits, use it. A sale is an [invoice](/sales/invoices), a vendor's
 charge with GST is a [bill](/purchases/bills), money in or out is a
-[receipt](/sales/receipts) or a [payment](/purchases/payments). A journal cannot
-carry GST, so it is never the place for a taxable sale or purchase (one that
-attracts GST).
+[receipt](/sales/receipts) or a [payment](/purchases/payments). A journal can
+settle GST ledger balances, but does not calculate line tax or enter a GST
+register. Use an invoice or bill for a taxable sale or purchase.
 :::
 
 ## The journal register
@@ -119,7 +119,8 @@ in a new organization has no depreciation accounts. Add
 - **Locked periods are closed.** A journal dated on or before the books
   [lock](/glossary#lock) (the date through which a period is closed) is refused
   unless you have an [exception](/glossary#lock-exception), a time-limited permission
-  to post into the closed period. See [Locks](/accounting/locks).
+  to post into the closed period. If any line names a GST account, the tax
+  period lock also applies, with no exceptions. See [Locks](/accounting/locks).
 
 ## Accounts a journal accepts and refuses
 
@@ -137,19 +138,25 @@ its own postings.
 | Income accounts that are [exempt, nil-rated](/glossary#supply-class) or outside GST, such as Interest Income                                                                                   | Yes           |                                                                                                      |
 | **Accounts Receivable** (what customers owe you, a [control account](/glossary#control-account)), with a party on the line                                                                     | Yes           | See [Party lines](#party-lines-on-accounts-receivable)                                               |
 | Taxable income accounts such as **Sales**, when the organization has a [GSTIN](/glossary#gstin) (GST registration number)                                                                      | No            | An [invoice](/sales/invoices), which adds the GST                                                    |
-| [CGST, SGST, IGST](/glossary#cgst-sgst-igst) (central, state and integrated GST) and [cess](/glossary#cess) input and output accounts                                                          | No            | The GST comes from invoices, bills and notes                                                         |
+| [CGST, SGST, IGST](/glossary#cgst-sgst-igst) (central, state and integrated GST) and [cess](/glossary#cess) input and output accounts                                                          | Yes           | GST payment and input-tax set-off; see below                                                         |
 | **Accounts Payable** (what you owe vendors, [payable](/glossary#payable)), **Customer Advances**, **Supplier Advances** ([advances](/glossary#advance), money paid before the invoice or bill) | No            | A [payment](/purchases/payments), [debit note](/purchases/debit-notes) or [receipt](/sales/receipts) |
 | An archived (switched-off) account                                                                                                                                                             | No            | Restore it in [Chart of accounts](/setup/chart-of-accounts)                                          |
 
-:::warning[No GST settlement journal yet]
-Because a journal cannot name a GST account, you cannot yet record the monthly
-[GSTR-3B](/glossary#gstr) set-off (the summary return where you deduct the GST you
-paid from the GST you collected) and the GST payment in Accly Books. The
-[output tax](/glossary#output-tax) and input tax balances stay on the
-[balance sheet](/glossary#balance-sheet), the statement of what the business owns
-and owes. Agree the treatment with your CA until a GST settlement
-document arrives.
-:::
+### Record a GST payment or input-tax set-off
+
+After agreeing the [GSTR-3B](/glossary#gstr) amounts with your CA, post a
+journal with a clear narration and the payment or return reference:
+
+- **Payment:** debit the relevant **GST Output Payable** account and credit
+  the bank account for the amount paid.
+- **Input-tax set-off:** debit the relevant **GST Output Payable** account
+  and credit the **GST Input Credit** account for the credit used.
+
+Use the CGST, SGST, IGST or cess accounts and amounts your CA confirms; the
+journal does not choose which credits may be used. It changes the ledger
+balances but does not add sales or purchases to the GST registers.
+Choose a date in the open tax period: the tax lock covers every journal
+with a GST-account line, and a books-lock exception does not override it.
 
 The **Party** box on an ordinary line is for reference only: the hint reads "Shown
 in the day book only." It does not change any party's balance.

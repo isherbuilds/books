@@ -11,9 +11,10 @@ an entry into the books for good. Accly Books has two locks:
 
 - **Books** stops every posting dated on or before its date.
 - **Tax period** stops posting a [document](/glossary#document) (an invoice, bill,
-  note or receipt) that belongs in a GST register, dated on or before its date. A GST
-  register is the list of sales or purchases that feeds your GST return. Set this lock
-  when you file the return for the period.
+  note or receipt) that belongs in a GST register, or a journal with any
+  GST-account line, dated on or before its date. A GST register is the list of
+  sales or purchases that feeds your GST return; GST journals do not enter it.
+  Set this lock when you file the return for the period.
 
 **Who can do it:** your [role](/glossary#roles) decides this. An Owner or a Chartered
 Accountant sets locks and grants
@@ -41,7 +42,7 @@ The lock date is inclusive: a lock through 30 Jun 2026 refuses a document dated
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Post an [invoice](/glossary#invoice), [bill](/glossary#bill), [credit note](/glossary#credit-note) or [debit note](/glossary#debit-note) dated in the period | Refused                                                                         | Refused, when the organization has a [GSTIN](/glossary#gstin) (GST registration number)                                                                       |
 | Post a [receipt](/glossary#receipt) (money in) or [payment](/glossary#payment) (money out) dated in the period                                               | Refused                                                                         | Refused only for a direct receipt to a GST-classified income account when the organization has a GSTIN; other receipts and payments are not in a GST register |
-| Post a [journal](/glossary#journal) (a manual entry) dated in the period                                                                                     | Refused                                                                         | Not affected: a journal never carries GST                                                                                                                     |
+| Post a [journal](/glossary#journal) (a manual entry) dated in the period                                                                                     | Refused                                                                         | Refused if any line names a GST input, output or cess account; otherwise not affected                                                                         |
 | Post an [Opening Balance](/glossary#opening-balance) (your balances on the day you start using Accly Books), or import one, dated in the period              | Refused                                                                         | Not affected                                                                                                                                                  |
 | Save an invoice or bill [draft](/glossary#draft) (saved but not yet posted) dated in the period                                                              | Allowed                                                                         | Allowed                                                                                                                                                       |
 | Post that draft                                                                                                                                              | Refused                                                                         | Refused                                                                                                                                                       |
@@ -182,15 +183,15 @@ log.
 
 ## Common errors
 
-| Message                                                                                    | Where                              | What to do                                                                |
-| ------------------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------- |
-| Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Any document form                  | Date the document after the lock, or ask the owner or CA for an exception |
-| The tax period is locked through 30 Jun 2026.                                              | Invoice, bill, note or GST receipt | Post it in the open period, usually as a credit or debit note             |
-| Choose an expiry in the future.                                                            | Grant exception                    | Pick a later time; the server's clock decides                             |
-| Choose a local time that exists in Asia/Kolkata                                            | Grant exception                    | Pick another time (applies only in zones with daylight saving)            |
-| Choose a member                                                                            | Grant exception                    | Pick the person who will post                                             |
-| This lock changed after you opened it.                                                     | Change lock                        | Reopen the dialog and review the new date                                 |
-| This exception is not active.                                                              | Revoke                             | It already expired or was revoked; refresh the page                       |
+| Message                                                                                    | Where                                           | What to do                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Any document form                               | Date the document after the lock, or ask the owner or CA for an exception |
+| The tax period is locked through 30 Jun 2026.                                              | Invoice, bill, note, GST receipt or GST journal | Post in the open period, or ask the owner or CA to reopen the tax lock    |
+| Choose an expiry in the future.                                                            | Grant exception                                 | Pick a later time; the server's clock decides                             |
+| Choose a local time that exists in Asia/Kolkata                                            | Grant exception                                 | Pick another time (applies only in zones with daylight saving)            |
+| Choose a member                                                                            | Grant exception                                 | Pick the person who will post                                             |
+| This lock changed after you opened it.                                                     | Change lock                                     | Reopen the dialog and review the new date                                 |
+| This exception is not active.                                                              | Revoke                                          | It already expired or was revoked; refresh the page                       |
 
 <Frame caption="An expiry in the past is refused.">
   ![Past expiry error](./images/locks-exception-past-expiry.webp)
