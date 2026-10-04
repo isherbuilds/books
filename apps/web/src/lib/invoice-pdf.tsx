@@ -35,7 +35,15 @@ export async function renderNotePdf(
 
   if (!data.against?.number) throw new Error(`Note ${data.number} has no numbered source`);
 
-  const printable = { ...data, number: data.number, printSnapshot: data.printSnapshot };
+  // Rule 53(1A)(f): keep the original invoice's immutable delivery address.
+  const shipTo = data.type === "creditNote" ? data.against.printSnapshot?.shipTo : undefined;
+
+  const printable = {
+    ...data,
+    number: data.number,
+    printSnapshot: { ...data.printSnapshot, shipTo },
+  };
+
   const title = data.type === "creditNote" ? "Credit Note" : "Debit Note";
 
   return renderPdf(<InvoiceDocument data={printable} />, {

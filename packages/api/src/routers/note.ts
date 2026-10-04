@@ -267,6 +267,7 @@ export const noteRouter = {
             number: against.number,
             documentDate: against.documentDate,
             reference: against.reference,
+            printSnapshot: against.printSnapshot,
           })
           .from(against)
           .where(and(eq(against.orgId, orgId), eq(against.id, note.againstDocumentId!)))

@@ -477,6 +477,8 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      and date, original Invoice or Bill number and date (plus the supplier invoice
      reference for Bills), each line's taxable value, GST rate and amounts,
      place of supply and the Authorised signatory line (Rule 53(1A)).
+     Credit Notes also retain the source Invoice's immutable delivery address
+     with state name and code (Rule 53(1A)(f)); Bills have no delivery address.
      The note record's PDF link opens the browser viewer to print or save.
    - **Web.** Bills and Payments under Purchases; Credit and Debit Notes
      under a Notes list; Bill pages as the Invoice (line grid); the Payment
