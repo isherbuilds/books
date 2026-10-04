@@ -12,7 +12,7 @@ import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { periodLocks } from "@accly/db/schema/period-locks";
 import { and, eq, sql } from "drizzle-orm";
 
-import { createAccountingFixture } from "../support/accounting";
+import { createAccountingFixture, postingOf } from "../support/accounting";
 import { required } from "../support/assert";
 import { createFounderSession, createTestUser, joinOrganization } from "../support/auth";
 import { clientFor, expectORPCCode, expectReason } from "../support/client";
@@ -383,9 +383,9 @@ test("missing organization settings is an integrity failure, not a stale lock co
   expect(await lockChangeCounts(fixture.organization.id)).toEqual({ history: 0, audits: 0 });
 });
 
-test("the tax lock follows affectsTax while cancellations use the reversal date", async () => {
+test("the tax lock follows affectsTax and cancellation reverses on the original date", async () => {
   const fixture = await createAccountingFixture(founder, "tax-lock", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
     timeZone: "UTC",
@@ -425,7 +425,7 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
   await caApi.lock.set({
     ...claim,
     kind: "tax",
-    lockedThrough: today,
+    lockedThrough: yesterday,
     expectedLockedThrough: null,
     reason: "GST return filed",
   });
@@ -438,7 +438,7 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
       paymentMethodId: cashMethod.id,
       incomeAccountId: exemptIncome.id,
       narration: "Exempt receipt in filed period",
-      documentDate: today,
+      documentDate: yesterday,
     }),
     "LOCKED",
   );
@@ -447,14 +447,14 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
     claim.orgSlug,
     cash,
     exemptIncome,
-    today,
+    yesterday,
     "Journal does not affect tax",
   );
   await expectReason(
     fixture.api.receipt.cancel({
       ...claim,
       receiptId: oldReceipt.id,
-      reason: "Reverse while today is tax locked",
+      reason: "Reverse a receipt in the filed tax period",
     }),
     "LOCKED",
   );
@@ -462,17 +462,20 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
   await caApi.lock.set({
     ...claim,
     kind: "tax",
-    lockedThrough: yesterday,
-    expectedLockedThrough: today,
-    reason: "Reopened current tax date",
+    lockedThrough: null,
+    expectedLockedThrough: yesterday,
+    reason: "Reopened original tax period",
   });
   expect(
     await fixture.api.receipt.cancel({
       ...claim,
       receiptId: oldReceipt.id,
-      reason: "Reverse on open current date",
+      reason: "Reverse on the original date after reopening",
     }),
   ).toMatchObject({ state: "cancelled" });
+  expect((await postingOf(fixture.organization.id, oldReceipt.id, "reverse")).entry.entryDate).toBe(
+    yesterday,
+  );
   expect(
     await fixture.api.journal.cancel({
       ...claim,
@@ -480,23 +483,6 @@ test("the tax lock follows affectsTax while cancellations use the reversal date"
       reason: "Journal is outside the tax lock",
     }),
   ).toMatchObject({ state: "cancelled" });
-
-  await caApi.lock.set({
-    ...claim,
-    kind: "general",
-    lockedThrough: today,
-    expectedLockedThrough: null,
-    reason: "Books closed",
-  });
-  await expectReason(
-    fixture.api.allocation.apply({
-      ...claim,
-      sourceDocumentId: crypto.randomUUID(),
-      targetDocumentId: crypto.randomUUID(),
-      amount: "1.00",
-    }),
-    "LOCKED",
-  );
 });
 
 test("a lock change waits for a posting that already passed its check", async () => {

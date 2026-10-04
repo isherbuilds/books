@@ -242,16 +242,159 @@ test("opening correction enforces the cutover lock and corrects historical balan
   expect(isolatedOpening.number).toMatch(/^OB\d{2}-\d{2}\/1$/);
 });
 
+test("business and the Opening Balance refuse each other across the cutover date", async () => {
+  const fixture = await createAccountingFixture(founder, "opening-date-boundary");
+  const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const lines = [
+    { accountId: cash.id, side: "debit" as const, amount: "1.00" },
+    { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
+  ];
+
+  const opening = await fixture.api.openingBalance.post({
+    ...claim,
+    documentDate: "2026-03-31",
+    lines,
+  });
+
+  await expectReason(
+    fixture.api.journal.post({
+      ...claim,
+      documentDate: "2026-03-31",
+      narration: "Business on the cutover date",
+      lines,
+    }),
+    "BEFORE_OPENING_BALANCE",
+  );
+
+  const journal = await fixture.api.journal.post({
+    ...claim,
+    documentDate: "2026-04-01",
+    narration: "Business after cutover",
+    lines,
+  });
+
+  expect((await postingOf(fixture.organization.id, journal.id, "post")).entry.entryDate).toBe(
+    "2026-04-01",
+  );
+
+  await fixture.api.openingBalance.cancel({
+    ...claim,
+    openingBalanceId: opening.id,
+    reason: "Replace the cutover",
+  });
+  await expectReason(
+    fixture.api.openingBalance.post({ ...claim, documentDate: "2026-04-01", lines }),
+    "OPENING_BALANCE_AFTER_BUSINESS",
+  );
+  await fixture.api.openingBalance.post({ ...claim, documentDate: "2026-03-31", lines });
+});
+
+test("a receipt on the cutover date blocks a later Opening Balance post", async () => {
+  const fixture = await createAccountingFixture(founder, "opening-after-receipt");
+  const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const income = required(
+    fixture.accounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "exempt income",
+  );
+
+  const method = required(
+    fixture.methods.find(({ accountId }) => accountId === cash.id),
+    "cash payment method",
+  );
+
+  await fixture.api.receipt.post({
+    ...claim,
+    settlementKind: "direct",
+    documentDate: "2026-03-31",
+    amount: "1.00",
+    paymentMethodId: method.id,
+    incomeAccountId: income.id,
+    narration: "Business posted before choosing the cutover",
+  });
+  await expectReason(
+    fixture.api.openingBalance.post({
+      ...claim,
+      documentDate: "2026-03-31",
+      lines: [
+        { accountId: cash.id, side: "debit", amount: "1.00" },
+        { accountId: openingEquity.id, side: "credit", amount: "1.00" },
+      ],
+    }),
+    "OPENING_BALANCE_AFTER_BUSINESS",
+  );
+});
+
+test("an Opening Balance and business on its date racing never both post", async () => {
+  const fixture = await createAccountingFixture(founder, "opening-race");
+  const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const income = required(
+    fixture.accounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "exempt income",
+  );
+
+  const method = required(
+    fixture.methods.find(({ accountId }) => accountId === cash.id),
+    "cash payment method",
+  );
+
+  // Before the settings lock, both read "nothing on the other side" and committed.
+  const outcomes = await Promise.allSettled([
+    fixture.api.openingBalance.post({
+      ...claim,
+      documentDate: "2026-03-31",
+      lines: [
+        { accountId: cash.id, side: "debit", amount: "1.00" },
+        { accountId: openingEquity.id, side: "credit", amount: "1.00" },
+      ],
+    }),
+    fixture.api.receipt.post({
+      ...claim,
+      settlementKind: "direct",
+      documentDate: "2026-03-31",
+      amount: "1.00",
+      paymentMethodId: method.id,
+      incomeAccountId: income.id,
+      narration: "Business racing the cutover",
+    }),
+  ]);
+
+  expect(outcomes.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+  expect(outcomes.find(({ status }) => status === "rejected")).toMatchObject({
+    reason: {
+      data: {
+        reason: expect.stringMatching(/^(BEFORE_OPENING_BALANCE|OPENING_BALANCE_AFTER_BUSINESS)$/),
+      },
+    },
+  });
+});
+
 test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
-  const fixture = await createAccountingFixture(founder, "opening-balance-refusals");
-  const { cash, openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
+  const fixture = await createAccountingFixture(founder, "opening-balance-refusals", {
+    gstin: "27ABCDE1234F1Z0",
+    stateCode: "27",
+    pan: "ABCDE1234F",
+  });
+
+  const { openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
+
+  const inputGst = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "cgstInput"),
+    "CGST input account",
+  );
+
   const claim = { orgSlug: fixture.organization.slug };
 
   const validInput = {
     ...claim,
     documentDate: "2026-04-01",
     lines: [
-      { accountId: cash.id, side: "debit" as const, amount: "1.00" },
+      { accountId: inputGst.id, side: "debit" as const, amount: "1.00" },
       { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
     ],
   };
@@ -262,6 +405,9 @@ test("opening balance refuses a future date, a second posted document, control a
   );
 
   const posted = await fixture.api.openingBalance.post(validInput);
+  expect((await fixture.api.openingBalance.get(claim))?.lines).toContainEqual(
+    expect.objectContaining({ accountId: inputGst.id, side: "debit", amountPaise: 100n }),
+  );
   await expectORPCCode(fixture.api.openingBalance.post(validInput), "CONFLICT");
 
   await fixture.api.openingBalance.cancel({

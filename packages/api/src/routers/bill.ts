@@ -29,6 +29,7 @@ import { effectiveOn, ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
+import { uniqueViolationConstraint } from "../lib/db-errors";
 import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import {
@@ -248,17 +249,27 @@ export const billRouter = {
   }),
 
   post: orgProcedure({ bill: ["post"] }, postInput).handler(async ({ context, input }) => {
-    const { posted, amountPaise } = await db.transaction(async (tx) => {
-      const settings = await orgSettings(context.scope.orgId, tx);
-      const bill = await resolveBill(tx, context.scope, input, settings);
+    const { posted, amountPaise } = await db
+      .transaction(async (tx) => {
+        const settings = await orgSettings(context.scope.orgId, tx);
+        const bill = await resolveBill(tx, context.scope, input, settings);
 
-      const posted = await postDocument(tx, context.scope, settings, settings.billPrefix, {
-        ...bill,
-        draft: input.draft ?? null,
+        const posted = await postDocument(tx, context.scope, settings, settings.billPrefix, {
+          ...bill,
+          draft: input.draft ?? null,
+        });
+
+        return { posted, amountPaise: bill.posting.amountPaise };
+      })
+      .catch((error: unknown) => {
+        if (uniqueViolationConstraint(error) === "documents_bill_reference_idx")
+          throw badRequest(
+            "BILL_NUMBER_TAKEN",
+            "This supplier invoice number is already posted for this supplier and financial year.",
+          );
+
+        throw error;
       });
-
-      return { posted, amountPaise: bill.posting.amountPaise };
-    });
 
     audit({
       action: "bill.post",

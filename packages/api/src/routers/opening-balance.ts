@@ -9,16 +9,13 @@ import { settlementPaise } from "../core/allocations";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";
-import {
-  assertNoOpeningBalance,
-  OPENING_BALANCE_PREFIX,
-  reverseOpening,
-} from "../core/opening-items";
+import { OPENING_BALANCE_PREFIX } from "../core/number-prefixes";
+import { assertNoOpeningBalance, reverseOpening } from "../core/opening-items";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { balancedEntryLines, dateOnly, entryLineFields, pageLimit, reason } from "../lib/schemas";
-import { afterDateCursor, cancelDocument, orgSettings, pageOf } from "../lib/settlements";
+import { dateCursor, cancelDocument, orgSettings, pageOf } from "../lib/settlements";
 
 const lineSchema = z.strictObject(entryLineFields);
 
@@ -149,7 +146,7 @@ export const openingBalanceRouter = {
           eq(documents.orgId, orgId),
           inArray(documents.type, ["openingClaim", "openingCredit"]),
           eq(documents.state, "posted"),
-          afterDateCursor(orgId, input.cursor),
+          dateCursor(orgId, input.cursor, "after"),
         ),
       )
       .orderBy(asc(documents.documentDate), asc(documents.id))

@@ -134,12 +134,27 @@ export const documents = pgTable(
     uniqueIndex("documents_org_opening_balance_idx")
       .on(table.orgId)
       .where(sql`${table.type} = 'openingBalance' and ${table.state} = 'posted'`),
-    index("documents_org_type_date_idx").on(table.orgId, table.type, table.documentDate),
-    // The newest-first keyset of each document list, without filtering type on the heap.
-    index("documents_org_type_id_idx").on(table.orgId, table.type, table.id),
-    // A party's documents newest first: the party filter seeks them instead of
-    // walking the whole register.
+    // Register periods and newest-first (document date, id) keysets share this index.
+    index("documents_org_type_date_id_idx").on(
+      table.orgId,
+      table.type,
+      table.documentDate,
+      table.id,
+    ),
+    // A supplier invoice number posts once per supplier and financial year (D5).
+    // Cancelling releases it; drafts are unchecked.
+    uniqueIndex("documents_bill_reference_idx")
+      .on(table.orgId, table.partyId, table.financialYear, sql`lower(${table.reference})`)
+      .where(sql`${table.type} = 'bill' and ${table.state} = 'posted'`),
+    // party.transactions retains its creation-order id cursor.
     index("documents_org_party_idx").on(table.orgId, table.partyId, table.id),
+    // Party-filtered registers seek their period and newest-first date/id keyset.
+    index("documents_org_party_date_id_idx").on(
+      table.orgId,
+      table.partyId,
+      table.documentDate,
+      table.id,
+    ),
     index("documents_search_text_idx").using("gin", table.searchText.op("gin_trgm_ops")),
     index("documents_org_amended_from_idx").on(table.orgId, table.amendedFromId),
     index("documents_org_against_document_idx").on(table.orgId, table.againstDocumentId),

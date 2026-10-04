@@ -4,7 +4,7 @@ import { linkRows } from "../../apps/web/src/lib/link-rows";
 
 type Row = { name: string; code?: string };
 
-const sharma: Row = { name: "Sharma Traders", code: "27AAAPS1234C1Z5" };
+const sharma: Row = { name: "Sharma Traders", code: "27AAAPS1234C1Z7" };
 
 const asha: Row = { name: "Asha Sharma" };
 

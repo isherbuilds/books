@@ -22,304 +22,189 @@ prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
 - **[User-guide walkthrough findings](./research/docs-walkthrough-findings-2026-10-04.md)**:
-  Active. 17 major findings, plus minor and polish items, from running every workflow
-  for the rebuilt guide in `apps/docs`. Every design question is decided in
-  [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
-  is building them. Start with reversal and allocation dating against locks (D1,
-  D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
-  and the blank party on Pay/Refund (M6, a bug).
+  Active. [D1–D16](./specs/accounting-core.md#decisions-2026-10-04) are recorded.
+  Built and verified on branches (PRs #39–#47): D1–D3 (including the Opening
+  Balance/business race fix and regression test), D4, D5, M6, D8, D11,
+  D13/D15, D16 and M10. M6 fixes a render-subscription bug; no automated test
+  exists without a component harness. D11 does not refresh an open page at
+  midnight. M10 first-page p50 fell from 14.8 s with timeouts to 62–145 ms;
+  16-worker load rose 43→72 req/s, errors 7→0
+  ([method](./specs/query-performance.md#current-read-measurements)).
+  Remaining: D6 supplier refund Receipt and D7 proportional TDS on Debit Notes
+  (M7/M8), M14–M17 (join page, phone invite form, password reset copy, join
+  audit), and the minor/polish lists. M12 is closed by D12, not a blocker.
+  Open UI checks: change an unused income account's supply class at 1440 and
+  390 px in both themes. Recapture the Edit account, apply-credit ledger and
+  quarter-close screenshots (and the quarter-close table) on a re-seeded demo.
+  Next: build D6/D7 and resolve the remaining findings against their owner docs.
 
-- **Combobox input simplification**: Verification. Invoice party and item picks
-  keep one input mounted; Enter selects, Tab reaches the next control, and
-  typing over a saved choice clears it. Empty search results render in the
-  list. The Apply Credit picker selects a receipt and focuses Amount; editing
-  that choice disables Apply credit. Checked on desktop and at 390 px in both
-  themes. Against the prior picker on the same local fixture, 24 alternating
-  invoice party searches took 18.7 → 13.7 ms median and 31.4 → 30.7 ms p95
-  from input event to the second animation frame in Chrome dev mode. The
-  LinkField client chunk fell from 16.52 to 14.61 kB gzip; the three picker
-  files fell from 755 to 686 lines. Remaining: exercise Load more with a party
-  that has over one page of open credits.
-
-- **Client bundle trim**: Verification. Client gzip JS fell 669.1 → 648.2 kB
-  (`bun --bun vite build`, sum of `assets/*.js` at gzip -9). Drizzle left the
-  client: the account, lock and entry-side lists moved to dependency-free
-  `*-kinds.ts` files, as `settlement-kinds.ts` did (−10.5 kB). cmdk's
-  never-used Radix `Command.Dialog` no longer drags Radix Dialog, remove-scroll
-  and aria-hidden in: `vite.config.ts` aliases it to a throwing stub (−10.4 kB).
-  Palette opens, filters and closes on Esc in the dev app with no console
-  errors. Remaining: check at 390 px and in dark theme.
-
-- **Apply Credit form cleanup**: Verification. The credit picker now uses the
-  Combobox's own open state. Lint and format passed; the web production build
-  passed before the concurrent Combobox edit landed.
-  Check selection, Load more, and keyboard use at desktop and mobile widths in
-  both themes when the concurrent Combobox edit and dependency update restore
-  the local web app and type check.
-
-- **[Query performance](./specs/query-performance.md)**: Active. Open: S4's
-  party statement refusal timing and S7 close-out. The local database is on
-  the current baseline with `db:seed:volume`; run `bun run db:seed:mega` for
-  the mega-volume checks.
-- **Loading indicators**: Verification. The list, picker, invitation, join,
-  allocation and opening-balance wait states use `WaveLoader`; types, lint and
-  build pass. Check a loading state at desktop and mobile widths in both themes
-  after the local web and API proxy processes respond.
-- **Cooler light palette**: Verification. The public page renders at desktop and
-  phone widths; the contrast test and production build pass. Check an authenticated
-  console page in light and dark after the local migration records match this
-  checkout and the web and API services start.
-- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 7a–7c
-  (opening items, workbook masters, Settings > Import) are implemented on
-  `feat/import-tally-opening-items`; `tests/integration/import.test.ts` and
-  `request-lifecycle.test.ts` cover their acceptance. In the dev app, Check
-  and Import pass for valid and invalid workbooks, a file edited after it was
-  chosen toasts "Choose it again", and a numeric State code `7` saves as `07`.
-  On Meridian at `db:seed:volume` (production API build, 20 runs), a 1,000-party,
-  5,000-item `import.commit` takes p95 1.29 s and `import.check` 107 ms; 5,000
-  parties take p95 1.55 s and 132 ms. Bulk inserts of 1,000 rows into
-  `documents` and `party_ledger_lines` take most of that time; no single
-  statement is slow. Open for slice 7: 7d (TallyPrime XML) is gated on an
-  anonymized real Tally export.
-
-  Also
-  open: CA acceptance of every implemented slice, and the slice 2 posting p95
-  on native PostgreSQL at `db:seed:volume`. Slices 1–6, 8 and 9 are
-  implemented; their open runtime checks are listed below. Slice 6 is
-  covered by the report, receipt and tenancy integration tests and the
-  report unit tests. Its pages (trial balance, P&L, balance sheet, account
-  ledger, day book, party Ledger downloads) passed at 1440 and 390 px in both
-  themes on Cedar Components: balance sheet → leaf → ledger → voucher, the
-  ledger closing equal to the balance sheet row, the P&L net equal to the
-  current-year row, and every report PDF answering `application/pdf`. At
-  210,124 Meridian journal lines on native Docker PostgreSQL after `VACUUM
-ANALYZE`, a production API build returns 365-day RPC p95 of 39.7 ms
-  (`trial_balance`), 37.8 ms (`profit_and_loss`) and 39.3 ms
-  (`balance_sheet`) over 200 requests each, all below 100 ms.
-  Warm `EXPLAIN (ANALYZE, BUFFERS)` shows parallel sequential scans of
-  `journal_lines`: 41.2, 30.8 and 30.2 ms respectively, with 11,373
-  shared buffers hit and none read for each. Slice 6 regenerated the
-  migration baseline to add `journal_lines.entry_date` (rule 4); a database
-  still on the earlier `0000_rare_johnny_storm` baseline fails migration and
-  must be reset with `bun run db:seed -- --reset`. Slice 9a's
-  Journal form, record, Apply credit and party Ledger link passed at 1440
-  and 390 px in both themes; open: the Opening Balance picker without
-  `receivables`, the Journal Invoice picker after a reversed refund and Fill
-  against a party's net credit at desktop and mobile widths in both themes,
-  Journal recovery after a selected Invoice closes, and Receipt and Payment
-  Fill/totals after the allocation grid refactor,
-  and `party.openCredits` with Journal credits under "Settlement reads at
-  volume". Slice 9b is covered by the journal
-  integration test; open: the Receipt form's Open items grid listing a
-  Journal debit, posting against it, and the Receipt Sheet's Journal
-  allocation link at 1440 and 390 px in both themes (the local database
-  needs a reset to match the migration baseline first), and
-  `party.openItems` with Journal debits under "Settlement reads at volume".
-
-- **Virtualized lists and paged ledgers**: Verification. Every `DataTable`, the
-  audit and files panels, the account ledger and the day book render through
-  `useVirtualRows`; keyset lists load the next 25 rows as they scroll into view.
-  At 210,124 Meridian lines on native PostgreSQL, warm
-  `EXPLAIN (ANALYZE, BUFFERS)` shows an account summary parallel sequential
-  scan in 22.4 ms (11,357 buffers hit, none read) and a first-page index
-  scan in 0.4 ms (216 hit). The day-book summary uses parallel sequential
-  scans of lines and entries in 51.1 ms (12,207 hit, 5,194 read); its
-  first-page index-only entry scan takes 0.1 ms (5 hit), and indexed
-  detail takes 0.6 ms (498 hit).
-  Party ledger, account ledger and day book page oldest first on
-  `(entry_date, id)` with a top summary. On mega-volume Meridian (1.3M journal
-  lines) warm page queries take 0.1–3 ms; the summaries scan their period
-  (account 165–390 ms, day book 120–770 ms, party 14–80 ms). Checked at 1440
-  and 390 px in both themes: SSR first rows, auto-load, bounded mounted rows,
-  balances continuing across pages, the Closing row only after the last page, and
-  row focus kept when a Sheet closes. In the light theme: on 1440 px Meridian
-  Invoices, ArrowDown from row 0 reaches row 60 across the mounted window and
-  ArrowUp returns; a cold-loaded day book fills the viewport after scrolling
-  at 1440 and 390 px; a failed remote party search shows "Could not load
-  parties"; renaming a party shows the new name on a day book cached earlier
-  in the session. Open: those four checks in the dark theme; a scroll to the
-  list end during a background refetch, confirming no next-page request starts
-  until the refetch settles (the code follows TanStack Query's `!isFetching`
-  guard); an organization legal-name edit refreshing a cached report header;
-  confirm the Parties table and its row highlight fill the bordered box at
-  desktop width after the virtual spacer fix, in both themes; the 5,000-party
-  register (the local seed has 94 parties); and period roll-ups if summaries
-  miss the report budget on native PostgreSQL. Open the Party Ledger and five
-  report PDF links in the running app and confirm they open without a Base UI
-  native-button console warning.
-- **Settlement reads at volume**: Verification. Every read of outstanding or
-  unapplied goes through `settlementPaise`: per row, one indexed lookup of the
-  document's single `post` party ledger line (a unique index) less its active
-  applies. Measured with `EXPLAIN ANALYZE` on `db:seed:volume` (100,000
-  Receipts per organization, 44,000 party ledger lines, no Invoices), grouped
-  joins before and correlated reads after: a 25-row register page with
-  balances 140–150 → 0.3–0.6 ms; the Invoice list and its open filter 48 →
-  0.1 ms; `party.openItems` 47 → 0.1 ms; `party.openCredits` for a party
-  with 5,799 open advances 85 → 55 ms, which reads every open credit and
-  sorts in memory before the 200-row limit. Both pickers now return 25-row
-  pages on a `(document date, id)` keyset (#16), but without an index in
-  that order the database still reads and sorts every open credit before
-  the page. Open: the unfiltered Invoice, Bill and Note register pages, the
-  open and overdue filters and both pickers on 100,000 Invoices and Bills
-  with allocations; decide then whether the pickers need an
-  `(org, party, document date, id)` index. Since slice 9 both pickers also
-  admit Journals through `exists` on `party_ledger_lines`, an `OR` arm that
-  the party index cannot serve, so its cost grows with the organization's
-  Journals. `db:seed:volume` seeds none, so measure with Journals seeded. If
-  the arm is slow, drive both pickers from `party_ledger_lines_org_party_idx`
-  (every settling document has one `post` line per party; the sign gives
-  source or target) instead of adding an index.
-- **Mega volume seed**: Verification. `db:seed:mega` fills Meridian Traders,
-  Ridgeview Academy and Cedar Components to 1M, 5M and 15M total documents with
-  linked document, journal, ledger and allocation rows. Open: run on local
-  PostgreSQL, confirm final row counts, then measure register and report reads.
-- **[Keyboard focus](./design.md)**: Verification. One global rounded ring
-  with `data-focus-inset` for full-bleed rows. Desktop light checks passed for
-  the login autofocus, Sign in, settings tabs, sidebar search and a receipt row
-  link, and the muted sidebar palette trigger passed in both themes. Remaining:
-  mobile widths, dark theme, dialogs, menus, comboboxes and compact data-table
-  rows. Cell-level text links sit about 2px from the ring.
-- **[Choice controls](./design.md#8-layout-primitives)**: Verification. The
-  signed-in desktop pass confirmed organization and account menus in both
-  themes, the active organization mark, theme radio selection and Escape
-  dismissal. Remaining: filter submenus, date popover and record combobox;
-  keyboard focus, edge placement and empty search results; mobile widths in
-  both themes. The Mac locked before those checks could finish.
-- **[Navigation, Home and Reports](./design.md)**: Verification. The native
-  rail, collapsible groups, Home, Reports (then four XLSX downloads; the
-  slice 6 index is under Accounting core), palette
-  document search and the section-keeping org switcher were checked on
-  desktop in both themes and on a 375 px drawer. Remaining: keyboard pass
-  through the collapsed groups and the drawer; confirm Home keeps the same row
-  height as other links while the rail scrolls at a short viewport height, in
-  both themes; and `account.moneyBalances` (Home and Banking) timed at
-  `db:seed:volume`. A Party hub is not built.
-- **Review fixes**: Verification. Run the journal, invoice, auth integrity and
-  settings integration tests when Docker is available. Check the Product menu
-  and group-hover links with mouse and touch at desktop and mobile widths, in
-  both themes. Confirm a failed Load more request shows one retry control and
-  a failed background refresh keeps its rows.
-- **Stale allocation recovery**: Verification. In a local two-session fixture,
-  select an open Invoice in a Receipt and an open Bill in a Payment, settle each
-  from the other session, then refresh the form's open rows. Confirm each form
-  shows Clear unavailable, clears the hidden amount and error, and can submit
-  a new allocation. Use the seeded Cedar Components organization, which has
-  posted Invoices and Bills; the running-app check remains open.
-- **Limits rule ([#17](https://github.com/isherbuilds/books/issues/17))**:
-  Verification. Members pages 25 at a time with Load more, keeps `q` in the
-  URL and renders cards on mobile; Link Fields show at most six rows, including
-  on initial open;
-  past 5,000 parties the Party Link Field, palette and parties page search
-  the server. Remaining: check each in the running app on desktop and mobile
-  in both themes, and the party search on an Organization seeded past 5,000
-  parties. Register Party menus are removed; a linked Party filter resolves its
-  chip by one Party id.
-- **Client patterns**: Active. Slice 3 row focus and volume checks, a 5,000-row
-  sort measurement, the H4 runs, and slice 5 import. Slice 4 is implemented
-  and runtime verified with accounting-core slices 4a and 4b-i; slice 5's
-  Journal, Opening Balance, lock, Payment, Bill and note forms are implemented.
-- **Invoice pages**: Verification. On the production build at 1440 and 390 px,
-  light and dark: New opens `/invoices/new`, Save Draft moves to
-  `/invoices/$invoiceId/edit`, Post opens the record Sheet, and a draft reopens
-  from the record with every field. Open: keyboard-only entry, the post toast and reset,
-  a stale-draft CONFLICT closing the editor, and a real phone.
+- **[Combobox input simplification](./specs/client-patterns.md)**: Verification.
+  One mounted input, Enter selection, Tab progression, clearing a saved choice
+  by typing, empty results, and Apply Credit selection/focus/disable behavior
+  passed at desktop and 390 px in both themes. Same local fixture, 24 alternating
+  invoice party searches, Chrome dev mode, input event to second animation frame:
+  median 18.7→13.7 ms, p95 31.4→30.7 ms. LinkField chunk 16.52→14.61 kB gzip;
+  three picker files 755→686 lines. Next: exercise Load more with over one page
+  of open credits.
+- **[Client bundle trim](./architecture.md)**: Verification. Client gzip JS
+  669.1→648.2 kB (`bun --bun vite build`, `assets/*.js` summed at gzip -9):
+  dependency-free `*-kinds.ts` removes Drizzle (−10.5 kB); the throwing
+  `Command.Dialog` alias removes unused Radix dependencies (−10.4 kB).
+  Palette open/filter/Esc passed without console errors. Next: 390 px and dark theme.
+- **[Apply Credit form cleanup](./specs/client-patterns.md)**: Verification.
+  Combobox owns open state; lint/format passed, production build passed before
+  the concurrent Combobox edit. Next: type check and selection, Load more and
+  keyboard checks in the running app.
+- **[Query performance](./specs/query-performance.md)**: Active. Remaining:
+  S4 party statement refusal timing and S7 close-out. Next: time refusal and
+  reconcile deferred gates; use `db:seed:mega` for mega-volume checks
+  (local database is at the current baseline with `db:seed:volume`).
+- **[Loading indicators](./design.md#8-layout-primitives)**: Verification.
+  List, picker, invitation, join, allocation and opening-balance waits use
+  `WaveLoader`; types, lint and build passed. Next: inspect waits once local
+  web/API proxy processes respond.
+- **[Cooler light palette](./design.md)**: Verification. Public desktop/phone
+  rendering, contrast test and production build passed. Next: authenticated
+  light/dark console check once local web/API services start.
+- **[Accounting core](./specs/accounting-core.md)**: Active. Slices 1–6, 7a–7c,
+  8 and 9 are implemented. Import integration/request-lifecycle coverage and
+  valid/invalid workbook Check/Import passed; an edited file toasts "Choose it
+  again", numeric State `7` saves as `07`. Slice 6 report/receipt/tenancy and
+  unit coverage passed; Cedar report pages/downloads at 1440/390 px in both
+  themes reconcile balance sheet → leaf → ledger → voucher, P&L net/current-year
+  row and PDF content type. Slice 9a Journal form/record, Apply credit and party
+  Ledger link passed at those widths/themes; 9b has journal integration coverage.
+  [Performance evidence](./specs/query-performance.md#current-read-measurements).
+  Remaining: 7d TallyPrime XML blocked on an anonymized real export; CA acceptance
+  of every slice; slice 2 posting p95 on native PostgreSQL at `db:seed:volume`.
+  Next: obtain the export and acceptance; check the Opening Balance picker
+  without `receivables`, Journal Invoice picker after reversed refund, Fill
+  against net party credit, recovery after a selected Invoice closes, Receipt/
+  Payment Fill and totals after the grid refactor; Receipt open-items Journal
+  debit, posting and Sheet allocation link. Measure Journal credits/debits under
+  Settlement reads at volume below.
+- **[Virtualized lists and paged ledgers](./design.md#8-layout-primitives)**:
+  Verification. At 1440/390 px in both themes, SSR rows, auto-load, bounded mounted
+  rows, continued balances, final Closing row and Sheet-close row focus passed.
+  Light-theme checks passed: Meridian Invoice ArrowDown 0→60 and ArrowUp return,
+  cold day-book viewport fill at both widths, failed party search error, cached
+  day-book party rename. [Performance evidence](./specs/query-performance.md#current-read-measurements).
+  Next: those four checks in dark; scroll to list end during refetch (no next-page
+  request until settled); legal-name edit refreshing cached report header;
+  Parties table/highlight filling its bordered box after spacer fix; 5,000-party
+  register (local seed has 94); Party Ledger and five report PDFs opening without
+  Base UI native-button warnings. Consider period roll-ups if summaries miss the
+  native-PostgreSQL report budget.
+- **[Settlement reads at volume](./specs/query-performance.md)**: Verification.
+  Next: measure unfiltered Invoice/Bill/Note pages, open/overdue filters and both
+  pickers on 100,000 Invoices/Bills with allocations. Check whether pickers need
+  `(org, party, document date, id)` indexing. Seed Journals: the pickers' `exists`
+  OR arm on `party_ledger_lines` cannot use the party document index; the volume
+  seed has none. If slow, drive pickers from `party_ledger_lines_org_party_idx`
+  (one post line per settling document/party, sign distinguishes source/target).
+- **[Mega volume seed](./specs/query-performance.md)**: Verification.
+  `db:seed:mega` targets Meridian/Ridgeview/Cedar at 1M/5M/15M total documents
+  with linked document, journal, ledger and allocation rows. Next: run locally,
+  confirm final counts and measure registers/reports.
+- **[Keyboard focus](./design.md)**: Verification. Desktop light passed login
+  autofocus, Sign in, settings tabs, sidebar search and Receipt row link;
+  muted palette trigger passed in both themes. Cell links sit about 2px from
+  the ring. Next: mobile, dark, dialogs, menus, comboboxes and compact table rows.
+- **[Choice controls](./design.md#8-layout-primitives)**: Verification.
+  Signed-in desktop org/account menus, active-org mark, theme radio and Esc
+  passed in both themes. Next: filter submenus, date popover, record combobox,
+  keyboard focus, edge placement, empty results and mobile in both themes.
+- **[Navigation, Home and Reports](./design.md)**: Verification. Rail/groups,
+  Home, Reports' four XLSX downloads, palette document search and section-keeping
+  org switch passed on desktop in both themes and 375 px drawer. Next: keyboard
+  collapsed groups/drawer; Home row height while short-viewport rail scrolls;
+  `account.moneyBalances` timing on volume data. Party hub remains unbuilt.
+- **[Review fixes](./specs/client-patterns.md)**: Verification. Next: journal,
+  invoice, auth-integrity and settings integration tests when Docker is available;
+  Product menu/group-hover links with mouse/touch; failed Load more showing one
+  retry; failed background refresh retaining rows.
+- **[Stale allocation recovery](./specs/client-patterns.md)**: Verification.
+  Next: in two Cedar sessions, select open Invoice/Bill in Receipt/Payment,
+  settle from the other session and refresh open rows. Confirm Clear unavailable
+  clears hidden amount/error and permits a new allocation.
+- **[Limits rule](./specs/client-patterns.md)**
+  ([#17](https://github.com/isherbuilds/books/issues/17)): Verification. Next:
+  Members' paged search/mobile cards, six-row Link Fields including initial open,
+  server party search in Link Field/palette/Parties beyond 5,000 parties, and
+  linked Party-filter chip resolved by id (no register Party menu).
+- **[Client patterns](./specs/client-patterns.md)**: Active. Slice 4 is runtime
+  verified with accounting-core 4a/4b-i; slice 5 forms are implemented. Next:
+  slice 3 row focus/volume checks, 5,000-row sort measurement, H4 runs and slice 5
+  import verification.
+- **[Invoice pages](./specs/client-patterns.md)**: Verification. Production
+  1440/390 px, both themes: New, Save Draft, Post Sheet and full draft reopen
+  passed. Next: keyboard-only entry, post toast/reset, stale-draft CONFLICT
+  closing editor and a real phone.
 - **[Invoice editor](./specs/invoice-editor.md)** and
-  **[ship-to](./specs/invoice-ship-to.md)**: Verification. Built and checked
-  in the dev app at desktop and 390 px (light and dark): Bill-to card, ship-to,
-  live quote, discount, split and partial payment, MRP hint, draft reopen, and
-  the PDF. Open: a GST-registered organization's CGST/SGST and IGST quote and
-  the PDF's reverse-charge line in the app (covered by tests), and a reopened
-  draft line repeating the item name as its description.
-- **Bills, payments and notes**: Verification. Open: hands-on form entry for
-  Bill lines, TDS and ITC; Payment against Bills and as a refund; Credit and
-  Debit Note pages; Invoice discount, counter sale and amend; and Receipt
-  adjustments at 1440 and 390 px in both themes. API flows, record Sheets
-  and mobile list and form rendering were exercised. Headless browser limits
-  blocked screenshots and form automation. Dates now format from a fixed
-  month table, so hydration error #418 ("Sep" versus "Sept") should be gone:
-  confirm on the Invoices, Payments and Notes lists. Also open after the
-  review fixes: the shared Allocations table with Reverse on the Invoice,
-  Bill, Note, Payment (an advance applied later) and Receipt Sheets; the
-  shared open-items table with Fill and totals in the Receipt and Payment
-  forms, and Payment write-offs; Apply credit on a Bill opening only on
-  demand; the Note form's line-level refusal; the Payment method field in
-  the Invoice, Receipt and Payment forms; the organization prefix fields;
-  the Invoice PDF totals (Subtotal and Discount only with a discount); the
-  Invoice PDF's Authorised signatory line and its single PDF link; ITC ticked
-  on a new Bill line; and the Organization form without a time-zone field.
-- **Organization settings**: Verification. After `bun run db:seed -- --reset`
-  (it deletes local data), create an organization, then save and reload its
-  settings, including the Payment prefix.
-- **Single address field**: Verification. Party and Organization forms now use
-  one multiline Address field. The receipt and tenancy tests pass. The local
-  database has the regenerated baseline; reset any other disposable database
-  still on the old baseline before migration. Check create, edit, save and
-  reload on desktop and mobile in both themes.
-- **Banking**: Verification. Add account opens the Add account Sheet in
-  Banking with Bank Accounts chosen; saving it opens Add payment method with
-  the new account chosen. Open: add a bank account and its method that way,
-  then mark the method inactive and active again. Post a receipt
-  with it and confirm the balance moves; cancel it and confirm the balance
-  returns. Confirm that marking the account inactive is refused while the
-  method is active. Mark the method inactive, then its account, then the
-  method active again, and confirm Banking shows "Account inactive" and the
-  Receipt form no longer offers the method. Sign in as a CA and confirm accounts, balances and methods are
-  visible without add and status actions.
-- **Chart of accounts and journal pages**: Verification. Headless checks cover
-  the chart, journal entry and record, Banking, Items, Locks and Opening
-  balance at 1440 and 390 px. Open: screenshots at 1440, 1024 and 390 px in
-  both themes, including read-only chart and Items rows (no edit link) and the
-  mobile GST supply class; the sidebar active row (`SidebarMenuButton`);
-  keyboard-only journal entry; a hands-on pass on a real phone. Also open: the
-  Opening balance mobile Total row at 390 px; typing a debit into a line with a
-  credit (and back) clears the cleared side's error; the Journal, Invoice and
-  Receipt record dates show the year at 390 px, and list days show it outside
-  the current year.
-- **Opening balance and locks**: Verification. The entry form and both lock
-  Dialogs are checked on desktop and mobile in both themes; the exception
-  Dialog rejects nonexistent organization-local DST times.
-  Open: post, cancel and re-post the Opening Balance;
-  have the books lock refuse a Journal, grant an exception that admits it,
-  and revoke it to refuse posting again. Check the tax lock refusing an exempt
-  direct Receipt, a CA setting locks and granting exceptions without the post
-  actions, and a valid exception expiry reading back unchanged in the
-  Organization zone from a browser in another zone. In the lock Dialogs, Escape
-  is ignored while saving, and a refetch while the Change Dialog is open keeps
-  its original expected lock date.
-- **Receipt "Advance for" field**: Verification. A goods advance posts; a
-  taxable service advance shows the field error.
-- **List period filter**: Verification. On Invoices, Receipts and the party
-  ledger: each preset, the financial-year label across an April start, a custom
-  range picked in the calendar popover, and clearing back to all time. Cover
-  desktop and mobile, both themes, and keyboard-only movement through the
-  calendar.
-- **Blank data regions**: Verification. A slow-4G cold open and a screen-reader
-  pass. A list whose refresh fails keeps its rows under a retry note; check it
-  by dropping the network on a loaded list.
-- **Touch hover and motion**: Verification. Every `hover:` style is gated to
-  fine pointers in `globals.css`. Buttons, toggles, checkboxes, the Dialog
-  close button and calendar days change state without a transition; the login
-  buttons read `transition-duration: 0s` at 1440 and 390 px. Open: a pressed
-  toggle, checkbox and calendar day at desktop and mobile widths in both
-  themes, blocked until the local database is reset to the current migration
-  baseline (see Query performance); a tap on a real phone leaves no stuck hover
-  colour.
-- **Production hardening**: Verification.
-  [Release evidence](./operations.md#production-hardening).
-- **Pilot readiness**: Active. A named owner records every
-  [gate](./operations.md#pilot-readiness).
+  **[ship-to](./specs/invoice-ship-to.md)**: Verification. Desktop/390 px in both
+  themes passed Bill-to, ship-to, live quote, discount, split/partial payment,
+  MRP hint, draft reopen and PDF. Next: registered-org CGST/SGST and IGST quote,
+  PDF reverse-charge line (test-covered), and reopened item-name description.
+- **[Bills, payments and notes](./specs/accounting-core.md)**: Verification.
+  API flows, record Sheets and mobile list/form rendering were exercised;
+  headless-browser limits blocked screenshots/form automation. Next: Bill
+  lines/TDS/ITC; Payment against Bills/refund; Note pages; Invoice discount,
+  counter sale/amend; Receipt adjustments. Confirm no hydration #418
+  ("Sep"/"Sept") on Invoice/Payment/Note lists. Also check allocation Reverse
+  on Invoice/Bill/Note/Payment (later-applied advance)/Receipt Sheets; open-items
+  Fill/totals in Receipt/Payment and Payment write-offs; Bill Apply credit
+  opening on demand; Note line refusal; shared Payment method fields; org
+  prefixes; Invoice PDF discount-only Subtotal/Discount, Authorised signatory
+  and single PDF link; default Bill ITC; Organization form without time zone.
+- **[Organization settings](./specs/accounting-core.md)**: Verification.
+  Next: create an org, save/reload settings including Payment prefix.
+- **[Single address field](./specs/accounting-core.md)**: Verification.
+  Receipt/tenancy tests passed. Next: Party/Organization multiline Address
+  create/edit/save/reload.
+- **[Banking](./specs/accounting-core.md)**: Verification. Next: add bank account
+  → payment method with account preselected; toggle method inactive/active;
+  Receipt post/cancel changes/restores balance; active method prevents account
+  deactivation; inactive account plus reactivated method shows "Account inactive"
+  and disappears from Receipt choices. CA sees accounts/balances/methods without
+  add/status actions.
+- **[Chart of accounts and journal pages](./specs/accounting-core.md)**:
+  Verification. Headless chart, Journal form/record, Banking, Items, Locks and
+  Opening Balance checks cover 1440/390 px. Next: screenshots at 1440/1024/390 px
+  in both themes, read-only chart/Items, mobile GST supply class, sidebar active
+  row, keyboard Journal and real phone. Check Opening Balance mobile Total,
+  debit↔credit clearing opposite-side errors; Journal/Invoice/Receipt record
+  years at 390 px and list years outside current year.
+- **[Opening balance and locks](./specs/accounting-core.md)**: Verification.
+  Entry form/lock Dialogs passed desktop/mobile in both themes; nonexistent
+  org-local DST expiry is refused. Next: Opening Balance post/cancel/repost;
+  Journal lock refusal → exception → revocation; tax-lock refusal of exempt
+  direct Receipt; CA lock/exception actions without posting; expiry round-trip
+  from another browser zone; Escape ignored during save; refetch preserving
+  an open Change Dialog's expected date.
+- **[Receipt "Advance for" field](./specs/accounting-core.md)**: Verification.
+  Next: goods advance posts; taxable service advance shows field error.
+- **[List period filter](./specs/client-patterns.md)**: Verification. Next:
+  Invoice/Receipt/party Ledger presets, April financial-year label, calendar
+  custom range, All time and keyboard calendar movement.
+- **[Blank data regions](./design.md#9-density-and-emptiness)**: Verification.
+  Next: slow-4G cold open, screen-reader pass, dropping network on loaded list
+  retains rows under retry note.
+- **[Touch hover and motion](./design.md#11-motion)**: Verification. Login
+  buttons show `transition-duration: 0s` at 1440/390 px. Next: pressed toggle,
+  checkbox/calendar day, and real-phone taps without stuck hover colour.
+- **[Production hardening](./operations.md#production-hardening)**:
+  Verification. Next: complete release evidence in the owner doc.
+- **[Pilot readiness](./operations.md#pilot-readiness)**: Active. Next: a named
+  owner records each gate.
 - **[Marketing homepage](./research/launch-and-homepage-2026-09-26.md)**:
-  Verification. The Edernal preview uses the selected copy and palette, an
-  8.1-second story loop and product previews. The owner has accepted its
-  future-feature claims while the site stays private: production builds send
-  `/` to login, return Not Found for other site routes and omit them from the
-  sitemap. WhatsApp forms open a
-  prepared message; the visitor must press Send. Open: confirm the public
-  contact settings, founder copy acceptance, qualified-conversion evidence and
-  the product capabilities promised before public launch. Check the Product
-  menu's single-shelf layout on desktop.
-- **Midday licence**: Blocked on Midday Labs. A written licence comes before the
-  first external release.
+  Verification. Edernal preview has an 8.1-second story loop; WhatsApp forms
+  prepare a message for the visitor to Send. Future-feature claims are accepted
+  only while private ([routing](./architecture.md#web-data-flow)); production
+  excludes site routes from the sitemap. Next:
+  public contact settings, founder copy acceptance, qualified-conversion evidence,
+  promised capabilities before launch and Product menu single-shelf desktop check.
+- **[Midday licence](./specs/client-patterns.md#midday-adaptation)**: Blocked
+  on Midday Labs. Next: written licence before first external release.
 
 ## Rules
 

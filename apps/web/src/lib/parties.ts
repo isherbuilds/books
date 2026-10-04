@@ -91,8 +91,8 @@ export function usePartyName(orgSlug: string, partyId: string | undefined, rows?
 export const partyTotalsOptions = (orgSlug: string, partyId?: string) =>
   orpc.receipt.partyTotals.queryOptions({ input: { orgSlug, partyId } });
 
-// Every party's closing balance for the register, a separate read so posting never
-// refetches the master. Sparse: a party with no ledger line has no row.
+// Every party's closing balance through today's Organization business date for Home
+// and the register. Sparse: no ledger line through today means no row.
 export const partyBalancesOptions = (orgSlug: string) =>
   orpc.party.balances.queryOptions({ input: { orgSlug } });
 

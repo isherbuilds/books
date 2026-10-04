@@ -17,7 +17,7 @@ bills. A Chartered Accountant can open payments.
 
 ## The payment register
 
-Open **Purchases → Payments**. The register lists payments newest first, with
+Open **Purchases → Payments**. The register lists payments newest document date first, with
 **Number**, **Date**, **Party** (the [party](/glossary#party) paid), **Kind** and **Amount**. It opens on **This month**.
 Search by number, party or reference. The filter icon in the search box offers **Date**,
 **State** (Posted or Cancelled) and **Settlement** (Advance, Against open items or
@@ -106,10 +106,10 @@ For a bill with [TDS](/glossary#tds) (tax deducted at source), pay the **Payable
 the payment takes no TDS section: Kulkarni Design Consultants' ₹59,000 bill is settled
 with a payment of ₹54,000.
 
-:::warning[Pay from the bill: check the party]
-**Pay** on a bill's record opens this form for the bill's supplier, but the **Party** field
-can look empty and the kind starts on **Advance**. Choose the party again and click
-**Against open items** before you post, or the money is booked as an advance.
+:::tip[Pay from the bill]
+**Pay** on a bill's record opens this form with the supplier selected and
+**Against open items → Bills** already chosen. Enter the amount and click **Fill**
+on the bill to allocate the payment before posting.
 :::
 
 ### Write off a small difference
@@ -271,8 +271,9 @@ amount. Then enter it again correctly.
 </Frame>
 
 Cancelling posts a [reversal](/glossary#reversal) (an equal and opposite entry) of the payment's entry, fee and write-offs included, dated
-the day you cancel, and reverses its allocations. The bills it paid become open again.
+on the payment date, and reverses its allocations. The bills it paid become open again.
 The payment stays in the register marked **Cancelled**.
+A books lock on the payment date requires an exception before you can cancel it.
 
 <Frame caption="A cancelled payment: its allocation to the bill shows Reversed.">
   ![Cancelled payment](./images/payments-cancelled.webp)

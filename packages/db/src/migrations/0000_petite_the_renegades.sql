@@ -475,15 +475,16 @@ CREATE UNIQUE INDEX "party_ledger_lines_org_document_party_kind_idx" ON "party_l
 CREATE UNIQUE INDEX "tax_rates_org_code_from_idx" ON "tax_rates" USING btree ("org_id","code","effective_from");--> statement-breakpoint
 CREATE INDEX "lock_exceptions_org_user_expires_idx" ON "lock_exceptions" USING btree ("org_id","user_id","expires_at");--> statement-breakpoint
 CREATE INDEX "period_locks_org_kind_id_idx" ON "period_locks" USING btree ("org_id","kind","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_methods_org_name_idx" ON "payment_methods" USING btree ("org_id",lower("name"));--> statement-breakpoint
 CREATE UNIQUE INDEX "journal_entries_org_document_kind_idx" ON "journal_entries" USING btree ("org_id","document_type","document_id","kind");--> statement-breakpoint
 CREATE UNIQUE INDEX "journal_entries_org_reverses_entry_idx" ON "journal_entries" USING btree ("org_id","reverses_entry_id") WHERE "journal_entries"."reverses_entry_id" is not null;--> statement-breakpoint
 CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("org_id","entry_date","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_number_idx" ON "documents" USING btree ("org_id","type","financial_year","number") WHERE "documents"."number" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_opening_balance_idx" ON "documents" USING btree ("org_id") WHERE "documents"."type" = 'openingBalance' and "documents"."state" = 'posted';--> statement-breakpoint
-CREATE INDEX "documents_org_type_date_idx" ON "documents" USING btree ("org_id","type","document_date");--> statement-breakpoint
-CREATE INDEX "documents_org_type_id_idx" ON "documents" USING btree ("org_id","type","id");--> statement-breakpoint
+CREATE INDEX "documents_org_type_date_id_idx" ON "documents" USING btree ("org_id","type","document_date","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "documents_bill_reference_idx" ON "documents" USING btree ("org_id","party_id","financial_year",lower("reference")) WHERE "documents"."type" = 'bill' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id","id");--> statement-breakpoint
+CREATE INDEX "documents_org_party_date_id_idx" ON "documents" USING btree ("org_id","party_id","document_date","id");--> statement-breakpoint
 CREATE INDEX "documents_search_text_idx" ON "documents" USING gin ("search_text" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "documents_org_amended_from_idx" ON "documents" USING btree ("org_id","amended_from_id");--> statement-breakpoint
 CREATE INDEX "documents_org_against_document_idx" ON "documents" USING btree ("org_id","against_document_id");--> statement-breakpoint

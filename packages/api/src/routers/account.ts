@@ -1,19 +1,26 @@
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
-import { ACCOUNT_TYPES } from "@accly/db/schema/account-kinds";
+import { ACCOUNT_TYPES, SUPPLY_CLASSES } from "@accly/db/schema/account-kinds";
 import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
-import { accountCreateFields, accountNameTaken, createAccounts } from "../core/masters";
+import {
+  accountCreateFields,
+  accountNameTaken,
+  accountSupplyError,
+  createAccounts,
+} from "../core/masters";
 import { isLeaf, moneyGroup, underMoneyGroup } from "../lib/accounts";
+import { businessDate } from "../lib/business-date";
 import { badRequest, conflict, impossible, nextEditToken } from "../lib/conflict";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { reportProfile } from "../lib/reports";
 import { editToken, shortName } from "../lib/schemas";
 
 export const accountRouter = {
@@ -73,22 +80,85 @@ export const accountRouter = {
     orgInput.extend({
       accountId: z.uuid(),
       name: shortName.max(120),
+      supplyClass: z.enum(SUPPLY_CLASSES).optional(),
       updatedAt: editToken,
     }),
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
 
-    const [updated] = await db
-      .update(accounts)
-      .set({ name: input.name, updatedAt: nextEditToken(accounts.updatedAt) })
-      .where(
-        and(
-          eq(accounts.orgId, orgId),
-          eq(accounts.id, input.accountId),
-          eq(accounts.updatedAt, new Date(input.updatedAt)),
-        ),
-      )
-      .returning()
+    const updated = await db
+      .transaction(async (tx) => {
+        if (input.supplyClass !== undefined) {
+          const [account] = await tx
+            .select({ type: accounts.type, supplyClass: accounts.supplyClass })
+            .from(accounts)
+            .where(
+              and(
+                eq(accounts.orgId, orgId),
+                eq(accounts.id, input.accountId),
+                eq(accounts.updatedAt, new Date(input.updatedAt)),
+              ),
+            )
+            .for("update");
+
+          if (!account) {
+            throw conflict("STALE_RECORD", "This account changed after you opened it.");
+          }
+
+          const supplyError = accountSupplyError(account.type, input.supplyClass);
+
+          if (supplyError) throw badRequest(supplyError.code, supplyError.message);
+
+          if (input.supplyClass !== account.supplyClass) {
+            // Posting holds a shared account lock; check its lines after taking this lock.
+            const [used] = await tx
+              .select({ id: journalLines.id })
+              .from(journalLines)
+              .where(
+                and(eq(journalLines.orgId, orgId), eq(journalLines.accountId, input.accountId)),
+              )
+              .limit(1);
+
+            if (used) {
+              throw badRequest(
+                "ACCOUNT_IN_USE",
+                "An account with posted journal lines cannot change its GST supply class.",
+              );
+            }
+
+            // Only a taxable item carries a GST rate (`itemEligibilityError`).
+            if (input.supplyClass !== "taxable")
+              await tx
+                .update(items)
+                .set({ taxCode: null, updatedAt: nextEditToken(items.updatedAt) })
+                .where(
+                  and(
+                    eq(items.orgId, orgId),
+                    eq(items.incomeAccountId, input.accountId),
+                    isNotNull(items.taxCode),
+                  ),
+                );
+          }
+        }
+
+        const [row] = await tx
+          .update(accounts)
+          .set({
+            name: input.name,
+            supplyClass: input.supplyClass,
+            updatedAt: nextEditToken(accounts.updatedAt),
+          })
+          .where(
+            and(
+              eq(accounts.orgId, orgId),
+              eq(accounts.id, input.accountId),
+              eq(accounts.updatedAt, new Date(input.updatedAt)),
+            ),
+          )
+          .returning();
+
+        return row;
+      })
       .catch(accountNameTaken);
 
     if (!updated) {
@@ -187,32 +257,40 @@ export const accountRouter = {
     return updated;
   }),
 
-  // Every cash box and bank account with its group and what it holds now, summed from
-  // journal lines. Inactive leaves are included: they keep their balance.
-  moneyBalances: orgProcedure({ report: ["readFinancial"] }, orgInput).handler(({ context }) => {
-    const { orgId } = context.scope;
+  // Cash and bank balances through today's business date, as on the balance sheet.
+  // Inactive leaves are included: they keep their balance.
+  moneyBalances: orgProcedure({ report: ["readFinancial"] }, orgInput).handler(
+    async ({ context }) => {
+      const { orgId } = context.scope;
+      const profile = await reportProfile(orgId);
+      const today = businessDate(new Date(), profile.timeZone);
 
-    return db
-      .select({
-        id: accounts.id,
-        code: accounts.code,
-        name: accounts.name,
-        active: accounts.active,
-        groupId: moneyGroup.id,
-        groupName: moneyGroup.name,
-        balancePaise:
-          sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
-            BigInt,
+      return db
+        .select({
+          id: accounts.id,
+          code: accounts.code,
+          name: accounts.name,
+          active: accounts.active,
+          groupId: moneyGroup.id,
+          groupName: moneyGroup.name,
+          balancePaise:
+            sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
+              BigInt,
+            ),
+        })
+        .from(accounts)
+        .innerJoin(moneyGroup, underMoneyGroup(orgId))
+        .leftJoin(
+          journalLines,
+          and(
+            eq(journalLines.orgId, orgId),
+            eq(journalLines.accountId, accounts.id),
+            lte(journalLines.entryDate, today),
           ),
-      })
-      .from(accounts)
-      .innerJoin(moneyGroup, underMoneyGroup(orgId))
-      .leftJoin(
-        journalLines,
-        and(eq(journalLines.orgId, orgId), eq(journalLines.accountId, accounts.id)),
-      )
-      .where(eq(accounts.orgId, orgId))
-      .groupBy(accounts.id, moneyGroup.id)
-      .orderBy(asc(moneyGroup.code), asc(accounts.code));
-  }),
+        )
+        .where(eq(accounts.orgId, orgId))
+        .groupBy(accounts.id, moneyGroup.id)
+        .orderBy(asc(moneyGroup.code), asc(accounts.code));
+    },
+  ),
 };

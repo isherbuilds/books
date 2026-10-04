@@ -84,13 +84,21 @@ function documentListWhere(
   orgId: string,
   types: readonly DocumentType[],
   input: DocumentListInput,
+  cursor: SQL | undefined,
 ) {
+  // Only Invoices and Bills have drafts outside the period. An unnecessary draft
+  // OR prevents the other registers from seeking their date range in the index.
   return and(
     eq(documents.orgId, orgId),
     inArray(documents.type, [...types]),
-    input.cursor ? lt(documents.id, input.cursor) : undefined,
+    cursor,
     input.partyId ? eq(documents.partyId, input.partyId) : undefined,
-    documentPeriod(input),
+    types.some((type) => type === "invoice" || type === "bill")
+      ? documentPeriod(input)
+      : and(
+          input.from ? gte(documents.documentDate, input.from) : undefined,
+          input.to ? lte(documents.documentDate, input.to) : undefined,
+        ),
   );
 }
 
@@ -99,8 +107,9 @@ function documentListWhere(
 const SEARCH_WINDOW = 1_000;
 
 /**
- * One register page, newest first. `read` runs the register's own query with `where`
- * and any filters of its own, ordered by `id` descending and limited to `limit + 1`.
+ * One register page, newest document date first. `read` runs the register's own query
+ * with `where` and its own filters, ordered by `(document_date, id)` descending and
+ * limited to `limit + 1`. The cursor stays a document id (`dateCursor`).
  *
  * A search term matches a substring of `documents.search_text`. PostgreSQL estimates
  * that match across every organization, so a term common elsewhere or in old history
@@ -115,27 +124,32 @@ export async function registerPage<T>(
   input: DocumentListInput,
   read: (where: SQL | undefined) => PromiseLike<T[]>,
 ): Promise<{ rows: T[]; hasMore: boolean }> {
-  const listed = documentListWhere(orgId, types, input);
+  const cursor = dateCursor(orgId, input.cursor, "before");
+  const listed = documentListWhere(orgId, types, input, cursor);
 
   if (!input.q) return pageOf(await read(listed), input.limit);
 
   const matches = ilike(documents.searchText, likePattern(input.q));
 
   const [edge] = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, documentDate: documents.documentDate })
     .from(documents)
-    .where(
-      and(
-        eq(documents.orgId, orgId),
-        inArray(documents.type, [...types]),
-        input.cursor ? lt(documents.id, input.cursor) : undefined,
-      ),
-    )
-    .orderBy(desc(documents.id))
+    .where(and(eq(documents.orgId, orgId), inArray(documents.type, [...types]), cursor))
+    .orderBy(desc(documents.documentDate), desc(documents.id))
     .offset(SEARCH_WINDOW - 1)
     .limit(1);
 
-  const recent = await read(and(listed, matches, edge ? gte(documents.id, edge.id) : undefined));
+  const edgePosition = edge ? sql`(${edge.documentDate}::date, ${edge.id})` : undefined;
+
+  const recent = await read(
+    and(
+      listed,
+      matches,
+      edgePosition
+        ? sql`(${documents.documentDate}, ${documents.id}) >= ${edgePosition}`
+        : undefined,
+    ),
+  );
 
   if (!edge || recent.length > input.limit) return pageOf(recent, input.limit);
 
@@ -148,13 +162,17 @@ export async function registerPage<T>(
       and(
         eq(documents.orgId, orgId),
         inArray(documents.type, [...types]),
-        lt(documents.id, edge.id),
+        sql`(${documents.documentDate}, ${documents.id}) < ${edgePosition}`,
         matches,
       ),
     );
 
   const rest = await read(
-    and(listed, lt(documents.id, edge.id), sql`${documents.id} = any(array(${older}))`),
+    and(
+      listed,
+      sql`(${documents.documentDate}, ${documents.id}) < ${edgePosition}`,
+      sql`${documents.id} = any(array(${older}))`,
+    ),
   );
 
   return pageOf([...recent, ...rest], input.limit);
@@ -313,7 +331,7 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
               : undefined,
         ),
       )
-      .orderBy(desc(documents.id))
+      .orderBy(desc(documents.documentDate), desc(documents.id))
       .limit(input.limit + 1),
   );
 
@@ -421,11 +439,12 @@ export function documentSettlement(
 type PickerPage = { cursor?: string; limit: number };
 
 /**
- * Rows after the cursor document in oldest-first (date, id) order, for the pickers and
- * the opening items. A posted document's date never changes, so a cursor keeps its
- * place between pages.
+ * Rows past the cursor document in (date, id) order: `after` for the oldest-first
+ * pickers and opening items, `before` for the newest-first registers. The position
+ * is read inside the page's own statement. A posted document's date never changes,
+ * so a cursor keeps its place between pages.
  */
-export function afterDateCursor(orgId: string, cursor: string | undefined) {
+export function dateCursor(orgId: string, cursor: string | undefined, side: "after" | "before") {
   if (!cursor) return undefined;
 
   const position = db
@@ -433,7 +452,9 @@ export function afterDateCursor(orgId: string, cursor: string | undefined) {
     .from(documents)
     .where(and(eq(documents.orgId, orgId), eq(documents.id, cursor)));
 
-  return sql`(${documents.documentDate}, ${documents.id}) > (${position})`;
+  return side === "after"
+    ? sql`(${documents.documentDate}, ${documents.id}) > (${position})`
+    : sql`(${documents.documentDate}, ${documents.id}) < (${position})`;
 }
 
 /** One page of the claims still open for the party and side, oldest first. */
@@ -496,7 +517,7 @@ export async function openItems(
               eq(documents.type, "bill"),
               and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "payable")),
             ),
-        afterDateCursor(orgId, input.cursor),
+        dateCursor(orgId, input.cursor, "after"),
         gt(outstandingPaise, 0n),
       ),
     )
@@ -585,7 +606,7 @@ export async function openCredits(
               ilike(documents.reference, likePattern(input.q)),
             )
           : undefined,
-        afterDateCursor(orgId, input.cursor),
+        dateCursor(orgId, input.cursor, "after"),
         gt(unappliedPaise, 0n),
       ),
     )

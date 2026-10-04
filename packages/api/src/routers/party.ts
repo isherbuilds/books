@@ -514,17 +514,23 @@ export const partyRouter = {
     );
   }),
 
-  // Each party's closing balance, the sum the statement ends on. Sparse: a party with
-  // no ledger line has no row.
-  balances: orgProcedure({ party: ["read"], report: ["read"] }, orgInput).handler(({ context }) =>
-    db
-      .select({
-        partyId: partyLedgerLines.partyId,
-        balancePaise: sql<bigint>`sum(${partyLedgerLines.amountPaise})::bigint`.mapWith(BigInt),
-      })
-      .from(partyLedgerLines)
-      .where(eq(partyLedgerLines.orgId, context.scope.orgId))
-      .groupBy(partyLedgerLines.partyId),
+  // Home and party lists show each party's closing balance through today's business
+  // date. Sparse: a party with no ledger line through today has no row.
+  balances: orgProcedure({ party: ["read"], report: ["read"] }, orgInput).handler(
+    async ({ context }) => {
+      const { orgId } = context.scope;
+      const profile = await reportProfile(orgId);
+      const today = businessDate(new Date(), profile.timeZone);
+
+      return db
+        .select({
+          partyId: partyLedgerLines.partyId,
+          balancePaise: sql<bigint>`sum(${partyLedgerLines.amountPaise})::bigint`.mapWith(BigInt),
+        })
+        .from(partyLedgerLines)
+        .where(and(eq(partyLedgerLines.orgId, orgId), lte(partyLedgerLines.entryDate, today)))
+        .groupBy(partyLedgerLines.partyId);
+    },
   ),
 
   // The master up to MASTER_LIST_LIMIT rows; every caller filters `active` in memory

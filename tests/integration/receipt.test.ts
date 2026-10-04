@@ -266,7 +266,7 @@ test("receipt post rejects invalid settlements and enforces advance supply polic
 
   const gstOrganization = await createAccountingOrganization(founder.headers, {
     slug: `receipt-gst-${uniqueSuffix()}`,
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     timeZone: "UTC",
   });
 
@@ -506,6 +506,25 @@ test("receipt detail preserves the posted party and organization print snapshot"
   }
 });
 
+test("payment method names are unique after trimming and ignoring case", async () => {
+  const fixture = await createAccountingFixture(founder, "method-names");
+  const orgSlug = fixture.organization.slug;
+  const methods = await fixture.api.paymentMethod.list({ orgSlug });
+
+  const upi = required(
+    methods.find((method) => method.name === "UPI"),
+    "seeded UPI method",
+  );
+
+  const refusal = await expectORPCCode(
+    fixture.api.paymentMethod.create({ orgSlug, name: " upi ", accountId: upi.accountId }),
+    "CONFLICT",
+  );
+
+  expect(refusal.data).toMatchObject({ reason: "DUPLICATE" });
+  expect(await fixture.api.paymentMethod.list({ orgSlug })).toEqual(methods);
+});
+
 test("a second bank account takes its own method, receipts and balance", async () => {
   const orgSlug = organization.slug;
 
@@ -691,8 +710,6 @@ test("receipt list filters narrow the keyset and party totals count posted recei
       ...input,
     });
 
-  const bank = await post({});
-
   const cash = await post({
     amount: "250.00",
     paymentMethodId: cashMethod.id,
@@ -706,8 +723,11 @@ test("receipt list filters narrow the keyset and party totals count posted recei
     paymentMethodId: bankTransfer.id,
     incomeAccountId: exemptIncome.id,
     amount: "40.00",
-    documentDate: "2026-09-10",
+    documentDate: "2026-09-05",
   });
+
+  // Posted last but dated oldest: id order alone would put this receipt first.
+  const bank = await post({});
 
   await api.receipt.cancel({
     orgSlug: organization.slug,
@@ -717,9 +737,7 @@ test("receipt list filters narrow the keyset and party totals count posted recei
 
   const byPartyName = await api.receipt.list({ orgSlug: organization.slug, q: buyer.name });
 
-  expect(byPartyName.rows.map(({ id }) => id)).toEqual(
-    expect.arrayContaining([direct.id, cash.id, bank.id]),
-  );
+  expect(byPartyName.rows.map(({ id }) => id)).toEqual([direct.id, cash.id, bank.id]);
 
   const firstPage = await api.receipt.list({
     orgSlug: organization.slug,
@@ -728,6 +746,7 @@ test("receipt list filters narrow the keyset and party totals count posted recei
   });
 
   expect(firstPage.hasMore).toBe(true);
+  expect(firstPage.rows.map(({ id }) => id)).toEqual([direct.id]);
 
   const secondPage = await api.receipt.list({
     orgSlug: organization.slug,
@@ -745,7 +764,7 @@ test("receipt list filters narrow the keyset and party totals count posted recei
     ).rows.map(({ id }) => id);
 
   expect(await ids({ state: "cancelled" })).toEqual([cash.id]);
-  expect(await ids({ from: "2026-09-02", to: "2026-09-09" })).toEqual([cash.id]);
+  expect(await ids({ from: "2026-09-02", to: "2026-09-09" })).toEqual([direct.id, cash.id]);
 
   await expectORPCCode(
     api.receipt.list({ orgSlug: organization.slug, from: "2026-09-10", to: "2026-09-01" }),

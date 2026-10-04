@@ -69,7 +69,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
 
   await api.openingBalance.post({
     ...claim,
-    documentDate: march31,
+    documentDate: `${aprilYear}-03-30`,
     lines: [
       { accountId: cash.id, side: "debit", amount: "50000.00" },
       { accountId: capital.id, side: "credit", amount: "50000.00" },
@@ -80,7 +80,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     ...claim,
     name: "Priya / Long-form Consulting Services",
     roles: ["customer"],
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     address: "42 Market Road, Mumbai",
     stateCode: "27",
   });
@@ -123,31 +123,28 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
 
   await api.journal.cancel({ ...claim, journalId: journal.id, reason: "Reversed discount" });
   const reversal = await postingOf(organization.id, journal.id, "reverse");
-  expect(reversal.entry.entryDate).toBe(today);
+  expect(reversal.entry.entryDate).toBe(`${aprilYear}-04-28`);
 
   const april = await api.report.trialBalance({ ...claim, ...claimDates });
   expect(april.header.range).toEqual(claimDates);
   expect(april.rows.find(({ accountId }) => accountId === cash.id)).toMatchObject({
     openingDebitPaise: 5_000_000n,
     openingCreditPaise: 0n,
-    closingDebitPaise: 5_350_000n,
+    closingDebitPaise: 5_400_000n,
     closingCreditPaise: 0n,
-    debitPaise: 400_000n,
+    debitPaise: 450_000n,
     creditPaise: 50_000n,
   });
   expect(april.rows.find(({ accountId }) => accountId === discount.id)).toMatchObject({
     debitPaise: 50_000n,
-    creditPaise: 0n,
+    creditPaise: 50_000n,
   });
   const current = await api.report.trialBalance({ ...claim, from: today, to: today });
   expect(
     current.rows
       .filter(({ debitPaise, creditPaise }) => debitPaise !== 0n || creditPaise !== 0n)
       .map(({ accountId, debitPaise, creditPaise }) => ({ accountId, debitPaise, creditPaise })),
-  ).toEqual([
-    { accountId: cash.id, debitPaise: 50_000n, creditPaise: 0n },
-    { accountId: discount.id, debitPaise: 0n, creditPaise: 50_000n },
-  ]);
+  ).toEqual([]);
 
   for (const { report, start, through } of [
     { report: april, start: from, through: to },
@@ -182,7 +179,13 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     }
 
     expect(new Set(report.rows.map(({ accountId }) => accountId))).toEqual(
-      new Set(balances.keys()),
+      new Set(
+        [...balances].flatMap(([accountId, balance]) =>
+          balance.opening !== 0n || balance.debit !== 0n || balance.credit !== 0n
+            ? [accountId]
+            : [],
+        ),
+      ),
     );
 
     for (const row of report.rows) {
@@ -247,8 +250,8 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   expect(profit.header.range).toEqual(claimDates);
   expect(profit).toMatchObject({
     incomePaise: 1_000_000n,
-    expensesPaise: 350_000n,
-    netProfitPaise: 650_000n,
+    expensesPaise: 300_000n,
+    netProfitPaise: 700_000n,
   });
   expect(profit.income).toEqual(
     expect.arrayContaining([
@@ -257,12 +260,12 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   );
   expect(profit.expenses).toEqual(
     expect.arrayContaining([
-      expect.objectContaining({ accountId: discount.id, amountPaise: 350_000n }),
+      expect.objectContaining({ accountId: discount.id, amountPaise: 300_000n }),
     ]),
   );
 
   const aprilSheet = await api.report.balanceSheet({ ...claim, asOf: to });
-  expect(aprilSheet.currentYearProfitPaise).toBe(650_000n);
+  expect(aprilSheet.currentYearProfitPaise).toBe(700_000n);
   expect(aprilSheet.earlierYearsProfitPaise).toBe(0n);
   expect(aprilSheet.assetsPaise).toBe(aprilSheet.liabilitiesPaise + aprilSheet.equityPaise);
 
@@ -276,7 +279,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     ],
   });
   const withEarlierYear = await api.report.balanceSheet({ ...claim, asOf: to });
-  expect(withEarlierYear.currentYearProfitPaise).toBe(650_000n);
+  expect(withEarlierYear.currentYearProfitPaise).toBe(700_000n);
   expect(withEarlierYear.earlierYearsProfitPaise).toBe(20_000n);
   expect(withEarlierYear.assetsPaise).toBe(
     withEarlierYear.liabilitiesPaise + withEarlierYear.equityPaise,
@@ -311,8 +314,16 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
       creditPaise: 50_000n,
       balancePaise: 5_350_000n,
     }),
+    expect.objectContaining({
+      entryId: reversal.entry.id,
+      documentId: journal.id,
+      kind: "reverse",
+      debitPaise: 50_000n,
+      creditPaise: 0n,
+      balancePaise: 5_400_000n,
+    }),
   ]);
-  expect(aprilLedger.closingPaise).toBe(5_350_000n);
+  expect(aprilLedger.closingPaise).toBe(5_400_000n);
 
   const reversalLedger = await api.report.accountLedger({
     ...claim,
@@ -321,18 +332,13 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     to: today,
   });
 
-  expect(reversalLedger.lines).toEqual([
-    expect.objectContaining({
-      entryId: reversal.entry.id,
-      documentId: journal.id,
-      kind: "reverse",
-      narration: expect.stringMatching(/^Reversal of /),
-      debitPaise: 50_000n,
-      creditPaise: 0n,
-      balancePaise: 5_400_000n,
-    }),
-  ]);
-  const dayBook = await api.report.dayBook({ ...claim, from: today, to: today });
+  expect(reversalLedger.lines).toEqual([]);
+
+  const dayBook = await api.report.dayBook({
+    ...claim,
+    from: reversal.entry.entryDate,
+    to: reversal.entry.entryDate,
+  });
 
   const reversedJournal = required(
     dayBook.entries.find(({ entryId }) => entryId === reversal.entry.id),
@@ -350,8 +356,8 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
       expect.objectContaining({ accountCode: discount.code, debitPaise: 0n, creditPaise: 50_000n }),
     ]),
   );
-  expect(dayBook.debitPaise).toBe(50_000n);
-  expect(dayBook.creditPaise).toBe(50_000n);
+  expect(dayBook.debitPaise).toBe(100_000n);
+  expect(dayBook.creditPaise).toBe(100_000n);
 
   const journalThroughReversal = { accountId: cash.id, from: `${aprilYear}-04-28`, to: today };
   await expectReason(accountLedger(organization.id, journalThroughReversal, 1), "REPORT_TOO_LARGE");
@@ -394,7 +400,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   expect(statementStrings).toContain("Priya / Long-form Consulting Services");
   expect(statementStrings).toContain(required(statement.lines[0]?.number, "invoice number"));
   expect(statementStrings).toContain(required(statement.lines[1]?.number, "receipt number"));
-  expect(statementStrings).toContain("27ABCDE1234F1Z5");
+  expect(statementStrings).toContain("27ABCDE1234F1Z0");
   expect(statementStrings).toContain("42 Market Road, Mumbai");
   expect(statementStrings).toContain("State code");
   expect(statementStrings).toContain(">27<");

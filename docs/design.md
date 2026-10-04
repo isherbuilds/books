@@ -45,9 +45,8 @@ a person must read is smaller than 12 px.
 | `text-4xl`/`text-5xl` | Public headlines only                                    |
 
 Controls keep the app's desktop sizes: buttons and inputs `h-8` (32 px), growing to
-44 px on a touch screen (`pointer-coarse:`). Table rows are 40 px; icons are
-`size-3.5` in the shell and `size-4` in buttons, at a 1.5 px stroke. Amount columns
-use `w-money` or `w-balance`, sized in digits (`ch`) so a crore figure never
+44 px on a touch screen (`pointer-coarse:`). Table rows are 40 px.
+Amount columns use `w-money` or `w-balance`, sized in digits (`ch`) so a crore figure never
 truncates. Colour and type follow the Edernal Books design system; this file owns
 behaviour, spacing and radius.
 
@@ -58,9 +57,8 @@ behaviour, spacing and radius.
 - `font-mono` is only for identifiers read character by character (codes,
   phone, document numbers, GSTIN, PAN), never prose or amounts.
 - `tabular-nums` goes on every number that can change.
-- Member and master names are stored lowercase and render with `capitalize`.
-  Never capitalize legal names, addresses, notes, references, identifiers or
-  email.
+- Names follow [Architecture](./architecture.md#data-and-migrations); never
+  capitalize legal names, addresses, notes, references, identifiers or email.
 - Inter Variable and JetBrains Mono are self-hosted. PDFs use Takumi's sans with
   Noto Sans Devanagari subsets. No CDN: the app works on an offline LAN.
 
@@ -96,7 +94,6 @@ state text and focus rings.
 - Field, checkbox and outline-button borders rest on `line-2` and darken to
   `line-strong` on hover and focus; keyboard focus draws the ink ring. A disabled
   control keeps its surface and fades; it never turns grey.
-- A draft is `warn` (provisional).
 - Money: negatives print in brackets, `(₹4,250.00)`; balances carry Dr or Cr. A
   document total, and a balanced journal entry, has an ink rule above and the
   `closing-total` double stamp rule below.
@@ -137,8 +134,8 @@ empty-state art. A bare icon button needs `aria-label`. Without a picture, use
 - Hover changes only the background to `bg-sidebar-accent/60`. The active row
   uses the full accent and a foreground icon; label weight and width stay
   fixed, and colours never transition on this frequent action.
-- The desktop rail is an `<aside>`. Below `lg`, `PageHeader` opens the same nav
-  content in a modal `Sheet`. A link, the backdrop or Esc closes the sheet.
+- Below `lg`, `PageHeader` opens the same nav content in a modal `Sheet`. A
+  link, the backdrop or Esc closes the sheet.
 - The second header row is the palette trigger: "Find anything…" with its Mod+K
   `Kbd`. The palette finds Parties and, by number, Party or reference, every
   Invoice, Receipt, Bill, Payment and Note.
@@ -199,7 +196,8 @@ plus icon, except the Create row in a picker. Buttons render Title Case through
 the primitive. Record tabs share one title; Settings tabs keep their own.
 Section labels are muted `text-xs`, and flat label rows are `min-h-6`.
 
-**List grammar.** Search, filters, sort and columns are URL state. A record
+**List grammar.** Search, filters, sort and columns follow
+[Development](./development.md#react-and-forms). A record
 opens in a right Sheet over the mounted list unless it carries a line grid. A
 record with a line grid is a page (`journals_.$journalId`), like a Party that
 outgrows a Sheet. Closing a Sheet refocuses its row. Records never open in a
@@ -252,11 +250,11 @@ bundled fonts and aligned numerals.
   below `md` and a totals row under the amount columns.
 - The Invoice editor reads like the printed invoice: Bill to (the Party, its
   address, state and GSTIN in a card) and Ship to on the left, dates and place
-  of supply on the right; then Item, Qty, Rate and Amount, with the description
+  of supply on the right; then Item (widest), Qty, Rate and Amount, with the description
   and HSN/SAC, GST % and unit under the item; then Reference and Narration
   beside a totals panel (Subtotal, Discount, GST, Round-off, Total) that ends in
   the Received payment lines and Balance due. Tax and total come from the
-  server's `invoice.quote`, never a browser copy of the tax rules.
+  server's [quote contract](./specs/invoice-editor.md#contract).
 - Forms compose `Form`, `FormItem`, `RegisteredFormField` and `FormField`. Two
   to five choices use `ToggleGroup`. A long form splits into flat sections under
   muted `h3` labels, never an accordion.

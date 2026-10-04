@@ -489,7 +489,7 @@ export async function validateImport(
         row.row,
         "Account",
         "ACCOUNT_INVALID",
-        `${row.account} cannot take an opening balance: choose an active leaf other than a GST or advance account.`,
+        `${row.account} cannot take an opening balance: choose an active leaf other than an advance account.`,
       );
       continue;
     }

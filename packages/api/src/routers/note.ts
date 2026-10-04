@@ -2,6 +2,7 @@ import { db } from "@accly/db";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import { parties } from "@accly/db/schema/parties";
+import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -17,6 +18,7 @@ import {
   partySnapshot,
   postDocument,
   purchaseLegs,
+  taxTotals,
   type PostDocumentLine,
 } from "../core/documents";
 import { computeNoteLines } from "../core/note-lines";
@@ -250,12 +252,23 @@ export const noteRouter = {
 
       const [lines, [source], allocations] = await Promise.all([
         db
-          .select()
+          .select({ ...getTableColumns(documentLines), rateBasisPoints: taxRates.rateBasisPoints })
           .from(documentLines)
+          .leftJoin(
+            taxRates,
+            and(eq(taxRates.orgId, orgId), eq(taxRates.id, documentLines.taxRateId)),
+          )
           .where(and(eq(documentLines.orgId, orgId), eq(documentLines.documentId, note.id)))
           .orderBy(asc(documentLines.position)),
         db
-          .select({ id: against.id, type: against.type, number: against.number })
+          .select({
+            id: against.id,
+            type: against.type,
+            number: against.number,
+            documentDate: against.documentDate,
+            reference: against.reference,
+            printSnapshot: against.printSnapshot,
+          })
           .from(against)
           .where(and(eq(against.orgId, orgId), eq(against.id, note.againstDocumentId!)))
           .limit(1),
@@ -265,6 +278,7 @@ export const noteRouter = {
       return {
         ...note,
         lines,
+        totals: taxTotals(lines),
         against: source ?? null,
         allocations,
         // A cancelled note keeps its capacity row but settles nothing.
@@ -305,7 +319,7 @@ export const noteRouter = {
             and(eq(against.orgId, orgId), eq(against.id, documents.againstDocumentId)),
           )
           .where(listed)
-          .orderBy(desc(documents.id))
+          .orderBy(desc(documents.documentDate), desc(documents.id))
           .limit(input.limit + 1),
     );
 

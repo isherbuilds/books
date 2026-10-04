@@ -110,7 +110,7 @@ export async function seedDemo(): Promise<void> {
         slug: SLUG,
         legalType: "company",
         legalName: "Cedar Components Pvt. Ltd.",
-        gstin: "27ABCDE1234F1Z5",
+        gstin: "27ABCDE1234F1Z0",
         financialYearStart: 4,
         timeZone: "Asia/Kolkata",
         address: "18 Industrial Estate",
@@ -283,7 +283,8 @@ export async function seedDemo(): Promise<void> {
   if (!(await api.openingBalance.get(claim))) {
     await api.openingBalance.post({
       ...claim,
-      documentDate: daysFromToday(-90),
+      // seed.ts's receipt history reaches at most 182 days back.
+      documentDate: daysFromToday(-183),
       lines: [
         { accountId: bank.id, side: "debit", amount: "250000.00" },
         { accountId: cash.id, side: "debit", amount: "10000.00" },

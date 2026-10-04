@@ -15,7 +15,7 @@ Accountant can cancel one. A Chartered Accountant can open and print receipts.
 
 ## The receipt register
 
-Open **Sales → Receipts**. The register lists receipts newest first, with **Number**,
+Open **Sales → Receipts**. The register lists receipts newest document date first, with **Number**,
 **Date**, **Party**, **Method** and **Amount**. Search by number, party or reference.
 The filter icon in the search box offers **Date**, **Payment method**, **State**
 (Posted or Cancelled) and **Settlement** (Advance, Against open items or Direct). The
@@ -226,8 +226,9 @@ Cancelling:
   Receivable;
 - keeps the receipt in the register, marked **Cancelled**, with the cancellation date.
 
-The reversal is dated today, not the receipt date. A September receipt cancelled in
-October stays in September's bank balance and leaves it in October.
+The reversal uses the receipt date, correcting the bank balance from that date.
+Cancellation is refused if that date is books-locked without an exception, or
+tax-locked for a receipt that belongs in a GST register.
 
 ## Common messages
 

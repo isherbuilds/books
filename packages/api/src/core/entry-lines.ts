@@ -6,7 +6,7 @@ import type { organizationSettings } from "@accly/db/schema/organization-setting
 import { parties } from "@accly/db/schema/parties";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import { journalAccounts } from "../lib/accounts";
+import { GST_SYSTEM_KEYS, journalAccounts } from "../lib/accounts";
 import { badRequest, impossible } from "../lib/conflict";
 import type { Scope } from "../lib/procedures/factory";
 import type { AllocationTarget } from "./allocations";
@@ -55,7 +55,7 @@ export async function postEntryLines(
   if (resolvedAccounts.length !== accountIds.length) {
     throw badRequest(
       "ACCOUNT_INVALID",
-      "Choose active leaf accounts; unsupported party control and GST accounts are posted by documents.",
+      "Choose active leaf accounts; unsupported party control and advance accounts are posted by documents.",
     );
   }
 
@@ -118,7 +118,7 @@ export async function postEntryLines(
   });
 
   // SAFETY: journalAccounts resolved every line (checked above) and admits only null or
-  // system keys from JOURNAL_SYSTEM_KEYS plus `receivables`, all SystemAccountKey values.
+  // system keys admitted by journalAccounts, all SystemAccountKey values.
   const journalLines = input.lines.map((line) => ({
     accountId: line.accountId,
     partyId: input.type === "journal" ? (line.partyId ?? null) : null,
@@ -139,7 +139,9 @@ export async function postEntryLines(
     placeOfSupplyStateCode: null,
     reference: input.reference,
     narration: input.narration,
-    affectsTax: false,
+    affectsTax:
+      input.type === "journal" &&
+      resolvedAccounts.some((account) => GST_SYSTEM_KEYS.some((key) => key === account.systemKey)),
     printSnapshot: null,
     discountPaise: 0n,
     againstDocumentId: null,
