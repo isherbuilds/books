@@ -653,6 +653,7 @@ export async function postReceipts(org: BooksOrg, plans: readonly ReceiptPlan[])
 
 // Every day from the start of the current financial year (at most six months back)
 // to today; Sundays are closed.
+// The named demo's cutover is 183 days back, before every generated receipt.
 function seedDays(
   settings: Settings,
   random: () => number,

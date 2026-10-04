@@ -161,6 +161,7 @@ const SERVER_FIELDS = {
   PARTY_INVALID: "partyId",
   DUE_DATE_BEFORE_DOCUMENT: "dueDate",
   ITEM_INVALID: "lines",
+  ITEM_TAX_CODE_REQUIRED: "lines",
   TAX_RATE_MISSING: "lines",
   INVOICE_ZERO_TOTAL: "lines",
   DISCOUNT_EXCEEDS_SUBTOTAL: "discount",

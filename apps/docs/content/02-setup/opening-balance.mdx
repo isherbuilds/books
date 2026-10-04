@@ -32,8 +32,11 @@ on 1 October 2026, enter **30 Sep 2026**.
 
 - The date cannot be in the future.
 - It cannot fall in a [locked](/glossary#lock) period (see [Locks](/accounting/locks)).
-- Post nothing dated on or before the cutover date. Accly Books does not stop you, but
-  such entries would mix old and new books.
+- Accly Books refuses new documents dated on or before a posted Opening Balance's
+  cutover date. Opening items imported with it keep their legacy dates.
+- It also refuses an Opening Balance dated on or after an ordinary document you
+  have already posted. Choose a cutover date before those documents; the opening
+  balance and its imported opening items are exempt from this comparison.
 
 ## Enter balances with the form
 
@@ -82,16 +85,17 @@ out:
   [control accounts](/glossary#control-account) that total what customers owe you and what
   you owe vendors). Party
   balances come only from [Import](/setup/import-opening-balances).
-- The **GST input and output accounts** ([ITC](/glossary#itc), the GST you paid and may
-  claim, and [output tax](/glossary#output-tax), the GST you collect). For an old GST balance, add an account such
-  as **GST payable at cutover** under Current Liabilities, carry the balance there, and
-  clear it later by [Journal](/accounting/journals) (a manual [journal](/glossary#journal)
-  entry) with your CA.
 - **Taxable income accounts** (see [supply class](/glossary#supply-class)), when your
   organization has a [GSTIN](/glossary#gstin), its GST registration number. At a mid-year
   cutover, carry year-to-date taxable sales in another income account your CA agrees.
 
 [Groups](/glossary#group-account) and [inactive](/glossary#inactive) accounts are never offered.
+
+GST input, output and cess accounts are offered too. Carry the old
+[input tax credit](/glossary#itc), [output tax](/glossary#output-tax) and
+[cess](/glossary#cess) balances on their matching GST accounts, then clear them by
+[Journal](/accounting/journals#record-a-gst-payment-or-input-tax-set-off)
+with your CA. These opening balances do not enter the GST registers.
 
 ## What happens in the books
 
@@ -101,7 +105,7 @@ date. On the page you see the number, **As at**, **Posted on**, **Total** (the s
 the debits), and the **Lines** with **Account**, **Description**, **Debit** and
 **Credit**.
 
-<Frame caption="Cedar Components' posted opening balance OB26-27/1 as at 5 Jul 2026.">
+<Frame caption="Cedar Components' posted opening balance and its As at date.">
   ![A posted opening balance](./images/opening-balance-posted.webp)
 </Frame>
 

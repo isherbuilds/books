@@ -22,7 +22,7 @@ print invoices but cannot change them.
 
 Open **Sales → Invoices**. The register lists [draft](/glossary#draft) invoices (saved but
 not yet in your books), [posted](/glossary#post) ones (recorded in your books) and
-cancelled ones, newest first. It opens on **This month**.
+cancelled ones, newest document date first. It opens on **This month**.
 
 <Frame caption="The invoice register for September 2026. Cancelled invoices are struck through; the draft shows whatever the period.">
   ![Invoice register with status badges](./images/invoices-register.webp)
@@ -226,8 +226,13 @@ The footer has:
 
 ## Print or download the PDF
 
-Click **PDF**. Your browser opens the invoice; use its print or download button. The
-PDF shows your organization's name, address, GSTIN and [PAN](/glossary#pan) (Permanent Account Number), the Bill to and Ship to
+Click **PDF**. Your browser opens the invoice; use its print or download button.
+
+The heading is **Tax Invoice** when any line carries a GST rate, including mixed
+taxable and exempt supplies; otherwise it is **Bill of Supply** for exempt,
+nil-rated or non-GST supplies, or an organization without a GSTIN.
+
+The PDF shows your organization's name, address, GSTIN and [PAN](/glossary#pan) (Permanent Account Number), the Bill to and Ship to
 blocks, date, due date, place of supply, reverse charge (No: you, not the buyer, pay this GST), each line with HSN or
 SAC, quantity, rate, discount, taxable value, GST rate and tax, the totals, the total
 in words, and a signature block. A cancelled invoice prints **CANCELLED**.
@@ -335,11 +340,11 @@ the date it was cancelled.
   ![Cancel invoice dialog](./images/invoices-cancel-dialog.webp)
 </Frame>
 
-:::warning[The reversal is dated today]
-The cancellation posts on today's date, not the invoice date. If you cancel a
-September invoice in October, September's ledgers still include it and October's
-reverse it, while the GST register leaves the cancelled invoice out entirely. Tell
-your CA (Chartered Accountant) when you cancel an invoice from an earlier month.
+:::warning[The reversal uses the invoice date]
+Cancelling or amending reverses the original invoice on its own date, correcting
+that period's ledgers. It is refused if the invoice date is tax-locked, or
+books-locked without an exception. Correct a filed invoice with a
+[credit note](/sales/credit-notes) in an open period instead.
 :::
 
 Amend and Cancel appear only when nothing is matched to the invoice. If a receipt,

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import { documents } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { and, eq } from "drizzle-orm";
@@ -652,7 +653,7 @@ test("journal posting refuses unbalanced lines and foreign parties", async () =>
 
 test("registered organizations hide and refuse taxable journal accounts", async () => {
   const fixture = await createAccountingFixture(founder, "journal-gstin", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
   });
@@ -676,6 +677,62 @@ test("registered organizations hide and refuse taxable journal accounts", async 
     }),
     "TAXABLE_ACCOUNT_LINE",
   );
+});
+
+test("a GST payment journal posts and respects the tax lock with books open", async () => {
+  const fixture = await createAccountingFixture(founder, "journal-gst-payment", {
+    gstin: "27ABCDE1234F1Z0",
+    stateCode: "27",
+    pan: "ABCDE1234F",
+  });
+
+  const { bank } = journalAccountsOf(fixture.accounts);
+
+  const output = required(
+    fixture.accounts.find(({ systemKey }) => systemKey === "cgstOutput"),
+    "CGST output account",
+  );
+
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const input = {
+    ...claim,
+    documentDate: "2026-04-01",
+    narration: "Pay CGST liability",
+    lines: [
+      { accountId: output.id, side: "debit" as const, amount: "100.00" },
+      { accountId: bank.id, side: "credit" as const, amount: "100.00" },
+    ],
+  };
+
+  expect(await fixture.api.journal.accounts(claim)).toContainEqual(
+    expect.objectContaining({ id: output.id, systemKey: "cgstOutput" }),
+  );
+  const posted = await fixture.api.journal.post(input);
+  const posting = await postingOf(fixture.organization.id, posted.id, "post");
+  expect(posting.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: output.id, debit: 10_000n, credit: 0n }),
+      expect.objectContaining({ accountId: bank.id, debit: 0n, credit: 10_000n }),
+    ]),
+  );
+  expect(
+    await db
+      .select({ affectsTax: documents.affectsTax })
+      .from(documents)
+      .where(and(eq(documents.orgId, fixture.organization.id), eq(documents.id, posted.id))),
+  ).toEqual([{ affectsTax: true }]);
+
+  const owner = clientFor(founder);
+  expect((await owner.lock.get(claim)).general).toBeNull();
+  await owner.lock.set({
+    ...claim,
+    kind: "tax",
+    lockedThrough: input.documentDate,
+    expectedLockedThrough: null,
+    reason: "GST period filed",
+  });
+  await expectReason(fixture.api.journal.post(input), "LOCKED");
 });
 
 // The start month names every financial year and number series, so it is fixed once

@@ -184,7 +184,7 @@ test("founder organization creation seeds the complete chart and profile", async
   await expectORPCCode(
     createAccountingOrganization(founder.headers, {
       slug: `invalid-tax-identity-${suffix}`,
-      gstin: "29ABCDE1234F1Z5",
+      gstin: "29ABCDE1234F1ZW",
       stateCode: "27",
     }),
     "BAD_REQUEST",
@@ -208,7 +208,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   const originalInput: PartyCreateInput = {
     ...partyCreateInput(organization.slug, "Acme & Co."),
     roles: ["customer", "vendor"],
-    gstin: "27abcde1234f1z5",
+    gstin: "27abcde1234f1z0",
   };
 
   const original = await api.party.create(originalInput);
@@ -216,7 +216,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
     name: "Acme & Co.",
     roles: ["customer", "vendor"],
     stateCode: "27",
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
   });
 
   // A GSTIN alone is enough: the server derives the state and PAN from it.
@@ -224,7 +224,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
     orgSlug: organization.slug,
     name: "GSTIN Only Traders",
     roles: ["vendor"],
-    gstin: "29ABCDE1234F2Z4",
+    gstin: "29ABCDE1234F2ZV",
   });
 
   expect(derived).toMatchObject({ stateCode: "29", pan: "ABCDE1234F" });
@@ -257,7 +257,7 @@ test("party namesakes, GSTIN uniqueness, and listing are explicit", async () => 
   const gstinCollision = await expectORPCCode(
     api.party.create({
       ...partyCreateInput(organization.slug, "Different Legal Name"),
-      gstin: "27ABCDE1234F1Z5",
+      gstin: "27ABCDE1234F1Z0",
     }),
     "CONFLICT",
   );

@@ -161,7 +161,7 @@ const coreAccounts = (equityName: string): TemplateAccount[] => [
 
 const professionalIncome: TemplateAccount[] = [
   { code: "5010", name: "Professional Fees", type: "income", supplyClass: "taxable" },
-  { code: "5020", name: "Rent Received", type: "income", supplyClass: "exempt" },
+  { code: "5020", name: "Rent Received", type: "income", supplyClass: "taxable" },
   { code: "5030", name: "Interest Income", type: "income", supplyClass: "exempt" },
   { code: "6010", name: "Professional Expenses", type: "expense" },
   { code: "6020", name: "Rent and Utilities", type: "expense" },
@@ -177,7 +177,7 @@ const businessIncome: TemplateAccount[] = [
 ];
 
 const institutionIncome: TemplateAccount[] = [
-  { code: "5010", name: "Fees", type: "income", supplyClass: "taxable" },
+  { code: "5010", name: "Fees", type: "income", supplyClass: "exempt" },
   { code: "5020", name: "Donations", type: "income", supplyClass: "notASupply" },
   { code: "5030", name: "Grants", type: "income", supplyClass: "notASupply" },
   { code: "5040", name: "Interest Income", type: "income", supplyClass: "exempt" },

@@ -1,10 +1,8 @@
 # Spec: Client patterns
 
-Status: slices 1–2 implemented, slice 3 partly, slice 4 implemented, and slice
-5 partly implemented. Authority: the founder's direction: a command palette and
-conventional fast forms, no shortcut grammar before measurement, Midday's
-components on Base UI, cmdk and TanStack, records in Sheets or, with a line
-grid, pages, and no side panes.
+Command palette and conventional fast forms; no shortcut grammar before the
+[speed gate](#speed-gate-h4) fails. UI surfaces follow
+[Design](../design.md#10-task-overlays). Open checks are in [Slices](#slices).
 
 ## Speed gate (H4)
 
@@ -21,8 +19,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
 
 ## Calls
 
-1. **State** follows [Development](../development.md#react-and-forms): no browser
-   storage, draft store or zustand.
+1. **State** follows [Development](../development.md#react-and-forms): no draft
+   store or zustand.
 2. **Cached masters.** `party.list`, `account.list`, `paymentMethod.list` and
    `item.list` return lists up to 5,000 rows (`MASTER_LIST_LIMIT`), stale
    after five minutes. `party.list` carries only what lists show (name, roles,
@@ -44,10 +42,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    receipt against one Invoice goes on to its record or closes. Rejected keeps
    the values and shows the reason.
    No number shows before the server returns it. Nothing is optimistic: no
-   inserted row, balance or outstanding. Invalidate only after success.
-   An Invoice's totals are quoted live (`invoice.quote`, 300 ms after the last
-   change, the previous quote kept dimmed); its counter sale is up to four
-   payment lines with Split payment, Fill and Over by, adapted from HMS.
+   inserted row, balance or outstanding. Success and uncertain results invalidate
+   through the [query contract](#queries-and-invalidation).
+   Invoice quoting and payment lines follow the
+   [Invoice editor contract](./invoice-editor.md#contract).
 5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
    match), except in a textarea or during IME composition. Mod+Enter posts. Esc
    closes the innermost popup, then the panel, then the overlay, one per press.
@@ -59,12 +57,13 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    navigation, Organization switch, Parties and Documents. The palette searches
    Invoices, Receipts, Bills, Payments and Notes after a 200 ms debounce.
    `rankCommands` ranks groups by best match and caps Parties and Documents
-   at eight rows each. Cancel opens the reason dialog. Query keys carry `orgSlug`.
+   at eight rows each. Cancel opens the reason dialog.
 8. **Overlays by URL.** List routes take `create` only for Sheet-hosted forms,
    and record Sheets take `edit`. For record Sheets, the list is a layout route
    with an `Outlet`, and the record is its child (`receipts/$receiptId.tsx`).
    There is no index route, because it would unmount the list. Closing clears
-   the param and refocuses the row. Parties open a quick look (`?party=`), and
+   the param; focus follows [Design](../design.md#8-layout-primitives).
+   Parties open a quick look (`?party=`), and
    `parties_.$partyId` owns editing. Its Transactions tab lists every Invoice,
    Bill, Note, Receipt and Payment naming the party (`party.transactions`, one
    keyset page of 25 at a time, only the types the member may read), as Zoho's
@@ -81,16 +80,13 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    the create grant. Create stacks the master's own form and returns the saved
    row. A document's Party field lists the parties holding its role first and
    hides none; a party it creates starts with that role.
-10. **Lists** use `DataTable`. ↑ and ↓ move row focus and Enter opens the
-    record; inside a Sheet, ↑ and ↓ step between rows. A page is 25 rows
-    (`pageLimit`). Parties sort and filter in memory and mount 25 rows at a
-    time; past the master's bound, the search runs on the server. Receipts,
-    files, the audit log and Members use `useInfiniteQuery` on a keyset cursor
-    with server filters; Members keeps its search `q` in the URL, and its
-    pending invitations come with the first page. Lists mount only their
-    visible rows (`useVirtualRows`, TanStack Virtual) and fetch the next page
-    when the last row scrolls into view; the allocation grid alone grows by
-    its Load more button.
+10. **Lists** follow [Design](../design.md#8-layout-primitives). ↑ and ↓ move
+    row focus and Enter opens the record; inside a Sheet, ↑ and ↓ step between
+    rows. A page is 25 rows (`pageLimit`). Parties sort and filter in memory and
+    mount 25 rows at a time; past the master's bound, search runs on the server.
+    Receipts, files, audit and Members use `useInfiniteQuery` with server
+    filters; Members keeps `q` in the URL and returns pending invitations with
+    the first page. The allocation grid alone grows by its Load more button.
     A dated page opened without dates moves to its default period in the URL
     (`requirePeriod`): this month for Invoices, Bills, Receipts and Payments;
     this financial year for Notes, Journals and a party's Transactions and
@@ -100,19 +96,76 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     carries only what its columns, card, palette entry and cursor read;
     everything else is one click away in the record Sheet. Search still
     matches the reference and narration on the server.
-    The open-item and credit pickers (`party.openItems`, `party.openCredits`)
-    follow the same rule: 25 rows oldest first, then `LoadMore`, so no fixed
-    count hides a document. Apply credit is a compact Dialog over the record
+    Open-item and credit picker paging follows
+    [Accounting core](./accounting-core.md#slices). Apply credit is a compact
+    Dialog over the record
     Sheet: a credit combobox searched by number on the server, with a Load
     more option last; an amount defaulting to the smaller of the credit's
     unapplied amount and the claim's outstanding; and the outstanding after
     the apply. The allocation grid has no search, because a narrowed grid
     would hide amounts already typed against other rows.
-11. **Document form.** Slice 4 extracts `DocumentForm`, `PostBar` and
-    `LineGrid` from the Receipt form. The reset after a post keeps the date, and
-    on a Receipt also the method, and focuses the first Link Field. Tab moves
-    between fields natively; plain Enter never submits, Mod+Enter posts.
-    `DocumentForm` and `PostBar` use one layout in a Sheet or on a page.
+11. **Document form.** `DocumentForm`, `PostBar` and `LineGrid` are shared;
+    layout follows [Design](../design.md#10-task-overlays). Reset after post
+    keeps the date, and on a Receipt also the method, then focuses the first
+    Link Field. Tab moves natively; plain Enter never submits.
+12. **Invoice fields and records.** Item uses a Link Field with inline create.
+    Place of supply defaults from the Party and stays editable; due date defaults
+    from document date and stays editable before post. Draft tokens, allocation
+    limits, settlement status and cancellation follow
+    [Accounting core](./accounting-core.md#slices). A reopened draft restores
+    every field and line. Invoice lists show due date, total, settlement and
+    overdue; records show total, outstanding, lines, tax split and allocations.
+13. **Shared settlement parts.** `AllocationsSection` links the other document
+    by type and offers Reverse while active. Receipt, Payment and Journal forms
+    use `AllocationTable` and pure `checkAllocations`. The table takes the form
+    path, a `remainingFor` callback and totals as children, never a mode prop:
+    each caller supplies its capacity rule and totals. `PaymentMethodField`
+    picks the method; `DocumentTotals` renders Invoice or Bill totals and
+    `ClaimStatus` renders settlement.
+14. **Remaining forms.** Journal and Opening Balance share `entry-lines.tsx`.
+    Lock exception expiry uses `orgLocalToInstant` for wall-clock time in the
+    Organization zone, with `@date-fns/tz` only for offsets; round-trip gap
+    rejection and separate date-only arithmetic follow
+    [Accounting core](./accounting-core.md#journal-opening-balance-and-locks-slice-5).
+    Payment offers Against only to roles that can read Bills and Notes; its
+    Credit Note refund picker filters on the server before the page. Payment,
+    Bill and Note fields and Settings > Import follow
+    [Accounting core](./accounting-core.md#slices). Forms are reachable from the
+    palette; settings forms use the settings form pattern.
+
+## Queries and invalidation
+
+- TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
+  `operational-query.ts`). Loaders prime it and components subscribe with the
+  same `queryOptions`, never loader data props. Query keys include `orgSlug`.
+- Report loaders start non-awaited prefetches; bodies read with suspense inside
+  local boundaries, so headers and controls appear immediately and streamed
+  SSR results hydrate without a loading/data mismatch.
+- Membership comes from `useMembership` through `membershipOptions`, stale
+  after five minutes; member and settings edits invalidate it.
+- A tabbed record keeps shared chrome in its layout route. Context shared by
+  sibling routes lives outside the route tree: TanStack Start splits route files
+  into chunks with separate context objects.
+- Required queries use `loadRouteQuery` and `useSuspenseQuery`, failing to the
+  route boundary. Optional queries prefetch with `.catch(() => {})`, read with
+  `useQuery` and show `ErrorNote` in place. Never both for one procedure.
+- Live lists add `OPERATIONAL_INFINITE_REFETCH`: poll every 10 s, stale after
+  5 s, refetch on focus only while page one is the only loaded page, and pause
+  polling in background tabs. Page two stops polling and focus refetching.
+  There is no WebSocket or SSE.
+- Time zone and today's business date come from `useOrgDateTime`;
+  `settings.get` needs `settings:read`.
+- Failed reads render `ErrorNote`; a failed list refresh keeps rows (`ListState`).
+  Failed writes use `handleWriteError`: CONFLICT or a lost response dismisses
+  and refetches; other refusals reach their field or toast
+  `errorMessage(error, "Could not …")`, never raw `error.message`.
+- Writes use `lib/domain-invalidation.ts`: `invalidateInvoiceDrafts` and
+  `invalidateBillDrafts` cover draft save/discard; `invalidateSettlementState`
+  covers Invoice, Bill and Note post/cancel and allocation apply/reverse;
+  `invalidateCashState` covers Receipt and Payment post/cancel and counter sales.
+  Uncertain results use the success path's set through `handleWriteError`.
+- Remote type-ahead debounces before the query key. Filter locally only a
+  complete, bounded list.
 
 ## Midday adaptation
 
@@ -126,113 +179,13 @@ are not adopted.
 
 ## Slices
 
-1. **Receipt entry.** Implemented: list shell, create Sheet, Receipt form,
-   Party Link Field with inline create, income account and "Advance for"
-   fields. Open: H4 set 1.
-2. **Palette.** Implemented, with `tests/unit/palette.test.ts`.
-3. **Lists and Sheets.** Implemented: Parties and Receipts on `DataTable`, the
-   Party quick look and page (Overview, Receipts, Ledger), Party edit, and
-   keyboard row focus. Open: the receipts list on `db:seed:volume` data, and an
-   empty-query Link Field at 5,000 Parties under 200 ms.
-4. **Invoice form.** Implemented. Open: H4 set 2.
-   - Acceptance: the Receipt and Invoice forms both use the extracted
-     `DocumentForm`, `PostBar` and `LineGrid`. Item is a Link Field with inline
-     create. Place of supply defaults from the Party, stays editable and is
-     passed to `computeTax`. Due date defaults to the document date, is
-     editable before post and never precedes it. Lines are added with the Add
-     buttons; Tab moves through fields natively. Totals and tax come only from `computeTax`, never a
-     second client formula. Save draft and post send the loaded
-     `draft: { id, version }` once a draft exists and omit it on a fresh form;
-     a stale version shows the refresh conflict; a draft reopened from the list
-     restores every field and line. A Receipt with `against`
-     lists the Party's open Invoices with outstanding, allocates by amount with
-     Enter, refuses more than outstanding on the field, and shows the
-     remainder as advance before post. The Invoice record Sheet applies an open
-     advance through `allocation.apply` and reverses it there. The list shows
-     due date, total and settlement status with overdue (core call 18); filters
-     include settlement status and overdue. The record Sheet shows total,
-     outstanding, lines, tax split and each allocation. It offers Cancel only
-     once every allocation is reversed (core call 17); reversing one
-     allocation keeps a shared Receipt and its other allocation.
-   - Depends on: slices 1–2 and accounting-core slice 4.
-   - Owns: `routes/$orgSlug/invoices/`, `routes/$orgSlug/invoices_.new.tsx`,
-     `routes/$orgSlug/invoices_.$invoiceId.edit.tsx`,
-     `components/invoice-form.tsx`, `components/invoice-columns.tsx`,
-     `components/invoice-summary.tsx`, `components/document-form.tsx`,
-     `components/apply-credit-dialog.tsx`, the `DocumentForm` adoption in
-     `receipt-form.tsx`, and `lib/domain-invalidation.ts`.
-   - Interfaces: `DocumentForm`, `PostBar` and `LineGrid` own the
-     two proven shared seams. Every record Sheet lists allocations through
-     `AllocationsSection` (the other document linked by type, Reverse while
-     active); the Receipt, Payment and Journal forms allocate through
-     `AllocationTable` and its pure `checkAllocations`. The table takes the
-     form path, a `remainingFor` callback and its totals as children, never a
-     mode prop: a new caller brings its own capacity rule and totals, and the
-     shared grid stays unchanged. `PaymentMethodField`
-     picks the method in the Invoice, Receipt and Payment forms;
-     `DocumentTotals` shows an Invoice's or Bill's totals and `ClaimStatus`
-     its settlement. Each write invalidates the set for what it moved:
-     `invalidateInvoiceDrafts` (draft save or discard),
-     `invalidateSettlementState` (invoice post or cancel, allocation apply or
-     reverse) and `invalidateCashState` (receipt post or cancel); an uncertain
-     result uses the same set as the success path, through `handleWriteError`.
-     `/invoices/new` starts a new invoice and `/invoices/$invoiceId/edit` edits
-     a draft, both on the page surface.
-   - Legacy reference (a716b6c). Read it; do not copy it.
-     - Allocation remainder: a live "Fill ₹x" or "Over by ₹x" control
-       (`a716b6c:apps/web/src/components/payment-lines.tsx:77-108`). Port it
-       onto bigint `formatMoney`.
-     - List totals: `count(*) over()` and `sum(sum(x)) over()` beside a
-       `limit + 1` page, in one query
-       (`a716b6c:packages/api/src/routers/billing-worklist.ts:59-112`). The
-       window reads every match before `LIMIT`; measure at pilot volume.
-5. **Remaining forms.** Payment, Bill, note and import forms are implemented.
-   - Acceptance: Journal, Opening Balance and lock/Lock Exception forms are
-     implemented. `components/entry-lines.tsx` is shared by the Journal and
-     Opening Balance forms. The routes are
-     `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
-     `routes/$orgSlug/journals.tsx`,
-     `routes/$orgSlug/journals_.new.tsx` and
-     `routes/$orgSlug/journals_.$journalId.tsx`. The form components are
-     `components/{opening-balance-form,lock-dialog,lock-exception-dialog}.tsx`.
-     An exception expiry is typed as wall-clock time in the Organization zone
-     and converted with `orgLocalToInstant`; the server judges "in the future".
-     Conversion uses `@date-fns/tz` only for offsets, retaining round-trip gap
-     rejection and separate date-only arithmetic ([decision](../research/midday-timezones-2026-09-22.md)).
-     Payment (`direct`, `advance`, `against` open Bills with allocations, a TDS
-     section Link Field), Bill (lines with `itcEligible`, an optional TDS
-     section, due date, and the Invoice settlement display and cancellation
-     flow), and Credit and Debit Notes against a source Document are
-     implemented. Import is accounting-core slice 7c (Settings > Import):
-     template download, Check before Import, row errors listed, nothing
-     written on any error.
-     Payment offers Against only to roles that can read Bills and Notes; its
-     Credit Note refund picker filters on the server before the page.
-     Sheet-hosted document forms use `DocumentForm` with the four posting
-     states and a list route with the same shell, `DataTable` and record Sheet.
-     A document with a line grid uses the page surface. Settings forms use the
-     settings form pattern. Forms are reachable from the palette.
-   - Depends on: slice 4 and accounting-core slices 3 and 5; import needs 7.
-   - Owns: `routes/$orgSlug/{payments,bills,notes}/`,
-     `routes/$orgSlug/bills_.new.tsx`,
-     `routes/$orgSlug/bills_.$billId.edit.tsx`,
-     `routes/$orgSlug/notes_.new.tsx`,
-     `routes/$orgSlug/journals.tsx`, `routes/$orgSlug/journals_.new.tsx`,
-     `routes/$orgSlug/journals_.$journalId.tsx`,
-     `routes/$orgSlug/settings/{opening-balance,locks}.tsx`,
-     `routes/$orgSlug/settings/import.tsx`, `components/entry-lines.tsx`,
-     `components/{opening-balance-form,lock-dialog,lock-exception-dialog}.tsx`,
-     `components/{payment-form,bill-form,note-form}.tsx`,
-     `components/{payment-columns,bill-columns,note-columns}.tsx`, and
-     `lib/domain-invalidation.ts`.
-   - Interfaces: `invalidateBillDrafts` covers Bill draft saves and discards;
-     `invalidateSettlementState` covers Invoice, Bill and note posting and
-     cancellation and allocation changes; `invalidateCashState` covers
-     Receipt and Payment posting and cancellation, plus Invoice counter sales.
-     The forms consume the slice 4 parts unchanged.
-
-Check each slice in the running app on desktop and mobile, in both themes. Pure
-helpers get unit tests; there is no UI test framework.
+- Receipt entry: H4 set 1 remains open.
+- Lists and Sheets: row-focus and receipts-list checks on `db:seed:volume`,
+  and an empty-query Link Field at 5,000 Parties under 200 ms remain open.
+- Invoice form: H4 set 2 remains open.
+- Runtime acceptance follows [Development](../development.md#commands) and the
+  [work registry](../README.md#work-lifecycle); pure helpers use unit tests.
+  There is no UI test framework.
 
 ## Deferred
 

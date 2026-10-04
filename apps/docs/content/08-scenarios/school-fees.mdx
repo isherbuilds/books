@@ -16,14 +16,13 @@ education services are [exempt](/glossary#supply-class) from [GST](/glossary#gst
 which of your fees are exempt.
 
 :::warning[If your school is GST-registered]
-Ridgeview Academy has no GSTIN, so its **Fees** account takes Direct receipts. The
-institution chart creates **Fees** with the GST supply class **Taxable**. In an
-organization with a GSTIN, a Direct receipt to a taxable account stops with "Taxable
-income must be invoiced before it is received." You cannot change an account's supply
-class later, so first add a new income account, for example **School Fees**, with
-**GST supply class** set to **Exempt** in the
-[chart of accounts](/setup/chart-of-accounts). Choose that account wherever this page
-says **Fees**.
+The trust and society charts create **Fees** with the GST supply class **Exempt**,
+so exempt school fees can use Direct receipts even when the organization has a
+GSTIN. Check the class in [Edit account](/setup/chart-of-accounts#edit-an-account)
+before posting. An unused account can change class; one with posted entries
+cannot. If an older **Fees** account is taxable and already used, add a new exempt
+income account and choose it instead. Taxable fees in a GST-registered organization
+must be invoiced before they are received.
 :::
 
 **Who does it:** the cashier [posts](/glossary#post) receipts (Owner, Accountant or Operator; see [roles](/glossary#roles)). Only an
@@ -168,7 +167,7 @@ Books does not warn about the same reference. The accountant cancels the duplica
   ![Cancelled receipt panel](./images/school-fees-cancelled-sheet.webp)
 </Frame>
 
-Accly Books keeps the receipt and posts a [reversal](/glossary#reversal), an equal and opposite entry, dated today:
+Accly Books keeps the receipt and posts a [reversal](/glossary#reversal), an equal and opposite entry, on the receipt's original date (today in this example):
 
 | Entry                      | Account           | Debit      | Credit     |
 | -------------------------- | ----------------- | ---------- | ---------- |
@@ -247,9 +246,8 @@ reversal cancel out. Deepa Reddy's ₹18,500.00 is not income; it waits in Custo
 Advances.
 
 :::warning
-A cancellation dated today reverses income from the receipt's own date. If you cancel
-many receipts of earlier months in one day, that day's and that month's profit and
-loss show negative fee income. Cancel mistakes the same day when you can.
+A cancellation reverses income on the receipt's original date, correcting that
+month's fee income. If the date is locked, ask your CA before correcting it.
 :::
 
 ## Balances after the day

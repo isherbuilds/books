@@ -276,7 +276,7 @@ function CreateOrganizationForm() {
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <GstinField label="GSTIN (optional)" placeholder="22ABCDE1234F1Z5" />
+              <GstinField label="GSTIN (optional)" placeholder="22ABCDE1234F1ZA" />
               {gstin.trim() === "" ? (
                 <RegisteredFormField
                   name="pan"

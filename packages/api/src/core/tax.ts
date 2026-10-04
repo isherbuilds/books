@@ -2,6 +2,11 @@ import { divideHalfUp } from "./money";
 
 type TaxLineInput = { taxablePaise: bigint; rateBasisPoints: number | null };
 
+/** Call 6: the stored print class includes mixed supplies and unregistered suppliers. */
+export function invoicePrintTitle(printClass: "taxInvoice" | "billOfSupply") {
+  return printClass === "taxInvoice" ? "Tax Invoice" : "Bill of Supply";
+}
+
 /**
  * GST for each line and the document. Each line takes the growth of the running
  * total rounded half-up, so the lines sum to the document total rounded once.

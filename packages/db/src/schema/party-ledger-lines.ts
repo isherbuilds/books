@@ -39,15 +39,15 @@ export const partyLedgerLines = pgTable(
       columns: [table.orgId, table.documentId],
       foreignColumns: [documents.orgId, documents.id],
     }),
-    // `amount_paise` trails so `party.balances` sums every party from this index alone.
+    // Party and side grouping with amounts available in the index.
     index("party_ledger_lines_org_party_idx").on(
       table.orgId,
       table.partyId,
       table.side,
       table.amountPaise,
     ),
-    // A party's lines by date. `amount_paise` trails the keyset so the statement's
-    // opening and summary sums read this index alone.
+    // A party's lines by date. `amount_paise` trails the keyset so statements and
+    // today's `party.balances` sums read this index alone.
     index("party_ledger_lines_org_party_date_idx").on(
       table.orgId,
       table.partyId,

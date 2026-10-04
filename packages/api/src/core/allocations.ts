@@ -2,6 +2,7 @@ import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import { documents } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
+import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, exists, inArray, notExists, or, sql } from "drizzle-orm";
@@ -9,6 +10,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
 import { requirePermission, type Scope } from "../lib/procedures/factory";
+import { assertPeriodOpen } from "./locks";
 import { formatMoney } from "./money";
 import { recordEntry, reverseEntries } from "./posting";
 
@@ -24,7 +26,7 @@ type Side = "receivable" | "payable";
 
 type LockedDocument = Pick<
   typeof documents.$inferSelect,
-  "id" | "type" | "state" | "settlementKind" | "exposureSide" | "partyId"
+  "id" | "type" | "state" | "settlementKind" | "exposureSide" | "partyId" | "documentDate"
 >;
 
 const reversal = alias(allocations, "allocation_reversal");
@@ -136,6 +138,7 @@ export async function activeAllocationsOf(
       sourceDocumentId: allocations.sourceDocumentId,
       targetDocumentId: allocations.targetDocumentId,
       amountPaise: allocations.amountPaise,
+      entryDate: allocations.entryDate,
     })
     .from(allocations)
     .where(
@@ -163,6 +166,7 @@ export async function lockDocuments(
       settlementKind: documents.settlementKind,
       exposureSide: documents.exposureSide,
       partyId: documents.partyId,
+      documentDate: documents.documentDate,
     })
     .from(documents)
     .where(and(eq(documents.orgId, orgId), inArray(documents.id, [...documentIds])))
@@ -220,10 +224,10 @@ function allocationEntrySide(
 export async function applyAllocations(
   tx: DbTransaction,
   scope: Scope,
+  settings: typeof organizationSettings.$inferSelect,
   args: {
     pairs: readonly AllocationPair[];
     draftDocumentId: string | null;
-    entryDate: string;
     requiredSourceType?: "creditNote";
     partyId?: string;
   },
@@ -298,6 +302,24 @@ export async function applyAllocations(
     }
   }
 
+  const rows = args.pairs.map((pair) => {
+    const sourceDate = byId.get(pair.sourceDocumentId)!.documentDate;
+    const targetDate = byId.get(pair.targetDocumentId)!.documentDate;
+
+    return {
+      id: Bun.randomUUIDv7(),
+      orgId: scope.orgId,
+      ...pair,
+      kind: "apply" as const,
+      reversesAllocationId: null,
+      entryDate: sourceDate > targetDate ? sourceDate : targetDate,
+      createdBy: scope.userId,
+    };
+  });
+
+  for (const row of rows)
+    await assertPeriodOpen(tx, scope, settings, { entryDate: row.entryDate, affectsTax: false });
+
   const sourceIds = new Set(args.pairs.map((pair) => pair.sourceDocumentId));
   const targetIds = new Set(args.pairs.map((pair) => pair.targetDocumentId));
   const sourceSettlement = settlementPaise(scope.orgId, "source", partyId);
@@ -360,16 +382,6 @@ export async function applyAllocations(
       );
   }
 
-  const rows = args.pairs.map((pair) => ({
-    id: Bun.randomUUIDv7(),
-    orgId: scope.orgId,
-    ...pair,
-    kind: "apply" as const,
-    reversesAllocationId: null,
-    entryDate: args.entryDate,
-    createdBy: scope.userId,
-  }));
-
   await tx.insert(allocations).values(rows);
 
   // Money a posted advance holds moves from the advance account to the control account.
@@ -390,7 +402,7 @@ export async function applyAllocations(
             amountPaise: row.amountPaise,
           },
         },
-        entryDate: args.entryDate,
+        entryDate: row.entryDate,
         narration: "Apply advance to claim",
       });
   }
@@ -402,8 +414,8 @@ export async function applyAllocations(
 export async function reverseAllocation(
   tx: DbTransaction,
   scope: Scope,
+  settings: typeof organizationSettings.$inferSelect,
   allocationId: string,
-  entryDate: string,
   narration: string,
 ): Promise<{ id: string; amountPaise: bigint }> {
   const [apply] = await tx
@@ -411,6 +423,7 @@ export async function reverseAllocation(
       sourceDocumentId: allocations.sourceDocumentId,
       targetDocumentId: allocations.targetDocumentId,
       amountPaise: allocations.amountPaise,
+      entryDate: allocations.entryDate,
       postEntryId: journalEntries.id,
     })
     .from(allocations)
@@ -442,6 +455,9 @@ export async function reverseAllocation(
   const source = locked.find((document) => document.id === apply.sourceDocumentId);
 
   if (!source) throw impossible(`allocation ${allocationId} has no source`);
+
+  const entryDate = apply.entryDate;
+  await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
 
   const [reversed] = await tx
     .insert(allocations)

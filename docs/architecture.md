@@ -66,14 +66,8 @@ A new org-scoped domain follows the
   request-local client. The flag is computed from `FOUNDING_EMAIL` on the server;
   the email never reaches the client. `/join` has no org, so it asks
   `organization.canCreate`. Base UI popups stay behind `ClientOnly`.
-- TanStack Query is the only cache (`lib/orpc.ts`, `query-client.ts`,
-  `operational-query.ts`). Loaders prime it, components subscribe with the same
-  `queryOptions`, and loaders never pass data down as props. Report loaders start
-  non-awaited prefetches; report bodies read them with suspense inside local
-  boundaries, so header and controls appear immediately during navigation and
-  streamed SSR results hydrate without a loading/data mismatch. Membership comes
-  from `useMembership` through `membershipOptions`, stale after five minutes;
-  member and settings edits invalidate it.
+- Cache, loader subscription and report streaming follow
+  [Client patterns](./specs/client-patterns.md#queries-and-invalidation).
 - The browser client batches same-tick non-`export` calls into one `/rpc`
   request (`BatchLinkPlugin`, `BatchHandlerPlugin`). `export` calls travel
   separately. Batched calls share one context, so the session and membership
@@ -85,12 +79,8 @@ A new org-scoped domain follows the
   to `/login`. On `/login`, `redirectSignedInHome` sends a signed-in member
   to the first organization's `/$orgSlug` Home and anyone without an
   organization to `/join`. A validated `redirect` on `/login` wins.
-- A tabbed record keeps shared chrome in its layout route. Declare context
-  shared by sibling routes outside the route tree: TanStack Start splits route
-  files into chunks with separate context objects.
-- Every query key includes `orgSlug`. Growing lists use full keysets and select
-  `limit + 1` base rows through a tenant-leading index before joins. Never use
-  `OFFSET`.
+- Growing lists use full keysets and select `limit + 1` base rows through a
+  tenant-leading index before joins. Never use `OFFSET`.
 - Ledgers page oldest first on `(entry_date, id)` with an object cursor. A
   separate summary procedure returns opening, debits, credits and closing for
   the period; the client starts the running balance from the summary's opening
@@ -98,12 +88,10 @@ A new org-scoped domain follows the
   copies its entry's date (composite FK) so account ledger pages read
   `(org_id, account_id, entry_date, id)`. PDF and XLSX exports keep the
   full-period helpers.
-- Live lists poll every 10 s (stale after 5 s) and refetch on focus only
-  while page one is the only loaded page. Both stop once a second page loads;
-  polling also pauses in background tabs. There is no WebSocket or SSE.
+- Live-list refresh follows
+  [Client patterns](./specs/client-patterns.md#queries-and-invalidation).
 
-Query, form and invalidation rules are in
-[Development](./development.md#react-and-forms).
+Form code rules are in [Development](./development.md#react-and-forms).
 
 ## Data and migrations
 
@@ -115,10 +103,10 @@ Query, form and invalidation rules are in
   that code owns, date ranges, the advance-supply presence rule).
 - Volatile and regulatory rules live in the application, in zod
   (`packages/api/src/lib/schemas.ts` and router inputs): supply classes, legal
-  types, state codes, Party roles, the TDS rate range, advance-supply values and
-  the document number format. A change to them needs no migration. Party GSTIN
-  uniqueness per Organization is an application check (`PARTY_GSTIN_TAKEN`),
-  not an index.
+  types, state codes, GSTIN mod-36 check characters, Party roles, the TDS rate range,
+  advance-supply values and the document number format. A change to them needs no
+  migration. Party GSTIN uniqueness per Organization is an application check
+  (`PARTY_GSTIN_TAKEN`), not an index.
 - Indexes lead with `org_id` and match the real filter, order and keyset.
 - Write with scoped `UPDATE ... RETURNING`. Edits compare-and-swap on the loaded
   `updatedAt` (`timestamptz(3)`). Zero rows is a stale-record `CONFLICT`, with
@@ -129,9 +117,8 @@ Query, form and invalidation rules are in
 - One `organization_settings` row per Organization holds identity, address,
   financial year, time zone, prefixes and settings. Readers query it directly;
   there is no settings cache.
-- Migrations run before startup under an advisory lock and must suit a draining
-  old instance ([rules](./development.md#code-rules)). `runMigrations` first
-  creates the extensions the schema needs; Drizzle generates no extension.
+- Startup migrations follow [Operations](./operations.md#deployment-topology).
+  `runMigrations` creates required extensions; Drizzle generates no extension.
 - Register and palette search match a substring anywhere in a document's
   number, reference, narration or printed party name, once the term has 3
   letters or digits in a row (`documentSearchQuery`): a shorter or
@@ -141,6 +128,13 @@ Query, form and invalidation rules are in
   reads the index for older ones only when the page is not full: PostgreSQL
   estimates a term's matches across every organization, so one plan alone can
   walk a whole register or collect every match of a common term.
+  Document registers order newest first on `(document_date, id)` through
+  `documents_org_type_date_id_idx`; an id cursor resolves its tenant-scoped
+  position inside the page's statement (`dateCursor`). Search window boundaries
+  use the same tuple.
+  Party-filtered registers use `documents_org_party_date_id_idx`; only Invoice and
+  Bill periods exempt drafts, so other registers seek their date range directly.
+  `party.transactions` keeps its creation-order cursor and `documents_org_party_idx`.
 - Balance sums read an index alone: `debit, credit` trail the account ledger
   index.
 - `amount_paise` trails both party ledger indexes, so party balances and
@@ -148,7 +142,6 @@ Query, form and invalidation rules are in
 - The session cookie cache stays on, and every adapter forwards the `Set-Cookie`
   that resolving a session returns, so a request reads its session from the
   cookie, not the database. Membership is still read on every request.
-- Tests use real PostgreSQL and wipe only a database whose name ends in `_test`.
 
 ## Audit and files
 
@@ -169,13 +162,6 @@ object best-effort, so a failure leaves an orphan, never a dangling row.
 
 ## Ledger
 
-Evidence, not decisions: `docs/research/ledger-architecture.md` (13 products and
-ledger engines, with code paths and URLs) and
-`docs/research/accounting-contract-decisions-2026-09-10.md` (ERPNext, Frappe
-Books and Odoo posting code at pinned commits), in Git at `a716b6c`. Where they
-differ from this page (materialized balances, a posting-rule table, database
-triggers), this page wins.
-
 ### Documents first, append-only
 
 Documents are the only write model. Posting writes the document, the journal
@@ -183,16 +169,9 @@ entry and lines, and the party ledger lines in one transaction. Posted rows
 change only through post and reverse; a correction is a reversing entry.
 `recordEntry` refuses an unbalanced entry (`assertBalanced`), and no code
 updates or deletes a journal line. Add a database guard only when a second
-writer appears. ERPNext, Odoo, Xero and Square Books share this shape. Two other
-shapes lost. A ledger-first voucher system (TallyPrime) makes the user choose
-accounts on every entry and permits edits in place. An event-sourced ledger
-with projections suits offline sync, but its event schemas are versioned
-forever, a projection change is a replay, and a late projection shows a wrong
-balance. Documents first won on entry speed, migrations, AI read models and
-cost. Event-sourced replay is given up; a hash chain can come later without a
-model change. Offline sync needs its own replay contract, idempotency keys and
-per-site number series ([deferred](./specs/accounting-core.md#deferred)). A
-feature that wants to edit a posted row adds a document type or a reversal.
+writer appears. Offline sync needs its own replay contract, idempotency keys and
+per-site number series ([deferred](./specs/accounting-core.md#deferred)).
+A feature that wants to edit a posted row adds a document type or a reversal.
 
 ### Posting mechanics in code, accounts and rates in data
 
@@ -202,13 +181,10 @@ lines. Accounts come from data: the method's account, the line Account, and
 `Account.systemKey`, seeded per legal type and unique per Organization. Tax
 Rates are immutable dated rows, and pure `computeTax` follows
 [call 5](./specs/accounting-core.md#architecture-calls). No account id, name or
-rate is in code. A
-posting-rule table keyed by document type, line kind, tax class and legal type
-was rejected. An advance Receipt has no line to key on, its debit comes from
-the Payment Method, and a Payment that refunds a Credit Note hits receivables
-although money goes out; a key that covers these becomes a rules language.
-ERPNext, Frappe Books and Odoo build these legs in code. A new accounting event
-is reviewed code plus a `systemKey` seed, with a unit test per branch.
+rate is in code. A posting-rule table would need a rules language to cover
+advance Receipts without lines and Payments that refund receivables. A new
+accounting event is reviewed code plus a `systemKey` seed, with a unit test per
+branch.
 
 ### Post and cancel
 
@@ -226,22 +202,13 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   Accounting. A post resolves system accounts and runs the posting function. A
   reverse swaps the stored post lines and never reruns the function, rates or
   mappings.
-- `reverseDocument` is one transaction. A conditional update first moves the
-  posted document to `cancelled` (anything else is `CONFLICT`). Allocations then
-  follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
-  party ledger lines and entry are reversed. Ordinary documents reverse on
-  today's business date in the Organization time zone; Opening Balance reverses
-  on its original cutover so a replacement corrects historical balances, and
-  cancels its imported opening items (party ledger lines only, no entry) with
-  it, refused while any item has an active allocation.
-  The reversal date must pass the period lock. A refusal rolls back the state
-  change; `cancelledAt` remains the actual cancellation instant.
-- Every ledger writer reads `organization_settings` `FOR SHARE` (or stronger)
-  inside its transaction before document locks, and uses that same row for tax,
-  numbering and lock dates; `assertPeriodOpen` (`core/locks.ts`) checks them.
-  Writers of settings (`lock.set`, `settings.update`) take `FOR UPDATE` and so
-  wait for in-flight postings. The lock contract is
-  [slice 5](./specs/accounting-core.md#journal-opening-balance-and-locks-slice-5).
+- `reverseDocument` conditionally moves a posted document to `cancelled` in
+  one transaction; anything else is `CONFLICT`. Allocation handling follows
+  [call 17](./specs/accounting-core.md#architecture-calls); reversal dates,
+  period locks and Opening Balance cancellation follow the
+  [accounting lock contract](./specs/accounting-core.md#journal-opening-balance-and-locks-slice-5).
+- `settings.update` takes the settings row `FOR UPDATE` and waits for in-flight
+  ledger writers, which hold `FOR SHARE` or stronger.
 - Receipt, Payment and Invoice validate posting-critical masters after locking
   settings, holding the resolved rows `FOR SHARE` until commit: the active Party
   (`activeParty`) supplies the snapshot and exposure; the direct income/expense
@@ -262,6 +229,9 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
   in bulk for imported opening items) refuses a number longer than 16
   characters (GST Rules 46 and 50) with `BAD_REQUEST` `NUMBER_SERIES_FULL`; the
   owner then changes the prefix, which starts a new consecutive series.
+  Settings refuse a prefix shared by two document types after trimming and ignoring
+  case (a `BAD_REQUEST` input issue on the duplicate field, `params.reason: PREFIX_TAKEN`).
+  The fixed opening-document prefixes `OB`, `OC` and `OA` are reserved by the same check.
 - There is no balances table: balances are sums of journal lines, as in ERPNext
   and Odoo. A period-close snapshot is
   [deferred](./specs/accounting-core.md#deferred).
@@ -282,7 +252,11 @@ follows [call 5](./specs/accounting-core.md#architecture-calls).
 The chart has a Cash group (1000, `systemKey` `cash`) and a Bank Accounts group
 (1100, `bank`). Money sits in their leaves: 1001 Cash in Hand, 1101 Bank
 Account, and cash or bank leaves that `account.create` adds.
-`account.moneyBalances` returns each leaf with its group and balance on Banking.
+`account.moneyBalances` returns each leaf with its group and balance on Home and
+Banking, through today's business date in the Organization's time zone
+(`journal_lines.entry_date <= today`), like the balance sheet. `party.balances`
+uses the same bound for Home and party lists; statements retain their requested
+date range. Future-dated documents remain allowed without a warning.
 The complete chart supplies parent groups for account creation. A Payment Method names one active money
 leaf, so the method decides where money lands, as in ERPNext; there is no
 per-receipt deposit account. `paymentMethod.setActive` marks a method
@@ -291,6 +265,8 @@ its account: posting refuses a method whose account is inactive, and Banking
 shows it as "Account inactive". New Organizations get Cash → Cash in Hand, and UPI, Bank transfer and
 Card → Bank Account. Direct receipts and payments cannot name a money account, a
 group or a system account (`postableAccounts`).
+Names are unique per Organization after trimming and ignoring case (`DUPLICATE`);
+creation serializes the name check and insert, retaining the exact-name unique index.
 
 Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
 Payment to it, from the bank statement. Record actual fees; never model per-bank

@@ -13,15 +13,11 @@ import type { Scope } from "../lib/procedures/factory";
 import { activeAllocationsOf, lockDocuments } from "./allocations";
 import { postedNumber, reverseDocument } from "./documents";
 import { postEntryLines } from "./entry-lines";
+import { OPENING_BALANCE_PREFIX, OPENING_ITEM_PREFIX } from "./number-prefixes";
 import { financialYearOf, reserveNumbers } from "./numbering";
 import { reversePartyLedgerLines } from "./party-ledger";
 
-export const OPENING_BALANCE_PREFIX = "OB";
-
 const OPENING_ITEM_TYPES = ["openingClaim", "openingCredit"] as const;
-
-// Fixed prefixes: each type keys its own number series.
-const OPENING_ITEM_PREFIX = { openingClaim: "OC", openingCredit: "OA" } as const;
 
 export type OpeningItem = {
   partyId: string;

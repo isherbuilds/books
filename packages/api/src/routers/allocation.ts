@@ -3,9 +3,7 @@ import { z } from "zod";
 
 import { audit } from "../audit";
 import { applyAllocations, reverseAllocation } from "../core/allocations";
-import { assertPeriodOpen } from "../core/locks";
 import { formatDecimal } from "../core/money";
-import { businessDate } from "../lib/business-date";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { positiveMoney, reason } from "../lib/schemas";
 import { orgSettings } from "../lib/settlements";
@@ -23,10 +21,8 @@ export const allocationRouter = {
 
     const rows = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
-      const entryDate = businessDate(new Date(), settings.timeZone);
-      await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
 
-      return applyAllocations(tx, scope, {
+      return applyAllocations(tx, scope, settings, {
         pairs: [
           {
             sourceDocumentId: input.sourceDocumentId,
@@ -35,7 +31,6 @@ export const allocationRouter = {
           },
         ],
         draftDocumentId: null,
-        entryDate,
       });
     });
 
@@ -62,10 +57,8 @@ export const allocationRouter = {
 
     const reversed = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
-      const entryDate = businessDate(new Date(), settings.timeZone);
-      await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
 
-      return reverseAllocation(tx, scope, input.allocationId, entryDate, input.reason);
+      return reverseAllocation(tx, scope, settings, input.allocationId, input.reason);
     });
 
     audit({

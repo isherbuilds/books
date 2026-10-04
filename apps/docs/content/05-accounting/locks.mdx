@@ -11,9 +11,10 @@ an entry into the books for good. Accly Books has two locks:
 
 - **Books** stops every posting dated on or before its date.
 - **Tax period** stops posting a [document](/glossary#document) (an invoice, bill,
-  note or receipt) that belongs in a GST register, dated on or before its date. A GST
-  register is the list of sales or purchases that feeds your GST return. Set this lock
-  when you file the return for the period.
+  note or receipt) that belongs in a GST register, or a journal with any
+  GST-account line, dated on or before its date. A GST register is the list of
+  sales or purchases that feeds your GST return; GST journals do not enter it.
+  Set this lock when you file the return for the period.
 
 **Who can do it:** your [role](/glossary#roles) decides this. An Owner or a Chartered
 Accountant sets locks and grants
@@ -37,30 +38,27 @@ the locked books right now.
 The lock date is inclusive: a lock through 30 Jun 2026 refuses a document dated
 30 Jun 2026 and allows one dated 1 Jul 2026.
 
-| Action                                                                                                                                                       | Books lock                  | Tax period lock                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post an [invoice](/glossary#invoice), [bill](/glossary#bill), [credit note](/glossary#credit-note) or [debit note](/glossary#debit-note) dated in the period | Refused                     | Refused, when the organization has a [GSTIN](/glossary#gstin) (GST registration number)                                                                       |
-| Post a [receipt](/glossary#receipt) (money in) or [payment](/glossary#payment) (money out) dated in the period                                               | Refused                     | Refused only for a direct receipt to a GST-classified income account when the organization has a GSTIN; other receipts and payments are not in a GST register |
-| Post a [journal](/glossary#journal) (a manual entry) dated in the period                                                                                     | Refused                     | Not affected: a journal never carries GST                                                                                                                     |
-| Post an [Opening Balance](/glossary#opening-balance) (your balances on the day you start using Accly Books), or import one, dated in the period              | Refused                     | Not affected                                                                                                                                                  |
-| Save an invoice or bill [draft](/glossary#draft) (saved but not yet posted) dated in the period                                                              | Allowed                     | Allowed                                                                                                                                                       |
-| Post that draft                                                                                                                                              | Refused                     | Refused                                                                                                                                                       |
-| Cancel or amend a document                                                                                                                                   | Checked on **today's** date | Checked on **today's** date                                                                                                                                   |
-| Cancel an Opening Balance                                                                                                                                    | Checked on its cutover date | Not affected                                                                                                                                                  |
-| Apply credit or reverse an [allocation](/glossary#allocation) (a match of a payment or credit to an invoice)                                                 | Checked on **today's** date | Not affected                                                                                                                                                  |
+| Action                                                                                                                                                       | Books lock                                                                      | Tax period lock                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post an [invoice](/glossary#invoice), [bill](/glossary#bill), [credit note](/glossary#credit-note) or [debit note](/glossary#debit-note) dated in the period | Refused                                                                         | Refused, when the organization has a [GSTIN](/glossary#gstin) (GST registration number)                                                                       |
+| Post a [receipt](/glossary#receipt) (money in) or [payment](/glossary#payment) (money out) dated in the period                                               | Refused                                                                         | Refused only for a direct receipt to a GST-classified income account when the organization has a GSTIN; other receipts and payments are not in a GST register |
+| Post a [journal](/glossary#journal) (a manual entry) dated in the period                                                                                     | Refused                                                                         | Refused if any line names a GST input, output or cess account; otherwise not affected                                                                         |
+| Post an [Opening Balance](/glossary#opening-balance) (your balances on the day you start using Accly Books), or import one, dated in the period              | Refused                                                                         | Not affected                                                                                                                                                  |
+| Save an invoice or bill [draft](/glossary#draft) (saved but not yet posted) dated in the period                                                              | Allowed                                                                         | Allowed                                                                                                                                                       |
+| Post that draft                                                                                                                                              | Refused                                                                         | Refused                                                                                                                                                       |
+| Cancel or amend a document                                                                                                                                   | Checked on its original date                                                    | Checked on its original date when it affects tax                                                                                                              |
+| Cancel an Opening Balance                                                                                                                                    | Checked on its cutover date                                                     | Not affected                                                                                                                                                  |
+| Apply credit or reverse an [allocation](/glossary#allocation) (a match of a payment or credit to an invoice)                                                 | Checked on the later source or target date; reversal uses the allocation's date | Not affected                                                                                                                                                  |
 
 A cancellation posts its [reversal](/glossary#reversal), an equal and opposite entry,
-today, so it is allowed even when the original is
-in a locked period. The original month keeps its figures and the reversal lands in
-the current month. Opening Balance corrections are the exception: they reverse on the
-original cutover date (the day you moved your books into Accly Books), so a locked
-cutover needs an exception (or an earlier lock)
-before you can cancel and replace it.
+on the original document date. It corrects that period's balances and cannot bypass
+a lock by cancelling later. A books lock requires an exception or reopening;
+a tax lock must be reopened for documents that affect tax. Opening Balance
+corrections follow the same rule on their cutover date.
 
 :::warning[After you file a GST return, use a credit note]
-The tax lock does not stop you cancelling or amending an invoice dated in a filed
-period. If you do, the invoice leaves that period's GST outward register and no
-longer matches the return you filed. To correct a filed invoice, issue a
+The tax lock stops cancelling or amending an invoice dated in a filed period.
+To keep the filed return unchanged, correct the invoice with a
 [credit note](/sales/credit-notes) dated in the open period instead.
 :::
 
@@ -185,15 +183,15 @@ log.
 
 ## Common errors
 
-| Message                                                                                    | Where                              | What to do                                                                |
-| ------------------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------- |
-| Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Any document form                  | Date the document after the lock, or ask the owner or CA for an exception |
-| The tax period is locked through 30 Jun 2026.                                              | Invoice, bill, note or GST receipt | Post it in the open period, usually as a credit or debit note             |
-| Choose an expiry in the future.                                                            | Grant exception                    | Pick a later time; the server's clock decides                             |
-| Choose a local time that exists in Asia/Kolkata                                            | Grant exception                    | Pick another time (applies only in zones with daylight saving)            |
-| Choose a member                                                                            | Grant exception                    | Pick the person who will post                                             |
-| This lock changed after you opened it.                                                     | Change lock                        | Reopen the dialog and review the new date                                 |
-| This exception is not active.                                                              | Revoke                             | It already expired or was revoked; refresh the page                       |
+| Message                                                                                    | Where                                           | What to do                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Any document form                               | Date the document after the lock, or ask the owner or CA for an exception |
+| The tax period is locked through 30 Jun 2026.                                              | Invoice, bill, note, GST receipt or GST journal | Post in the open period, or ask the owner or CA to reopen the tax lock    |
+| Choose an expiry in the future.                                                            | Grant exception                                 | Pick a later time; the server's clock decides                             |
+| Choose a local time that exists in Asia/Kolkata                                            | Grant exception                                 | Pick another time (applies only in zones with daylight saving)            |
+| Choose a member                                                                            | Grant exception                                 | Pick the person who will post                                             |
+| This lock changed after you opened it.                                                     | Change lock                                     | Reopen the dialog and review the new date                                 |
+| This exception is not active.                                                              | Revoke                                          | It already expired or was revoked; refresh the page                       |
 
 <Frame caption="An expiry in the past is refused.">
   ![Past expiry error](./images/locks-exception-past-expiry.webp)

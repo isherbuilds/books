@@ -119,11 +119,11 @@ function EarlyAccessPage() {
             <input
               name="GSTIN"
               maxLength={15}
-              placeholder="08AABCS1234F1Z5"
+              placeholder="08AABCS1234F1ZR"
               autoComplete="off"
               autoCapitalize="characters"
               pattern="[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]"
-              title="15 characters, like 08AABCS1234F1Z5"
+              title="15 characters, like 08AABCS1234F1ZR"
               className="uppercase placeholder:normal-case"
             />
           </label>

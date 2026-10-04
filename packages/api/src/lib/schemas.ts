@@ -8,6 +8,7 @@ import {
   parseBasisPoints,
   parseMoney,
 } from "../core/money";
+import { OPENING_BALANCE_PREFIX, OPENING_ITEM_PREFIX } from "../core/number-prefixes";
 import { INDIAN_STATES } from "./indian-states";
 import { normalizedName } from "./normalized-name";
 
@@ -116,6 +117,38 @@ export const documentPrefix = z
   .trim()
   .toUpperCase()
   .regex(/^[A-Z0-9/-]{1,4}$/, "Use 1 to 4 letters, digits, '-' or '/'");
+
+const DOCUMENT_PREFIX_FIELDS = [
+  "invoicePrefix",
+  "billPrefix",
+  "receiptPrefix",
+  "paymentPrefix",
+  "creditNotePrefix",
+  "debitNotePrefix",
+  "journalPrefix",
+] as const;
+
+/** Refuse a second document type using the same number series, on its prefix field. */
+export function distinctDocumentPrefixes(
+  settings: Record<(typeof DOCUMENT_PREFIX_FIELDS)[number], string>,
+  context: z.RefinementCtx,
+): void {
+  const prefixes = new Set<string>([OPENING_BALANCE_PREFIX, ...Object.values(OPENING_ITEM_PREFIX)]);
+
+  for (const field of DOCUMENT_PREFIX_FIELDS) {
+    const prefix = settings[field].trim().toUpperCase();
+
+    if (prefixes.has(prefix))
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        params: { reason: "PREFIX_TAKEN" },
+        message: "Each document type must use a different prefix.",
+      });
+
+    prefixes.add(prefix);
+  }
+}
 
 export const reason = z.string().trim().min(1).max(500);
 
@@ -270,13 +303,29 @@ export const optionalPan = z
   .transform((value) => value || undefined)
   .optional();
 
-export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+const GSTIN_CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function validGstin(gstin: string): boolean {
+  if (!GSTIN_PATTERN.test(gstin)) return false;
+
+  let sum = 0;
+
+  // GSTN mod-36: alternate factors 1 and 2, folding each product's base-36 digits.
+  for (let index = 0; index < 14; index++) {
+    const product = GSTIN_CHARSET.indexOf(gstin.charAt(index)) * (index % 2 === 0 ? 1 : 2);
+    sum += Math.floor(product / 36) + (product % 36);
+  }
+
+  return gstin.charAt(14) === GSTIN_CHARSET.charAt((36 - (sum % 36)) % 36);
+}
 
 export const optionalGstin = z
   .string()
   .trim()
   .toUpperCase()
-  .refine((value) => value === "" || GSTIN_PATTERN.test(value), "Use a valid GSTIN")
+  .refine((value) => value === "" || validGstin(value), "Use a valid GSTIN")
   .transform((value) => value || undefined)
   .optional();
 
@@ -305,7 +354,7 @@ export function gstinParts(value: string): { stateCode: string; pan: string } | 
   const gstin = value.trim().toUpperCase();
   const stateCode = gstin.slice(0, 2);
 
-  if (!GSTIN_PATTERN.test(gstin) || !Object.hasOwn(INDIAN_STATES, stateCode)) return null;
+  if (!validGstin(gstin) || !Object.hasOwn(INDIAN_STATES, stateCode)) return null;
 
   return { stateCode, pan: gstin.slice(2, 12) };
 }

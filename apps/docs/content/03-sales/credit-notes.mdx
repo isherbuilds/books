@@ -89,10 +89,14 @@ CGST, SGST, IGST and total.
 For CN26-27/2: taxable ₹4,410.00, CGST ₹396.90, SGST ₹396.90, total ₹5,203.80
 rounded to **₹5,204.00**.
 
-:::note
-A credit note cannot be printed from Accly Books yet. If the customer needs a credit
-note document for their GST records, prepare it from the details on this record.
-:::
+## Print or download the PDF
+
+Click **PDF** on the record to open the **Credit Note** in a new tab. Use the
+browser viewer to print or save it. It shows your organization's and the customer's
+names, addresses and GSTINs, the note number and date, the original invoice number
+and date, each line's taxable value, GST rate and tax, place of supply, totals,
+reason and signature line. If the invoice had a delivery address, the note keeps
+that **Ship to** address, state name and code. A cancelled note prints **CANCELLED**.
 
 ## Apply to the invoice
 
@@ -120,11 +124,8 @@ On 20 Sep 2026 a walk-in customer paid ₹2,655 by [UPI](/glossary#upi-neft) (an
 
 <Steps>
   <Step title="Start the refund">
-    Open the credit note and click **Refund**. A **New payment** form opens.
-  </Step>
-  <Step title="Switch the payment to a refund">
-    Click **Against open items**, then under **Pay against** click **Refund credit notes**. The
-    party's name and its unapplied credit notes appear.
+    Open the credit note and click **Refund**. A **New payment** form opens with the customer
+    selected and **Against open items → Refund credit notes** already chosen.
   </Step>
   <Step title="Fill the refund">
     Type the **Amount** (₹531), choose the [**Payment method**](/glossary#payment-method) (UPI), and
@@ -135,12 +136,6 @@ On 20 Sep 2026 a walk-in customer paid ₹2,655 by [UPI](/glossary#upi-neft) (an
     amount must equal the allocated credit notes".
   </Step>
 </Steps>
-
-:::tip
-The refund form first opens as an ordinary vendor payment. If the **Party** box is
-empty, do not pick the party again: switch to **Against open items → Refund credit
-notes** and it appears.
-:::
 
 ## What happens in the books
 
@@ -174,9 +169,10 @@ the balance back to zero.
 ## Cancel a credit note
 
 Open the note and click **Cancel note**. Give the reason. Cancelling posts a
-[reversal](/glossary#reversal) of the note's entry on today's date and reverses its allocations, so the invoice owes the
+[reversal](/glossary#reversal) of the note's entry on the note date and reverses its allocations, so the invoice owes the
 amount again. Cancel a credit note before you cancel or amend its invoice: the invoice
 refuses with "Cancel credit note CN26-27/2 first."
+Cancellation is refused if the note date is tax-locked, or books-locked without an exception.
 
 ## Common messages
 

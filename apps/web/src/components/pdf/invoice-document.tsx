@@ -1,4 +1,5 @@
 import { formatMoney, isZeroMoney } from "@accly/api/core/money";
+import { invoicePrintTitle } from "@accly/api/core/tax";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import type { PrintSnapshot } from "@accly/db/schema/documents";
@@ -13,16 +14,29 @@ import {
   colors,
 } from "@/components/pdf/parts";
 import type { InvoiceDetail } from "@/lib/invoices";
+import type { NoteDetail } from "@/lib/notes";
 
 const numericCell: CSSProperties = { flex: 1, textAlign: "right" };
 
-/** A posted invoice: `renderInvoicePdf` refuses one without a number or snapshot. */
-type PrintableInvoice = InvoiceDetail & { number: string; printSnapshot: PrintSnapshot };
+/** Numbered documents with immutable supplier and recipient print details. */
+type PrintableInvoice = (InvoiceDetail | NoteDetail) & {
+  number: string;
+  printSnapshot: PrintSnapshot;
+};
 
 export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
   const { organization, party, shipTo } = data.printSnapshot;
 
-  if (!party) throw new Error("An invoice document requires a buyer in its print snapshot");
+  if (!party) throw new Error("A printed invoice or note requires a recipient");
+
+  const note = "against" in data ? data : null;
+
+  const title =
+    "printClass" in data
+      ? invoicePrintTitle(data.printClass)
+      : data.type === "creditNote"
+        ? "Credit Note"
+        : "Debit Note";
 
   // The server sums the document; a column shows only when some line carries it.
   const { taxablePaise, cgstPaise, sgstPaise, igstPaise } = data.totals;
@@ -41,14 +55,14 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
   return (
     <PrintedDocument
       organization={organization}
-      kind="Invoice"
+      kind={title}
       number={data.number}
       cancelled={data.state === "cancelled"}
     >
       {/* CGST rule 46(d)/(e): the recipient with its state; 46(o): the address of delivery. */}
       <div style={{ display: "flex", gap: 24, marginBottom: 18 }}>
         <section style={{ flex: 1 }}>
-          <SectionHeading>Bill to</SectionHeading>
+          <SectionHeading>{note ? "Recipient" : "Bill to"}</SectionHeading>
           <div style={{ fontWeight: 700 }}>{party.name}</div>
           <div style={{ whiteSpace: "pre-line" }}>{party.address}</div>
           <div>State {stateLabel(party.stateCode)}</div>
@@ -69,9 +83,25 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
         {data.dueDate ? (
           <DetailRow label="Due date">{formatBusinessDate(data.dueDate)}</DetailRow>
         ) : null}
+        {note?.against ? (
+          <>
+            <DetailRow label={note.type === "creditNote" ? "Original invoice" : "Original bill"}>
+              {note.against.number}
+            </DetailRow>
+            <DetailRow label="Original document date">
+              {formatBusinessDate(note.against.documentDate)}
+            </DetailRow>
+            {note.type === "debitNote" && note.against.reference ? (
+              <DetailRow label="Supplier invoice">{note.against.reference}</DetailRow>
+            ) : null}
+            <DetailRow label="Reason">{note.narration}</DetailRow>
+          </>
+        ) : null}
         {placeOfSupply ? <DetailRow label="Place of supply">{placeOfSupply}</DetailRow> : null}
         {/* CGST rule 46(p). Outward reverse charge is not modelled (accounting-core deferral). */}
-        {data.printClass === "taxInvoice" ? <DetailRow label="Reverse charge">No</DetailRow> : null}
+        {"printClass" in data && data.printClass === "taxInvoice" ? (
+          <DetailRow label="Reverse charge">No</DetailRow>
+        ) : null}
       </section>
 
       <section>
@@ -90,9 +120,9 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
           <span style={{ width: 15 }}>#</span>
           <span style={{ flex: 2 }}>Description</span>
           <span style={numericCell}>HSN/SAC</span>
-          <span style={numericCell}>Qty</span>
+          {note ? null : <span style={numericCell}>Qty</span>}
           {hasMrp ? <span style={numericCell}>MRP</span> : null}
-          <span style={numericCell}>Rate</span>
+          {note ? null : <span style={numericCell}>Rate</span>}
           {hasDiscount ? <span style={numericCell}>Discount</span> : null}
           <span style={numericCell}>Taxable</span>
           <span style={numericCell}>GST rate</span>
@@ -115,18 +145,22 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
             <span style={{ width: 15 }}>{index + 1}</span>
             <span style={{ flex: 2 }}>{line.description}</span>
             <span style={numericCell}>{line.hsnSac ?? "—"}</span>
-            <span style={numericCell}>
-              {line.quantity ?? "—"}
-              {line.unit ? ` ${line.unit}` : ""}
-            </span>
+            {note ? null : (
+              <span style={numericCell}>
+                {line.quantity ?? "—"}
+                {line.unit ? ` ${line.unit}` : ""}
+              </span>
+            )}
             {hasMrp ? (
               <span style={numericCell}>
                 {line.mrpPaise === null ? "—" : formatMoney(line.mrpPaise)}
               </span>
             ) : null}
-            <span style={numericCell}>
-              {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
-            </span>
+            {note ? null : (
+              <span style={numericCell}>
+                {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
+              </span>
+            )}
             {hasDiscount ? (
               <span style={numericCell}>{formatMoney(line.discountPaise)}</span>
             ) : null}

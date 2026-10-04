@@ -1,7 +1,7 @@
 import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
 import { Button } from "@accly/ui/components/button";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRightIcon, CircleDotIcon } from "lucide-react";
 import { useRef } from "react";
@@ -25,10 +25,12 @@ import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/pag
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
+import { WaveLoader } from "@/components/wave-loader";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
+import { partyDetailOptions } from "@/lib/parties";
 import { paymentListOptions } from "@/lib/payments";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -39,6 +41,7 @@ const paymentSearch = z.object({
   create: z.boolean().optional().catch(undefined),
   // Seeds the new payment's party; kept apart from the `partyId` list filter.
   payeeId: z.uuid().optional().catch(undefined),
+  payAgainst: z.enum(["payable", "receivable"]).optional().catch(undefined),
   q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
@@ -46,18 +49,25 @@ const paymentSearch = z.object({
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
 });
 
-type Filters = Omit<z.infer<typeof paymentSearch>, "create" | "payeeId">;
+type Filters = Omit<z.infer<typeof paymentSearch>, "create" | "payeeId" | "payAgainst">;
 
 export const Route = createFileRoute("/$orgSlug/payments")({
   head: () => ({ meta: [{ title: "Payments · Accly Books" }] }),
   validateSearch: paymentSearch,
   beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
     requirePeriod(queryClient, orgSlug, location, search, "this-month"),
-  loaderDeps: ({ search: { create: _create, payeeId: _payeeId, all: _all, ...filters } }) =>
-    filters,
+  loaderDeps: ({
+    search: { create, payeeId, payAgainst: _payAgainst, all: _all, ...filters },
+  }) => ({ filters, payeeId: create ? payeeId : undefined }),
   loader: async ({ context: { queryClient }, params: { orgSlug }, deps }) => {
     await requireOrgPermission(queryClient, orgSlug, { payment: ["read"] });
-    await queryClient.infiniteQuery(paymentListOptions(orgSlug, deps)).catch(() => {});
+
+    await Promise.all([
+      queryClient.infiniteQuery(paymentListOptions(orgSlug, deps.filters)).catch(() => {}),
+      deps.payeeId
+        ? queryClient.prefetchQuery(partyDetailOptions(orgSlug, deps.payeeId)).catch(() => {})
+        : undefined,
+    ]);
   },
   component: PaymentsRoute,
 });
@@ -65,15 +75,22 @@ export const Route = createFileRoute("/$orgSlug/payments")({
 function PaymentOverlay({
   orgSlug,
   today,
-  partyId,
+  payeeId,
+  payAgainst,
   onClose,
 }: {
   orgSlug: string;
   today: string;
-  partyId?: string;
+  payeeId?: string;
+  payAgainst?: "payable" | "receivable";
   onClose: () => void;
 }) {
   const saving = useIsMutating({ mutationKey: orpc.payment.post.mutationKey() }) > 0;
+
+  const payee = useQuery({
+    ...partyDetailOptions(orgSlug, payeeId ?? ""),
+    enabled: payeeId !== undefined,
+  });
 
   return (
     <FormSheet
@@ -83,14 +100,24 @@ function PaymentOverlay({
       title="New payment"
       description="Record money paid by the organization."
     >
-      <PaymentForm orgSlug={orgSlug} today={today} initialPartyId={partyId} onClose={onClose} />
+      {payeeId && payee.isPending ? (
+        <WaveLoader label="Loading party" className="justify-center px-3 py-4" />
+      ) : (
+        <PaymentForm
+          orgSlug={orgSlug}
+          today={today}
+          initialParty={payee.data ? { id: payee.data.id, name: payee.data.name } : undefined}
+          initialExposureSide={payAgainst}
+          onClose={onClose}
+        />
+      )}
     </FormSheet>
   );
 }
 
 function PaymentsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, payeeId, all: _all, ...filters } = Route.useSearch();
+  const { create, payeeId, payAgainst, all: _all, ...filters } = Route.useSearch();
   const { q, partyId, from, to, state, settlementKind } = filters;
   const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -145,7 +172,12 @@ function PaymentsRoute() {
   // A party-filtered list seeds that party as the payee; the filter itself stays apart.
   const openCreate = () =>
     void navigate({
-      search: (previous) => ({ ...previous, create: true, payeeId: previous.partyId }),
+      search: (previous) => ({
+        ...previous,
+        create: true,
+        payeeId: previous.partyId,
+        payAgainst: undefined,
+      }),
     });
 
   usePaletteActions(
@@ -155,7 +187,12 @@ function PaymentsRoute() {
   const closeOverlay = () =>
     void navigate({
       replace: true,
-      search: (previous) => ({ ...previous, create: undefined, payeeId: undefined }),
+      search: (previous) => ({
+        ...previous,
+        create: undefined,
+        payeeId: undefined,
+        payAgainst: undefined,
+      }),
     }).then(() => newTrigger.current?.focus());
 
   const empty = (
@@ -232,7 +269,14 @@ function PaymentsRoute() {
       </PageBody>
       {date.popover}
       {canPost && create ? (
-        <PaymentOverlay orgSlug={orgSlug} today={today} partyId={payeeId} onClose={closeOverlay} />
+        <PaymentOverlay
+          key={`${payeeId ?? ""}:${payAgainst ?? ""}`}
+          orgSlug={orgSlug}
+          today={today}
+          payeeId={payeeId}
+          payAgainst={payAgainst}
+          onClose={closeOverlay}
+        />
       ) : null}
     </>
   );

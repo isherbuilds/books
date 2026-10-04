@@ -126,17 +126,21 @@ const client: RouterClient<AppRouter> = createORPCClient(
 
 const org = { orgSlug: ORG_SLUG };
 
-// A register page: at most `limit` rows, newest first, and a page flag.
+// A register page: at most `limit` rows, newest first, and a page flag. Registers order
+// by (document date, id); party transactions keep creation (id) order.
 function page(
-  result: { rows: { id: string }[]; hasMore: boolean },
-  expect: { min?: number; max?: number; includes?: string } = {},
+  result: { rows: { id: string; documentDate?: string }[]; hasMore: boolean },
+  expect: { min?: number; max?: number; includes?: string; order?: "date" | "id" } = {},
 ): string {
   const { rows } = result;
+
+  const key = (row: (typeof rows)[number]) =>
+    expect.order === "id" ? row.id : `${row.documentDate ?? ""}|${row.id}`;
 
   check(rows.length <= 25, `a page holds ${rows.length} rows`);
   check(new Set(rows.map((row) => row.id)).size === rows.length, "a page repeats a row");
   check(
-    rows.every((row, index) => index === 0 || rows[index - 1]!.id > row.id),
+    rows.every((row, index) => index === 0 || key(rows[index - 1]!) > key(row)),
     "a page is not newest first",
   );
   check(
@@ -478,14 +482,20 @@ const reads: Scenario[] = [
     route: "parties/$id/transactions",
     kind: "read",
     run: async () =>
-      page(await client.party.transactions({ ...org, partyId: busyParty.partyId }), { min: 1 }),
+      page(await client.party.transactions({ ...org, partyId: busyParty.partyId }), {
+        min: 1,
+        order: "id",
+      }),
   },
   {
     name: "party_transactions_small",
     route: "parties/$id/transactions",
     kind: "read",
     run: async () =>
-      page(await client.party.transactions({ ...org, partyId: smallParty.partyId }), { min: 1 }),
+      page(await client.party.transactions({ ...org, partyId: smallParty.partyId }), {
+        min: 1,
+        order: "id",
+      }),
   },
   {
     name: "party_open_items",
@@ -542,7 +552,7 @@ type RegisterList = (input: {
   cursor?: string;
   partyId?: string;
 }) => Promise<{
-  rows: { id: string; number: string | null; partyName: string | null }[];
+  rows: { id: string; number: string | null; documentDate: string; partyName: string | null }[];
   hasMore: boolean;
 }>;
 

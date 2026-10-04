@@ -1,5 +1,5 @@
 {
-  "id": "e67d472c-f839-44be-9927-d00fdc6acb52",
+  "id": "5b3b613b-b4f3-4637-8372-38cab9764676",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1960,9 +1960,9 @@
               "nulls": "last"
             },
             {
-              "expression": "name",
-              "isExpression": false,
+              "expression": "lower(\"name\")",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
@@ -2490,8 +2490,8 @@
           "method": "btree",
           "with": {}
         },
-        "documents_org_type_date_idx": {
-          "name": "documents_org_type_date_idx",
+        "documents_org_type_date_id_idx": {
+          "name": "documents_org_type_date_id_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -2510,6 +2510,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -2517,8 +2523,8 @@
           "method": "btree",
           "with": {}
         },
-        "documents_org_type_id_idx": {
-          "name": "documents_org_type_id_idx",
+        "documents_bill_reference_idx": {
+          "name": "documents_bill_reference_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -2527,7 +2533,41 @@
               "nulls": "last"
             },
             {
-              "expression": "type",
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "financial_year",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"reference\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"documents\".\"type\" = 'bill' and \"documents\".\"state\" = 'posted'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_org_party_idx": {
+          "name": "documents_org_party_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "party_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2544,8 +2584,8 @@
           "method": "btree",
           "with": {}
         },
-        "documents_org_party_idx": {
-          "name": "documents_org_party_idx",
+        "documents_org_party_date_id_idx": {
+          "name": "documents_org_party_date_id_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -2555,6 +2595,12 @@
             },
             {
               "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "document_date",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

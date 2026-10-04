@@ -24,7 +24,7 @@ them. An Operator does not see bills.
 
 ## The bill register
 
-Open **Purchases → Bills**. The register lists [drafts](/glossary#draft) (saved but not posted) and posted bills, newest first,
+Open **Purchases → Bills**. The register lists [drafts](/glossary#draft) (saved but not posted) and posted bills, newest document date first,
 with **Number**, **Supplier invoice**, **Party** (the [party](/glossary#party), here the
 supplier), **Date**, **Due date**, **Status** and
 **Total**. It opens on **This month**; remove that chip or choose another period to see
@@ -90,6 +90,12 @@ states), invoice
     and the form clears for the next bill.
   </Step>
 </Steps>
+
+Posting refuses a supplier invoice number already posted for the same supplier
+in the same financial year. It ignores letter case and spaces at either end and
+shows the error on **Supplier invoice number**. Drafts can share a number; a
+cancelled bill does not reserve it. Another supplier or financial year can use
+the same number.
 
 <Frame caption="A bill for brass rod from a Gujarat supplier. Place of supply is Maharashtra, so the bill takes IGST.">
   ![New bill form with one line](./images/bills-new-form.webp)
@@ -256,8 +262,8 @@ the totals.
 
 At the bottom:
 
-- **Pay** opens a new payment for this supplier. Check the **Party** field and choose
-  **Against open items** before you post (see [Payments](/purchases/payments#pay-against-bills)).
+- **Pay** opens a new payment with this supplier and **Against open items → Bills**
+  selected. Enter the amount and allocate it to the bill before posting (see [Payments](/purchases/payments#pay-against-bills)).
 - **⋯** opens **Apply credit**, **Debit note**, **Amend** and **Cancel bill**. **Apply credit**
   appears only while something is outstanding. **Amend** and **Cancel bill** appear only when
   no payment, advance or debit note is applied to the bill.
@@ -328,18 +334,17 @@ To cancel, choose **⋯ → Cancel bill**, type the **Reason** and click **Cance
   ![Cancelled bill record](./images/bills-cancelled.webp)
 </Frame>
 
-:::warning[A cancellation posts on today's date]
-Cancelling posts a reversal of every line, including the input tax credit and TDS, dated
-the day you cancel, not the bill date. If you cancel in October a bill dated July, the July
-ledgers still include it, while the July GST and TDS registers leave it out. Before you
-deposit July's TDS or file July's GSTR-3B, cancel wrong July bills in July, or tell your CA.
-The reversal date must also be in an open period, one that no [lock](/glossary#lock) has
-closed to new entries; see [Locks](/accounting/locks).
+:::warning[A cancellation uses the bill date]
+Cancelling reverses every line, including input tax credit and TDS, on the bill's
+original date. It corrects that period's ledgers and is refused if the bill date is
+tax-locked, or books-locked without an exception. For a filed period, agree a
+[debit note](/purchases/debit-notes) in an open period with your CA instead;
+see [Locks](/accounting/locks).
 :::
 
-Accly Books does not stop you posting the same supplier invoice number twice for one
-supplier. Search the register by the supplier's invoice number before you book a bill you
-are unsure about.
+Posting refuses a supplier invoice number already posted for the same supplier
+and financial year, ignoring letter case and spaces at either end. The error
+appears on **Supplier invoice number**; drafts and cancelled bills do not reserve it.
 
 ## Common errors
 

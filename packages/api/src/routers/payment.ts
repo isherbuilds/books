@@ -394,7 +394,7 @@ export const paymentRouter = {
         })
         .from(documents)
         .where(and(listed, settlementListWhere(input)))
-        .orderBy(desc(documents.id))
+        .orderBy(desc(documents.documentDate), desc(documents.id))
         .limit(input.limit + 1),
     );
   }),

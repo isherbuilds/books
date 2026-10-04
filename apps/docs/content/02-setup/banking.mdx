@@ -28,7 +28,9 @@ Open **Accounting → Banking**. The page has two tables.
 
 **Accounts** lists every money account under its group, **Cash** or **Bank
 Accounts**, with its **Code**, **Name** and **Balance**. The balance is the sum of
-every [posted](/glossary#post) entry to that account up to now, including entries dated in the future.
+every [posted](/glossary#post) entry to that account dated through today in your organization's time zone,
+matching the balance sheet as of today. Future-dated entries count only when their date arrives;
+you can still post them without a warning.
 It is the book balance, not your bank statement: cheques you have recorded but the
 bank has not cleared are included. A balance in brackets, such as (₹2,650.00), is a credit balance, or
 [overdrawn](/glossary#overdrawn): the books show more paid out than received. For cash that means an entry is missing or wrongly dated.
@@ -84,13 +86,8 @@ To add another method to an existing account, for example **HDFC cheque**, click
 offered. A receipt or payment form offers **Add one** under **Payment method** only
 when no active method exists at all; otherwise add methods here on **Banking**.
 
-Method names must be unique. A method name cannot be changed after you save it.
-
-:::note
-The name check looks at exact spelling, so **upi** is accepted beside **UPI**. Check
-the list before you add a method, so your team does not choose between two methods
-for the same account.
-:::
+Method names must be unique ignoring case and surrounding spaces: **upi** cannot be
+added beside **UPI**. A method name cannot be changed after you save it.
 
 ## Opening balance of a bank account
 

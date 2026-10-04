@@ -6,9 +6,9 @@
 variables win, and images carry no `.env`. Both containers get the server
 variables, because web SSR imports auth and database code.
 
-- `DATABASE_URL`: PostgreSQL. Tests need a `_test` database. The role must be
-  able to create the trusted extension `pg_trgm` (the database owner can);
-  `runMigrations` creates it.
+- `DATABASE_URL`: PostgreSQL; [tests](./development.md#tests) need a `_test`
+  database. The role must be able to create trusted extension `pg_trgm` (the
+  database owner can); `runMigrations` creates it.
 - `BETTER_AUTH_SECRET`: at least 32 characters, the same on server and web.
 - `BETTER_AUTH_URL` and `VITE_SERVER_URL`: the public API origin.
 - `CORS_ORIGIN`: the exact web origin and the invitation-link base.
@@ -42,9 +42,8 @@ expand-and-contract.
 
 ## Production hardening
 
-- A stored role outside `owner`, `accountant`, `ca` and `operator` (Better
-  Auth's `member` and `admin` included) fails closed. Reset pre-pilot databases
-  before you deploy.
+- Stored roles fail closed under
+  [Architecture](./architecture.md#tenancy-and-authorization).
 - Both hosts send `nosniff`, a referrer policy, and a permissions policy that
   denies camera, microphone, geolocation and payment, plus HSTS in production.
   API CSP: `default-src 'none'; frame-ancestors 'none'`. Web CSP: self, its API
@@ -99,10 +98,11 @@ goes with the release. A configuration or workflow change reruns only its gate.
 
 ## Accounts and Organizations
 
-Run `create-founder` once. The founder creates Organizations at `/create`, and
-staff join from an invitation link at `/join`. No email is sent. The link
-creates the invited account, so hand it over directly, treat it like a
-temporary password, and cancel it if it leaks. There is no password reset yet.
+Run the [founder command](./development.md#accounts-and-seed-data) once;
+the founder creates Organizations at `/create` and staff join at `/join`.
+Invitations follow [Architecture](./architecture.md#tenancy-and-authorization):
+hand links over directly, treat them like temporary passwords, and cancel a
+leaked link. There is no password reset yet.
 
 ## Backups and restore
 

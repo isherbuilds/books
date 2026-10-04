@@ -72,6 +72,7 @@ import { Route as OrgSlugPartiesPartyIdIndexRouteImport } from './routes/$orgSlu
 import { Route as OrgSlugPartiesPartyIdLedgerRouteImport } from './routes/$orgSlug/parties_.$partyId.ledger'
 import { Route as OrgSlugPartiesPartyIdTransactionsRouteImport } from './routes/$orgSlug/parties_.$partyId.transactions'
 import { Route as ApiOrgSlugInvoicesInvoiceIdPdfRouteImport } from './routes/api.$orgSlug.invoices.$invoiceId.pdf'
+import { Route as ApiOrgSlugNotesNoteIdPdfRouteImport } from './routes/api.$orgSlug.notes.$noteId.pdf'
 import { Route as ApiOrgSlugReceiptsReceiptIdPdfRouteImport } from './routes/api.$orgSlug.receipts.$receiptId.pdf'
 import { Route as ApiOrgSlugReportsAccountLedgerPdfRouteImport } from './routes/api.$orgSlug.reports.account-ledger.pdf'
 import { Route as ApiOrgSlugReportsBalanceSheetPdfRouteImport } from './routes/api.$orgSlug.reports.balance-sheet.pdf'
@@ -409,6 +410,12 @@ const ApiOrgSlugInvoicesInvoiceIdPdfRoute =
     path: '/api/$orgSlug/invoices/$invoiceId/pdf',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiOrgSlugNotesNoteIdPdfRoute =
+  ApiOrgSlugNotesNoteIdPdfRouteImport.update({
+    id: '/api/$orgSlug/notes/$noteId/pdf',
+    path: '/api/$orgSlug/notes/$noteId/pdf',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiOrgSlugReceiptsReceiptIdPdfRoute =
   ApiOrgSlugReceiptsReceiptIdPdfRouteImport.update({
     id: '/api/$orgSlug/receipts/$receiptId/pdf',
@@ -515,6 +522,7 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/parties/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
+  '/api/$orgSlug/notes/$noteId/pdf': typeof ApiOrgSlugNotesNoteIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
   '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
   '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
@@ -583,6 +591,7 @@ export interface FileRoutesByTo {
   '/$orgSlug/parties/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties/$partyId': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
+  '/api/$orgSlug/notes/$noteId/pdf': typeof ApiOrgSlugNotesNoteIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
   '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
   '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
@@ -656,6 +665,7 @@ export interface FileRoutesById {
   '/$orgSlug/parties_/$partyId/transactions': typeof OrgSlugPartiesPartyIdTransactionsRoute
   '/$orgSlug/parties_/$partyId/': typeof OrgSlugPartiesPartyIdIndexRoute
   '/api/$orgSlug/invoices/$invoiceId/pdf': typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
+  '/api/$orgSlug/notes/$noteId/pdf': typeof ApiOrgSlugNotesNoteIdPdfRoute
   '/api/$orgSlug/receipts/$receiptId/pdf': typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
   '/api/$orgSlug/reports/account-ledger/pdf': typeof ApiOrgSlugReportsAccountLedgerPdfRoute
   '/api/$orgSlug/reports/balance-sheet/pdf': typeof ApiOrgSlugReportsBalanceSheetPdfRoute
@@ -729,6 +739,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties/$partyId/transactions'
     | '/$orgSlug/parties/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
+    | '/api/$orgSlug/notes/$noteId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
     | '/api/$orgSlug/reports/account-ledger/pdf'
     | '/api/$orgSlug/reports/balance-sheet/pdf'
@@ -797,6 +808,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties/$partyId/transactions'
     | '/$orgSlug/parties/$partyId'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
+    | '/api/$orgSlug/notes/$noteId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
     | '/api/$orgSlug/reports/account-ledger/pdf'
     | '/api/$orgSlug/reports/balance-sheet/pdf'
@@ -869,6 +881,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/parties_/$partyId/transactions'
     | '/$orgSlug/parties_/$partyId/'
     | '/api/$orgSlug/invoices/$invoiceId/pdf'
+    | '/api/$orgSlug/notes/$noteId/pdf'
     | '/api/$orgSlug/receipts/$receiptId/pdf'
     | '/api/$orgSlug/reports/account-ledger/pdf'
     | '/api/$orgSlug/reports/balance-sheet/pdf'
@@ -887,6 +900,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: typeof ApiOrgSlugInvoicesInvoiceIdPdfRoute
+  ApiOrgSlugNotesNoteIdPdfRoute: typeof ApiOrgSlugNotesNoteIdPdfRoute
   ApiOrgSlugReceiptsReceiptIdPdfRoute: typeof ApiOrgSlugReceiptsReceiptIdPdfRoute
   ApiOrgSlugReportsAccountLedgerPdfRoute: typeof ApiOrgSlugReportsAccountLedgerPdfRoute
   ApiOrgSlugReportsBalanceSheetPdfRoute: typeof ApiOrgSlugReportsBalanceSheetPdfRoute
@@ -1339,6 +1353,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOrgSlugInvoicesInvoiceIdPdfRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/$orgSlug/notes/$noteId/pdf': {
+      id: '/api/$orgSlug/notes/$noteId/pdf'
+      path: '/api/$orgSlug/notes/$noteId/pdf'
+      fullPath: '/api/$orgSlug/notes/$noteId/pdf'
+      preLoaderRoute: typeof ApiOrgSlugNotesNoteIdPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/$orgSlug/receipts/$receiptId/pdf': {
       id: '/api/$orgSlug/receipts/$receiptId/pdf'
       path: '/api/$orgSlug/receipts/$receiptId/pdf'
@@ -1594,6 +1615,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiOrgSlugInvoicesInvoiceIdPdfRoute: ApiOrgSlugInvoicesInvoiceIdPdfRoute,
+  ApiOrgSlugNotesNoteIdPdfRoute: ApiOrgSlugNotesNoteIdPdfRoute,
   ApiOrgSlugReceiptsReceiptIdPdfRoute: ApiOrgSlugReceiptsReceiptIdPdfRoute,
   ApiOrgSlugReportsAccountLedgerPdfRoute:
     ApiOrgSlugReportsAccountLedgerPdfRoute,

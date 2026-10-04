@@ -58,9 +58,9 @@ const balanced: JournalPosting = {
 
 test("receipt tax classifies registered direct income once", () => {
   expect(receiptTax(null, "exempt")).toEqual({ refused: false, affectsTax: false });
-  expect(receiptTax("27ABCDE1234F1Z5", "taxable")).toEqual({ refused: true, affectsTax: true });
-  expect(receiptTax("27ABCDE1234F1Z5", "exempt")).toEqual({ refused: false, affectsTax: true });
-  expect(receiptTax("27ABCDE1234F1Z5", "notASupply")).toEqual({
+  expect(receiptTax("27ABCDE1234F1Z0", "taxable")).toEqual({ refused: true, affectsTax: true });
+  expect(receiptTax("27ABCDE1234F1Z0", "exempt")).toEqual({ refused: false, affectsTax: true });
+  expect(receiptTax("27ABCDE1234F1Z0", "notASupply")).toEqual({
     refused: false,
     affectsTax: false,
   });

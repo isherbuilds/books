@@ -81,6 +81,7 @@ const SERVER_FIELDS = {
   TDS_SECTION_INVALID: "tdsSectionId",
   TDS_PAN_REQUIRED: "partyId",
   BILL_ZERO_TOTAL: "lines",
+  BILL_NUMBER_TAKEN: "reference",
   BILL_TDS_EXCEEDS_TOTAL: "tdsSectionId",
 } satisfies Record<string, FieldPath<BillFormValues>>;
 
