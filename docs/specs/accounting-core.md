@@ -396,6 +396,11 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
      allocations name Credit Notes as sources; the amount equals their sum
      exactly and no TDS is allowed. Unused Receipt advances stay unrefundable
      (Deferred).
+     Bill **Pay** opens the Payment with its supplier and `against` / `payable`
+     selected; Credit Note **Refund** opens it with its customer and `against` /
+     `receivable` selected. The party lookup settles before the form opens;
+     if it fails, the user can pick a party without losing the Payments page.
+     Allocation amounts are still entered by the user.
    - **Fee, write-off and customer TDS.** A Receipt `against` may carry
      `adjustments` of `{ kind: "fee" | "writeOff" | "tds", accountId?, amount }`,
      at most 5: `fee` and `writeOff` name an active non-system expense leaf,

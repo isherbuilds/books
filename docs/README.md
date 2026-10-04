@@ -27,7 +27,8 @@ Check UI items in the running app on desktop and mobile, in both themes.
   [Decisions D1–D16](./specs/accounting-core.md#decisions-2026-10-04); what remains
   is building them. Start with reversal and allocation dating against locks (D1,
   D2), postings before the cutover (D3), GST journals (D4), duplicate bills (D5)
-  and the blank party on Pay/Refund (M6, a bug).
+  and the blank party on Pay/Refund (M6, a bug; fixed, awaiting running-app
+  verification of the party and settlement presets).
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and

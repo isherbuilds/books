@@ -369,7 +369,7 @@ function BillSheetRoute() {
                 void navigate({
                   to: "/$orgSlug/payments",
                   params: { orgSlug },
-                  search: { create: true, payeeId: bill.partyId! },
+                  search: { create: true, payeeId: bill.partyId!, payAgainst: "payable" },
                 })
               }
             >
