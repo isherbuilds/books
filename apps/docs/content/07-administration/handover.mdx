@@ -61,7 +61,10 @@ The CA or the owner sets the **Books lock** ([lock](/glossary#lock): a date on o
 before which nobody can post) and, once the [GST returns](/glossary#gstr)
 (GSTR-1 and GSTR-3B) for the period are filed, the **Tax period lock** to the handover date. After that, no
 one can post into the handed-over period without a
-[lock exception](/glossary#lock-exception), a time-limited permission. See
+[lock exception](/glossary#lock-exception), a time-limited permission. An
+exception lifts only the Books lock. A document that affects GST still cannot be
+posted into a period under the Tax period lock until the CA or owner moves that
+lock to an earlier date. See
 [Period locks](/accounting/locks).
 
 </Step>
@@ -96,8 +99,9 @@ before the old one steps back.
    state, financial year and document prefixes. Changes there apply to new
    documents only; they do not rewrite documents already issued.
 4. Then either the new owner removes the old owner, or the old owner changes
-   their own role, for example to **Chartered Accountant** for read-only access
-   during the transition.
+   their own role, for example to **Chartered Accountant** during the transition. A
+   Chartered Accountant reads everything and records no documents, but can
+   still change period locks and grant lock exceptions.
 
 If you try to step back while you are the only owner, Accly Books refuses with
 "Could not update the roster" and nothing changes.

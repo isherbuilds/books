@@ -54,8 +54,8 @@ balance:
 | Share Capital, Capital Account or Corpus Fund (3000) | Your opening equity; also open to Journals                                                                                                                      |
 | Cash (1000), Bank Accounts (1100)                    | Groups that hold your money accounts (see [Banking](/setup/banking))                                                                                            |
 
-You can rename a system account, but you cannot mark it inactive. You cannot pick a
-[payable](/glossary#payable), advance or GST account in a [Journal](/accounting/journals)
+You can rename a system account, but you cannot mark it inactive. You cannot pick
+**Accounts Payable** ([payable](/glossary#payable)), an advance account or a GST account in a [Journal](/accounting/journals)
 (a manual [journal](/glossary#journal) entry) or the [Opening balance](/setup/opening-balance)
 (the [balances you start with](/glossary#opening-balance)). A Journal can use Accounts Receivable only
 with a [party](/glossary#party) (customer or vendor) on the line, and the Opening balance form cannot use it at all. This
@@ -205,9 +205,12 @@ Rules:
 - A cash or bank account used by an active [payment method](/glossary#payment-method)
   (a named way money moves, such as UPI) is refused: "This account
   is used by the active Payment Method "UPI"." Mark the method inactive first.
-- An account that still has a balance can be marked inactive. Clear the balance by a
-  [Journal](/accounting/journals) first, so your [balance sheet](/glossary#balance-sheet) does not carry a ledger
-  you can no longer post to.
+- An account that still has a balance can be marked inactive. Clear an asset or
+  liability balance by a [Journal](/accounting/journals) first, so your
+  [balance sheet](/glossary#balance-sheet) does not carry a ledger you can no longer post to.
+  A Journal cannot use a taxable income account in a GST-registered organization:
+  correct such income with a [credit note](/sales/credit-notes), and mark the account
+  inactive once you stop invoicing to it.
 - A new account can reuse the name of an inactive one.
 
 ## What you cannot do

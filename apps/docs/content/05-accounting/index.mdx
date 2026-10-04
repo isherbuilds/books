@@ -45,7 +45,7 @@ expense or income that belongs to this period but is paid later) or a
 | Reduce an invoice for a return or a discount                                           | [Credit note](/sales/credit-notes)                                     |
 | Book depreciation, accruals, bank charges without GST, or a cash deposit into the bank | [Journal](/accounting/journals)                                        |
 | Write off a customer's unpaid invoice                                                  | [Journal](/accounting/journals#write-off-a-bad-debt) with a party line |
-| Stop anyone from changing a period you have closed                                     | [Lock](/accounting/locks)                                              |
+| Stop new postings into a period you have closed                                        | [Lock](/accounting/locks)                                              |
 
 ## Who can do what
 
@@ -68,7 +68,8 @@ Each member's [role](/glossary#roles) decides what they can do. See
    period: the list of every account's balance, where the debits and credits must
    agree ([trial balance](/glossary#trial-balance)).
 3. File the GST return ([GSTR-1](/glossary#gstr), the monthly or quarterly return of
-   your sales) from the GST outward and inward registers on [Reports](/reports).
+   your sales) from the GST outward register on [Reports](/reports). The GST inward
+   register (purchases and input tax credit) supports GSTR-3B, not GSTR-1.
 4. Set the **Books** lock and the **Tax period** lock to the last day of the period.
 5. For a late correction, grant a short [exception](/glossary#lock-exception), a
    time-limited permission for one person to post into the locked period. Post the

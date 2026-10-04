@@ -46,8 +46,9 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
   </Step>
   <Step title="Give the reason">
     Type the **Reason**, for example the customer's return note number and why the goods came back.
-    It is saved as the [narration](/glossary#narration) (the note on the entry) and in the [audit
-    log](/glossary#audit-log).
+    It is saved on the note as its [narration](/glossary#narration) (the note on the entry). The
+    [audit log](/glossary#audit-log) records that the note was posted, with its number and invoice,
+    but not the reason.
   </Step>
   <Step title="Post">
     Click **Post note**. The toast reads "Credit note posted" and the note opens.
@@ -99,7 +100,7 @@ When you post a credit note, Accly Books applies it to its own invoice at once (
 [allocation](/glossary#allocation), the match between a credit and an invoice), up to
 what the invoice still owes, dated on the note date. You do not need to do anything
 else. The invoice shows the note under **Credit notes** and **Allocations**, and its
-[outstanding](/glossary#outstanding) amount falls by the note total.
+[outstanding](/glossary#outstanding) amount falls by the amount applied.
 
 If the invoice was already paid, or owes less than the note, the rest stays
 **Unapplied**. You can then:

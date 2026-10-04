@@ -74,7 +74,9 @@ organization or send the file itself.
 </Frame>
 
 A deleted file cannot be restored. Each deletion is written to the
-[audit log](/administration/audit-log) (the record of sensitive actions) as **File deleted** with the file's name.
+[audit log](/administration/audit-log) (the record of sensitive actions) as **File deleted**. The **Target** column shows the file's storage key
+(`file:<organization id>/<id>/<name>`), which ends in the file name with spaces
+and special characters replaced by hyphens.
 Uploads are not recorded there, and the list does not show who uploaded a file.
 
 ## When there are no files

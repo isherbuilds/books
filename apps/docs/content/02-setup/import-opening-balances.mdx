@@ -101,13 +101,13 @@ The import is all or nothing. If any row has an error, nothing is written.
 
 ## What the import creates
 
-| From the sheet    | Accly Books creates                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------- |
-| **Accounts**      | New accounts, with codes given as in the [chart of accounts](/setup/chart-of-accounts#account-codes) |
-| **Parties**       | New parties                                                                                          |
-| **Items**         | New items                                                                                            |
-| **Trial balance** | One posted Opening Balance, numbered `OB` + year, dated on the opening date                          |
-| **Opening items** | One opening claim (`OC…`) or opening credit (`OA…`) per row, on the opening date                     |
+| From the sheet    | Accly Books creates                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Accounts**      | New accounts, with codes given as in the [chart of accounts](/setup/chart-of-accounts#account-codes)                                          |
+| **Parties**       | New parties                                                                                                                                   |
+| **Items**         | New items                                                                                                                                     |
+| **Trial balance** | One posted Opening Balance, numbered `OB` + year, dated on the opening date                                                                   |
+| **Opening items** | One opening claim (`OC…`) or opening credit (`OA…`) per row. Each keeps its original date; its party-ledger line is dated on the opening date |
 
 Each opening item keeps its own reference, original date and due date. The
 [receivable](/glossary#receivable) and [payable](/glossary#payable) totals post to

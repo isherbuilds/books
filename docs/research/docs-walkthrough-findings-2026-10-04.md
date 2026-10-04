@@ -5,7 +5,9 @@ local app (Cedar Components, Ridgeview Academy at 100,000 receipts) and recorded
 findings. This file merges duplicates into 17 major findings, then minor and polish
 items grouped by area. Code references
 are from commit `3dab8c8`. Raw notes and evidence screenshots were session scratch and
-are not kept; each entry names the code that owns it and how to reproduce it.
+are not kept; each entry names the code that owns it and how to reproduce it. This file
+is evidence: the [work registry](../README.md#work-lifecycle) owns status, and each fix
+updates the owning spec or page.
 
 What passed: role permissions match `access.ts` on the sidebar, settings, record
 actions and direct API calls; Cedar Components reconciles (trial balance, balance
@@ -31,7 +33,7 @@ expiry and revoke; the import posts a cutover that ties to the agreed trial bala
 | M11 | Banking and Home count post-dated documents; the balance sheet and ledgers stop at their date, so the bank differs between them. Future dates post with no warning. | Reports, banking | `account.ts:192-217` `moneyBalances` and party `balances` have no date bound | Bound by today's business date, and warn on a future date |
 | M12 | Cash can go negative with no warning (Cedar Cash in Hand reached −₹2,650). | Banking | no balance check | Warn when a running cash balance would fall below zero |
 | M13 | The trust/society chart seeds a taxable "Fees" account, and a supply class can never change. School fees are exempt. | Setup | chart template | Make it exempt and allow a class change while unused |
-| M14 | An account created from an invitation sees "Email verification required to view or list invitations" when it opens `/join` again (closed tab, or **Join organization** in the switcher). | Getting started | join page invitation list | List the session user's invitations by email without the verification gate |
+| M14 | An account created from an invitation sees "Email verification required to view or list invitations" when it opens `/join` again (closed tab, or **Join organization** in the switcher). | Getting started | join page invitation list | Keep the verification gate (invitation ids are sign-up proof); show the invitee a link back to their own invitation, or let the owner re-share it from Members |
 | M15 | On a 390 px phone the invite form's role buttons overflow, so **Operator** cannot be chosen. | Administration | members invite form | Wrap or use a select |
 | M16 | No password reset exists, yet the sign-in page says "Ask your administrator to reset your password". | Getting started | sign-in copy | Add an owner/operator reset path or change the copy |
 | M17 | Joining (accepting an invitation) is not audited; member and credit audit entries show only internal ids, so a removed member cannot be identified. | Administration | audit writes | Audit the join; store names and document numbers in `meta` |
