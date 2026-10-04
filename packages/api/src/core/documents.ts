@@ -469,8 +469,7 @@ export async function writeDraft(
 }
 
 // The caller holds this settings row FOR SHARE (or stronger) in the same
-// transaction before taking any document locks; Bills also lock their supplier
-// FOR NO KEY UPDATE before entering here to serialize supplier-number checks.
+// transaction before taking any document locks.
 export async function postDocument(
   tx: DbTransaction,
   scope: Scope,
@@ -571,37 +570,13 @@ export async function postDocument(
         amountPaise: posting.amountPaise,
       });
       break;
-    case "bill": {
-      const [duplicate] = await tx
-        .select({ id: documents.id })
-        .from(documents)
-        .where(
-          and(
-            eq(documents.orgId, scope.orgId),
-            eq(documents.partyId, posting.partyId),
-            eq(documents.type, "bill"),
-            eq(documents.state, "posted"),
-            eq(documents.financialYear, financialYear),
-            sql`lower(trim(${documents.reference})) = lower(trim(${input.reference}))`,
-          ),
-        )
-        .limit(1);
-
-      if (duplicate) {
-        throw badRequest(
-          "BILL_NUMBER_TAKEN",
-          "This supplier invoice number is already posted for this supplier and financial year.",
-        );
-      }
-
+    case "bill":
       ledgers.push({
         partyId: posting.partyId,
         side: "payable",
         amountPaise: -(posting.amountPaise - posting.tdsPaise),
       });
       break;
-    }
-
     case "creditNote":
     case "debitNote": {
       ledgers.push(

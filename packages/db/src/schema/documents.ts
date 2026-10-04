@@ -141,6 +141,11 @@ export const documents = pgTable(
       table.documentDate,
       table.id,
     ),
+    // A supplier invoice number posts once per supplier and financial year (D5).
+    // Cancelling releases it; drafts are unchecked.
+    uniqueIndex("documents_bill_reference_idx")
+      .on(table.orgId, table.partyId, table.financialYear, sql`lower(${table.reference})`)
+      .where(sql`${table.type} = 'bill' and ${table.state} = 'posted'`),
     // party.transactions retains its creation-order id cursor.
     index("documents_org_party_idx").on(table.orgId, table.partyId, table.id),
     // Party-filtered registers seek their period and newest-first date/id keyset.
