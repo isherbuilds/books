@@ -28,8 +28,9 @@ Check UI items in the running app on desktop and mobile, in both themes.
   is building them. Start with reversal and allocation dating against locks (D1,
   D2), postings before the cutover (D3), GST journals (D4)
   and the blank party on Pay/Refund (M6, a bug).
-  Duplicate bills (D5): Verification; posting now refuses the repeated supplier
-  number on its field. Integration and running-form checks remain.
+  Duplicate bills (D5) are built and verified: bill integration tests pass;
+  posting a draft with a repeated supplier number (trimmed, other case) shows
+  the field error at 1440 and 390 px in both themes.
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and
