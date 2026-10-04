@@ -4,6 +4,7 @@ import { businessDate } from "@accly/api/lib/business-date";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
+import { allocations } from "@accly/db/schema/allocations";
 import { items } from "@accly/db/schema/items";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
@@ -138,7 +139,7 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     partyId: party.id,
     amount: "10000.00",
     paymentMethodId: bankTransfer.id,
-    documentDate: "2026-09-12",
+    documentDate: "2026-09-09",
     allocations: [
       { documentId: firstInvoice.id, amount: "6000.00" },
       { documentId: secondInvoice.id, amount: "3000.00" },
@@ -189,6 +190,7 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     overdue: false,
   });
   expect(detail.allocations).toHaveLength(2);
+  expect(detail.allocations.every(({ entryDate }) => entryDate === "2026-09-10")).toBe(true);
   expect(detail.allocations).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
@@ -307,6 +309,7 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     documentType: "allocation",
     documentId: postTimeAllocationId,
     reversesEntryId: null,
+    entryDate: "2026-09-10",
     narration: reason,
   });
   expect(postTimeReversal.lines).toEqual(
@@ -335,9 +338,22 @@ test("an against receipt settles invoices, applies and reverses its advance, the
     reason: "receipt entered in error",
   });
 
-  expect((await postingOf(organization.id, receipt.id, "reverse")).entry.reversesEntryId).toBe(
-    receiptPost.entry.id,
-  );
+  expect((await postingOf(organization.id, receipt.id, "reverse")).entry).toMatchObject({
+    reversesEntryId: receiptPost.entry.id,
+    entryDate: "2026-09-09",
+  });
+
+  const [cancelledAllocation] = await db
+    .select({ entryDate: allocations.entryDate })
+    .from(allocations)
+    .where(
+      and(
+        eq(allocations.orgId, organization.id),
+        eq(allocations.reversesAllocationId, activeAtCancelId),
+      ),
+    );
+
+  expect(cancelledAllocation?.entryDate).toBe("2026-09-10");
 
   const [firstAfterCancel, secondAfterCancel] = await Promise.all([
     api.invoice.get({ orgSlug: organization.slug, invoiceId: firstInvoice.id }),
@@ -390,6 +406,108 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   expect(balances.get(receivables.id)).toBe(0n);
   expect(balances.get(customerAdvances.id)).toBe(0n);
   expect(balances.get(bankAccount.id)).toBe(0n);
+});
+
+test("credit applies on the later document date and reverses on that same locked date", async () => {
+  const fixture = await createAccountingFixture(founder, "allocation-dates");
+  const claim = { orgSlug: fixture.organization.slug };
+  const ownerApi = clientFor(founder);
+
+  const income = required(
+    fixture.accounts.find(({ type, supplyClass }) => type === "income" && supplyClass === "exempt"),
+    "exempt income",
+  );
+
+  const method = required(
+    fixture.methods.find(({ name }) => name === "Cash"),
+    "cash method",
+  );
+
+  const customer = await fixture.api.party.create({
+    ...claim,
+    name: "Dated credit customer",
+    roles: ["customer"],
+    stateCode: "27",
+  });
+
+  const item = await fixture.api.item.create({
+    ...claim,
+    name: "Dated service",
+    unit: "service",
+    unitPrice: "100.00",
+    incomeAccountId: income.id,
+  });
+
+  const advance = await fixture.api.receipt.post({
+    ...claim,
+    settlementKind: "advance",
+    partyId: customer.id,
+    amount: "100.00",
+    paymentMethodId: method.id,
+    documentDate: "2026-06-01",
+    advanceSupply: "exempt",
+  });
+
+  const invoice = await fixture.api.invoice.post({
+    ...claim,
+    partyId: customer.id,
+    documentDate: "2026-06-15",
+    placeOfSupplyStateCode: "27",
+    lines: [{ kind: "item", itemId: item.id, quantity: 1 }],
+  });
+
+  const applyInput = {
+    ...claim,
+    sourceDocumentId: advance.id,
+    targetDocumentId: invoice.id,
+    amount: "50.00",
+  };
+
+  const [applied] = await fixture.api.allocation.apply(applyInput);
+  const allocationId = required(applied, "applied credit").id;
+  const allocationPost = await postingOf(fixture.organization.id, allocationId, "post");
+
+  expect(allocationPost.entry.entryDate).toBe("2026-06-15");
+
+  const advanceDetail = await fixture.api.receipt.get({ ...claim, receiptId: advance.id });
+
+  expect(advanceDetail.allocations[0]).toMatchObject({ entryDate: "2026-06-15" });
+
+  await ownerApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: "2026-06-15",
+    expectedLockedThrough: null,
+    reason: "Close through the allocation date",
+  });
+  await expectReason(fixture.api.allocation.apply(applyInput), "LOCKED");
+  await expectReason(
+    fixture.api.allocation.reverse({ ...claim, allocationId, reason: "Undo locked credit" }),
+    "LOCKED",
+  );
+  await ownerApi.lock.set({
+    ...claim,
+    kind: "general",
+    lockedThrough: null,
+    expectedLockedThrough: "2026-06-15",
+    reason: "Reopen allocation date",
+  });
+
+  const reversed = await fixture.api.allocation.reverse({
+    ...claim,
+    allocationId,
+    reason: "Undo credit after reopening",
+  });
+
+  const [reverseRow] = await db
+    .select({ entryDate: allocations.entryDate })
+    .from(allocations)
+    .where(and(eq(allocations.orgId, fixture.organization.id), eq(allocations.id, reversed.id)));
+
+  expect(reverseRow?.entryDate).toBe("2026-06-15");
+  expect((await postingOf(fixture.organization.id, allocationId, "reverse")).entry.entryDate).toBe(
+    "2026-06-15",
+  );
 });
 
 test("an invoice due yesterday is overdue and appears in the overdue filter", async () => {

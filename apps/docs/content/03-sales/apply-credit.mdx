@@ -59,12 +59,11 @@ If the customer has nothing to apply, the dialog says "No unapplied credits for 
 party." An amount larger than the credit or the outstanding is refused with "Enter no
 more than ₹…".
 
-:::warning[The match is dated today]
-Applying credit has no date field. The entry is dated the day you apply it. For
-Deshmukh, the advance was applied on 4 Oct 2026, so the September [balance sheet](/glossary#balance-sheet) still
-shows ₹50,000 as a customer advance and ₹50,000 more in [receivables](/glossary#receivable)
-(money customers owe). Apply advances
-before you close a month, and before your CA (Chartered Accountant) [locks](/glossary#lock) it.
+:::note[The match follows the document dates]
+Applying credit has no date field. The allocation is dated the later of the credit
+and the invoice dates, even if you apply it later. It therefore corrects the balances
+from that date. Applying or reversing it is refused if that date is
+[locked](/glossary#lock), unless you have a books-lock exception.
 :::
 
 ## Where you see allocations
@@ -141,7 +140,7 @@ the credit is unapplied again, ready to apply elsewhere.
 
 In the books:
 
-| What you reverse                               | [Reversal](/glossary#reversal) entry dated today                             |
+| What you reverse                               | [Reversal](/glossary#reversal) entry on the allocation's original date       |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
 | An advance you applied later                   | The applying entry is reversed: Dr Accounts Receivable, Cr Customer Advances |
 | A match made when the receipt was posted       | The money becomes an advance: Dr Accounts Receivable, Cr Customer Advances   |

@@ -328,13 +328,12 @@ To cancel, choose **⋯ → Cancel bill**, type the **Reason** and click **Cance
   ![Cancelled bill record](./images/bills-cancelled.webp)
 </Frame>
 
-:::warning[A cancellation posts on today's date]
-Cancelling posts a reversal of every line, including the input tax credit and TDS, dated
-the day you cancel, not the bill date. If you cancel in October a bill dated July, the July
-ledgers still include it, while the July GST and TDS registers leave it out. Before you
-deposit July's TDS or file July's GSTR-3B, cancel wrong July bills in July, or tell your CA.
-The reversal date must also be in an open period, one that no [lock](/glossary#lock) has
-closed to new entries; see [Locks](/accounting/locks).
+:::warning[A cancellation uses the bill date]
+Cancelling reverses every line, including input tax credit and TDS, on the bill's
+original date. It corrects that period's ledgers and is refused if the bill date is
+tax-locked, or books-locked without an exception. For a filed period, agree a
+[debit note](/purchases/debit-notes) in an open period with your CA instead;
+see [Locks](/accounting/locks).
 :::
 
 Accly Books does not stop you posting the same supplier invoice number twice for one

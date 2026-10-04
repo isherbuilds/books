@@ -125,8 +125,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    exception. An exception clears the general lock only; the tax lock is
    reopened by `lock.set` with an earlier date or null and a reason. The tax
    lock follows `affectsTax`, stored at post, which marks any document in a GST
-   register, exempt direct Receipts included. `allocation.apply` and
-   `allocation.reverse` check the lock on their entry date.
+   register, exempt direct Receipts included. Allocations use the later source or
+   target document date; their reversals use that allocation date. Both check the lock.
    A cancellation is checked on its reversal date. **Every document reverses
    on its own `documentDate`** (D1), the Opening Balance on its cutover date,
    so cancellation and replacement correct historical balances. A locked cutover needs an authorized exception
@@ -230,8 +230,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     every allocation is reversed. Receipt cancellation (and Journal
     cancellation from slice 9a) appends reverse rows for its active
     allocations, with no journal entry of its own, and reverses every
-    un-reversed allocation journal entry from the document. `allocation.apply` and `allocation.reverse` check the period lock
-    on their entry date. Slice 4b-ii uses this model: it keeps ERPNext's
+    un-reversed allocation journal entry from the document. Each allocation's
+    entry date is the later source or target document date, including applies
+    created at post. Its reversal keeps that date, including on cancellation.
+    `allocation.apply` and `allocation.reverse` check the period lock on that date.
+    Slice 4b-ii uses this model: it keeps ERPNext's
     separate advance account, and rejects Zoho-style gross posting, which sends
     every Receipt through the advance account and doubles journal rows, and the
     Odoo and Tally shape without an advance account, which loses the liability
@@ -529,9 +532,9 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    - **Dates.** Inclusive `from` and `to` (`orderedPeriod`), or one `asOf`,
      in the Organization's calendar. Activity is dated by
      `journal_entries.entryDate`. A cancelled document's post and reverse
-     entries each count on their own date; no Accounting report filters on
-     `documents.state`, so a closed month never changes when a later
-     cancellation posts. A period's opening is the sum of every line dated
+     entries both count on the original document date; no Accounting report
+     filters on `documents.state`. Locks prevent changing a closed period
+     without reopening or a books-lock exception. A period's opening is the sum of every line dated
      before `from`, the Opening Balance entry included; there is no opening
      flag.
    - **Amounts.** bigint paise through the procedure, as `party.statement`
@@ -608,14 +611,14 @@ problem. Git keeps it at `a716b6c`. Read it; do not copy it.
    - Acceptance, on one proprietorship Organization. April is the first month
      of the financial year before the one containing the run date, and 31
      March is the day before it. Opening Balance on
-     31 March (`Cash in Hand` 50,000 Dr, `Capital Account` 50,000 Cr); an
+     30 March (`Cash in Hand` 50,000 Dr, `Capital Account` 50,000 Cr); an
      exempt Invoice to Priya for 10,000 on 10 April; a Receipt `against` it
      for 4,000 on 12 April, into `Cash in Hand`; a Journal Dr `Sibling
 Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      on 28 April, cancelled during the test, so `reverseDocument` dates its
-     reversal the run date. The April trial balance shows `Cash in Hand`
-     opening 50,000 Dr and closing 53,500 Dr, and the Journal's lines; the
-     trial balance for today shows only its reversal; every account's
+     reversal 28 April. The April trial balance shows `Cash in Hand`
+     opening 50,000 Dr and closing 54,000 Dr, and both Journal entries; the
+     trial balance for today has no activity; every account's
      closing equals `sum(debit) - sum(credit)` through `to`, computed directly
      in the test; the XLSX totals row equals the JSON totals; the PDF answers
      `application/pdf`; an operator is `FORBIDDEN`. The benchmark p95 is
@@ -728,9 +731,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      default today. Document numbers link to their records, as the party
      Ledger does.
    - Acceptance, on the 6a fixture: the `Cash in Hand` ledger for April opens
-     at 50,000 Dr, shows the Receipt (4,000 Dr) and the Journal (500 Cr) and
-     closes at 53,500 Dr; for today it shows the reversal. The day book for
-     today lists the reversal with totals equal to the Journal's. The
+     at 50,000 Dr, shows the Receipt (4,000 Dr), the Journal (500 Cr) and its
+     reversal (500 Dr), and closes at 54,000 Dr. The day book for 28 April
+     lists both Journal entries with totals twice the Journal's. The
      ledger builder called with `limit: 1` for 28 April through today is
      `REPORT_TOO_LARGE`, and with `limit: 100` returns the Journal line and
      its reversal.
@@ -1396,8 +1399,8 @@ slice 9.
   A `journalPrefix` setting (default `JV` via `SETTINGS_DEFAULTS`, the
   `documentPrefix` rule) produces `JV26-27/1`.
 - **Cancel.** Journal cancellation uses `reverseDocument`: once, with a reason,
-  dated the cancel day. A wrong date is fixed by a new Journal, not by editing.
-  Opening Balance uses the original-cutover rule below.
+  dated the original journal date. A wrong date is fixed by a new Journal, not by editing.
+  Opening Balance follows the same original-date rule below.
 - **Contra** is a label for a Journal whose lines are all money leaves (bank to
   bank, a cash deposit). One type, one series.
 - **Wiring.** The `journal.{post,get,list,accounts,cancel}` procedures have
@@ -1427,6 +1430,9 @@ slice 9.
   refusal rolls back the cancellation. The original and reversal remain
   auditable. A replacement can use the same date, subject to normal posting
   locks; there is no separate replacement-after-reversal cutoff.
+  `postDocument` reads the posted Opening Balance date once in the same transaction,
+  using the org-scoped partial index. Other documents dated on or before it are
+  `BEFORE_OPENING_BALANCE`; opening items keep their legacy dates through import.
   `openingBalance.get` returns the posted document or null.
 - **Locks.** `organization_settings.lockedThrough` and `taxLockedThrough` own
   the current dates; null means unlocked. `lock.set` reads settings `FOR UPDATE`
@@ -1558,6 +1564,8 @@ here from ERPNext v15 (source and docs) and Zoho Books India help. Where the two
 differ, the simpler rule wins; where this model differs from both, the row says why.
 Each row is a build item until its code lands; the
 [work registry](../README.md#work-lifecycle) tracks them. Revisit any row with the CA.
+
+D1–D3 are implemented; their integration checks await the coordinated verification run.
 
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Basis                                                                                                                                                                                     |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

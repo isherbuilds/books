@@ -285,10 +285,9 @@ opposite entry that cancels the original.
 
 What happens:
 
-- The reversal is dated **today**, not the journal date. A June journal cancelled
-  on 4 Oct 2026 still counts in June and is reversed in October. To correct a
-  closed month itself, post a correcting journal in that month under an
-  [exception](/accounting/locks#let-one-person-post-a-late-correction).
+- The reversal uses the **journal date**, correcting balances from that date.
+  A books lock on that date requires an
+  [exception](/accounting/locks#let-one-person-post-a-late-correction) before cancellation.
 - Invoices the journal settled become open again; their allocations are reversed
   automatically.
 - If a receipt or credit note settled this journal's debit, **Cancel** is disabled

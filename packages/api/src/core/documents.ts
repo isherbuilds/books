@@ -15,7 +15,6 @@ import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { insertChunks } from "../lib/insert-chunks";
 import type { Scope } from "../lib/procedures/factory";
@@ -478,6 +477,26 @@ export async function postDocument(
   prefix: string,
   input: PostDocumentInput,
 ): Promise<{ id: string; number: string }> {
+  if (input.posting.type !== "openingBalance") {
+    const [opening] = await tx
+      .select({ documentDate: documents.documentDate })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.orgId, scope.orgId),
+          eq(documents.type, "openingBalance"),
+          eq(documents.state, "posted"),
+        ),
+      )
+      .limit(1);
+
+    if (opening && input.documentDate <= opening.documentDate)
+      throw badRequest(
+        "BEFORE_OPENING_BALANCE",
+        "Post new business after the Opening Balance date.",
+      );
+  }
+
   await assertPeriodOpen(tx, scope, settings, {
     entryDate: input.documentDate,
     affectsTax: input.affectsTax,
@@ -678,21 +697,19 @@ export async function postDocument(
     if (targetIds.length > 0) await lockDocuments(tx, scope.orgId, targetIds);
 
     for (const [partyId, targets] of journalPairs)
-      await applyAllocations(tx, scope, {
+      await applyAllocations(tx, scope, settings, {
         pairs: [...targets].map(([targetDocumentId, amountPaise]) => ({
           sourceDocumentId: id,
           targetDocumentId,
           amountPaise,
         })),
         draftDocumentId: id,
-        entryDate: input.documentDate,
         partyId,
       });
   } else if (pairs.length > 0) {
-    await applyAllocations(tx, scope, {
+    await applyAllocations(tx, scope, settings, {
       pairs,
       draftDocumentId: id,
-      entryDate: input.documentDate,
       requiredSourceType,
     });
   }
@@ -764,11 +781,7 @@ export async function reverseDocument(
     }
   }
 
-  // Opening corrections belong to the cutover; ordinary cancellations belong to today.
-  const entryDate =
-    cancelled.type === "openingBalance"
-      ? cancelled.documentDate
-      : businessDate(cancelledAt, settings.timeZone);
+  const entryDate = cancelled.documentDate;
 
   await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: cancelled.affectsTax });
 
@@ -795,6 +808,9 @@ export async function reverseDocument(
   }
 
   // Every remaining row allocates from this document. Drizzle refuses an empty insert.
+  for (const row of active)
+    await assertPeriodOpen(tx, scope, settings, { entryDate: row.entryDate, affectsTax: false });
+
   if (active.length > 0) {
     await tx.insert(allocations).values(
       active.map((row) => ({
@@ -805,7 +821,7 @@ export async function reverseDocument(
         amountPaise: row.amountPaise,
         kind: "reverse" as const,
         reversesAllocationId: row.id,
-        entryDate,
+        entryDate: row.entryDate,
         createdBy: scope.userId,
       })),
     );
@@ -814,7 +830,7 @@ export async function reverseDocument(
   const reversedEntry = alias(journalEntries, "reversed_entry");
 
   const unreversedAllocationEntries = await tx
-    .select({ entryId: journalEntries.id })
+    .select({ entryId: journalEntries.id, entryDate: allocations.entryDate })
     .from(journalEntries)
     .innerJoin(
       allocations,
@@ -854,12 +870,16 @@ export async function reverseDocument(
 
   if (!postEntry) throw impossible(`document ${documentId} is missing its post journal entry`);
 
-  await reverseEntries(
-    tx,
-    scope,
-    [...unreversedAllocationEntries.map((entry) => entry.entryId), postEntry.entryId],
-    { entryDate, narration: reason },
-  );
+  const entriesByDate = new Map<string, string[]>([[entryDate, [postEntry.entryId]]]);
+
+  for (const entry of unreversedAllocationEntries) {
+    const entries = entriesByDate.get(entry.entryDate) ?? [];
+    entries.push(entry.entryId);
+    entriesByDate.set(entry.entryDate, entries);
+  }
+
+  for (const [date, entries] of entriesByDate)
+    await reverseEntries(tx, scope, entries, { entryDate: date, narration: reason });
 
   await reversePartyLedgerLines(tx, scope.orgId, [documentId], entryDate);
 

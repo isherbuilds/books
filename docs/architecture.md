@@ -229,11 +229,11 @@ is reviewed code plus a `systemKey` seed, with a unit test per branch.
 - `reverseDocument` is one transaction. A conditional update first moves the
   posted document to `cancelled` (anything else is `CONFLICT`). Allocations then
   follow [call 17](./specs/accounting-core.md#architecture-calls). Last, the
-  party ledger lines and entry are reversed. Ordinary documents reverse on
-  today's business date in the Organization time zone; Opening Balance reverses
-  on its original cutover so a replacement corrects historical balances, and
-  cancels its imported opening items (party ledger lines only, no entry) with
-  it, refused while any item has an active allocation.
+  party ledger lines and entry are reversed on the document's original date,
+  so cancellation or amendment corrects historical balances. Allocations reverse
+  on their own dates. Opening Balance cancels its imported opening items
+  (party ledger lines only, no entry) on its original cutover date,
+  refused while any item has an active allocation.
   The reversal date must pass the period lock. A refusal rolls back the state
   change; `cancelledAt` remains the actual cancellation instant.
 - Every ledger writer reads `organization_settings` `FOR SHARE` (or stronger)

@@ -242,6 +242,39 @@ test("opening correction enforces the cutover lock and corrects historical balan
   expect(isolatedOpening.number).toMatch(/^OB\d{2}-\d{2}\/1$/);
 });
 
+test("posting on the opening date is refused while the day after posts", async () => {
+  const fixture = await createAccountingFixture(founder, "opening-date-boundary");
+  const { cash, openingEquity } = openingBalanceAccountsOf(fixture.accounts);
+  const claim = { orgSlug: fixture.organization.slug };
+
+  const lines = [
+    { accountId: cash.id, side: "debit" as const, amount: "1.00" },
+    { accountId: openingEquity.id, side: "credit" as const, amount: "1.00" },
+  ];
+
+  await fixture.api.openingBalance.post({ ...claim, documentDate: "2026-03-31", lines });
+  await expectReason(
+    fixture.api.journal.post({
+      ...claim,
+      documentDate: "2026-03-31",
+      narration: "Business on the cutover date",
+      lines,
+    }),
+    "BEFORE_OPENING_BALANCE",
+  );
+
+  const journal = await fixture.api.journal.post({
+    ...claim,
+    documentDate: "2026-04-01",
+    narration: "Business after cutover",
+    lines,
+  });
+
+  expect((await postingOf(fixture.organization.id, journal.id, "post")).entry.entryDate).toBe(
+    "2026-04-01",
+  );
+});
+
 test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
   const fixture = await createAccountingFixture(founder, "opening-balance-refusals");
   const { cash, openingEquity, receivables } = openingBalanceAccountsOf(fixture.accounts);
