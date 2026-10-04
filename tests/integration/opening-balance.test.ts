@@ -369,7 +369,7 @@ test("an Opening Balance and business on its date racing never both post", async
 
 test("opening balance refuses a future date, a second posted document, control accounts, and CA posting", async () => {
   const fixture = await createAccountingFixture(founder, "opening-balance-refusals", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
   });

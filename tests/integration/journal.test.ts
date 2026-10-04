@@ -681,7 +681,7 @@ test("registered organizations hide and refuse taxable journal accounts", async 
 
 test("a GST payment journal posts and respects the tax lock with books open", async () => {
   const fixture = await createAccountingFixture(founder, "journal-gst-payment", {
-    gstin: "27ABCDE1234F1Z5",
+    gstin: "27ABCDE1234F1Z0",
     stateCode: "27",
     pan: "ABCDE1234F",
   });
