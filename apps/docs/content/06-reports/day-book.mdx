@@ -1,0 +1,116 @@
+---
+title: Day book
+description: See every entry posted in a period with all its debit and credit lines
+---
+
+The [day book](/glossary#day-book) lists every [journal entry](/glossary#journal-entry) (one balanced set of debit and credit lines) in a period, in date order, with all its
+lines. Use it at day close to check what was [posted](/glossary#post) today, or to review one kind of
+document, such as all [receipts](/glossary#receipt) of the week.
+
+**Question it answers:** what was posted in this period, and to which accounts?
+
+**Who can open it:** Owner, Accountant and Chartered Accountant.
+
+## Open the day book
+
+<Steps>
+  <Step title="Open the report">Click **Reports**, then **Day book**. It opens for **Today**.</Step>
+  <Step title="Choose the period">
+    Choose **This month** or another preset, or type the **From** and **To** dates.
+  </Step>
+  <Step title="Filter by document type (optional)">
+    In **All document types**, choose **Receipts**, **Payments**, **Invoices**, **Bills**, **Credit
+    notes**, **Debit notes**, **Journals**, **Opening balances** or **Allocations**. A
+    [journal](/glossary#journal) is a manual entry; an [allocation](/glossary#allocation) applies an
+    advance or credit to an invoice or bill.
+  </Step>
+</Steps>
+
+<Frame caption="The day book of Cedar Components from 28 Sep to 4 Oct 2026.">
+  ![Day book with entries and their lines](./images/day-book-week.webp)
+</Frame>
+
+## Read the day book
+
+The line above the table sums up the period:
+
+| Figure      | Meaning                                               |
+| ----------- | ----------------------------------------------------- |
+| **Entries** | The number of journal entries                         |
+| **Debits**  | The total of all debit lines                          |
+| **Credits** | The total of all credit lines; always equal to Debits |
+
+Each entry starts with a shaded heading row: the date, the document number (a link to
+the document) and the [narration](/glossary#narration). For a document this is the note typed on it; a
+reversal reads "Reversal of" and the number, and an allocation reads "Allocation". The rows below it are the entry's lines:
+
+| Column                | Meaning                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| **Account**           | Account code and name                                               |
+| **Party**             | The [party](/glossary#party) on the line, if any                    |
+| **Debit**, **Credit** | The amount of the line ([debit and credit](/glossary#debit-credit)) |
+
+For example, receipt RCT26-27/2 from Orion Fabrication on 28 Sep 2026 shows two lines:
+
+| Account                  | Party             | Debit     | Credit    |
+| ------------------------ | ----------------- | --------- | --------- |
+| 1101 Bank Account        |                   | ₹1,388.00 | ₹0.00     |
+| 1300 Accounts Receivable | Orion Fabrication | ₹0.00     | ₹1,388.00 |
+
+The **Total** row at the bottom repeats the debit and credit totals. It shows once the
+last entry has loaded.
+
+### Which date an entry uses
+
+The day book uses the document date, not the time you posted it. A bill you post today
+with yesterday's date appears in yesterday's day book.
+
+A cancellation is its own entry, a [reversal](/glossary#reversal), dated the day you cancel, with the narration
+"Reversal of" and the document number. Its lines mirror the original. If you cancel a
+receipt of last week today, today's day book shows only the reversal.
+
+An **Allocation** entry has no document number. It records an advance or credit note
+applied to an invoice or bill, and moves the amount between two accounts of the same
+party.
+
+## Day close
+
+At the end of the day:
+
+1. Open the day book for **Today**.
+2. Choose **Receipts** in the document type list. Check each receipt against the
+   counterfoils or the receipt book.
+3. Open the [account ledger](/reports/account-ledger) (the [ledger](/glossary#ledger) of one account) for **Cash in Hand** for **Today**
+   and compare **Closing** with the cash in the drawer.
+4. Repeat for **Payments** if you paid out money.
+
+The day book has no total per [payment method](/glossary#payment-method) (cash, UPI, card and so on). To total today's [UPI](/glossary#upi-neft) or card
+collections, filter the **Receipts** register by payment method, or open the ledger of
+the bank account that the method lands in.
+
+## Download
+
+- **Download XLSX** saves one row per line, with Date, Document, Type, Kind, Account
+  code, Account, Party, Debit, Credit and Narration. **Type** holds the document type
+  (for example `receipt` or `debitNote`) and **Kind** is `post` or `reverse`. The
+  document type filter applies. It holds up to 1,00,000 lines.
+- **Download PDF** opens the day book in a new tab. It holds up to 5,000 lines.
+
+On a busy day the PDF can exceed its limit. The new tab then shows only the text "This
+report exceeds 5,000 lines; choose a shorter period." Choose a shorter period or a
+document type, or download the XLSX.
+
+## Common questions
+
+**The day book says "No entries posted in this period."** Nothing is dated in the
+period. Check **To**; the day book opens on today's date.
+
+**I cannot see why a receipt was cancelled.** The day book shows "Reversal of" and the
+number, not the reason. Find the reason in the [audit log](/administration/audit-log) ([audit log](/glossary#audit-log): the record of sensitive actions).
+
+## Related pages
+
+- [Account ledger](/reports/account-ledger)
+- [Receipts](/sales/receipts)
+- [Journals](/accounting/journals)
+- [School fees scenario](/scenarios/school-fees)

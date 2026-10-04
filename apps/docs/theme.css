@@ -1,0 +1,23 @@
+/* Match the app's radius scale: --radius 0.625rem, inner panels one step smaller. */
+:root {
+  --blume-radius: 0.625rem;
+}
+
+/* The frame behind a screenshot: a step darker than the page in light mode and a step
+   lighter in dark mode, so the screenshot reads as a raised app panel. */
+figure > div {
+  background: color-mix(in oklab, var(--blume-foreground) 6%, var(--blume-background));
+  border-color: color-mix(in oklab, var(--blume-foreground) 12%, var(--blume-background));
+}
+
+/* A near-black page needs a larger lift to read as a separate surface. */
+:root[data-theme="dark"] figure > div {
+  background: color-mix(in oklab, var(--blume-foreground) 12%, var(--blume-background));
+  border-color: color-mix(in oklab, var(--blume-foreground) 20%, var(--blume-background));
+}
+
+/* Screenshots read as app panels: rounded like rounded-md, with the border token. */
+figure img {
+  border-radius: calc(var(--blume-radius) - 2px);
+  border: 1px solid var(--blume-border);
+}

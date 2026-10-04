@@ -27,9 +27,9 @@
     "@orpc/tanstack-query": "^1.15.4",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.104.1",
-    "@tanstack/react-router": "^1.170.40",
+    "@tanstack/react-router": "^1.170.41",
     "@tanstack/react-router-ssr-query": "^1.167.3",
-    "@tanstack/react-start": "^1.168.59",
+    "@tanstack/react-start": "^1.168.60",
     "@tanstack/react-table": "^9.2.4",
     "@tanstack/react-virtual": "^3",
     "better-auth": "catalog:",
@@ -51,9 +51,9 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^6.1.1",
-    "oxc-transform-react": "^0.151.0",
+    "oxc-transform-react": "^0.152.0",
     "typescript": "catalog:",
-    "vite": "^8.3.1"
+    "vite": "^8.3.2"
   },
   "portless": {
     "name": "accly",

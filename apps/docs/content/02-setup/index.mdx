@@ -1,0 +1,102 @@
+---
+title: Set up your books
+description: Organization details, accounts, banks, items, parties and opening balances, in the order to set them up
+---
+
+Before you raise the first [invoice](/glossary#invoice) (the bill you give a customer for a sale), tell Accly Books who you are, where money is kept,
+what you sell, who you deal with, and what your books held on the day you start. Each
+step below takes a few minutes. Most organizations do them once and then change them
+rarely.
+
+## The order to follow
+
+<Steps>
+  <Step title="Check the organization details">
+    Legal name, [GSTIN](/glossary#gstin) (your 15-character GST registration number), address and
+    document prefixes print on every [document](/glossary#document). See
+    [Organization](/setup/organization).
+  </Step>
+  <Step title="Review the chart of accounts">
+    Every organization starts with a ready [chart of accounts](/glossary#chart-of-accounts), the
+    list of every ledger your books post to. Add the expense and income accounts your business
+    needs. See [Chart of accounts](/setup/chart-of-accounts).
+  </Step>
+  <Step title="Add your bank accounts and payment methods">
+    One account for each bank account or cash box, and one [payment
+    method](/glossary#payment-method) (a named way money moves, such as UPI) for each way money
+    moves. See [Banking](/setup/banking).
+  </Step>
+  <Step title="Add your items">
+    The goods and services you sell, with [HSN or SAC](/glossary#hsn-sac) (the GST code for goods or
+    services), price and [GST](/glossary#gst) rate. See [Items](/setup/items).
+  </Step>
+  <Step title="Add your customers and vendors">
+    Each is a [party](/glossary#party), with GSTIN where they have one. See
+    [Parties](/setup/parties).
+  </Step>
+  <Step title="Bring in your opening balances">
+    Your [opening balance](/glossary#opening-balance) is what your old books held on the day you
+    switch. Type a few balances by hand in [Opening balance](/setup/opening-balance), or import the
+    full [trial balance](/glossary#trial-balance) (the list of every account's balance) with unpaid
+    invoices and [bills](/glossary#bill) from Excel in [Import opening
+    balances](/setup/import-opening-balances).
+  </Step>
+</Steps>
+
+A new organization also opens a short **Setup** page with three steps: bank accounts
+and payment methods, opening balances, and the team. You can do the steps in
+any order and come back later. Only the opening balance needs care: [post](/glossary#post) it (record it in the books) once,
+before you rely on your reports.
+
+<CardGroup>
+  <Card title="Organization" href="/setup/organization">
+    Legal details, GSTIN, state, financial year and document numbering.
+  </Card>
+  <Card title="Chart of accounts" href="/setup/chart-of-accounts">
+    Groups and accounts, system accounts, GST supply class, inactive accounts.
+  </Card>
+  <Card title="Banking" href="/setup/banking">
+    Cash and bank accounts, their balances, and payment methods.
+  </Card>
+  <Card title="Items" href="/setup/items">
+    Goods and services with HSN/SAC, unit, price, GST rate and income account.
+  </Card>
+  <Card title="Parties" href="/setup/parties">
+    Customers and vendors, GSTIN and PAN, roles, the party page, inactive parties.
+  </Card>
+  <Card title="Opening balance" href="/setup/opening-balance">
+    Enter balances by hand, see opening items, apply opening credits, cancel.
+  </Card>
+  <Card title="Import opening balances" href="/setup/import-opening-balances">
+    Move from Tally or Excel: masters, trial balance and open invoices in one workbook.
+  </Card>
+</CardGroup>
+
+## Where to find these pages
+
+| Page                    | In the app                         |
+| ----------------------- | ---------------------------------- |
+| Organization            | **Settings → Organization**        |
+| Chart of accounts       | **Accounting → Chart of accounts** |
+| Banking                 | **Accounting → Banking**           |
+| Items                   | **Masters → Items**                |
+| Parties                 | **Masters → Parties**              |
+| Opening balance         | **Settings → Opening balance**     |
+| Import opening balances | **Settings → Import**              |
+
+## Who can do what
+
+| Action ([roles](/glossary#roles))               | Owner | Accountant | Chartered Accountant | Operator |
+| ----------------------------------------------- | ----- | ---------- | -------------------- | -------- |
+| Change organization details and prefixes        | Yes   | No         | No                   | No       |
+| See accounts, items, parties and methods        | Yes   | Yes        | Yes                  | Yes      |
+| Add or change accounts, items, parties, methods | Yes   | Yes        | No                   | No       |
+| See bank balances on **Banking**                | Yes   | Yes        | Yes                  | No       |
+| Post or cancel the opening balance              | Yes   | Yes        | No                   | No       |
+| Import a workbook                               | Yes   | Yes        | No                   | No       |
+
+An operator can pick existing parties on an invoice or receipt, and existing items on an
+invoice, but cannot add new ones. See [Roles and access](/getting-started/roles-and-access).
+
+To move a running business from Tally, follow the scenario
+[Cut over from Tally](/scenarios/cutover-from-tally).

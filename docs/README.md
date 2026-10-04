@@ -2,7 +2,7 @@
 
 Each page owns one area. Keep a fact in one place and link to it. Code is the
 authority for exact APIs, schemas and permissions. End-user help lives in
-`apps/fumadocs`; terms live in [`CONTEXT.md`](../CONTEXT.md).
+`apps/docs`; terms live in [`CONTEXT.md`](../CONTEXT.md).
 
 | Page                                           | Owns                                 |
 | ---------------------------------------------- | ------------------------------------ |
@@ -20,6 +20,12 @@ authority for exact APIs, schemas and permissions. End-user help lives in
 The only list of unfinished work. **Active**: work remains. **Blocked**: a named
 prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
+
+- **[User-guide walkthrough findings](./research/docs-walkthrough-findings-2026-10-04.md)**:
+  Active. 17 major findings, plus minor and polish items, from running every workflow
+  for the rebuilt guide in `apps/docs`. Triage the majors first: reversal and
+  allocation dating against locks (M1–M2), postings before the cutover (M3), GST
+  settlement (M4), duplicate bills (M5) and the blank party on Pay/Refund (M6).
 
 - **Combobox input simplification**: Verification. Invoice party and item picks
   keep one input mounted; Enter selects, Tab reaches the next control, and

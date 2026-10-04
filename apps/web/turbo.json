@@ -2,6 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
+      "dependsOn": ["^build", "docs#build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/env/.env*"],
       "env": ["VITE_*"],
       "outputs": [".output/**"]
