@@ -5,7 +5,7 @@ import { items } from "@accly/db/schema/items";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "../audit";
@@ -125,6 +125,19 @@ export const accountRouter = {
                 "An account with posted journal lines cannot change its GST supply class.",
               );
             }
+
+            // Only a taxable item carries a GST rate (`itemEligibilityError`).
+            if (input.supplyClass !== "taxable")
+              await tx
+                .update(items)
+                .set({ taxCode: null, updatedAt: nextEditToken(items.updatedAt) })
+                .where(
+                  and(
+                    eq(items.orgId, orgId),
+                    eq(items.incomeAccountId, input.accountId),
+                    isNotNull(items.taxCode),
+                  ),
+                );
           }
         }
 

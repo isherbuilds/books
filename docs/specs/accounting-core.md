@@ -1080,7 +1080,7 @@ balance` row for a non-zero balance; a name matching an existing
      `ACCOUNT_NAME_TAKEN`, enforced by a partial unique index on the active
      rows' `lower(name)`; restoring an archived account whose name is now taken
      is refused the same way.
-   - `account.update({ accountId, name, updatedAt })` renames an account;
+   - `account.update({ accountId, name, supplyClass?, updatedAt })` renames an account;
      `updatedAt` is a millisecond-precision edit token (`CONFLICT` when stale).
    - `account.setActive({ accountId, active })` archives or restores a leaf without a
      `systemKey`. Refused: a group or system account (`ACCOUNT_SYSTEM`), an
@@ -1096,6 +1096,8 @@ balance` row for a non-zero balance; a name matching an existing
    - `account.update` can change an income account's `supplyClass` only while
      it has no posted journal lines (`ACCOUNT_IN_USE` otherwise). The
      organization-scoped existence check runs under the account's update lock.
+     A change away from `taxable` clears the `taxCode` of the account's Items
+     in the same transaction.
      Once used, a wrong class is archived and recreated.
    - Every new organization's core template includes `6810 Discount Allowed`
      and `6820 Bad Debts Written Off` for slice 9.
