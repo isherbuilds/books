@@ -166,8 +166,8 @@ paging and pool starvation without changing results or error codes.
    Matching across adjacent fields is allowed. `documentSearchQuery` requires
    3 letters or digits in a row: registers hint and ignore shorter terms; the
    palette waits until the term qualifies. File search has no trigram index.
-3. **Register keysets.** Registers page newest document date first with an id
-   cursor resolved inside the page statement (`dateCursor`). Only Invoice
+3. **Register keysets.** Registers page newest document date first with a
+   `{ documentDate, id }` cursor (`dateCursor`). Only Invoice
    and Bill periods retain the draft exemption. Type/date/id and party/date/id
    indexes serve register filters; party/id remains for `party.transactions`.
 4. **Index-only balance sums.** `journal_lines_org_account_date_idx` ends in

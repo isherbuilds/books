@@ -20,12 +20,16 @@ Accountant can open them. An Operator does not see them.
 
 ## The debit note register
 
-Open **Purchases → Debit notes**. The page is titled **Notes** and opens filtered to
+Open **Purchases → Debit notes**. The page is titled **Debit notes** and opens filtered to
 **Debit note** for this [financial year](/glossary#financial-year) (April to March, unless your
 organization starts its year in another month). It lists **Number**, **Against** (the bill),
 **Party**, **Date**, **Total**, **Unapplied** and **Status**: **Applied** when the whole
 note is set against bills, **Unapplied** when some [credit](/glossary#credit) is left to use, or **Cancelled**.
 Search by number, [party](/glossary#party) or reason.
+
+The **Documents**, **Total** and **Unapplied** line covers all matching debit
+notes, not just the loaded page. Cancelled notes still count toward the total
+when shown, but contribute zero to the unapplied amount.
 
 There is no **New** button here: you raise a debit note from the bill it reduces.
 
@@ -50,15 +54,15 @@ states).
     note. It cannot be earlier than the bill date.
   </Step>
   <Step title="Enter the amount for each line">
-    **Source lines** lists the bill's lines with their **Taxable** value, GST **Rate** and **Tax**.
-    In **Amount**, type the taxable value to take off the line, before GST. **Full** enters the
-    line's whole taxable value, even when an earlier note already took part of it; then type the
-    smaller amount that remains yourself. Leave a line empty to leave it unchanged. Below the lines,
-    **Selected taxable** adds up what you entered.
+    **Source lines** lists the bill's lines with their **Remaining taxable** value, GST **Rate** and
+    **Tax**. In **Amount**, type the taxable value to take off the line, before GST. **Full** enters
+    only the remainder after earlier posted debit notes. Leave a line empty to leave it unchanged.
+    The totals preview shows taxable value, GST, round-off and the note total.
   </Step>
-  <Step title="Give the reason">
-    Type the **Reason**: what came back or what changed, and the supplier's credit note number if
-    they sent one. The reason shows on the note and the register search finds it.
+  <Step title="Add the supplier's reference and reason">
+    If the supplier sent a credit note, enter its number in **Supplier credit note number**
+    (optional). Type the **Reason** for what came back or changed. Both show on the record; the
+    supplier's number also prints on the PDF.
   </Step>
   <Step title="Post the note">
     Click **Post note** (or <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>). The toast reads "Debit
@@ -70,9 +74,13 @@ states).
   ![New debit note form](./images/debit-notes-form.webp)
 </Frame>
 
-The form does not show the GST or the note total before posting. Accly Books works the
-tax out from the bill line's rate when you post: here 18% IGST of ₹10,400 is ₹1,872, so
-the note is for ₹12,272.
+The preview calculates tax from the bill line's rate: here 18% IGST of ₹10,400 is
+₹1,872, so the estimated note total is ₹12,272. Posting recalculates against the
+latest source balance.
+
+If the bill deducted TDS, the form also estimates the TDS to reverse from the
+selected taxable value. The amount you can apply against the supplier's bill
+is the note total **less** that TDS reversal; GST is not part of the TDS base.
 
 For a price reduction, enter the reduction in taxable value on each line it applies to.
 For a purchase return, enter the value of the returned quantity.
@@ -82,8 +90,8 @@ For a purchase return, enter the value of the returned quantity.
 Click **PDF** on the note record to open the **Debit Note** in a new tab. Use the
 browser viewer to print or save it. It shows your organization's and the vendor's
 names, addresses and GSTINs, the note number and date, the original bill number
-and date and supplier invoice reference, each line's taxable value, GST rate
-and tax, place of supply, totals, reason and signature line.
+and date, supplier invoice reference and any supplier credit note number, each line's
+taxable value, GST rate and tax, place of supply, totals, reason and signature line.
 A cancelled note prints **CANCELLED**.
 
 ## What happens in the books
@@ -102,6 +110,13 @@ The note appears in the GST inward register as a reduction of the input tax for 
 month. Report it as your supplier's [credit note](/glossary#credit-note) in your GST return
 ([GSTR-3B](/glossary#gstr)).
 
+If the bill deducted TDS, the note also debits **TDS Payable** for the
+proportional reversal, leaving a smaller debit to **Accounts Payable**. For
+example, a ₹10,000 taxable bill with ₹1,000 TDS and a ₹4,000 taxable return
+reverses ₹400 TDS. Any final note returning the remaining taxable value
+takes exactly the remaining TDS. The TDS register shows the note's reversed
+deduction as a negative amount under the bill's section in the note's period.
+
 ## Where the credit goes
 
 When you post, the note is applied to its own bill straight away, up to what is still
@@ -112,10 +127,10 @@ under **Allocations**; an [allocation](/glossary#allocation) matches a credit to
   ![Debit note record applied to its bill](./images/debit-notes-record.webp)
 </Frame>
 
-If the bill was already paid, the credit stays **Unapplied** on the note. Use it against
-the supplier's next bill: open that bill, choose **⋯ → Apply credit** and pick the debit
-note in **Credit**. See [Apply an advance](/purchases/bills#apply-an-advance); debit notes
-appear in the same list.
+If the bill was already paid, the credit stays **Unapplied** on the note. You can use
+it against the supplier's next bill: open that bill, choose **⋯ → Apply credit** and
+pick the debit note in **Credit**. See [Apply an advance](/purchases/bills#apply-an-advance);
+debit notes appear in the same list. Or request a refund from the supplier.
 
 <Frame caption="A ₹1,180 debit note on a bill that was already paid stays unapplied.">
   ![Unapplied debit note](./images/debit-notes-unapplied.webp)
@@ -123,14 +138,15 @@ appear in the same list.
 
 ## When the supplier refunds you
 
-Accly Books cannot yet record money a supplier pays back against a debit note. The note
-has no **Refund** action (only a customer's credit note has one), and a [receipt](/glossary#receipt) (a record of money received) cannot
-settle a supplier's balance.
+Open a posted debit note with an **Unapplied** balance and click **Refund**. A
+**New receipt** form opens with the supplier selected and **Refund supplier** chosen.
+Enter the amount received, choose the payment method, and allocate the full amount
+to the supplier's unapplied debit notes or payment advances. Click **Post**. The
+receipt debits the bank or cash account and credits Payables; it does not record
+income again. The note's unapplied balance falls by the allocation. Cancelling the
+receipt restores the unapplied credit.
 
-Until it can, keep the credit and apply it to the supplier's next bill. If the supplier
-sends the money and you will not buy from them again, ask your CA (Chartered Accountant) how to record the
-receipt. Do not post a direct receipt to an income account: the debit note has already
-reduced your purchases, so that would count the credit twice.
+You can also start from **Sales → Receipts** and select **Refund supplier**.
 
 ## Limits
 
@@ -139,10 +155,8 @@ reduced your purchases, so that would count the credit twice.
 - The notes against a bill cannot add up to more than the bill total.
 - The note date cannot be before the bill date: "Note date cannot precede its source
   document."
-- A debit note does not change the [TDS](/glossary#tds) (tax deducted at source) on the
-  bill. If you reduce a bill that carried TDS, ask your CA whether to
-  adjust [TDS Payable](/glossary#tds-payable) with a [journal](/glossary#journal), a manual
-  entry; see [Journals](/accounting/journals).
+- On a bill with TDS, the note reverses the corresponding TDS automatically;
+  do not post a separate journal for that correction.
 - A bill with a posted debit note cannot be cancelled or amended until the note is
   cancelled.
 
@@ -152,7 +166,8 @@ Open the note and click **Cancel note**. Type the **Reason** and click **Cancel 
 Cancelling posts the reverse entry ([reversal](/glossary#reversal), an equal and opposite
 entry), dated on the note date, and removes the note's allocations, so
 the bill's outstanding goes back up. The note stays in the register marked
-**Cancelled**.
+**Cancelled**. If the bill had TDS, cancelling also reverses the TDS adjustment;
+the cancelled note no longer appears as a reversal in the TDS register.
 Cancellation is refused if the note date is tax-locked, or books-locked without an exception.
 
 ## Related pages

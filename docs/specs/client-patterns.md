@@ -47,9 +47,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    Invoice quoting and payment lines follow the
    [Invoice editor contract](./invoice-editor.md#contract).
 5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
-   match), except in a textarea or during IME composition. Mod+Enter posts. Esc
-   closes the innermost popup, then the panel, then the overlay, one per press.
-   Tab commits a highlighted match; Create needs Enter or a click.
+   match), except in a textarea or during IME composition. Mod+Enter posts;
+   its footer hint is shown only on non-touch desktop widths. Esc closes the
+   innermost popup, then the panel, then the overlay, one per press.
+   Tab commits a highlighted match only after typing; Create needs Enter or a click.
 6. **Two bindings**: Mod+K for the palette, and Mod+Enter per form. No
    registry, customizer or F-keys until H4 fails.
 7. **Palette**: a cmdk `Command` (`shouldFilter={false}`) in the Base UI
@@ -96,6 +97,15 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     carries only what its columns, card, palette entry and cursor read;
     everything else is one click away in the record Sheet. Search still
     matches the reference and narration on the server.
+    Each Receipts, Payments, Invoices, Bills and Notes register loads a separate
+    tenant-scoped aggregate over the full current filter, not the loaded page:
+    document count and amount, plus unapplied on Notes. The Receipts aggregate
+    also lists count and amount by Payment Method. Choose a single Date in the
+    Receipts filter to use that breakdown as day-close totals. A status-filtered
+    register totals exactly its listed states; absent a state filter, cancelled
+    documents remain included and the amount is gross, not a ledger net.
+    Aggregates have no cursor, share the list predicate, and refetch through
+    the existing domain invalidations.
     Open-item and credit picker paging follows
     [Accounting core](./accounting-core.md#slices). Apply credit is a compact
     Dialog over the record

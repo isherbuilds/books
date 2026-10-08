@@ -26,8 +26,9 @@ see this page.
 
 Open **Settings → Locks**. **Period locks** shows **Books** and **Tax period**, each
 with **Locked through** (or "Not locked"), the **Reason**, and **Set by** with the
-date and time of the change. **Active exceptions** lists the people who may post into
-the locked books right now.
+date and time of the change. **Lock history** shows every change to either lock:
+the kind, previous and new date, who changed it, when, and why. **Active exceptions**
+lists the people who may post into the locked books right now.
 
 <Frame caption="Cedar Components after closing April–June 2026: both locks at 30 Jun 2026.">
   ![Locks page with both locks set](./images/locks-page-locked.webp)
@@ -123,12 +124,13 @@ itself, which you should do only with your CA.
 <Steps>
   <Step title="Open Grant exception">In **Settings → Locks**, click **Grant exception**.</Step>
   <Step title="Choose the member">
-    In **Member**, choose the person who will post, for example Priya Nair, the accountant.
+    In **Member**, choose someone who can post documents, for example Priya Nair, the accountant. A
+    member with no posting permission cannot receive an exception. A member who already has an
+    active exception must use that grant or have it revoked before another is issued.
   </Step>
   <Step title="Choose when it expires">
-    **Expires** is a date and time in the organization's time zone (the hint reads "Local time in
-    Asia/Kolkata."), whatever time zone your own computer uses. Keep it short: the end of the
-    working day is usually enough.
+    **Expires** is a date and time within the next 30 days in the organization's time zone, whatever
+    time zone your own computer uses. Keep it short: the end of the working day is usually enough.
   </Step>
   <Step title="Give the reason and grant">
     Name the entry and who asked for it, then click **Grant exception**. The message "Exception
@@ -168,9 +170,11 @@ is posted.
 
 ## Lock history
 
-The Locks page shows only the current lock for each kind, with its reason and who
-set it. The full history is in [Settings → Audit](/administration/audit-log), the
-[audit log](/glossary#audit-log) that records every sensitive action:
+**Lock history** on the Locks page shows every change to the Books and Tax period
+locks, newest first. Each entry shows the lock kind, the old and new dates
+("Not locked" means no date), who changed it, when, and the reason. This history
+is recorded with the lock change itself. For exception grants and revocations,
+use [Settings → Audit](/administration/audit-log):
 
 | Audit action           | Details                                         |
 | ---------------------- | ----------------------------------------------- |
@@ -190,6 +194,9 @@ log.
 | Choose an expiry in the future.                                                            | Grant exception                                 | Pick a later time; the server's clock decides                             |
 | Choose a local time that exists in Asia/Kolkata                                            | Grant exception                                 | Pick another time (applies only in zones with daylight saving)            |
 | Choose a member                                                                            | Grant exception                                 | Pick the person who will post                                             |
+| Choose an expiry within 30 days.                                                           | Grant exception                                 | Choose an earlier time                                                    |
+| Choose a member who can post documents.                                                    | Grant exception                                 | Choose a posting member or update their role                              |
+| This member already has an active exception.                                               | Grant exception                                 | Use the existing grant, or revoke it before granting another              |
 | This lock changed after you opened it.                                                     | Change lock                                     | Reopen the dialog and review the new date                                 |
 | This exception is not active.                                                              | Revoke                                          | It already expired or was revoked; refresh the page                       |
 

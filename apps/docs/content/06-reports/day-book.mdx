@@ -11,6 +11,11 @@ document, such as all [receipts](/glossary#receipt) of the week.
 
 **Who can open it:** Owner, Accountant and Chartered Accountant.
 
+For a day-close breakdown by **Payment method** (name, receipt count and amount),
+open **Sales → Receipts** and set **From** and **To** to the same date. Filter
+**State** to **Posted** to exclude cancelled receipts. The day book's debit
+and credit totals are accounting entries, not a breakdown of receipt methods.
+
 ## Open the day book
 
 <Steps>
@@ -41,8 +46,9 @@ The line above the table sums up the period:
 | **Credits** | The total of all credit lines; always equal to Debits |
 
 Each entry starts with a shaded heading row: the date, the document number (a link to
-the document) and the [narration](/glossary#narration). For a document this is the note typed on it; a
-reversal reads "Reversal of" and the number, and an allocation reads "Allocation". The rows below it are the entry's lines:
+the document) and the [narration](/glossary#narration). A reversal names the original
+document and cancellation reason; an allocation names its source and target documents,
+and links to the source. The rows below it are the entry's lines:
 
 | Column                | Meaning                                                             |
 | --------------------- | ------------------------------------------------------------------- |
@@ -65,13 +71,13 @@ last entry has loaded.
 The day book uses the document date, not the time you posted it. A bill you post today
 with yesterday's date appears in yesterday's day book.
 
-A cancellation is its own entry, a [reversal](/glossary#reversal), dated on the original document date, with the narration
-"Reversal of" and the document number. Its lines mirror the original. Cancelling a
-receipt from last week places both entries in last week's day book.
+A cancellation is its own entry, a [reversal](/glossary#reversal), dated on the original document date, with a narration
+such as "Reversal of RCT26-27/5: Duplicate receipt". Its lines mirror the original.
+Cancelling a receipt from last week places both entries in last week's day book.
 
-An **Allocation** entry has no document number. It records an advance or credit note
-applied to an invoice or bill, and moves the amount between two accounts of the same
-party.
+An **Allocation** entry reads "Allocation: source number → target number". It records
+an advance or credit note applied to an invoice or bill, links to its source document,
+and moves the amount between two accounts of the same party.
 
 ## Day close
 
@@ -91,8 +97,8 @@ the bank account that the method lands in.
 ## Download
 
 - **Download XLSX** saves one row per line, with Date, Document, Type, Kind, Account
-  code, Account, Party, Debit, Credit and Narration. **Type** holds the document type
-  (for example `receipt` or `debitNote`) and **Kind** is `post` or `reverse`. The
+  code, Account, Party, Debit, Credit and Narration. **Type** uses readable names
+  (for example "Debit note") and **Kind** reads "Posted" or "Cancellation". The
   document type filter applies. It holds up to 1,00,000 lines.
 - **Download PDF** opens the day book in a new tab. It holds up to 5,000 lines.
 
@@ -105,8 +111,8 @@ document type, or download the XLSX.
 **The day book says "No entries posted in this period."** Nothing is dated in the
 period. Check **To**; the day book opens on today's date.
 
-**I cannot see why a receipt was cancelled.** The day book shows "Reversal of" and the
-number, not the reason. Find the reason in the [audit log](/administration/audit-log) ([audit log](/glossary#audit-log): the record of sensitive actions).
+**I cannot see why a receipt was cancelled.** Check its reversal narration for the
+reason. The [audit log](/administration/audit-log) also records the cancellation.
 
 ## Related pages
 

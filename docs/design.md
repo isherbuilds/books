@@ -97,8 +97,9 @@ state text and focus rings.
 - Money: negatives print in brackets, `(₹4,250.00)`; balances carry Dr or Cr. A
   document total, and a balanced journal entry, has an ink rule above and the
   `closing-total` double stamp rule below.
-- Money fields use `AmountInput` (decimal keypad, right-aligned tabular digits; `symbol`
-  adds ₹ on a standalone field). GSTIN, PAN and codes use `IdInput`; `GstinField`
+- Money fields use `AmountInput` (decimal keypad, right-aligned tabular digits;
+  enough width to read the entered amount without clipping). `symbol` adds ₹ on
+  a standalone field. GSTIN, PAN and codes use `IdInput`; `GstinField`
   shows the state and PAN carried by a valid GSTIN.
 - Home leads with the owner's figures in whole rupees (`formatRupees`): owed to you,
   owed by you and cash, from the party and money-account balances.
@@ -205,6 +206,11 @@ side pane. Operational tables never scroll sideways: below `md` rows become
 compact cards (`px-3 py-2 border-b`, identifier, name and status first). The
 card stacks its lines with `gap-1`; a `*Card` renderer returns a fragment and
 sets no margins. Report and print tables may scroll.
+
+In a record Sheet, compact allocation cards keep Reverse in the row on phones.
+Dense line tables may scroll within their own width on larger screens; the Sheet
+itself must not hide the tax and total columns.
+
 Scrollbars are 6 px; the rail hides its own. `DataTable` rows stay single-line:
 truncate with a `title`, keep identifiers whole, and hide optional columns below
 a breakpoint. Elsewhere long text wraps (`break-words`) or truncates with a

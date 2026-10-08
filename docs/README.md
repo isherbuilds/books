@@ -22,39 +22,22 @@ prerequisite stops it. **Verification**: the code is done; the evidence is not.
 Check UI items in the running app on desktop and mobile, in both themes.
 
 - **[User-guide walkthrough findings](./research/docs-walkthrough-findings-2026-10-04.md)**:
-  Active. [D1–D16](./specs/accounting-core.md#decisions-2026-10-04) are recorded.
-  Built and verified on branches (PRs #39–#47): D1–D3 (including the Opening
-  Balance/business race fix and regression test), D4, D5, M6, D8, D11,
-  D13/D15, D16 and M10. M6 fixes a render-subscription bug; no automated test
-  exists without a component harness. D11 does not refresh an open page at
-  midnight. M10 first-page p50 fell from 14.8 s with timeouts to 62–145 ms;
-  16-worker load rose 43→72 req/s, errors 7→0
-  ([method](./specs/query-performance.md#current-read-measurements)).
-  Remaining: D6 supplier refund Receipt and D7 proportional TDS on Debit Notes
-  (M7/M8), M14–M17 (join page, phone invite form, password reset copy, join
-  audit), and the minor/polish lists. M12 is closed by D12, not a blocker.
-  Open UI checks: change an unused income account's supply class at 1440 and
-  390 px in both themes. Recapture the Edit account, apply-credit ledger and
-  quarter-close screenshots (and the quarter-close table) on a re-seeded demo.
-  Next: build D6/D7 and resolve the remaining findings against their owner docs.
+  Verification. Every major and minor/polish finding is built, closed by a
+  [decision](./specs/accounting-core.md#decisions-2026-10-04), deferred
+  (record attachments) or recorded as a
+  [CA question](./specs/accounting-core.md#ca-acceptance). D6/D7, M14–M17 and
+  the minor/polish fixes passed in the running app at 1440 and 390 px in both
+  themes. Not exercised: expired-invitation UI, exception refusal for a
+  non-posting member, the sole-owner server refusal, the `import.commit` audit
+  label, the empty place-of-supply message, and changing an unused income
+  account's supply class. Next: those checks, then recapture the Edit account,
+  apply-credit ledger and quarter-close screenshots (and the quarter-close
+  table) on a re-seeded demo.
 
-- **[Combobox input simplification](./specs/client-patterns.md)**: Verification.
-  One mounted input, Enter selection, Tab progression, clearing a saved choice
-  by typing, empty results, and Apply Credit selection/focus/disable behavior
-  passed at desktop and 390 px in both themes. Same local fixture, 24 alternating
-  invoice party searches, Chrome dev mode, input event to second animation frame:
-  median 18.7→13.7 ms, p95 31.4→30.7 ms. LinkField chunk 16.52→14.61 kB gzip;
-  three picker files 755→686 lines. Next: exercise Load more with over one page
-  of open credits.
-- **[Client bundle trim](./architecture.md)**: Verification. Client gzip JS
-  669.1→648.2 kB (`bun --bun vite build`, `assets/*.js` summed at gzip -9):
-  dependency-free `*-kinds.ts` removes Drizzle (−10.5 kB); the throwing
-  `Command.Dialog` alias removes unused Radix dependencies (−10.4 kB).
-  Palette open/filter/Esc passed without console errors. Next: 390 px and dark theme.
-- **[Apply Credit form cleanup](./specs/client-patterns.md)**: Verification.
-  Combobox owns open state; lint/format passed, production build passed before
-  the concurrent Combobox edit. Next: type check and selection, Load more and
-  keyboard checks in the running app.
+- **[Product family](./specs/product-family.md)**: Active. One SaaS, one
+  database, School and HMS as modules on Finance; supersedes the 2026-09-13
+  separate-apps decision. Next: Slice 1 (module switch and document source).
+
 - **[Query performance](./specs/query-performance.md)**: Active. Remaining:
   S4 party statement refusal timing and S7 close-out. Next: time refusal and
   reconcile deferred gates; use `db:seed:mega` for mega-volume checks
@@ -161,6 +144,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
 - **[Single address field](./specs/accounting-core.md)**: Verification.
   Receipt/tenancy tests passed. Next: Party/Organization multiline Address
   create/edit/save/reload.
+- **[Review fixes D1–D16](./specs/accounting-core.md)**: Verification. Types,
+  lint and affected integration tests passed. Next: PDF link on cancelled Invoice
+  and Note, credit-note Ship to from the invoice's party address, register Load
+  more after a draft date change, at desktop and 390 px. Blocked locally while a
+  foreign process holds web port 55444.
 - **[Banking](./specs/accounting-core.md)**: Verification. Next: add bank account
   → payment method with account preselected; toggle method inactive/active;
   Receipt post/cancel changes/restores balance; active method prevents account

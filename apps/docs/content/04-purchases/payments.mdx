@@ -23,6 +23,10 @@ Search by number, party or reference. The filter icon in the search box offers *
 **State** (Posted or Cancelled) and **Settlement** (Advance, Against open items or
 Direct).
 
+The **Documents** and **Total** line covers every matching payment, not only
+those loaded on screen. It includes cancelled payments unless **State** is
+filtered to **Posted**.
+
 <Frame caption="July payments: an advance, two payments against bills, and a cash payment.">
   ![Payment register filtered to July 2026](./images/payments-register.webp)
 </Frame>
@@ -186,8 +190,8 @@ section rate and that the party's PAN ([Permanent Account Number](/glossary#pan)
 Type the **gross** amount in **Amount**: Accly Books deducts the TDS from it, pays the
 rest from the bank and keeps the TDS in **TDS Payable** ([TDS Payable](/glossary#tds-payable),
 what you owe the government). A ₹25,000 advance under 1027 at
-10% pays ₹22,500 from the bank and credits ₹2,500 to TDS Payable. The form does not show
-the net amount before you post.
+10% pays ₹22,500 from the bank and credits ₹2,500 to TDS Payable. **Net paid** shows
+₹22,500 before you post.
 
 <Frame caption="On a phone, the TDS section shows its rate below the field.">
   ![Advance with a TDS section on a phone](./images/payments-advance-tds-phone.webp)

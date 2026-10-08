@@ -20,8 +20,9 @@ inactive. A **Chartered Accountant** and an **Operator** can see the chart.
 ## Read the chart
 
 Open **Accounting → Chart of accounts**. Each row shows the account **Name**, its
-**Parent ledger**, its **Code** and its **Type**: Asset, Liability, Equity, Income or
-Expense (see [assets, liabilities and equity](/glossary#assets-liabilities-equity)). Search by name or code. The filter icon in the search box filters by
+**Parent ledger**, its **Code**, its **Type** (Asset, Liability, Equity, Income or
+Expense) and the **GST supply class** for income accounts (see
+[assets, liabilities and equity](/glossary#assets-liabilities-equity)). Search by name or code. The filter icon in the search box filters by
 **Type**.
 
 <Frame caption="The chart of accounts of Cedar Components. A lock marks a system account.">
@@ -66,7 +67,7 @@ the ledger balances, not the GST registers; see
 
 ### Account codes
 
-Accly Books gives each new account the next free code for its type. You do not type
+Accly Books gives each new top-level account the next code for its type. You do not type
 codes.
 
 | Type      | New codes |
@@ -77,14 +78,10 @@ codes.
 | Income    | 5000–5999 |
 | Expense   | 6000–6799 |
 
-A new bank or cash account takes the next code inside its group instead, for example
-**1102** under Bank Accounts (1100).
-
-:::note
-The code is the next number after the highest code of that type. It does not follow
-the parent: a new asset account after **Cess Input Credit (1540)** gets **1541**, even
-at the top level. Search by name if the code order looks mixed.
-:::
+Under a group, the code takes the first free slot in that group's range: **1200**
+under Current Assets (100), **2001** under Current Liabilities (200), or
+**1102** under Bank Accounts (1100). A top-level asset continues after the
+highest asset code instead. Groups themselves cannot be added.
 
 ## Add an expense account
 
@@ -96,9 +93,8 @@ ledger.
     In **Chart of accounts**, click **New account**. The **Add account** panel opens.
   </Step>
   <Step title="Choose where it belongs">
-    In **Under**, choose a group, or **Top level** under the type you need. The list is grouped by
-    type: choose **Top level** in the **Expense** part. A new organization has no expense groups, so
-    most expense accounts go at the top level.
+    In **Under**, choose a group, or **Top level (Expense)**. A new organization has no expense
+    groups, so most expense accounts go at the top level.
   </Step>
   <Step title="Name it">
     Type **Courier and Postage** in **Name**. Names are unique among active accounts, in any mix of
@@ -114,10 +110,9 @@ ledger.
 </Frame>
 
 :::tip
-After you choose an option in **Under**, the box shows only "Top level" or the
-group's name, not the type. Open the list again to check that you chose **Top level**
-in the right type.
-:::
+The selected option in **Under** keeps its type visible, for example
+**Top level (Expense)**. Check it before saving.
+::::
 
 ## Add an income account
 
@@ -125,8 +120,8 @@ Cedar Components sells brass scrap from its workshop. Scrap is a taxable supply,
 it needs a taxable income account.
 
 <Steps>
-  <Step title="Choose Top level under Income">
-    Click **New account**. In **Under**, choose **Top level** in the **Income** part.
+  <Step title="Choose Top level (Income)">
+    Click **New account**. In **Under**, choose **Top level (Income)**.
   </Step>
   <Step title="Name it">Type **Scrap Sales**.</Step>
   <Step title="Choose the GST supply class">
@@ -172,8 +167,8 @@ If you change an account from Exempt to Taxable, choose a GST rate on each
 [item](/setup/items#gst-rate-and-the-income-account) that uses it before invoicing
 in a GST-registered organization.
 
-The desktop list does not show the class. Filter by **Type** → **Income** on a phone,
-where each card shows "GST supply class: …", or open an item that uses the account.
+The desktop chart shows the GST supply class for each income account; the phone
+cards show "GST supply class: …" below the account name.
 
 <Frame caption="On a phone, each income account shows its supply class.">
   ![Chart of accounts on a phone](./images/chart-of-accounts-mobile.webp)

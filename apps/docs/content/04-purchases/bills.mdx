@@ -34,6 +34,11 @@ Search by bill number, party or supplier invoice number. The filter icon in the 
 box offers **Date** and **Status**: **Draft**, **Posted**, **Cancelled**, **Open**
 (something still to pay) and **Overdue** (open and past its due date).
 
+The **Documents** and **Total** line counts and sums all matching bills, even
+beyond the loaded page. Cancelled bills are included unless you choose another
+**Status**. Drafts remain in the register outside the selected period and their
+saved totals count too.
+
 <Frame caption="July bills for Cedar Components: three paid, one cancelled duplicate, and a draft.">
   ![Bill register filtered to July 2026](./images/bills-register.webp)
 </Frame>
@@ -158,6 +163,10 @@ a contractor's work or commission. Accly Books deducts TDS when you book the bil
 is the earlier of credit or payment for most sections, so you do not deduct it again when
 you pay.
 
+If you choose a TDS section while this supplier has an open advance Payment with TDS,
+the form warns you that TDS was already deducted. The warning does not block posting:
+review the deduction with your accountant because the two entries are not netted.
+
 The sections follow the Income-tax Act, 2025, which applies from 1 April 2026. They use
 the new codes, so search by the description, not the old 1961 Act number:
 
@@ -250,8 +259,8 @@ You can check each entry in the [day book](/reports/day-book) (the
 ## The bill record
 
 Click a bill in the register to open its record. It shows the total and **Outstanding**,
-the supplier invoice number and date, due date, **Place of supply** (as a state code, for
-example 27 for Maharashtra), [narration](/glossary#narration) (your note on the entry), the
+the supplier invoice number and date, due date, **Place of supply** (state name and
+code, for example Maharashtra (27)), [narration](/glossary#narration) (your note on the entry), the
 **Allocations** that settle it ([allocations](/glossary#allocation) match payments and credits
 to the bill), the lines and
 the totals.
@@ -310,7 +319,7 @@ documents become open to settle again.
 
 A draft has no number and posts nothing. It shows in the register as **Draft**. Open it
 and choose **Edit draft** to change it and post it, or **Discard draft** to delete it.
-**Discard draft** deletes at once, without asking.
+Confirm before deleting; a discarded draft cannot be recovered.
 
 ## Correct or cancel a bill
 

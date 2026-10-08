@@ -91,22 +91,19 @@ every column.
 
 ## 3. Check, and fix the errors
 
-The accountant chooses the file and clicks **Check**. The first draft has four
-errors:
+The accountant chooses the file and clicks **Check**. The first draft has three
+row errors:
 
-<Frame caption="The first Check: four errors, nothing written.">
-  ![Check errors for the first draft](./images/cutover-from-tally-check-errors.webp)
-</Frame>
+| Error                                                                   | Cause                                                               | Fix                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------- |
+| Parties · 6 · Name · "A party with this name already exists."           | Varun Shetty is already a party in the school's books               | Delete the row; existing parties need no row |
+| Opening items · 3 · Due date · "Enter a due date on or after the date." | Kavya's due date was typed as 28 Jan, before the 5 Feb invoice date | Correct it to `2025-02-28`                   |
+| Opening items · 4 · Amount · "Enter a non-negative amount …"            | The advance was typed as `₹4,000`                                   | Type `4000.00`                               |
 
-| Error                                                                                           | Cause                                                                                                                 | Fix                                                    |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Parties · 6 · Name · "A party with this name already exists."                                   | Varun Shetty is already a party in the school's books                                                                 | Delete the row; existing parties need no row           |
-| Opening items · 3 · Due date · "Enter a due date on or after the date."                         | Kavya's due date was typed as 28 Jan, before the 5 Feb invoice date                                                   | Correct it to `2025-02-28`                             |
-| Opening items · 4 · Amount · "Enter a non-negative amount …"                                    | The advance was typed as `₹4,000`                                                                                     | Type `4000.00`                                         |
-| Trial balance · "Accounts receivable is ₹36,500.00 but the receivable items net to ₹18,500.00." | A typing slip of ₹2,000 in `1300`, and Kavya's two rows above were left out of the items' net because they had errors | Correct `1300` to `38500` and Corpus Fund to `3028480` |
-
-Fix the opening-item rows first: while they have errors, the receivable net leaves
-them out, so the ₹18,500.00 in the message is not the real total.
+While opening-item rows have errors, Check holds back control-account mismatch
+messages because their totals are incomplete. After fixing those rows and checking
+again, it reports that Accounts Receivable is ₹36,500.00 but receivable items net to
+₹38,500.00. Correct `1300` to `38500` and Corpus Fund to `3028480`, then Check again.
 
 The accountant saves the workbook, clicks **Clear**, chooses it again and clicks
 **Check**. This time it shows **Ready to import**:

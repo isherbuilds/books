@@ -51,10 +51,12 @@ No email is sent. An owner hands an invitation id (UUIDv7) to one person. The
 `invitation-claim` plugin lets `/sign-up/email` create an account only with a
 live invitation for that email, and refuses every other path. Operator scripts
 insert users directly, verified. Invited accounts stay `emailVerified: false`.
-`member.list` shows
-links only to holders of `invitation: ["create"]` and hides expired rows. The
-public join lookup returns the invited email, the organization, and whether an
-account exists. Better Auth checks the session email when it accepts.
+`member.list` shows pending invitations, including expired ones, only to holders
+of `invitation: ["create"]`; only live links can be copied, and expired rows
+can be re-invited. The public join lookup returns the invited email, role,
+organization and whether an account exists. An expired link reports expiry
+without exposing its recipient; cancelled or used links remain unavailable.
+Better Auth checks the session email when it accepts.
 
 A new org-scoped domain follows the
 [`org-scoped-feature`](../.agents/skills/org-scoped-feature/SKILL.md) skill.
@@ -129,8 +131,8 @@ Form code rules are in [Development](./development.md#react-and-forms).
   estimates a term's matches across every organization, so one plan alone can
   walk a whole register or collect every match of a common term.
   Document registers order newest first on `(document_date, id)` through
-  `documents_org_type_date_id_idx`; an id cursor resolves its tenant-scoped
-  position inside the page's statement (`dateCursor`). Search window boundaries
+  `documents_org_type_date_id_idx`; the cursor is the last row's
+  `{ documentDate, id }`, so a draft that changes date cannot move it (`dateCursor`). Search window boundaries
   use the same tuple.
   Party-filtered registers use `documents_org_party_date_id_idx`; only Invoice and
   Bill periods exempt drafts, so other registers seek their date range directly.
@@ -145,13 +147,28 @@ Form code rules are in [Development](./development.md#react-and-forms).
 
 ## Audit and files
 
-`audit()` is fire-and-forget. It records role denials and sensitive successes
-(organization creation, invitations, membership and settings changes, file
-deletion, account archiving, posts, cancellations, allocations, lock changes and
-exceptions), never reads or ordinary writes. A target is `type:id`. A foreign claim cannot write another tenant's log.
-URLs, tokens and secrets never enter metadata; an unverified file key is stored
-as a digest. Journal entries differ: they commit with their document, because ledger
-drift must fail the transaction and an audit outage must not.
+`audit()` is fire-and-forget, outside domain transactions. It records role denials
+and sensitive successes (organization creation, invitation acceptance,
+invitations, membership and settings changes, successful file uploads and
+deletions, account archiving, posts, cancellations, allocations, lock changes
+and exceptions), never reads or ordinary writes. Uploads are recorded only
+after a pending file becomes ready; a failed or abandoned upload is not a
+success. File events retain the original name in metadata, even after deletion.
+Acceptance stores the invitee's org, user and role; member changes retain name
+and email, and allocation changes retain source and target document numbers in
+metadata. A stored target is `type:id`; the audit table instead shows a saved
+business identifier (number, name or email) where available, retaining the
+stored reference on hover and omitting raw metadata ID fields. A foreign claim
+cannot write another tenant's log. URLs, tokens and secrets never enter metadata;
+an unverified file key is stored as a digest. Journal entries commit with
+their document, because ledger drift must fail the transaction and an audit
+outage must not.
+
+Audit entries page newest first by id under the organization predicate. Optional
+action, actor name/email/id, inclusive organization-local date range and target
+or metadata text filters apply before the keyset limit. A deleted actor's entry
+remains, identified by its stored id. Files list the uploader's name when the
+account still exists and show “Former member” otherwise.
 
 Objects are private. The browser moves bytes with 15-minute presigned URLs; keys
 are `<orgId>/<uuid>/<sanitized-name>`. A read URL names its own response type:
@@ -266,7 +283,7 @@ shows it as "Account inactive". New Organizations get Cash → Cash in Hand, and
 Card → Bank Account. Direct receipts and payments cannot name a money account, a
 group or a system account (`postableAccounts`).
 Names are unique per Organization after trimming and ignoring case (`DUPLICATE`);
-creation serializes the name check and insert, retaining the exact-name unique index.
+the unique index `payment_methods_org_name_idx` on `(org_id, lower(name))` enforces it.
 
 Bank Charges (6800) is a plain expense. A card MDR or bank fee is a direct
 Payment to it, from the bank statement. Record actual fees; never model per-bank

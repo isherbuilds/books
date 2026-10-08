@@ -45,6 +45,11 @@ To narrow the list:
   shows open invoices whose due date is before today.
 - Click **Clear** to remove every filter.
 
+The **Documents** and **Total** line sums all matching invoices, not just the
+loaded page. It includes cancelled invoices unless you select a **Status** such
+as **Posted** or **Open**. Drafts appear even when their date is outside your
+selected period, and their saved totals are included.
+
 <Frame caption="Status → Open lists every posted invoice that is not fully paid.">
   ![Invoice register filtered to open invoices](./images/invoices-register-open.webp)
 </Frame>
@@ -170,8 +175,8 @@ supply is Karnataka, so the invoice carries IGST at 18%.
 ### Edit a draft
 
 Open the draft from the register and click **Edit draft**. Change what you need, then
-**Save draft** again or **Post**. To delete a draft, click **Discard draft**. This
-deletes it at once, with no confirmation.
+**Save draft** again or **Post**. To delete a draft, click **Discard draft**, then
+confirm the deletion. A discarded draft cannot be recovered.
 
 <Frame caption="A draft has no number. It shows the totals it will post.">
   ![Draft invoice record](./images/invoices-draft-sheet.webp)
@@ -207,6 +212,7 @@ The record shows:
   invoice;
 - **Class**: [**Tax Invoice**](/glossary#tax-invoice) when any line carries GST, otherwise
   **Bill of Supply** ([exempt and nil-rated](/glossary#supply-class) items, which carry no GST, or an organization without a GSTIN);
+- **Place of supply** as the state name and code, for example Maharashtra (27);
 - [**Credit notes**](/glossary#credit-note) posted against it, and
   [**Allocations**](/glossary#allocation): every receipt, credit note or advance matched
   to it (see [Apply credit](/sales/apply-credit));
@@ -361,7 +367,7 @@ advance or credit note is matched to it:
 | Message                                                                                    | What to do                                                                                                                    |
 | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | Choose a party                                                                             | Pick a customer in **Bill to**                                                                                                |
-| Use a valid Indian state code                                                              | Choose a **Place of supply** (it fills once a party is chosen)                                                                |
+| Choose the place of supply                                                                 | Choose a **Place of supply** (it fills once a party is chosen)                                                                |
 | Choose an item                                                                             | Every line needs an item; remove empty lines                                                                                  |
 | Quantity must be from 1 to 1,000,000                                                       | Use a whole number. For part quantities, set the item's unit smaller (for example grams instead of kg)                        |
 | Due date cannot be before the invoice date                                                 | Move the due date on or after the invoice date                                                                                |

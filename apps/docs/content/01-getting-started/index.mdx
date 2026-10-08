@@ -34,8 +34,8 @@ email address can create the account.
 <Steps>
 <Step title="Open the link">
 
-The **Join** page shows the organization name and the invited email address,
-for example "Join Cedar Components. Invited as priya.accountant@example.com."
+The **Join** page shows the organization name, the role and the invited email,
+for example "Join Cedar Components. Invited as Accountant · priya.accountant@example.com."
 
 </Step>
 <Step title="Create your account, or sign in">
@@ -74,13 +74,14 @@ for an accountant and an operator, with screenshots of each step.
 
 ### Problems with an invitation
 
-| What you see                                                                                                                  | What it means                                                                                                          | What to do                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Could not open this invitation. This invitation is no longer available. Ask the sender for a new link."                      | The invitation expired, the owner cancelled it, or it was already used.                                                | Ask the owner for a new invitation.                                                                                                               |
-| "This invitation is for another account. Switch accounts to sign in with the invited email."                                  | You are signed in with a different email address.                                                                      | Click **Switch account**, then sign in or create the account for the invited email.                                                               |
-| "Could not load organizations and invitations. Email verification required to view or list invitations for the session email" | You opened `/join` without the invitation link. Accounts created from an invitation cannot list invitations there yet. | Open the original invitation link again. If you are already a member, go to your organization's address instead, for example `/cedar-components`. |
+| What you see                                                                                 | What it means                                                                                    | What to do                                                                                                                                     |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| "This invitation has expired. Ask the sender for a new link."                                | The 48-hour window has passed.                                                                   | Ask the owner to use **Re-invite** on the expired row in **Settings → Members**, then send the new link.                                       |
+| "This invitation is no longer available. Ask the sender for a new link."                     | The owner cancelled it, or it was already used.                                                  | Ask the owner for a new invitation.                                                                                                            |
+| "This invitation is for another account. Switch accounts to sign in with the invited email." | You are signed in with a different email address.                                                | Click **Switch account**, then sign in or create the account for the invited email.                                                            |
+| The Join page lists your organizations, but no invitations.                                  | Accounts created from an invitation cannot list pending invitation links without verified email. | Open the original invitation link again; if you lost it, ask the owner to copy the pending link from **Settings → Members** and send it again. |
 
-<Frame caption="An expired, cancelled or already used invitation link.">
+<Frame caption="An expired, cancelled or already used invitation link shows why it cannot be opened.">
   ![Join page saying the invitation is no longer
   available](./images/index-invitation-unavailable.webp)
 </Frame>
@@ -112,11 +113,10 @@ If the email or password is wrong, the page shows "Invalid email or password".
 </Frame>
 
 :::note[Forgotten password]
-The sign-in page says "Locked out? Ask your administrator to reset your
-password." Accly Books has no password reset yet, and an organization owner
-cannot reset a password from the app. Contact the person who runs your Accly
-Books installation.
-:::
+The sign-in page says "Locked out? Contact the person who runs your Accly Books
+installation. Password reset is not available yet." An organization owner
+cannot reset a password from the app.
+::::
 
 A sign-in stays active for about a week on that browser. Sign out on a shared
 computer.
@@ -127,17 +127,14 @@ If you belong to more than one organization, use the organization switcher at
 the top of the sidebar to move between them (see
 [Finding your way](/getting-started/finding-your-way#switch-organization)).
 
-The **Join** page at `/join` also lists **Your organizations** and any pending
-**Invitations** for your email address. Click an organization to open it, or
-**Review invitation** to accept one. Open it from **Join organization** in the
-organization switcher.
+The **Join** page at `/join` lists **Your organizations**. Click one to open it.
+To join another, open the invitation link the owner shares; accounts created
+from invitations cannot list pending invitations without verified email.
+Owners can copy an existing pending link from **Settings → Members** if you
+lose it. Open `/join` from **Join organization** in the organization switcher.
 
-<Frame caption="The Join page lists your organizations. Pending invitations appear above them.">
+<Frame caption="The Join page lists the organizations you already belong to.">
   ![Join page listing three organizations](./images/index-choose-organization.webp)
-</Frame>
-
-<Frame caption="A pending invitation on the Join page. Click Review invitation, then Join.">
-  ![Join page with a pending invitation to Cedar Components](./images/index-join-invitations.webp)
 </Frame>
 
 ## Organization addresses

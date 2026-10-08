@@ -34,7 +34,7 @@ and **Amount** (the debit total). Search by number, reference or narration. The
 filter icon offers **Date** and **State** (Posted or Cancelled). By default the
 register shows the current [financial year](/glossary#financial-year) (FY). In India
 it usually runs from 1 April to 31 March; your organization's start month is in
-**Settings → Organization** under **Fiscal year starts in**.
+**Settings → Organization** under **Financial year starts in**.
 
 <Frame caption="The journal register for Cedar Components after the April–June close.">
   ![Journal register](./images/journals-list.webp)
@@ -141,6 +141,12 @@ its own postings.
 | [CGST, SGST, IGST](/glossary#cgst-sgst-igst) (central, state and integrated GST) and [cess](/glossary#cess) input and output accounts                                                          | Yes           | GST payment and input-tax set-off; see below                                                         |
 | **Accounts Payable** (what you owe vendors, [payable](/glossary#payable)), **Customer Advances**, **Supplier Advances** ([advances](/glossary#advance), money paid before the invoice or bill) | No            | A [payment](/purchases/payments), [debit note](/purchases/debit-notes) or [receipt](/sales/receipts) |
 | An archived (switched-off) account                                                                                                                                                             | No            | Restore it in [Chart of accounts](/setup/chart-of-accounts)                                          |
+
+Payables cannot be adjusted with party lines in a journal. To record what you owe a
+supplier or settle it, use a [bill](/purchases/bills), a
+[payment](/purchases/payments), or a [debit note](/purchases/debit-notes) instead.
+Putting a vendor's name on an ordinary journal line does not change their payable
+balance.
 
 ### Record a GST payment or input-tax set-off
 
