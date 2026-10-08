@@ -46,7 +46,8 @@
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-readable-spacing": "error",
-    "anti-slop/require-safety-comment-for-type-assertion": "error"
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "accly/no-pass-through-function": "error"
   },
   "overrides": [
     {
@@ -59,7 +60,20 @@
     {
       "files": ["**/*.tsx"],
       "rules": {
-        "accly/no-bigint-in-components": "error"
+        "accly/no-bigint-in-components": "error",
+        "accly/no-motion-on-controls": "error"
+      }
+    },
+    {
+      "files": [
+        "packages/ui/src/components/dialog.tsx",
+        "packages/ui/src/components/popover.tsx",
+        "packages/ui/src/components/sheet.tsx",
+        "apps/web/src/components/wave-loader.tsx",
+        "apps/web/src/components/landing/**"
+      ],
+      "rules": {
+        "accly/no-motion-on-controls": "off"
       }
     }
   ]

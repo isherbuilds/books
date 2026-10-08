@@ -20,7 +20,7 @@ import { ErrorNote } from "@/components/page";
 // would otherwise curl the ends of the rule up while the field is focused.
 // 16 px keeps iOS from zooming on focus.
 const underline =
-  "h-10 w-full rounded-none border-0 border-b-2 border-input bg-transparent px-0 text-base transition-colors duration-150 ease-out outline-none placeholder:text-muted-foreground focus:border-foreground disabled:opacity-60 aria-invalid:border-destructive";
+  "h-10 w-full rounded-none border-0 border-b-2 border-input bg-transparent px-0 text-base outline-none placeholder:text-muted-foreground focus:border-foreground disabled:opacity-60 aria-invalid:border-destructive";
 
 export function AuthField({
   name,

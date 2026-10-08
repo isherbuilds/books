@@ -53,7 +53,8 @@ live invitation for that email, and refuses every other path. Operator scripts
 insert users directly, verified. Invited accounts stay `emailVerified: false`.
 `member.list` shows pending invitations, including expired ones, only to holders
 of `invitation: ["create"]`; only live links can be copied, and expired rows
-can be re-invited. The public join lookup returns the invited email, role,
+can be re-invited: `member.invite` cancels the expired rows for that email
+before Better Auth creates the new one. The public join lookup returns the invited email, role,
 organization and whether an account exists. An expired link reports expiry
 without exposing its recipient; cancelled or used links remain unavailable.
 Better Auth checks the session email when it accepts.

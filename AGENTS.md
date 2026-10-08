@@ -67,16 +67,16 @@ Run this before reporting UI, route, or API work.
 
 A rule with only `prose` behind it that an agent breaks again moves up a level in the same change.
 
-| Rule | Enforced by |
-| --- | --- |
-| No bigint literal in `.tsx` | lint `accly/no-bigint-in-components` |
+| Rule                                                           | Enforced by                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| No bigint literal in `.tsx`                                    | lint `accly/no-bigint-in-components`                                            |
 | No transition or animation class outside overlays (design §11) | lint `accly/no-motion-on-controls`; overlays exempt by file in `.oxlintrc.json` |
-| No function that only forwards its parameters to one call | lint `accly/no-pass-through-function` |
-| Tenant predicate, scope-only authorization (rules 1–2) | test `tests/integration/tenancy.test.ts` |
-| Roles authorize as a union (rule 2) | `@accly/auth/access` is the only parser; test `tests/unit/access.test.ts` |
-| Migrations come from `db:generate` (rule 4) | `prose` |
-| Base UI `data-pressed:` not Radix `data-[state=…]:` (UI) | `prose`; no occurrence in the tree yet |
-| Agent never stages or commits | `prose` (personal guidance) |
+| No function that only forwards its parameters to one call      | lint `accly/no-pass-through-function`                                           |
+| Tenant predicate, scope-only authorization (rules 1–2)         | test `tests/integration/tenancy.test.ts`                                        |
+| Roles authorize as a union (rule 2)                            | `@accly/auth/access` is the only parser; test `tests/unit/access.test.ts`       |
+| Migrations come from `db:generate` (rule 4)                    | `prose`                                                                         |
+| Base UI `data-pressed:` not Radix `data-[state=…]:` (UI)       | `prose`; no occurrence in the tree yet                                          |
+| Agent never stages or commits                                  | `prose` (personal guidance)                                                     |
 
 ## How to work
 

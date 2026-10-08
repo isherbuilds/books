@@ -145,10 +145,12 @@ Check UI items in the running app on desktop and mobile, in both themes.
   Receipt/tenancy tests passed. Next: Party/Organization multiline Address
   create/edit/save/reload.
 - **[Review fixes D1–D16](./specs/accounting-core.md)**: Verification. Types,
-  lint and affected integration tests passed. Next: PDF link on cancelled Invoice
-  and Note, credit-note Ship to from the invoice's party address, register Load
-  more after a draft date change, at desktop and 390 px. Blocked locally while a
-  foreign process holds web port 55444.
+  lint and the full test suite passed; audit URL filters (1440 and 390 px dark)
+  and the advance-receipt voucher passed in the running app. Next: PDF link on
+  cancelled Invoice and Note, credit-note Ship to from the invoice's party
+  address, register Load more after a draft date change, at desktop and 390 px;
+  Members Re-invite replacing the expired row; customer-refund Payment cancel
+  from its Sheet; supplier-refund Receipt refusal refreshing its credits.
 - **[Banking](./specs/accounting-core.md)**: Verification. Next: add bank account
   → payment method with account preselected; toggle method inactive/active;
   Receipt post/cancel changes/restores balance; active method prevents account

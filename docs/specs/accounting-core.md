@@ -248,8 +248,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     `receivables`, such as a Journal credit, allocates and reverses with no
     entry: its credit is posted once.
     A target with active allocations refuses cancellation
-    (`CONFLICT`, naming the sources); the record Sheet offers Cancel only once
-    every allocation is reversed. Receipt and Journal
+    (`CONFLICT`, naming the sources), except refund Payments (`against` /
+    `receivable`) and refund Receipts (`against` / `payable`): cancelling a refund
+    reverses its own allocations and restores the source credits. Other target
+    record Sheets offer Cancel only once every allocation is reversed. Receipt and Journal
     cancellation append reverse rows for their active allocations, with no
     journal entry of their own, and reverse every
     un-reversed allocation journal entry from the document. Each allocation's
@@ -432,8 +434,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      taxable base and positive reversed amount; the TDS register displays it
      as a negative deduction in the note's period. The party ledger, automatic
      source allocation and unapplied credit use the net supplier credit, while
-     the note total remains gross for tax reporting. Cancelling reverses the
-     entry and party credit and removes the register row from active deductions.
+     the note total remains gross for tax reporting. Reversed TDS may equal the
+     note total: that final note posts no `payables` line or party credit.
+     Reversed TDS above the total is refused (`NOTE_TDS_EXCEEDS_TOTAL`).
+     Cancelling reverses the entry and party credit and removes the register
+     row from active deductions.
      Both copy `affectsTax` from the source. At post a note allocates to its
      source up to the source's outstanding; the rest stays an unapplied source.
      A Debit Note may store the supplier's credit note number in the
@@ -446,8 +451,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      It takes no TDS: the Bill deducts at credit.
      `receivable` is a refund: the targets are the Payment itself and the
      allocations name Credit Notes as sources; the amount equals their sum
-     exactly and no TDS is allowed. Unused Receipt advances stay unrefundable
-     (Deferred).
+     exactly and no TDS is allowed. Cancelling reverses the entry and its allocations,
+     restoring the Credit Notes' unapplied amounts. Unused Receipt advances stay
+     unrefundable (Deferred).
      Bill **Pay** opens the Payment with its supplier and `against` / `payable`
      selected; Credit Note **Refund** opens it with its customer and `against` /
      `receivable` selected. The party lookup settles before the form opens;
@@ -543,8 +549,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      The Receipt PDF uses `receipt.get` and lists the settled documents by number,
      document date and amount applied (including debit notes and payment advances
      on supplier refunds), plus fee, write-off and customer TDS adjustments with
-     the stored TDS section when available. Applied amounts less adjustments and
-     any remaining advance reconcile to the amount received.
+     the stored TDS section when available. Applied amounts less adjustments,
+     plus any remaining advance, reconcile to the amount received.
    - **Note PDF** at `/api/$orgSlug/notes/$noteId/pdf` uses `note.get` with
      `note:read` and the Invoice layout. It prints "Credit Note" or "Debit Note",
      the supplier and recipient snapshot names, addresses and GSTINs, note number
