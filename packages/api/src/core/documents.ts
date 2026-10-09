@@ -21,7 +21,7 @@ import {
   activeAllocationsOf,
   applyAllocations,
   lockDocuments,
-  reverseAllocation,
+  reverseAllocationToCancelled,
   settlementPaise,
   type AllocationPair,
   type AllocationTarget,
@@ -817,7 +817,8 @@ export async function reverseDocument(
 
   // Refunds reverse allocations targeting them, restoring each source's credit:
   // reverse the apply entry, or release a source that allocated at post.
-  for (const row of asTarget) await reverseAllocation(tx, scope, settings, row.id, reason);
+  for (const row of asTarget)
+    await reverseAllocationToCancelled(tx, scope, settings, row.id, reason);
 
   const asSource = active.filter((row) => row.targetDocumentId !== documentId);
 
