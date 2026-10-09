@@ -1,7 +1,7 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { datedPaging, orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
 
 type ReceiptListFilters = Omit<
   Parameters<AppRouterClient["receipt"]["list"]>[0],
@@ -15,7 +15,7 @@ export type ReceiptDetail = Awaited<ReturnType<AppRouterClient["receipt"]["get"]
 export const receiptListOptions = (orgSlug: string, filters: ReceiptListFilters) =>
   orpc.receipt.list.infiniteOptions({
     input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...datedPaging,
+    ...nextPage,
   });
 
 // A cached master like party.list: every method, active or not, since old receipts
@@ -34,3 +34,13 @@ export const activePaymentMethodsOptions = (orgSlug: string) => ({
 
 export const receiptDetailOptions = (orgSlug: string, receiptId: string) =>
   orpc.receipt.get.queryOptions({ input: { orgSlug, receiptId } });
+
+// The register's one-line aggregate over the whole filter, not the loaded page.
+export const receiptTotalsOptions = (
+  orgSlug: string,
+  filters: Omit<Parameters<AppRouterClient["receipt"]["totals"]>[0], "orgSlug">,
+) => orpc.receipt.totals.queryOptions({ input: { orgSlug, ...filters } });
+
+/** A party's five latest receipts, for its overview. */
+export const recentReceiptsOptions = (orgSlug: string, partyId: string) =>
+  orpc.receipt.list.queryOptions({ input: { orgSlug, partyId, limit: 5 } });

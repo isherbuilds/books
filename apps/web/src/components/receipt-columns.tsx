@@ -7,6 +7,7 @@ import type { AppRouter } from "@accly/api/routers/index";
 import { DropdownMenuItem } from "@accly/ui/components/dropdown-menu";
 import { cn } from "@accly/ui/lib/utils";
 import type { RouterClient } from "@orpc/server";
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
@@ -91,8 +92,14 @@ function ReceiptRowActions({ orgSlug, receipt }: { orgSlug: string; receipt: Rec
   return (
     <RowActionsMenu label={`Actions for receipt ${receipt.number ?? ""}`.trim()}>
       <DropdownMenuItem
-        onClick={() =>
-          window.open(`/api/${orgSlug}/receipts/${receipt.id}/pdf`, "_blank", "noopener,noreferrer")
+        render={
+          <Link
+            to="/api/$orgSlug/receipts/$receiptId/pdf"
+            params={{ orgSlug, receiptId: receipt.id }}
+            reloadDocument
+            target="_blank"
+            rel="noopener noreferrer"
+          />
         }
       >
         Print

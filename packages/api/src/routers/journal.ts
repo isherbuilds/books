@@ -21,7 +21,8 @@ import {
   reason,
   settlementPostFields,
 } from "../lib/schemas";
-import { allocationsOf, cancelDocument, registerPage, orgSettings } from "../lib/settlements";
+import { allocationsOf, cancelDocument, registerPage } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
 
 const lineSchema = z.strictObject({
   ...entryLineFields,

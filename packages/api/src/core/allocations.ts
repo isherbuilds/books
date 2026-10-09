@@ -9,7 +9,9 @@ import { and, asc, eq, exists, inArray, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
+import { paiseSum } from "../lib/sql";
 import { requirePermission, type Scope } from "../lib/procedures/factory";
+import { documentRole, type Side } from "./document-roles";
 import { assertPeriodOpen } from "./locks";
 import { formatMoney } from "./money";
 import { recordEntry, reverseEntries } from "./posting";
@@ -21,8 +23,6 @@ export type AllocationPair = {
   targetDocumentId: string;
   amountPaise: bigint;
 };
-
-type Side = "receivable" | "payable";
 
 type LockedDocument = Pick<
   typeof documents.$inferSelect,
@@ -100,7 +100,9 @@ export function settlementPaise(orgId: string, role: "source" | "target", partyI
   // active total. One scan of the document's allocations; no reversal anti-join per row.
   const applied = db
     .select({
-      amount: sql`coalesce(sum(case when ${allocations.kind} = 'apply' then ${allocations.amountPaise} else -${allocations.amountPaise} end), 0)`,
+      amount: paiseSum(
+        sql`case when ${allocations.kind} = 'apply' then ${allocations.amountPaise} else -${allocations.amountPaise} end`,
+      ),
     })
     .from(allocations)
     .where(
@@ -182,50 +184,11 @@ export async function lockDocuments(
     .for("no key update");
 }
 
-function roleOf(document: LockedDocument, position: "source" | "target"): Side | null {
-  switch (document.type) {
-    case "invoice":
-      return position === "target" ? "receivable" : null;
-    case "bill":
-      return position === "target" ? "payable" : null;
-    case "creditNote":
-      return position === "source" ? "receivable" : null;
-    case "debitNote":
-      return position === "source" ? "payable" : null;
-    case "receipt":
-      if (document.settlementKind === "direct") return null;
-
-      return document.exposureSide === (position === "source" ? "receivable" : "payable")
-        ? document.exposureSide
-        : null;
-    case "journal":
-      return "receivable";
-    case "payment":
-      return document.settlementKind !== "direct" &&
-        document.exposureSide &&
-        (document.exposureSide === "payable" ? position === "source" : position === "target")
-        ? document.exposureSide
-        : null;
-    case "openingClaim":
-      return position === "target" ? document.exposureSide : null;
-    case "openingCredit":
-      return position === "source" ? document.exposureSide : null;
-    default:
-      return null;
-  }
-}
-
 /** Only money held in an advance account needs a journal entry when allocated after post. */
-function allocationEntrySide(
-  source: Pick<LockedDocument, "type" | "settlementKind" | "exposureSide">,
-): Side | null {
-  if (source.settlementKind === "direct") return null;
+function advanceSide(document: LockedDocument): Side | null {
+  const role = documentRole(document);
 
-  if (source.type === "receipt" && source.exposureSide === "receivable") return "receivable";
-
-  if (source.type === "payment" && source.exposureSide === "payable") return "payable";
-
-  return null;
+  return role.advance ? (role.source ?? null) : null;
 }
 
 /** Lock all named documents in ascending id order, consume their balances, and move applied advances. */
@@ -257,17 +220,19 @@ export async function applyAllocations(
 
   // A Journal is settled only by someone who may read it, whichever path names it.
   if (locked.some((document) => document.type === "journal"))
+    // oxlint-disable-next-line accly/no-permission-in-handler -- the permission depends on the stored documents, read inside the transaction
     requirePermission(scope, { journal: ["read"] });
 
-  const firstSource = byId.get(args.pairs[0]!.sourceDocumentId);
-  const firstTarget = byId.get(args.pairs[0]!.targetDocumentId);
+  const [first] = args.pairs;
+  const firstSource = first && byId.get(first.sourceDocumentId);
+  const firstTarget = first && byId.get(first.targetDocumentId);
 
   if (!firstTarget)
     throw badRequest(
       "ALLOCATION_TARGET_INVALID",
       "Choose a posted target for the same party and side.",
     );
-  const side = firstSource && roleOf(firstSource, "source");
+  const side = firstSource && documentRole(firstSource).source;
 
   const partyId =
     firstSource?.type === "journal" ? (args.partyId ?? firstTarget.partyId) : firstSource?.partyId;
@@ -279,13 +244,13 @@ export async function applyAllocations(
     );
   }
 
-  for (const pair of args.pairs) {
+  const applies = args.pairs.map((pair) => {
     const source = byId.get(pair.sourceDocumentId);
     const target = byId.get(pair.targetDocumentId);
 
     if (
       !source ||
-      roleOf(source, "source") !== side ||
+      documentRole(source).source !== side ||
       (source.type !== "journal" && source.partyId !== partyId) ||
       (source.state !== "posted" &&
         !(source.state === "draft" && source.id === args.draftDocumentId)) ||
@@ -300,7 +265,7 @@ export async function applyAllocations(
     if (
       !target ||
       (source.type === "journal" && target.type !== "invoice") ||
-      roleOf(target, "target") !== side ||
+      documentRole(target).target !== side ||
       (target.type !== "journal" && target.partyId !== partyId) ||
       (target.state !== "posted" &&
         !(target.state === "draft" && target.id === args.draftDocumentId))
@@ -310,22 +275,22 @@ export async function applyAllocations(
         "Choose a posted target for the same party and side.",
       );
     }
-  }
 
-  const rows = args.pairs.map((pair) => {
-    const sourceDate = byId.get(pair.sourceDocumentId)!.documentDate;
-    const targetDate = byId.get(pair.targetDocumentId)!.documentDate;
-
-    return {
+    const row = {
       id: Bun.randomUUIDv7(),
       orgId: scope.orgId,
       ...pair,
       kind: "apply" as const,
       reversesAllocationId: null,
-      entryDate: sourceDate > targetDate ? sourceDate : targetDate,
+      entryDate:
+        source.documentDate > target.documentDate ? source.documentDate : target.documentDate,
       createdBy: scope.userId,
     };
+
+    return { row, source, target };
   });
+
+  const rows = applies.map(({ row }) => row);
 
   for (const row of rows)
     await assertPeriodOpen(tx, scope, settings, { entryDate: row.entryDate, affectsTax: false });
@@ -350,15 +315,17 @@ export async function applyAllocations(
   const left = new Map<string, bigint>();
 
   for (const row of balances) {
+    const isJournal = byId.get(row.id)?.type === "journal";
+
     // A Journal is a source only for a party it credits.
-    if (sourceIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.sourceCapacity <= 0n)
+    if (sourceIds.has(row.id) && isJournal && row.sourceCapacity <= 0n)
       throw badRequest(
         "ALLOCATION_SOURCE_INVALID",
         "Choose a posted source for the same party and side.",
       );
 
     // A Journal is a target only for a party it debits.
-    if (targetIds.has(row.id) && byId.get(row.id)!.type === "journal" && row.targetCapacity <= 0n)
+    if (targetIds.has(row.id) && isJournal && row.targetCapacity <= 0n)
       throw badRequest(
         "ALLOCATION_TARGET_INVALID",
         "Choose a posted target for the same party and side.",
@@ -367,13 +334,21 @@ export async function applyAllocations(
     left.set(row.id, sourceIds.has(row.id) ? row.source : row.target);
   }
 
+  const remaining = (id: string) => {
+    const balance = left.get(id);
+
+    if (balance === undefined) throw impossible(`locked document ${id} has no balance`);
+
+    return balance;
+  };
+
   for (const pair of args.pairs) {
-    left.set(pair.sourceDocumentId, left.get(pair.sourceDocumentId)! - pair.amountPaise);
-    left.set(pair.targetDocumentId, left.get(pair.targetDocumentId)! - pair.amountPaise);
+    left.set(pair.sourceDocumentId, remaining(pair.sourceDocumentId) - pair.amountPaise);
+    left.set(pair.targetDocumentId, remaining(pair.targetDocumentId) - pair.amountPaise);
   }
 
   for (const targetId of targetIds) {
-    const outstanding = left.get(targetId)!;
+    const outstanding = remaining(targetId);
 
     if (outstanding < 0n)
       throw badRequest(
@@ -383,7 +358,7 @@ export async function applyAllocations(
   }
 
   for (const sourceId of sourceIds) {
-    const unapplied = left.get(sourceId)!;
+    const unapplied = remaining(sourceId);
 
     if (unapplied < 0n)
       throw badRequest(
@@ -396,9 +371,8 @@ export async function applyAllocations(
 
   // Money a posted advance holds moves from the advance account to the control account.
   // A source posting now credits the control account itself, and a note holds no advance.
-  for (const row of rows) {
-    const source = byId.get(row.sourceDocumentId)!;
-    const entrySide = source.id === args.draftDocumentId ? null : allocationEntrySide(source);
+  for (const { row, source } of applies) {
+    const entrySide = source.id === args.draftDocumentId ? null : advanceSide(source);
 
     if (entrySide)
       await recordEntry(tx, scope, {
@@ -417,11 +391,11 @@ export async function applyAllocations(
       });
   }
 
-  return rows.map(({ id, amountPaise, sourceDocumentId, targetDocumentId }) => ({
-    id,
-    amountPaise,
-    sourceNumber: byId.get(sourceDocumentId)!.number,
-    targetNumber: byId.get(targetDocumentId)!.number,
+  return applies.map(({ row, source, target }) => ({
+    id: row.id,
+    amountPaise: row.amountPaise,
+    sourceNumber: source.number,
+    targetNumber: target.number,
   }));
 }
 
@@ -473,9 +447,9 @@ export async function reverseAllocation(
   ]);
 
   const source = locked.find((document) => document.id === apply.sourceDocumentId);
-  const target = locked.find((document) => document.id === apply.targetDocumentId)!;
+  const target = locked.find((document) => document.id === apply.targetDocumentId);
 
-  if (!source) throw impossible(`allocation ${allocationId} has no source`);
+  if (!source || !target) throw impossible(`allocation ${allocationId} lost a document`);
 
   const entryDate = apply.entryDate;
   await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
@@ -504,7 +478,7 @@ export async function reverseAllocation(
   if (apply.postEntryId) {
     await reverseEntries(tx, scope, [apply.postEntryId], { entryDate, narration });
   } else {
-    const side = allocationEntrySide(source);
+    const side = advanceSide(source);
 
     if (side) {
       if (!source.partyId)

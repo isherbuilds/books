@@ -213,8 +213,9 @@ export async function validateImport(
     const parentKey = row.parent.toLowerCase();
     const parent = byCode.get(parentKey) ?? byName.get(parentKey);
     const rootType = Object.hasOwn(TYPE_LABELS, parentKey) ? TYPE_LABELS[parentKey] : undefined;
+    const type = parent?.type ?? rootType;
 
-    if (!parent && !rootType) {
+    if (!type) {
       error(
         "Accounts",
         row.row,
@@ -236,7 +237,6 @@ export async function validateImport(
       continue;
     }
 
-    const type = parent ? parent.type : rootType!;
     const supplyClass = parsed.data.supplyClass;
 
     const supplyError = accountSupplyError(type, supplyClass);
@@ -540,8 +540,9 @@ export async function validateImport(
 
   for (const row of workbook.openingItems) {
     const found = partiesByName.get(normalizedName(row.party)) ?? [];
+    const [partyId] = found;
 
-    if (found.length !== 1) {
+    if (found.length !== 1 || !partyId) {
       error(
         "Opening items",
         row.row,
@@ -554,7 +555,7 @@ export async function validateImport(
       continue;
     }
 
-    if (inactive.has(found[0]!)) {
+    if (inactive.has(partyId)) {
       error(
         "Opening items",
         row.row,
@@ -577,7 +578,7 @@ export async function validateImport(
     }
 
     openingItems.push({
-      partyId: found[0]!,
+      partyId,
       side: row.side,
       type: row.type,
       reference: row.reference,

@@ -85,13 +85,11 @@ function PresetItems({
   );
 }
 
-// A business date names a day, so it converts by calendar fields, never through an
-// instant: `new Date("2026-08-02")` is UTC midnight and reads back as 1 August west of
-// Greenwich. The calendar stays in the browser's own frame and no day can shift.
+// A business date names a day, so it converts as local midnight, never as an instant:
+// `new Date("2026-08-02")` is UTC midnight and reads back as 1 August west of Greenwich,
+// while a date-time without an offset is local time. No day can shift.
 function toDate(day: string): Date {
-  const [year, month, date] = day.split("-").map(Number);
-
-  return new Date(year!, month! - 1, date!);
+  return new Date(`${day}T00:00`);
 }
 
 function toDay(date?: Date): string | undefined {

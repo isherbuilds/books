@@ -1,4 +1,4 @@
-import { authorize } from "@accly/auth/access";
+import { authorize, REFUND_GRANT } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
+import { documentRole } from "../core/document-roles";
 import {
   accountLine,
   organizationSnapshot,
@@ -22,7 +23,7 @@ import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
 import { effectiveOn, effectiveTdsSections } from "../core/tax-schedule";
-import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
+import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import {
   dateOnly,
   orderedPeriod,
@@ -35,15 +36,15 @@ import {
 import {
   adjustmentLinesOf,
   allocationsOf,
+  assertRefundAmount,
   cancelDocument,
   settlementListRow,
   registerPage,
   settlementTotals,
   settlementListWhere,
-  orgSettings,
-  orgTimeZone,
   settlementDetail,
 } from "../lib/settlements";
+import { orgSettings, orgTimeZone } from "../lib/org-settings";
 
 const commonPostFields = { ...orgInput.shape, ...settlementPostFields };
 
@@ -88,30 +89,30 @@ const postInput = z.union([
   }),
 ]);
 
+type PaymentInput = z.output<typeof postInput>;
+
+/** A customer refund: a Payment that pays out the customer's credits. */
+const isRefund = (input: PaymentInput) =>
+  input.settlementKind === "against" &&
+  documentRole({ type: "payment", exposureSide: input.exposureSide }).refund === true;
+
 export const paymentRouter = {
-  post: orgProcedure({ payment: ["post"] }, postInput).handler(async ({ context, input }) => {
+  // Settling claims needs read access to them: bills for a payable, the credits for a refund.
+  post: orgProcedure(
+    (input) =>
+      isRefund(input)
+        ? { payment: ["post"], ...REFUND_GRANT }
+        : input.settlementKind === "against"
+          ? { payment: ["post"], bill: ["read"] }
+          : { payment: ["post"] },
+    postInput,
+  ).handler(async ({ context, input }) => {
     const { scope } = context;
     const { settlementKind } = input;
     const tdsSectionId = "tdsSectionId" in input ? input.tdsSectionId : undefined;
 
-    // Settling a claim needs read access to it: bills for a payable, credit notes for a refund.
-    if (settlementKind === "against") {
-      requirePermission(
-        scope,
-        input.exposureSide === "payable" ? { bill: ["read"] } : { note: ["read"] },
-      );
-    }
-
-    if (
-      settlementKind === "against" &&
-      input.exposureSide === "receivable" &&
-      sumPaise(input.allocations.map((allocation) => allocation.amount)) !== input.amount
-    ) {
-      throw badRequest(
-        "REFUND_AMOUNT_MISMATCH",
-        "Refund amount must equal the allocated credit notes.",
-      );
-    }
+    if (settlementKind === "against" && isRefund(input))
+      assertRefundAmount(input.amount, sumPaise(input.allocations.map(({ amount }) => amount)));
 
     const { posted, tds, section } = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
@@ -122,7 +123,8 @@ export const paymentRouter = {
       const accountIds =
         settlementKind === "direct"
           ? [input.expenseAccountId]
-          : settlementKind === "against" && input.exposureSide === "payable"
+          : // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
+            settlementKind === "against" && input.exposureSide === "payable"
             ? [
                 ...(input.writeOffs ?? []).map(({ accountId }) => accountId),
                 ...(input.fee ? [input.fee.accountId] : []),
@@ -186,10 +188,10 @@ export const paymentRouter = {
         lines = [accountLine(null, lineDescription, input.amount)];
       } else if (settlementKind === "against") {
         lineDescription =
-          input.narration ??
-          (input.exposureSide === "payable" ? "Payment against bills" : "Credit note refund");
+          input.narration ?? (isRefund(input) ? "Credit note refund" : "Payment against bills");
         lines = [accountLine(null, lineDescription, input.amount)];
 
+        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
         if (input.exposureSide === "payable") {
           const writeOffs = (input.writeOffs ?? []).map(({ accountId, amount }) => {
             const account = byAccountId.get(accountId);
@@ -322,16 +324,15 @@ export const paymentRouter = {
       const detail = await settlementDetail(orgId, "payment", input.paymentId);
       // A refund settles from credit notes; every other non-direct payment is a source
       // that settles bills, at post or later from an advance.
-      const isRefund = detail.exposureSide === "receivable";
+      const { refund } = documentRole(detail);
       const settles = detail.settlementKind !== "direct";
 
       const canReadRelated =
-        !settles ||
-        authorize(context.scope.roles, isRefund ? { note: ["read"] } : { bill: ["read"] });
+        !settles || authorize(context.scope.roles, refund ? REFUND_GRANT : { bill: ["read"] });
 
       const [allocations, adjustments, [tds], [credit]] = await Promise.all([
         settles && canReadRelated
-          ? allocationsOf(db, orgId, input.paymentId, isRefund ? "target" : "source")
+          ? allocationsOf(db, orgId, input.paymentId, refund ? "target" : "source")
           : Promise.resolve([]),
         adjustmentLinesOf(orgId, input.paymentId),
         db
@@ -349,7 +350,7 @@ export const paymentRouter = {
           )
           .where(and(eq(tdsDeductions.orgId, orgId), eq(tdsDeductions.documentId, input.paymentId)))
           .limit(1),
-        settles && !isRefund
+        settles && !refund
           ? db
               .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
               .from(documents)

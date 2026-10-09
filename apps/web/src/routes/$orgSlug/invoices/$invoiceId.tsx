@@ -1,6 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
+import { stateLabel } from "@accly/api/lib/indian-states";
 import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
@@ -209,9 +209,7 @@ function InvoiceSheetRoute() {
             {invoice.dueDate ? formatBusinessDate(invoice.dueDate) : null}
           </DetailRow>
           <DetailRow label="Place of supply">
-            {invoice.placeOfSupplyStateCode
-              ? `${INDIAN_STATES[invoice.placeOfSupplyStateCode]} (${invoice.placeOfSupplyStateCode})`
-              : null}
+            {invoice.placeOfSupplyStateCode ? stateLabel(invoice.placeOfSupplyStateCode) : null}
           </DetailRow>
           {invoice.printSnapshot?.shipTo ? (
             <DetailRow label="Ship to">
@@ -292,64 +290,52 @@ function InvoiceSheetRoute() {
                 </TableRow>
               </TableHeader>
               <TableBody className="tabular-nums">
-                {invoice.lines.map((line) => {
-                  const lineTotal =
-                    line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise;
-
-                  return (
-                    <TableRow key={line.id}>
-                      <TableCell className="min-w-40 whitespace-normal">
-                        {line.description}
-                      </TableCell>
-                      <TableCell className="font-mono">{line.hsnSac ?? "—"}</TableCell>
-                      <TableCell className="text-right">
-                        {line.quantity === null
-                          ? "—"
-                          : line.unit
-                            ? `${line.quantity} ${line.unit}`
-                            : line.quantity}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatMoney(line.amountPaise)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(line.cgstPaise)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(line.sgstPaise)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(line.igstPaise)}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatMoney(lineTotal)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {invoice.lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="min-w-40 whitespace-normal">{line.description}</TableCell>
+                    <TableCell className="font-mono">{line.hsnSac ?? "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {line.quantity === null
+                        ? "—"
+                        : line.unit
+                          ? `${line.quantity} ${line.unit}`
+                          : line.quantity}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {line.unitPricePaise === null ? "—" : formatMoney(line.unitPricePaise)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatMoney(line.amountPaise)}</TableCell>
+                    <TableCell className="text-right">{formatMoney(line.cgstPaise)}</TableCell>
+                    <TableCell className="text-right">{formatMoney(line.sgstPaise)}</TableCell>
+                    <TableCell className="text-right">{formatMoney(line.igstPaise)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatMoney(line.lineTotalPaise)}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
           <div className="divide-y divide-border tabular-nums md:hidden">
-            {invoice.lines.map((line) => {
-              const taxPaise = line.cgstPaise + line.sgstPaise + line.igstPaise;
-              const lineTotal = line.amountPaise + taxPaise;
-
-              return (
-                <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 break-words font-medium">{line.description}</p>
-                    <p className="shrink-0 tabular-nums">{formatMoney(lineTotal)}</p>
-                  </div>
-                  <p className="text-muted-foreground">
-                    {line.hsnSac ? <span className="font-mono">{line.hsnSac}</span> : null}
-                    {line.quantity === null
-                      ? null
-                      : ` · ${line.quantity}${line.unit ? ` ${line.unit}` : ""} × `}
-                    {line.unitPricePaise === null ? null : formatMoney(line.unitPricePaise)}
-                  </p>
-                  <div className="flex justify-between gap-3 text-muted-foreground">
-                    <span>Taxable {formatMoney(line.amountPaise)}</span>
-                    <span>Tax {formatMoney(taxPaise)}</span>
-                  </div>
+            {invoice.lines.map((line) => (
+              <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 break-words font-medium">{line.description}</p>
+                  <p className="shrink-0 tabular-nums">{formatMoney(line.lineTotalPaise)}</p>
                 </div>
-              );
-            })}
+                <p className="text-muted-foreground">
+                  {line.hsnSac ? <span className="font-mono">{line.hsnSac}</span> : null}
+                  {line.quantity === null
+                    ? null
+                    : ` · ${line.quantity}${line.unit ? ` ${line.unit}` : ""} × `}
+                  {line.unitPricePaise === null ? null : formatMoney(line.unitPricePaise)}
+                </p>
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>Taxable {formatMoney(line.amountPaise)}</span>
+                  <span>Tax {formatMoney(line.taxPaise)}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -443,14 +429,16 @@ function InvoiceSheetRoute() {
           ) : null}
           {invoice.number !== null ? (
             // The browser's PDF viewer prints and saves, so one link covers both.
-            <a
-              href={`/api/${orgSlug}/invoices/${invoice.id}/pdf`}
+            <Link
+              to="/api/$orgSlug/invoices/$invoiceId/pdf"
+              params={{ orgSlug, invoiceId: invoice.id }}
+              reloadDocument
               target="_blank"
               rel="noreferrer"
               className={buttonVariants({ variant: "outline" })}
             >
               PDF
-            </a>
+            </Link>
           ) : null}
           {canRecordReceipt ? (
             <Button type="button" onClick={() => setActiveOverlay("receipt")}>

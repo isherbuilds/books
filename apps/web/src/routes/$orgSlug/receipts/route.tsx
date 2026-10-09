@@ -32,8 +32,7 @@ import { WaveLoader } from "@/components/wave-loader";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
-import { orpc } from "@/lib/orpc";
-import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
+import { paymentMethodListOptions, receiptListOptions, receiptTotalsOptions } from "@/lib/receipts";
 import { partyDetailOptions } from "@/lib/parties";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
@@ -75,9 +74,7 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
       authorize(membership.roles, { paymentMethod: ["read"] }) &&
         queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
       queryClient.infiniteQuery(receiptListOptions(orgSlug, deps.filters)).catch(() => {}),
-      queryClient.prefetchQuery(
-        orpc.receipt.totals.queryOptions({ input: { orgSlug, ...deps.filters } }),
-      ),
+      queryClient.prefetchQuery(receiptTotalsOptions(orgSlug, deps.filters)),
       deps.payerId
         ? queryClient.prefetchQuery(partyDetailOptions(orgSlug, deps.payerId)).catch(() => {})
         : undefined,
@@ -102,7 +99,7 @@ function ReceiptsRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
-  const totals = useQuery(orpc.receipt.totals.queryOptions({ input: { orgSlug, ...filters } }));
+  const totals = useQuery(receiptTotalsOptions(orgSlug, filters));
 
   // Every method, not only active ones: old receipts name retired methods.
   const methods = useQuery({ ...paymentMethodListOptions(orgSlug), enabled: canReadMethods });

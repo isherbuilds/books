@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { businessDate, formatBusinessDay } from "@accly/api/lib/business-date";
+import { businessDate, formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
 
 test("changes the Kolkata business date at local midnight", () => {
   expect(businessDate(new Date("2026-08-08T18:29:59Z"), "Asia/Kolkata")).toBe("2026-08-08");
@@ -16,4 +16,8 @@ test("a list day keeps its year unless it falls in the current year", () => {
 
   expect(formatBusinessDay(`${year}-03-12`)).toBe("12 Mar");
   expect(formatBusinessDay(`${year - 1}-03-12`)).toBe(`12 Mar ${year - 1}`);
+});
+
+test("business dates render with the year and cannot shift across time zones", () => {
+  expect(formatBusinessDate("2026-08-08")).toBe("8 Aug 2026");
 });

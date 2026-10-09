@@ -32,7 +32,7 @@ import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { partyDetailOptions } from "@/lib/parties";
-import { paymentListOptions } from "@/lib/payments";
+import { paymentListOptions, paymentTotalsOptions } from "@/lib/payments";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -65,9 +65,7 @@ export const Route = createFileRoute("/$orgSlug/payments")({
 
     await Promise.all([
       queryClient.infiniteQuery(paymentListOptions(orgSlug, deps.filters)).catch(() => {}),
-      queryClient.prefetchQuery(
-        orpc.payment.totals.queryOptions({ input: { orgSlug, ...deps.filters } }),
-      ),
+      queryClient.prefetchQuery(paymentTotalsOptions(orgSlug, deps.filters)),
       deps.payeeId
         ? queryClient.prefetchQuery(partyDetailOptions(orgSlug, deps.payeeId)).catch(() => {})
         : undefined,
@@ -91,10 +89,7 @@ function PaymentOverlay({
 }) {
   const saving = useIsMutating({ mutationKey: orpc.payment.post.mutationKey() }) > 0;
 
-  const payee = useQuery({
-    ...partyDetailOptions(orgSlug, payeeId ?? ""),
-    enabled: payeeId !== undefined,
-  });
+  const payee = useQuery(partyDetailOptions(orgSlug, payeeId));
 
   return (
     <FormSheet
@@ -134,7 +129,7 @@ function PaymentsRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
-  const totals = useQuery(orpc.payment.totals.queryOptions({ input: { orgSlug, ...filters } }));
+  const totals = useQuery(paymentTotalsOptions(orgSlug, filters));
 
   const activeRowId = useMatch({ from: "/$orgSlug/payments/$paymentId", shouldThrow: false })
     ?.params.paymentId;

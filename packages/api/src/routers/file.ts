@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "@accly/db/audit";
+import { audit, type AuditAction } from "@accly/db/audit";
+import { pageOf } from "../lib/pagination";
 import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
 
@@ -21,7 +22,7 @@ function keyDigest(key: string): string {
 
 // Every key begins with its owning org, so a foreign key is rejected before any
 // database work — and recorded, because probing for one is what audit is for.
-function assertKeyInScope(key: string, scope: Scope, action: string): void {
+function assertKeyInScope(key: string, scope: Scope, action: AuditAction): void {
   if (key.startsWith(`${scope.orgId}/`)) {
     return;
   }
@@ -80,7 +81,7 @@ export const fileRouter = {
       search ? ilike(fileTable.name, search) : undefined,
     );
 
-    const items = await db
+    const rows = await db
       .select({
         id: fileTable.id,
         name: fileTable.name,
@@ -105,17 +106,14 @@ export const fileRouter = {
       .orderBy(desc(fileTable.createdAt), desc(fileTable.id))
       .limit(input.limit + 1);
 
-    const hasNextPage = items.length > input.limit;
-
-    if (hasNextPage) {
-      items.pop();
-    }
-
-    const last = items[items.length - 1];
+    const page = pageOf(rows, input.limit, (last) => ({
+      createdAt: last.createdAtCursor,
+      id: last.id,
+    }));
 
     return {
-      items: items.map(({ createdAtCursor: _cursor, ...item }) => item),
-      nextCursor: hasNextPage && last ? { createdAt: last.createdAtCursor, id: last.id } : null,
+      rows: page.rows.map(({ createdAtCursor: _cursor, ...row }) => row),
+      nextCursor: page.nextCursor,
     };
   }),
 

@@ -160,8 +160,12 @@ export const APPLY_CREDIT_GRANT = {
   note: ["read"],
 } as const satisfies AppPermission;
 
-/** What a supplier refund needs: the payable credit picker (`bill.read`) and its Debit Notes. */
-export const SUPPLIER_REFUND_GRANT = {
+/**
+ * What a refund needs besides its post grant: the credits it pays out (Credit Notes,
+ * Debit Notes) and the payable picker that lists a supplier's (`bill.read`). One grant
+ * for the customer refund (a Payment) and the supplier refund (a Receipt).
+ */
+export const REFUND_GRANT = {
   note: ["read"],
   bill: ["read"],
 } as const satisfies AppPermission;

@@ -1,19 +1,33 @@
 import { defineRule } from "@oxlint/plugins";
 
+import type { ESTree } from "@oxlint/plugins";
+
+type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
+
 /**
  * Ban a function whose whole body forwards its own parameters, unchanged and in
  * order, to one plain function: `const f = (a, b) => g(a, b)`. It adds a name and a hop, not
- * behaviour. Call `g` directly, or give the wrapper real work. A callback argument is
- * exempt: `xs.map((s) => parseInt(s))` pins the arity, and `xs.map(parseInt)` would not.
+ * behaviour. Call `g` directly, or give the wrapper real work.
+ *
+ * A callback is exempt, because its caller may pass more arguments than it forwards:
+ * `xs.map((s) => parseInt(s))` pins the arity where `xs.map(parseInt)` would not, and
+ * Base UI calls `onValueChange(value, eventDetails)`. So a function passed as a call
+ * argument, a JSX attribute value or an object property value is left alone.
+ * An `async` wrapper is not reported either: it turns a synchronous throw into a
+ * rejection, so it is not a pure pass-through.
  */
-function isForwarding(node) {
-  const params = node.params;
-  if (node.parent?.type === "CallExpression" && node.parent.arguments.includes(node)) return false;
+function isForwarding(node: FunctionNode): boolean {
+  const { params, parent } = node;
+  if (node.async) return false;
+  if (parent.type === "CallExpression" && parent.arguments.some((arg) => arg === node))
+    return false;
+  if (parent.type === "JSXExpressionContainer") return false;
+  if (parent.type === "Property" && parent.value === node) return false;
   if (params.length === 0 || params.some((param) => param.type !== "Identifier")) return false;
   let call = node.body;
-  if (call.type === "BlockStatement") {
+  if (call?.type === "BlockStatement") {
     const [only] = call.body;
-    if (call.body.length !== 1 || only.type !== "ReturnStatement") return false;
+    if (call.body.length !== 1 || only?.type !== "ReturnStatement") return false;
     call = only.argument;
   }
   if (
@@ -22,9 +36,10 @@ function isForwarding(node) {
     call.arguments.length !== params.length
   )
     return false;
-  return call.arguments.every(
-    (arg, index) => arg.type === "Identifier" && arg.name === params[index].name,
-  );
+  return call.arguments.every((arg, index) => {
+    const param = params[index];
+    return arg.type === "Identifier" && param?.type === "Identifier" && arg.name === param.name;
+  });
 }
 
 export const noPassThroughFunctionRule = defineRule({
@@ -37,7 +52,7 @@ export const noPassThroughFunctionRule = defineRule({
     },
   },
   createOnce(context) {
-    const check = (node) => {
+    const check = (node: FunctionNode) => {
       if (isForwarding(node)) context.report({ node, messageId: "passThrough" });
     };
     return {

@@ -9,7 +9,7 @@ import {
 } from "@accly/ui/components/form";
 
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { useFormContext, Watch } from "react-hook-form";
 
@@ -18,7 +18,7 @@ import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
 import { useListState, type ListState } from "@/lib/list-state";
-import { orpc } from "@/lib/orpc";
+import { tdsSectionsOptions } from "@/lib/payments";
 
 type Adjustment = {
   kind: "fee" | "writeOff" | "tds";
@@ -183,13 +183,10 @@ export function ReceiptAdjustments({
   );
 
   const sections = useListState<TdsSection[]>(
-    useQuery(
-      orpc.payment.tdsSections.queryOptions({
-        input: z.iso.date().safeParse(documentDate).success
-          ? { orgSlug, date: documentDate }
-          : skipToken,
-      }),
-    ),
+    useQuery({
+      ...tdsSectionsOptions(orgSlug, documentDate),
+      enabled: z.iso.date().safeParse(documentDate).success,
+    }),
   );
 
   return (

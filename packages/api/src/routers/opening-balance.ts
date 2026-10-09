@@ -22,7 +22,9 @@ import {
   pageLimit,
   reason,
 } from "../lib/schemas";
-import { dateCursor, cancelDocument, orgSettings, pageOf } from "../lib/settlements";
+import { cancelDocument } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
+import { dateCursor, documentCursorOf, pageOf } from "../lib/pagination";
 
 const lineSchema = z.strictObject(entryLineFields);
 
@@ -159,10 +161,10 @@ export const openingBalanceRouter = {
       .orderBy(asc(documents.documentDate), asc(documents.id))
       .limit(input.limit + 1);
 
-    const page = pageOf(rows, input.limit);
+    const page = pageOf(rows, input.limit, documentCursorOf);
 
     return {
-      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
       rows: page.rows.map((item) => {
         if (item.exposureSide === null || item.reference === null)
           throw impossible(`opening item ${item.id} lacks its side or reference`);

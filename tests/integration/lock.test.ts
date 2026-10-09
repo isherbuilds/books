@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { drainAuditWrites } from "@accly/db/audit";
 import { assertPeriodOpen } from "@accly/api/core/locks";
 import type { Scope } from "@accly/api/lib/procedures/factory";
-import { orgSettings } from "@accly/api/lib/settlements";
+import { orgSettings } from "@accly/api/lib/org-settings";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";

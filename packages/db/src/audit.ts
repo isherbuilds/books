@@ -1,6 +1,8 @@
 import { db } from "./index";
 import { auditLog } from "./schema/audit";
 
+export type { AuditAction } from "./schema/audit";
+
 type AuditEntry = Omit<typeof auditLog.$inferInsert, "id" | "createdAt">;
 
 const pendingWrites = new Set<Promise<void>>();

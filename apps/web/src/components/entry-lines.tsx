@@ -164,6 +164,7 @@ export function journalAllocationLimit(
   const { capacity, allocated } = journalPartyAmounts(lines, index);
 
   const invoiceLeft =
+    // oxlint-disable-next-line accly/no-paise-arithmetic-in-components -- input maths on typed amounts inside the named helper journalAllocationLimit
     openPaise - sumEntered(lines.map((line) => line.allocations[documentId] ?? "")) + own;
 
   const partyLeft = capacity - allocated + own;

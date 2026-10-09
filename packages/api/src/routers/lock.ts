@@ -11,8 +11,8 @@ import { z } from "zod";
 import { audit } from "@accly/db/audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { dateOnly, reason } from "../lib/schemas";
-import { orgSettings } from "../lib/settlements";
+import { dateOnly, LOCK_EXCEPTION_DAYS, reason } from "../lib/schemas";
+import { orgSettings } from "../lib/org-settings";
 
 const exceptionUser = alias(user, "exception_user");
 
@@ -131,7 +131,7 @@ export const lockRouter = {
     { lock: ["grantException"] },
     orgInput.extend({
       userId: z.string().min(1),
-      days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
+      days: z.literal(LOCK_EXCEPTION_DAYS),
       reason,
     }),
   ).handler(async ({ context, input }) => {

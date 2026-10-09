@@ -6,7 +6,7 @@ import { taxRates } from "@accly/db/schema/tax-rates";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "@accly/db/audit";
@@ -15,19 +15,19 @@ import {
   organizationSnapshot,
   partySnapshot,
   postDocument,
-  priorNoteLines,
   purchaseLegs,
   writeDraft,
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
 import { computeTds, formatDecimal } from "../core/money";
+import { priorNotes } from "../core/note-source";
 import type { BillPosting } from "../core/posting";
-import { computeTax, documentTotals, taxTotals } from "../core/tax";
+import { computeTax, documentTotals, taxTotals, withLineTax } from "../core/tax";
 import { effectiveTdsSections, ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
-import { badRequest } from "../lib/conflict";
+import { badRequest, impossible, nth } from "../lib/conflict";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import { activeParty } from "../lib/parties";
 import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
@@ -52,10 +52,9 @@ import {
   discardDraft,
   documentSettlement,
   listClaims,
-  orgSettings,
-  orgTimeZone,
   printedPartyName,
 } from "../lib/settlements";
+import { orgSettings, orgTimeZone } from "../lib/org-settings";
 
 const billFields = {
   partyId: z.uuid(),
@@ -118,6 +117,16 @@ async function resolveBill(
     throw badRequest("TAX_CODE_INVALID", "Choose a GST rate effective on the bill date.");
   }
 
+  const rates = input.lines.map((line) => {
+    if (!line.taxCode) return null;
+
+    const rate = rateByCode.get(line.taxCode);
+
+    if (!rate) throw impossible(`tax code ${line.taxCode} resolved no rate`);
+
+    return rate;
+  });
+
   const [section] = await effectiveTdsSections(
     executor,
     scope.orgId,
@@ -134,9 +143,9 @@ async function resolveBill(
 
   const tax = computeTax({
     intraState,
-    lines: input.lines.map((line) => ({
+    lines: input.lines.map((line, index) => ({
       taxablePaise: line.amount,
-      rateBasisPoints: line.taxCode ? rateByCode.get(line.taxCode)!.rateBasisPoints : null,
+      rateBasisPoints: nth(rates, index, "bill line rate")?.rateBasisPoints ?? null,
     })),
   });
 
@@ -154,11 +163,11 @@ async function resolveBill(
     quantity: null,
     unitPricePaise: null,
     mrpPaise: null,
-    taxRateId: line.taxCode ? rateByCode.get(line.taxCode)!.id : null,
+    taxRateId: nth(rates, index, "bill line rate")?.id ?? null,
     itcEligible: registered && line.itcEligible,
     sourceLineId: null,
     adjustmentKind: null,
-    ...tax.lines[index]!,
+    ...nth(tax.lines, index, "bill line tax"),
   }));
 
   const { taxablePaise, roundOffPaise, totalPaise } = documentTotals(lines);
@@ -335,15 +344,7 @@ export const billRouter = {
               )
               .orderBy(asc(documentLines.position));
 
-            const priorLines = await priorNoteLines(
-              tx,
-              orgId,
-              bill.id,
-              "debitNote",
-              lines.map((line) => line.id),
-            );
-
-            const used = new Map(priorLines.map((line) => [line.sourceLineId, line]));
+            const prior = await priorNotes(tx, orgId, { id: bill.id, type: "bill" }, lines);
 
             const allocations = await allocationsOf(tx, orgId, input.billId, "target");
 
@@ -364,42 +365,15 @@ export const billRouter = {
               )
               .limit(1);
 
-            const [reversed] = tds
-              ? await tx
-                  .select({
-                    amountPaise:
-                      sql<bigint>`coalesce(sum(${tdsDeductions.amountPaise}), 0)::bigint`.mapWith(
-                        BigInt,
-                      ),
-                  })
-                  .from(tdsDeductions)
-                  .innerJoin(
-                    documents,
-                    and(eq(documents.orgId, orgId), eq(documents.id, tdsDeductions.documentId)),
-                  )
-                  .where(
-                    and(
-                      eq(tdsDeductions.orgId, orgId),
-                      eq(documents.againstDocumentId, bill.id),
-                      eq(documents.type, "debitNote"),
-                      eq(documents.state, "posted"),
-                    ),
-                  )
-              : [];
-
             return {
               bill,
-              lines: lines.map((line) => ({
-                ...line,
-                remainingPaise: line.amountPaise - (used.get(line.id)?.amountPaise ?? 0n),
-                priorNote: used.get(line.id) ?? null,
-              })),
+              lines: prior.lines,
               allocations,
               tds: tds
                 ? {
                     ...tds,
-                    priorTaxablePaise: priorLines.reduce((sum, line) => sum + line.amountPaise, 0n),
-                    priorReversedPaise: reversed!.amountPaise,
+                    priorTaxablePaise: prior.taxablePaise,
+                    priorReversedPaise: prior.reversedTdsPaise,
                   }
                 : null,
             };
@@ -416,7 +390,9 @@ export const billRouter = {
         ...bill,
         ...documentSettlement(bill, businessDate(new Date(), timeZone)),
         tds,
-        lines,
+        // What the supplier is owed once TDS is withheld.
+        netPaise: bill.totalPaise - (tds?.amountPaise ?? 0n),
+        lines: lines.map(withLineTax),
         totals: taxTotals(lines),
         allocations,
       };

@@ -1,4 +1,5 @@
 import type { AccountType } from "@accly/db/schema/account-kinds";
+import type { EntryDocumentType } from "@accly/db/schema/journal-entries";
 
 import { impossible } from "../lib/conflict";
 import type { AccountActivity, ReportHeader } from "../lib/reports";
@@ -129,7 +130,7 @@ export type AccountLedgerLine = {
   entryDate: string;
   kind: "post" | "reverse";
   documentId: string;
-  documentType: string;
+  documentType: EntryDocumentType;
   number: string | null;
   narration: string;
   partyName: string | null;
@@ -152,7 +153,7 @@ export type DayBookEntry = {
   entryDate: string;
   kind: "post" | "reverse";
   documentId: string;
-  documentType: string;
+  documentType: EntryDocumentType;
   number: string | null;
   narration: string;
   lines: Array<{

@@ -160,6 +160,9 @@ export const reason = z.string().trim().min(1).max(500);
 
 // One page of a keyset list. 25 rows keep a list page fast to render and to navigate;
 // clients omit `limit` and take this default, and Load more fetches the next page.
+/** The days a lock exception may last; the grant dialog offers the same choices. */
+export const LOCK_EXCEPTION_DAYS = [1, 7, 30] as const;
+
 export const pageLimit = z.number().int().min(1).max(100).default(25);
 
 export const searchQuery = z.string().trim().min(1).max(100).optional();

@@ -27,10 +27,7 @@ export function ReceiptOverlay({
 }) {
   const saving = useIsMutating({ mutationKey: orpc.receipt.post.mutationKey() }) > 0;
 
-  const payer = useQuery({
-    ...partyDetailOptions(orgSlug, payerId ?? ""),
-    enabled: payerId !== undefined,
-  });
+  const payer = useQuery(partyDetailOptions(orgSlug, payerId));
 
   return (
     <FormSheet

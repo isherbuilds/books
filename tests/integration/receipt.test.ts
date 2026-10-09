@@ -939,7 +939,7 @@ test("a new prefix starts its own series, stored in upper case", async () => {
 
 test("receipt queries filter by reference and hide cross-organization ids", async () => {
   const result = await api.receipt.list({ orgSlug: organization.slug, q: "UTR1" });
-  expect(result.hasMore).toBe(false);
+  expect(result.nextCursor).toBeNull();
   expect(result.rows).toEqual([
     expect.objectContaining({
       id: primaryReceipt.id,
@@ -1078,13 +1078,12 @@ test("receipt list filters narrow the keyset and party totals count posted recei
     limit: 1,
   });
 
-  expect(firstPage.hasMore).toBe(true);
   expect(firstPage.rows.map(({ id }) => id)).toEqual([direct.id]);
 
   const secondPage = await api.receipt.list({
     orgSlug: organization.slug,
     partyId: buyer.id,
-    cursor: required(firstPage.rows[0], "first receipt page row"),
+    cursor: required(firstPage.nextCursor, "second receipt page"),
     limit: 2,
   });
 
@@ -1093,7 +1092,7 @@ test("receipt list filters narrow the keyset and party totals count posted recei
   expect(await api.receipt.totals({ orgSlug: organization.slug, partyId: buyer.id })).toMatchObject(
     { count: 2, totalPaise: 14_000n },
   );
-  expect(secondPage.hasMore).toBe(false);
+  expect(secondPage.nextCursor).toBeNull();
 
   const ids = async (filters: Partial<Parameters<AppRouterClient["receipt"]["list"]>[0]>) =>
     (

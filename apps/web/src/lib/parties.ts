@@ -2,7 +2,7 @@ import type { AppRouterClient } from "@accly/api/routers/index";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import type { LinkOptions } from "@tanstack/react-router";
 
-import { orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
 
 // Mirrors PARTY_ROLES in @accly/db, kept local so no server schema module reaches
 // the client bundle (hard rule 6).
@@ -39,8 +39,9 @@ export const partyListOptions = (orgSlug: string, q?: string) => ({
   staleTime: 5 * 60_000,
 });
 
-export const partyDetailOptions = (orgSlug: string, partyId: string) =>
-  orpc.party.get.queryOptions({ input: { orgSlug, partyId } });
+// No `partyId` skips the read, so a form or filter can subscribe before a party is chosen.
+export const partyDetailOptions = (orgSlug: string, partyId: string | undefined) =>
+  orpc.party.get.queryOptions({ input: partyId ? { orgSlug, partyId } : skipToken });
 
 /** The active rows a Link Field offers: id, name and GSTIN. */
 export type PartyOption = { id: string; name: string; gstin?: string | null };
@@ -76,11 +77,7 @@ export const partyPickerOptions = (orgSlug: string, role?: PartyRole, q?: string
 export function usePartyName(orgSlug: string, partyId: string | undefined, rows?: PartyOption[]) {
   const listed = partyId ? rows?.find((party) => party.id === partyId) : undefined;
 
-  const fetched = useQuery(
-    orpc.party.get.queryOptions({
-      input: partyId && !listed ? { orgSlug, partyId } : skipToken,
-    }),
-  );
+  const fetched = useQuery(partyDetailOptions(orgSlug, listed ? undefined : partyId));
 
   return listed?.name ?? fetched.data?.name;
 }
@@ -102,6 +99,32 @@ export const partyLedgerSummaryOptions = (
   partyId: string,
   range: { from?: string; to?: string } = {},
 ) => orpc.party.ledgerSummary.queryOptions({ input: { orgSlug, partyId, ...range } });
+
+export const partyLedgerLinesOptions = (
+  orgSlug: string,
+  partyId: string,
+  range: { from?: string; to?: string },
+) =>
+  orpc.party.ledgerLines.infiniteOptions({
+    input: (cursor: { entryDate: string; id: string } | undefined) => ({
+      orgSlug,
+      partyId,
+      ...range,
+      cursor,
+    }),
+    ...nextPage,
+  });
+
+// Every document naming the party, newest first, one keyset page at a time.
+export const partyTransactionsOptions = (
+  orgSlug: string,
+  partyId: string,
+  range: { from?: string; to?: string },
+) =>
+  orpc.party.transactions.infiniteOptions({
+    input: (cursor: string | undefined) => ({ orgSlug, partyId, ...range, cursor }),
+    ...nextPage,
+  });
 
 export const PARTY_STATUSES = ["active", "inactive"] as const;
 

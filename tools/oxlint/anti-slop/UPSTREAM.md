@@ -17,5 +17,5 @@ Local changes from the bundle:
 
 Nested vendored code: `vendor/eslint-stylistic/` keeps its own `LICENSE` and `UPSTREAM.md`.
 
-Dependencies: `@oxlint/plugins` and `oxlint` use `^1.85.0` ranges. Keep their resolved versions
+Dependencies: `@oxlint/plugins` and `oxlint` use `^1.87.0` ranges. Keep their resolved versions
 compatible when updating.

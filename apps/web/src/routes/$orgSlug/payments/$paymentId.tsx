@@ -1,3 +1,4 @@
+import { documentRole } from "@accly/api/core/document-roles";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
@@ -46,7 +47,7 @@ function PaymentSheetRoute() {
   const canReadBills = useCan(orgSlug, { bill: ["read"] });
   const [cancelOpen, setCancelOpen] = useState(false);
   const partyName = payment.printSnapshot?.party?.name;
-  const refund = payment.exposureSide === "receivable";
+  const refund = documentRole(payment).refund === true;
 
   const close = () =>
     void navigate({

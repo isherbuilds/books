@@ -34,9 +34,11 @@ export const BILL_COLUMNS = [
   column.accessor("dueDate", {
     header: "Due date",
     meta: { className: "hidden w-24 lg:table-cell" },
-    cell: ({ getValue }) => (
-      <span className="tabular-nums">{getValue() ? formatBusinessDay(getValue()!) : "—"}</span>
-    ),
+    cell: ({ getValue }) => {
+      const due = getValue();
+
+      return <span className="tabular-nums">{due ? formatBusinessDay(due) : "—"}</span>;
+    },
   }),
   column.display({
     id: "status",

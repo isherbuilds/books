@@ -9,7 +9,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { isLeaf, postableAccounts } from "../lib/accounts";
-import { badRequest, conflict } from "../lib/conflict";
+import { badRequest, conflict, nth, type RefusalReason } from "../lib/conflict";
 import { uniqueViolationConstraint } from "../lib/db-errors";
 import { insertChunks } from "../lib/insert-chunks";
 import { normalizedName } from "../lib/normalized-name";
@@ -150,10 +150,12 @@ export type AccountCreateInput = z.output<z.ZodObject<typeof accountCreateFields
   id: string;
 };
 
+type MasterError = { code: RefusalReason; message: string } | null;
+
 export function accountSupplyError(
   type: AccountType,
   supplyClass: (typeof SUPPLY_CLASSES)[number] | undefined,
-) {
+): MasterError {
   if (type === "income" && supplyClass === undefined)
     return {
       code: "SUPPLY_CLASS_REQUIRED",
@@ -321,7 +323,7 @@ export function itemEligibilityError(
   hsnSac: string | undefined,
   taxCode: string | undefined,
   hasRate: boolean,
-) {
+): MasterError {
   if (!account)
     return {
       code: "INCOME_ACCOUNT_INVALID",
@@ -396,7 +398,7 @@ export async function createItems(
 
   try {
     for (const chunk of insertChunks(
-      values.map((row, index) => ({ ...row, id: fields[index]!.id, orgId })),
+      values.map((row, index) => ({ ...row, id: nth(fields, index, "item field").id, orgId })),
     ))
       created.push(...(await tx.insert(items).values(chunk).returning()));
   } catch (error) {

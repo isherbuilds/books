@@ -511,8 +511,8 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      outstanding (`{ id, type, number, documentDate, dueDate, outstandingPaise }`)
      and `party.openCredits({ partyId, side, type?, q? })` returns sources with unapplied
      credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
-     page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
-     next page passes the last row's `{ documentDate, id }` as `cursor`, so no row is out of reach.
+     page (`limit`, default 25) oldest first by date then id, with `nextCursor`
+     (null on the last page); the next page passes it as `cursor`, so no row is out of reach.
      The optional credit `type` and the search `q` (number, reference or
      narration) filter before the page;
      reading credits requires the Note read grant. `allocation.apply` takes
@@ -836,8 +836,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      `customerAdvances` and `supplierAdvances` stay refused: an opening credit
      sits on the control account, as a 9a Journal credit does, and is not an
      advance (no `advanceSupply`).
-   - **Settlement.** `roleOf(document, position)` returns a document's side
-     for the position it may take, else null: an `openingClaim` only as a
+   - **Settlement.** `documentRole(document)` (`core/document-roles.ts`, one table
+     keyed by type and exposure side, dependency-free so the web asks it too)
+     returns a document's source and target sides, and `hasRole`
+     (`lib/settlements.ts`) builds the same rule as SQL for the pickers: an `openingClaim` only as a
      target and an `openingCredit` only as a source; capacity is the absolute `post`
      line (`settlementPaise`'s non-Journal branch). Applying or reversing from
      an opening credit writes no entry: it is already on the control account.
@@ -865,7 +867,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      Transactions tab for a reader of `openingBalance`, the Receipt and
      Payment open-item grids, Apply credit, and Settings > Opening balance,
      where `openingBalance.items({ cursor?, limit })` pages the items oldest
-     legacy date first (keyset on date and id, 25 by default, with `hasMore`) as
+     legacy date first (keyset on date and id, 25 by default, with `nextCursor`) as
      `{ id, type, number, partyName, exposureSide, reference, documentDate, dueDate, totalPaise, balancePaise }`.
      `openingBalance.get` is the header and lines. With 5,000 items beside
      105,000 documents, one page reads at p95 24 ms and 7 KiB
@@ -1242,7 +1244,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      Applying or reversing from a Journal writes no entry.
      `party.openCredits({ partyId, side: "receivable", type? })` lists
      Journals with unapplied credit for the party alongside Receipts and
-     Credit Notes, in the same 25-row keyset pages with `hasMore`; `type`
+     Credit Notes, in the same 25-row keyset pages with `nextCursor`; `type`
      accepts `journal`.
    - Cancel follows call 17; `reverseDocument` reverses the party ledger lines.
    - Web: the Journal line's Party field turns required when the account is

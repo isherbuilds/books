@@ -23,8 +23,9 @@ export function HeroScene() {
     };
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        onScreen = entry.isIntersecting;
+      (entries) => {
+        // The newest record for the one observed element wins.
+        for (const entry of entries) onScreen = entry.isIntersecting;
         sync();
       },
       { threshold: 0.25 },

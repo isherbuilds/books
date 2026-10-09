@@ -57,6 +57,13 @@ export function taxTotals(lines: readonly TaxedLine[]) {
   return totals;
 }
 
+/** A posted line's GST and its value with GST, so no screen adds the components. */
+export function withLineTax<Line extends TaxedLine>(line: Line) {
+  const taxPaise = line.cgstPaise + line.sgstPaise + line.igstPaise;
+
+  return { ...line, taxPaise, lineTotalPaise: line.amountPaise + taxPaise };
+}
+
 /** A document's taxable value, taxes, round-off and total, from its lines. */
 export function documentTotals(lines: readonly TaxedLine[]) {
   const taxes = taxTotals(lines);

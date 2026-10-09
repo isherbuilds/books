@@ -21,7 +21,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useState } from "react";
-import { useWatch, type FieldPath } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -37,8 +37,9 @@ import type { BillDetail } from "@/lib/bills";
 import { invalidateBillDrafts, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
+import { tdsSectionsOptions } from "@/lib/payments";
 import { settingsOptions } from "@/lib/settings";
-import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
+import { applyOrpcFieldError, handleWriteError, type ServerFields } from "@/lib/orpc-error";
 
 type BillApiLine = Parameters<AppRouterClient["bill"]["saveDraft"]>[0]["lines"][number];
 
@@ -83,7 +84,7 @@ const SERVER_FIELDS = {
   BILL_ZERO_TOTAL: "lines",
   BILL_NUMBER_TAKEN: "reference",
   BILL_TDS_EXCEEDS_TOTAL: "tdsSectionId",
-} satisfies Record<string, FieldPath<BillFormValues>>;
+} satisfies ServerFields<BillFormValues>;
 
 // Place of supply starts at the organization's own state.
 function defaults(today: string, stateCode: string, draft?: BillDetail): BillFormValues {
@@ -121,15 +122,13 @@ function defaults(today: string, stateCode: string, draft?: BillDetail): BillFor
 }
 
 /** A Bill's TDS and what remains payable, below its totals. */
-export function BillTdsRows({ bill }: { bill: Pick<BillDetail, "totalPaise" | "tds"> }) {
+export function BillTdsRows({ bill }: { bill: Pick<BillDetail, "netPaise" | "tds"> }) {
   return bill.tds ? (
     <>
       <DetailRow label={`TDS · ${bill.tds.sectionCode}`}>
         {formatMoney(bill.tds.amountPaise)}
       </DetailRow>
-      <DetailRow label="Payable after TDS">
-        {formatMoney(bill.totalPaise - bill.tds.amountPaise)}
-      </DetailRow>
+      <DetailRow label="Payable after TDS">{formatMoney(bill.netPaise)}</DetailRow>
     </>
   ) : null;
 }
@@ -168,11 +167,10 @@ export function BillForm({
   // Date-scoped pickers wait for a complete date rather than query a half-typed one.
   const documentDate = z.iso.date().safeParse(watchedDate).success ? watchedDate : undefined;
 
-  const sections = useQuery(
-    orpc.payment.tdsSections.queryOptions({
-      input: canReadPayment && documentDate ? { orgSlug, date: documentDate } : skipToken,
-    }),
-  );
+  const sections = useQuery({
+    ...tdsSectionsOptions(orgSlug, documentDate),
+    enabled: canReadPayment && documentDate !== undefined,
+  });
 
   const tdsAdvances = useQuery(
     orpc.party.openCredits.queryOptions({

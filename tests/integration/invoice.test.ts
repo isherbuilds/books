@@ -331,7 +331,7 @@ test("an intra-state invoice stores component tax, posts a balanced receivable a
   ]);
 
   const listed = await api.invoice.list({ orgSlug: organization.slug, q: "INV-PRIMARY" });
-  expect(listed).toMatchObject({ hasMore: false });
+  expect(listed).toMatchObject({ nextCursor: null });
   expect(listed.rows).toEqual([
     expect.objectContaining({
       id: posted.id,

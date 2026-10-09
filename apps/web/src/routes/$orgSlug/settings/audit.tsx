@@ -1,3 +1,4 @@
+import { AUDIT_ACTION_LABELS } from "@accly/api/lib/document-labels";
 import { searchQuery } from "@accly/api/lib/schemas";
 import { Badge } from "@accly/ui/components/badge";
 import {
@@ -24,10 +25,10 @@ import {
 } from "@/components/page";
 import { useVirtualRows } from "@/components/data-table/use-virtual-rows";
 import { PeriodMenu } from "@/components/date-range-filter";
-import { orpc } from "@/lib/orpc";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { periodSearch } from "@/lib/require-period";
+import { auditListOptions } from "@/lib/settings";
 
 import { SettingsTabs } from "./route";
 
@@ -35,60 +36,6 @@ const auditSearch = z.object({
   q: searchQuery.catch(undefined),
   ...periodSearch,
 });
-
-// `staleTime: 0`: every sensitive mutation writes here, so the trail refetches on
-// every entry rather than relying on each mutation to invalidate it.
-
-const auditQuery = (orgSlug: string, filters: Omit<z.infer<typeof auditSearch>, "all">) =>
-  orpc.audit.list.infiniteOptions({
-    input: (cursor: number | undefined) => ({
-      orgSlug,
-      cursor,
-      ...filters,
-    }),
-    initialPageParam: undefined,
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-    staleTime: 0,
-  });
-
-const ACTION_LABELS: Record<string, string> = {
-  "account.setActive": "Account status changed",
-  "allocation.apply": "Amount applied",
-  "allocation.reverse": "Applied amount undone",
-  "bill.amend": "Bill amended",
-  "bill.cancel": "Bill cancelled",
-  "bill.post": "Bill posted",
-  "creditNote.cancel": "Credit note cancelled",
-  "creditNote.post": "Credit note posted",
-  "debitNote.cancel": "Debit note cancelled",
-  "debitNote.post": "Debit note posted",
-  "file.delete": "File deleted",
-  "file.read": "File opened",
-  "file.upload": "File uploaded",
-  "import.commit": "Workbook imported",
-  "invoice.amend": "Invoice amended",
-  "invoice.cancel": "Invoice cancelled",
-  "invoice.post": "Invoice posted",
-  "journal.cancel": "Journal cancelled",
-  "journal.post": "Journal posted",
-  "lock.grantException": "Lock exception granted",
-  "lock.revokeException": "Lock exception revoked",
-  "lock.set": "Period lock changed",
-  "member.invite": "Member invited",
-  "member.invite.revoke": "Invitation cancelled",
-  "member.join": "Member joined",
-  "member.remove": "Member removed",
-  "member.role.update": "Member role changed",
-  "openingBalance.cancel": "Opening balance cancelled",
-  "openingBalance.post": "Opening balance posted",
-  "organization.create": "Organization created",
-  "payment.cancel": "Payment cancelled",
-  "payment.post": "Payment posted",
-  "rbac.permission": "Permission check",
-  "receipt.cancel": "Receipt cancelled",
-  "receipt.post": "Receipt posted",
-  "settings.update": "Settings updated",
-};
 
 function describeTarget(target: string | null, meta: Record<string, unknown> | null): string {
   if (!target) return "—";
@@ -109,9 +56,9 @@ function describeTarget(target: string | null, meta: Record<string, unknown> | n
     return `${meta.kind === "tax" ? "Tax" : "General"} period`;
   }
 
-  const type = target.split(":")[0]!.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const type = target.replace(/:.*/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
 
-  return type[0]!.toUpperCase() + type.slice(1);
+  return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 function describeMeta(meta: Record<string, unknown> | null): string {
@@ -123,7 +70,7 @@ function describeMeta(meta: Record<string, unknown> | null): string {
         .replace(/\btds\b/gi, "TDS")
         .replace(/\bgstin\b/gi, "GSTIN");
 
-      return `${label[0]!.toUpperCase()}${label.slice(1)}: ${
+      return `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${
         typeof value === "string" ? value : JSON.stringify(value)
       }`;
     });
@@ -137,7 +84,7 @@ export const Route = createFileRoute("/$orgSlug/settings/audit")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { audit: ["read"] });
-    await queryClient.infiniteQuery(auditQuery(orgSlug, deps)).catch(() => {});
+    await queryClient.infiniteQuery(auditListOptions(orgSlug, deps)).catch(() => {});
   },
   component: AuditRoute,
 });
@@ -151,14 +98,14 @@ function AuditRoute() {
   const setFilters = (patch: Partial<z.infer<typeof auditSearch>>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
-  const audit = useInfiniteQuery(auditQuery(orgSlug, filters));
+  const audit = useInfiniteQuery(auditListOptions(orgSlug, filters));
 
-  const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
+  const entries = audit.data?.pages.flatMap((page) => page.rows) ?? [];
 
   const virtual = useVirtualRows<HTMLTableSectionElement, HTMLTableRowElement>({
     count: entries.length,
     estimateSize: 72,
-    getItemKey: (index) => String(entries[index]!.id),
+    getItemKey: (index) => String(entries[index]?.id ?? index),
     nextPage: audit,
   });
 
@@ -212,7 +159,9 @@ function AuditRoute() {
                   </TableRow>
                 ) : null}
                 {virtual.virtualRows.map((item) => {
-                  const entry = entries[item.index]!;
+                  const entry = entries[item.index];
+
+                  if (!entry) return null;
                   const details = describeMeta(entry.meta);
 
                   return (
@@ -234,8 +183,7 @@ function AuditRoute() {
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="font-medium" title={entry.action}>
-                            {ACTION_LABELS[entry.action] ??
-                              entry.action.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll(".", " ")}
+                            {AUDIT_ACTION_LABELS[entry.action]}
                           </span>
                           {entry.denied && <Badge variant="danger">Denied</Badge>}
                         </span>

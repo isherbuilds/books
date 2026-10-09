@@ -68,6 +68,7 @@ export function InvoicePayments({
   const methods = useQuery(activePaymentMethodsOptions(orgSlug));
 
   const received = receivedPaise(payments);
+  // oxlint-disable-next-line accly/no-paise-arithmetic-in-components -- live remainder of the typed counter-sale payments
   const remaining = totalPaise === null ? null : totalPaise - received;
 
   // A counter sale is usually cash, so the first line prefers it; each next line takes
@@ -89,12 +90,13 @@ export function InvoicePayments({
 
   const fillLast = () => {
     const last = payments.length - 1;
+    const lastPayment = payments[last];
 
-    if (last < 0 || remaining === null || stale) return;
+    if (!lastPayment || remaining === null || stale) return;
 
     form.setValue(
       `payments.${last}.amount`,
-      formatDecimal(receivedPaise([payments[last]!]) + remaining),
+      formatDecimal(receivedPaise([lastPayment]) + remaining),
       { shouldDirty: true, shouldValidate: true },
     );
   };

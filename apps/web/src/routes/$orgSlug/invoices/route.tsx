@@ -21,10 +21,9 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { RegisterTotals } from "@/components/register-totals";
-import { invoiceListOptions } from "@/lib/invoices";
+import { invoiceListOptions, invoiceTotalsOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { orpc } from "@/lib/orpc";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -51,7 +50,7 @@ export const Route = createFileRoute("/$orgSlug/invoices")({
     await requireOrgPermission(queryClient, orgSlug, { invoice: ["read"] });
     await Promise.all([
       queryClient.infiniteQuery(invoiceListOptions(orgSlug, deps)).catch(() => {}),
-      queryClient.prefetchQuery(orpc.invoice.totals.queryOptions({ input: { orgSlug, ...deps } })),
+      queryClient.prefetchQuery(invoiceTotalsOptions(orgSlug, deps)),
     ]);
   },
   component: InvoicesRoute,
@@ -70,7 +69,7 @@ function InvoicesRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
-  const totals = useQuery(orpc.invoice.totals.queryOptions({ input: { orgSlug, ...filters } }));
+  const totals = useQuery(invoiceTotalsOptions(orgSlug, filters));
 
   const activeRowId = useMatch({ from: "/$orgSlug/invoices/$invoiceId", shouldThrow: false })
     ?.params.invoiceId;

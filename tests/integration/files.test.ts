@@ -43,7 +43,7 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   expect(put.status).toBe(200);
 
   await expectORPCCode(api.file.getReadUrl({ orgSlug: org.slug, key: upload.key }), "NOT_FOUND");
-  expect((await api.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
+  expect((await api.file.list({ orgSlug: org.slug })).rows).toHaveLength(0);
 
   const finalized = await api.file.finalizeUpload({
     orgSlug: org.slug,
@@ -58,10 +58,10 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   );
 
   const listed = await api.file.list({ orgSlug: org.slug });
-  expect(listed.items.find((item) => item.id === upload.key)?.uploaderName).toBe(owner.user.name);
+  expect(listed.rows.find((item) => item.id === upload.key)?.uploaderName).toBe(owner.user.name);
   await drainAuditWrites();
   const uploads = await api.audit.list({ orgSlug: org.slug, q: "notes report" });
-  expect(uploads.items).toEqual([
+  expect(uploads.rows).toEqual([
     expect.objectContaining({
       action: "file.upload",
       actorId: owner.user.id,
@@ -69,17 +69,17 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
       meta: { name: "notes report.txt" },
     }),
   ]);
-  expect((await api.audit.list({ orgSlug: org.slug, q: owner.user.name })).items).toContainEqual(
+  expect((await api.audit.list({ orgSlug: org.slug, q: owner.user.name })).rows).toContainEqual(
     expect.objectContaining({ action: "file.upload" }),
   );
   expect(
-    (await api.audit.list({ orgSlug: org.slug, q: "notes report", from: "2099-01-01" })).items,
+    (await api.audit.list({ orgSlug: org.slug, q: "notes report", from: "2099-01-01" })).rows,
   ).toEqual([]);
-  expect((await api.audit.list({ orgSlug: org.slug, q: "no-such-actor" })).items).toEqual([]);
-  expect(listed.items.map((file) => file.id)).toContain(upload.key);
+  expect((await api.audit.list({ orgSlug: org.slug, q: "no-such-actor" })).rows).toEqual([]);
+  expect(listed.rows.map((file) => file.id)).toContain(upload.key);
   const matching = await api.file.list({ orgSlug: org.slug, query: "OTES R" });
-  expect(matching.items.map((file) => file.id)).toContain(upload.key);
-  expect((await api.file.list({ orgSlug: org.slug, query: "no-such-file-zz" })).items).toEqual([]);
+  expect(matching.rows.map((file) => file.id)).toContain(upload.key);
+  expect((await api.file.list({ orgSlug: org.slug, query: "no-such-file-zz" })).rows).toEqual([]);
 
   const read = await api.file.getReadUrl({ orgSlug: org.slug, key: upload.key });
   expect(read.url).toContain("X-Amz-Signature");
@@ -98,10 +98,10 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   await api.file.delete({ orgSlug: org.slug, key: upload.key });
   await drainAuditWrites();
   const first = await api.audit.list({ orgSlug: org.slug, q: "notes report", limit: 1 });
-  expect(first.items).toEqual([
+  expect(first.rows).toEqual([
     expect.objectContaining({ action: "file.delete", meta: { name: "notes report.txt" } }),
   ]);
-  expect(first.items).toHaveLength(1);
+  expect(first.rows).toHaveLength(1);
   expect(first.nextCursor).not.toBeNull();
 
   const second = await api.audit.list({
@@ -111,10 +111,10 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
     cursor: first.nextCursor!,
   });
 
-  expect(second.items).toHaveLength(1);
-  expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
+  expect(second.rows).toHaveLength(1);
+  expect(second.rows[0]!.id).not.toBe(first.rows[0]!.id);
   expect(second.nextCursor).toBeNull();
-  expect((await api.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
+  expect((await api.file.list({ orgSlug: org.slug })).rows).toHaveLength(0);
   await expectORPCCode(api.file.getReadUrl({ orgSlug: org.slug, key: upload.key }), "NOT_FOUND");
 });
 
@@ -162,7 +162,7 @@ test("another org's file key is FORBIDDEN, not merely missing", async () => {
   const beta = await createOrganization(bob, "files-beta-2");
   const bobApi = clientFor(bob);
 
-  expect((await bobApi.file.list({ orgSlug: beta.slug })).items).toHaveLength(0);
+  expect((await bobApi.file.list({ orgSlug: beta.slug })).rows).toHaveLength(0);
   await expectORPCCode(
     bobApi.file.getReadUrl({ orgSlug: beta.slug, key: upload.key }),
     "FORBIDDEN",
@@ -173,7 +173,7 @@ test("another org's file key is FORBIDDEN, not merely missing", async () => {
     "FORBIDDEN",
   );
 
-  expect((await aliceApi.file.list({ orgSlug: alpha.slug })).items.map((f) => f.id)).toContain(
+  expect((await aliceApi.file.list({ orgSlug: alpha.slug })).rows.map((f) => f.id)).toContain(
     upload.key,
   );
 });
@@ -200,7 +200,7 @@ test("a member without file:delete cannot delete a file, the owner can", async (
   );
 
   await ownerApi.file.delete({ orgSlug: org.slug, key: upload.key });
-  expect((await ownerApi.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
+  expect((await ownerApi.file.list({ orgSlug: org.slug })).rows).toHaveLength(0);
 });
 
 test("upload cleanup preserves dry runs and ready files while deleting stale uploads and orphans", async () => {

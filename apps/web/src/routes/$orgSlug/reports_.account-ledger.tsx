@@ -1,7 +1,6 @@
 import { formatBalance, formatMoney, isZeroMoney } from "@accly/api/core/money";
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import type { AppRouterClient } from "@accly/api/routers/index";
-import { Button } from "@accly/ui/components/button";
 import {
   Table,
   TableBody,
@@ -10,53 +9,34 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import {
-  useMutation,
-  useQuery,
-  useSuspenseInfiniteQuery,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { DownloadIcon } from "lucide-react";
-import { useDeferredValue, useMemo } from "react";
-import { toast } from "sonner";
+import { useQuery, useSuspenseInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, linkOptions, useNavigate } from "@tanstack/react-router";
+import { useDeferredValue } from "react";
 import { z } from "zod";
 
 import { useDesktop, useVirtualRows } from "@/components/data-table/use-virtual-rows";
 import { LinkField } from "@/components/link-field";
 import { ErrorNote, ListFooter, PageBody, PageHeader, ReportBody } from "@/components/page";
+import { ReportDownloads } from "@/components/report-downloads";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
 import { ReportProvenance } from "@/components/report-provenance";
 import { accountListOptions, deriveAccountRows } from "@/lib/accounts";
 import { presetRange } from "@/lib/date-presets";
-import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
 import { documentLink } from "@/lib/parties";
-import { saveFile } from "@/lib/reports";
+import {
+  accountLedgerLinesOptions,
+  accountLedgerSummaryOptions,
+  netDebitPaise,
+  type AccountLedgerInput,
+  withRunningBalance,
+} from "@/lib/reports";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 type LedgerLine = Awaited<
   ReturnType<AppRouterClient["report"]["accountLedgerLines"]>
 >["rows"][number] & { balancePaise: bigint };
-
-const ledgerLinesOptions = (input: {
-  orgSlug: string;
-  accountId: string;
-  from: string;
-  to: string;
-}) =>
-  orpc.report.accountLedgerLines.infiniteOptions({
-    input: (cursor: { entryDate: string; id: string } | undefined) => ({ ...input, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => {
-      if (!last.hasMore) return undefined;
-      const row = last.rows.at(-1)!;
-
-      return { entryDate: row.entryDate, id: row.id };
-    },
-  });
 
 export const Route = createFileRoute("/$orgSlug/reports_/account-ledger")({
   head: () => ({ meta: [{ title: "Account ledger · Accly Books" }] }),
@@ -74,10 +54,8 @@ export const Route = createFileRoute("/$orgSlug/reports_/account-ledger")({
 
     if (deps.accountId && deps.from && deps.to && deps.from <= deps.to) {
       const input = { orgSlug, accountId: deps.accountId, from: deps.from, to: deps.to };
-      void queryClient.infiniteQuery(ledgerLinesOptions(input)).catch(() => {});
-      void queryClient
-        .query(orpc.report.accountLedgerSummary.queryOptions({ input }))
-        .catch(() => {});
+      void queryClient.infiniteQuery(accountLedgerLinesOptions(input)).catch(() => {});
+      void queryClient.query(accountLedgerSummaryOptions(input)).catch(() => {});
     }
   },
   component: AccountLedgerRoute,
@@ -94,18 +72,6 @@ function AccountLedgerRoute() {
   const shownPeriod = { from: shown.from ?? period.from, to: shown.to ?? period.to };
   const shownAccountId = shown.accountId ?? accountId;
   const valid = period.from <= period.to;
-  const canExport = useCan(orgSlug, { export: ["read"] });
-
-  const download = useMutation({
-    mutationFn: () =>
-      orpc.export.accountLedgerXlsx.call({ orgSlug, accountId: accountId!, ...period }),
-    onSuccess: saveFile,
-    onError: (error) => toast.error(errorMessage(error, "Could not build the account ledger")),
-  });
-
-  const pdf = accountId
-    ? `/api/${encodeURIComponent(orgSlug)}/reports/account-ledger/pdf?${new URLSearchParams({ accountId, ...period })}`
-    : undefined;
 
   const setSearch = (patch: { accountId?: string; from?: string; to?: string }) =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
@@ -125,28 +91,22 @@ function AccountLedgerRoute() {
             </div>
             <ReportPeriod period={period} onChange={setSearch} />
           </div>
-          <div className="flex items-center gap-2">
-            {canExport ? (
-              <Button
-                variant="outline"
-                disabled={!valid || !accountId || download.isPending}
-                onClick={() => download.mutate()}
-              >
-                <DownloadIcon data-icon="inline-start" />
-                {download.isPending ? "Building…" : "Download XLSX"}
-              </Button>
-            ) : null}
-            {valid && pdf ? (
-              <Button
-                render={<a href={pdf} target="_blank" rel="noopener noreferrer" />}
-                nativeButton={false}
-                variant="outline"
-              >
-                <DownloadIcon data-icon="inline-start" />
-                Download PDF
-              </Button>
-            ) : null}
-          </div>
+          <ReportDownloads
+            orgSlug={orgSlug}
+            ready={valid && accountId !== undefined}
+            build={() => {
+              // `ready` keeps the button disabled until an account is chosen.
+              if (accountId === undefined) throw new Error("No account is chosen");
+
+              return orpc.export.accountLedgerXlsx.call({ orgSlug, accountId, ...period });
+            }}
+            failure="Could not build the account ledger"
+            pdf={linkOptions({
+              to: "/api/$orgSlug/reports/account-ledger/pdf",
+              params: { orgSlug },
+              search: { accountId, ...period },
+            })}
+          />
         </div>
         {!valid ? <ErrorNote title="The end date must not be before the start date." /> : null}
         <div>
@@ -154,13 +114,13 @@ function AccountLedgerRoute() {
             <p className="min-h-24 rounded-lg border border-border bg-card px-4 py-3 text-muted-foreground">
               Choose an account to view its ledger.
             </p>
-          ) : valid ? (
+          ) : valid && shownAccountId ? (
             <ReportBody
               resetKey={JSON.stringify([orgSlug, shownAccountId, shownPeriod.from, shownPeriod.to])}
               errorTitle="Could not load account ledger"
               stale={shown !== search}
             >
-              <AccountLedgerBody input={{ orgSlug, accountId: shownAccountId!, ...shownPeriod }} />
+              <AccountLedgerBody input={{ orgSlug, accountId: shownAccountId, ...shownPeriod }} />
             </ReportBody>
           ) : null}
         </div>
@@ -198,33 +158,24 @@ function AccountPicker({
   );
 }
 
-function AccountLedgerBody({
-  input,
-}: {
-  input: { orgSlug: string; accountId: string; from: string; to: string };
-}) {
+function AccountLedgerBody({ input }: { input: AccountLedgerInput }) {
   const { orgSlug } = input;
-  const summary = useSuspenseQuery(orpc.report.accountLedgerSummary.queryOptions({ input }));
-  const report = useSuspenseInfiniteQuery(ledgerLinesOptions(input));
+  const summary = useSuspenseQuery(accountLedgerSummaryOptions(input));
+  const report = useSuspenseInfiniteQuery(accountLedgerLinesOptions(input));
   const account = summary.data.account;
 
-  const lines: LedgerLine[] = useMemo(() => {
-    let balancePaise = summary.data.openingPaise;
-
-    return report.data.pages.flatMap((page) =>
-      page.rows.map((row) => ({
-        ...row,
-        balancePaise: (balancePaise += row.debitPaise - row.creditPaise),
-      })),
-    );
-  }, [summary.data, report.data]);
+  const lines: LedgerLine[] = withRunningBalance(
+    summary.data.openingPaise,
+    report.data.pages.flatMap((page) => page.rows),
+    netDebitPaise,
+  );
 
   const desktop = useDesktop();
 
   const tableRows = useVirtualRows<HTMLTableSectionElement>({
     count: lines.length,
     estimateSize: 40,
-    getItemKey: (index) => lines[index]!.id,
+    getItemKey: (index) => lines[index]?.id ?? String(index),
     enabled: desktop !== false,
     nextPage: desktop === true ? report : undefined,
   });
@@ -232,7 +183,7 @@ function AccountLedgerBody({
   const cards = useVirtualRows<HTMLUListElement, HTMLLIElement>({
     count: lines.length,
     estimateSize: 72,
-    getItemKey: (index) => lines[index]!.id,
+    getItemKey: (index) => lines[index]?.id ?? String(index),
     enabled: desktop !== true,
     nextPage: desktop === false ? report : undefined,
   });
@@ -309,7 +260,9 @@ function AccountLedgerBody({
                   </TableRow>
                 ) : null}
                 {tableRows.virtualRows.map((item) => {
-                  const line: LedgerLine = lines[item.index]!;
+                  const line = lines[item.index];
+
+                  if (!line) return null;
 
                   const destination = documentLink(orgSlug, line.documentType, line.documentId);
 
@@ -391,7 +344,9 @@ function AccountLedgerBody({
                 <li aria-hidden="true" style={{ height: cards.paddingTop }} />
               ) : null}
               {cards.virtualRows.map((item) => {
-                const line: LedgerLine = lines[item.index]!;
+                const line = lines[item.index];
+
+                if (!line) return null;
 
                 const destination = documentLink(orgSlug, line.documentType, line.documentId);
 

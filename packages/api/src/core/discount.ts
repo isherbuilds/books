@@ -13,9 +13,13 @@ export function splitDiscount(valuesPaise: readonly bigint[], discountPaise: big
   const shares = valuesPaise.map((value) => divideHalfUp(discountPaise * value, subtotal));
   const allocated = sumPaise(shares);
   let largest = 0;
+  let largestPaise = -1n;
 
-  for (let index = 1; index < valuesPaise.length; index++) {
-    if (valuesPaise[index]! > valuesPaise[largest]!) largest = index;
+  for (const [index, value] of valuesPaise.entries()) {
+    if (value > largestPaise) {
+      largest = index;
+      largestPaise = value;
+    }
   }
 
   // A half-up share can over-allocate on many small lines. Correct the largest
@@ -29,7 +33,12 @@ export function splitDiscount(valuesPaise: readonly bigint[], discountPaise: big
   );
 
   for (const index of order) {
-    const room = remainder > 0n ? valuesPaise[index]! - shares[index]! : shares[index]!;
+    const value = valuesPaise[index];
+    const share = shares[index];
+
+    if (value === undefined || share === undefined) throw new RangeError("Line index out of range");
+
+    const room = remainder > 0n ? value - share : share;
 
     const change =
       remainder > 0n
@@ -40,7 +49,7 @@ export function splitDiscount(valuesPaise: readonly bigint[], discountPaise: big
           ? remainder
           : -room;
 
-    shares[index] = shares[index]! + change;
+    shares[index] = share + change;
     remainder -= change;
 
     if (remainder === 0n) break;

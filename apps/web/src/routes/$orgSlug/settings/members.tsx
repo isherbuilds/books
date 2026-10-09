@@ -43,19 +43,11 @@ import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/pag
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateMembership, invalidateRoster } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
+import { errorMessage, handleWriteError } from "@/lib/orpc-error";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
-import { useCan } from "@/lib/membership";
+import { memberListOptions, useCan } from "@/lib/membership";
 
 import { SettingsTabs } from "./route";
-
-// Members page by the server keyset, 25 at a time (lib/schemas `pageLimit`).
-const memberListOptions = (orgSlug: string, q: string | undefined) =>
-  orpc.member.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, q, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => (last.hasMore ? last.members.at(-1)?.id : undefined),
-  });
 
 export const Route = createFileRoute("/$orgSlug/settings/members")({
   head: () => ({ meta: [{ title: "Members · Accly Books" }] }),
@@ -250,7 +242,7 @@ type RosterPage = Awaited<ReturnType<AppRouterClient["member"]["list"]>>;
 
 /** A member or a pending invitation: the roster shows both in one table. */
 type RosterRow =
-  | ({ kind: "member" } & RosterPage["members"][number])
+  | ({ kind: "member" } & RosterPage["rows"][number])
   | ({ kind: "invitation" } & RosterPage["invitations"][number]);
 
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, RosterRow>();
@@ -335,7 +327,14 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
   // The roster is readable org-wide; only its actions need the grant.
   const canManage = useCan(orgSlug, { member: ["update", "delete"] });
   const canRevoke = useCan(orgSlug, { invitation: ["cancel"] });
-  const onError = (error: Error) => toast.error(errorMessage(error, "Could not update the roster"));
+
+  // A CONFLICT or an uncertain result refetches the roster, so the row shows what stands.
+  const onError = (error: Error) =>
+    handleWriteError(error, {
+      settle: () => invalidateMembership(queryClient, orgSlug),
+      fallback: "Could not update the roster",
+      uncertain: "The result is uncertain. Check the roster before trying again.",
+    });
 
   const updateRole = useMutation(
     orpc.member.updateRole.mutationOptions({
@@ -373,7 +372,7 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
         await invalidateRoster(queryClient, orgSlug);
         toast.success("Invitation renewed; copy the new link from the row");
       },
-      onError: (error) => toast.error(errorMessage(error, "Could not renew the invitation")),
+      onError,
     }),
   );
 
@@ -491,7 +490,7 @@ function MemberDirectory({ orgSlug, q }: { orgSlug: string; q: string | undefine
       ...invite,
     })),
     ...pages.flatMap((page) =>
-      page.members.map((person): RosterRow => ({ kind: "member", ...person })),
+      page.rows.map((person): RosterRow => ({ kind: "member", ...person })),
     ),
   ];
 

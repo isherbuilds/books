@@ -193,7 +193,8 @@ export function ApplyCreditDialog({
 
   const afterPaise =
     selected && isPositiveMoney(enteredAmount) && enteredAmount <= target.outstandingPaise
-      ? target.outstandingPaise - enteredAmount
+      ? // oxlint-disable-next-line accly/no-paise-arithmetic-in-components -- preview of the typed amount against the server's outstanding
+        target.outstandingPaise - enteredAmount
       : null;
 
   const emptyText =

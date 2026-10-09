@@ -77,6 +77,10 @@ export async function gstRegisterRows(
       throw impossible(`document ${row.documentId} has no supply type`);
     }
 
+    if (row.againstId && row.againstDate === null) {
+      throw impossible(`document ${row.documentId} names a source without a date`);
+    }
+
     if (
       row.type !== "invoice" &&
       row.type !== "creditNote" &&
@@ -97,12 +101,13 @@ export async function gstRegisterRows(
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,
       intraState: row.intraState,
       documentTotalPaise: row.documentTotalPaise,
-      against: row.againstId
-        ? {
-            number: postedNumber(row.againstNumber, row.againstId),
-            documentDate: row.againstDate!,
-          }
-        : null,
+      against:
+        row.againstId && row.againstDate !== null
+          ? {
+              number: postedNumber(row.againstNumber, row.againstId),
+              documentDate: row.againstDate,
+            }
+          : null,
       supplyClass: row.supplyClass,
       rateBasisPoints: row.rateBasisPoints,
       hsnSac: row.hsnSac,

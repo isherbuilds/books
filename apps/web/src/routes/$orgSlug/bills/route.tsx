@@ -21,11 +21,10 @@ import {
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { RegisterTotals } from "@/components/register-totals";
-import { billListOptions } from "@/lib/bills";
+import { billListOptions, billTotalsOptions } from "@/lib/bills";
 import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { orpc } from "@/lib/orpc";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const STATUSES = ["draft", "posted", "cancelled", "open", "overdue"] as const;
@@ -51,7 +50,7 @@ export const Route = createFileRoute("/$orgSlug/bills")({
     await requireOrgPermission(queryClient, orgSlug, { bill: ["read"] });
     await Promise.all([
       queryClient.infiniteQuery(billListOptions(orgSlug, deps)).catch(() => {}),
-      queryClient.prefetchQuery(orpc.bill.totals.queryOptions({ input: { orgSlug, ...deps } })),
+      queryClient.prefetchQuery(billTotalsOptions(orgSlug, deps)),
     ]);
   },
   component: BillsRoute,
@@ -70,7 +69,7 @@ function BillsRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
-  const totals = useQuery(orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } }));
+  const totals = useQuery(billTotalsOptions(orgSlug, filters));
 
   const activeRowId = useMatch({ from: "/$orgSlug/bills/$billId", shouldThrow: false })?.params
     .billId;

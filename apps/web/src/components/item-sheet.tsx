@@ -29,7 +29,7 @@ import { LinkField } from "@/components/link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateItems } from "@/lib/domain-invalidation";
-import type { ItemListRow } from "@/lib/items";
+import { taxRatesOptions, type ItemListRow } from "@/lib/items";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, errorReason, hasErrorCode } from "@/lib/orpc-error";
 
@@ -99,7 +99,7 @@ function ItemForm({
   const [editToken] = useState(() => item?.updatedAt.toISOString() ?? null);
 
   const accounts = useQuery(incomeAccountOptions(orgSlug));
-  const rates = useQuery(orpc.item.taxRates.queryOptions({ input: { orgSlug } }));
+  const rates = useQuery(taxRatesOptions(orgSlug));
   const incomeAccountId = useWatch({ control: form.control, name: "incomeAccountId" });
 
   const selectedAccount = accounts.data?.find((account) => account.id === incomeAccountId) ?? null;

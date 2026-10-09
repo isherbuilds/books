@@ -105,24 +105,25 @@ export async function postEntryLines(
     0n,
   );
 
-  const storedLines = input.lines.map((line) => {
+  const resolvedLines = input.lines.map((line) => {
     const account = accountById.get(line.accountId);
 
     if (!account) throw impossible(`validated entry account ${line.accountId} is missing`);
 
-    return {
-      ...accountLine(line.accountId, line.description ?? account.name, line.amount),
-      entrySide: line.side,
-      partyId: input.type === "journal" ? (line.partyId ?? null) : null,
-    };
+    return { line, account, partyId: input.type === "journal" ? (line.partyId ?? null) : null };
   });
 
-  // SAFETY: journalAccounts resolved every line (checked above) and admits only null or
-  // system keys admitted by journalAccounts, all SystemAccountKey values.
-  const journalLines = input.lines.map((line) => ({
+  const storedLines = resolvedLines.map(({ line, account, partyId }) => ({
+    ...accountLine(line.accountId, line.description ?? account.name, line.amount),
+    entrySide: line.side,
+    partyId,
+  }));
+
+  // SAFETY: journalAccounts admits only null or system keys, all SystemAccountKey values.
+  const journalLines = resolvedLines.map(({ line, account, partyId }) => ({
     accountId: line.accountId,
-    partyId: input.type === "journal" ? (line.partyId ?? null) : null,
-    systemKey: accountById.get(line.accountId)!.systemKey as SystemAccountKey | null,
+    partyId,
+    systemKey: account.systemKey as SystemAccountKey | null,
     allocations: line.allocations ?? [],
     side: line.side,
     amountPaise: line.amount,

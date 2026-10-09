@@ -1,14 +1,16 @@
+import { documentRole } from "@accly/api/core/document-roles";
 // Copyright (c) Midday Labs AB, AGPL-3.0, from midday-ai/midday@51587319f26a0ffaa9dfccab1920373cb65689b7
 // Adapted from apps/dashboard/src/components/invoice-details.tsx and sheets/invoice-details-sheet.tsx.
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
+import { ADJUSTMENT_LABELS, documentLabel } from "@accly/api/lib/document-labels";
 import { Badge } from "@accly/ui/components/badge";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import { Separator } from "@accly/ui/components/separator";
 import { SheetBody, SheetFooter } from "@accly/ui/components/sheet";
 import { cn } from "@accly/ui/lib/utils";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, linkOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -27,12 +29,6 @@ import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import type { PaletteItem } from "@/lib/palette";
 import { focusRowLink } from "@/lib/row-focus";
 import { receiptDetailOptions } from "@/lib/receipts";
-
-const ADJUSTMENT_LABELS = {
-  fee: "Fee",
-  writeOff: "Write-off",
-  tds: "TDS deducted by customer",
-} as const;
 
 export const Route = createFileRoute("/$orgSlug/receipts/$receiptId")({
   remountDeps: ({ params }) => ({ receiptId: params.receiptId }),
@@ -56,8 +52,13 @@ function ReceiptSheetRoute() {
   const canCancel = useCan(orgSlug, { receipt: ["cancel"] }) && !cancelled;
   const canReadParties = useCan(orgSlug, { party: ["read"] });
   const [cancelOpen, setCancelOpen] = useState(false);
-  const pdfHref = `/api/${orgSlug}/receipts/${receipt.id}/pdf`;
+  const router = useRouter();
   const partyName = receipt.printSnapshot?.party?.name;
+
+  const pdf = linkOptions({
+    to: "/api/$orgSlug/receipts/$receiptId/pdf",
+    params: { orgSlug, receiptId: receipt.id },
+  });
 
   const close = () =>
     void navigate({
@@ -72,7 +73,7 @@ function ReceiptSheetRoute() {
       id: `receipt:${receipt.id}:pdf`,
       label: "PDF",
       group: "action",
-      run: () => window.open(pdfHref, "_blank", "noopener,noreferrer"),
+      run: () => window.open(router.buildLocation(pdf).href, "_blank", "noopener,noreferrer"),
     },
     ...(canCancel
       ? [
@@ -152,8 +153,8 @@ function ReceiptSheetRoute() {
           <DetailRow label="Date">{formatBusinessDate(receipt.documentDate)}</DetailRow>
           <DetailRow label="Payment method">{receipt.printSnapshot?.paymentMethod}</DetailRow>
           <DetailRow label="Settlement">
-            {receipt.exposureSide === "payable"
-              ? "Supplier refund"
+            {documentRole(receipt).refund
+              ? documentLabel("receipt", "payable")
               : receipt.settlementKind && SETTLEMENT_KIND_LABELS[receipt.settlementKind]}
           </DetailRow>
           <DetailRow label="Reference" mono>
@@ -170,14 +171,14 @@ function ReceiptSheetRoute() {
             <section className="grid gap-2">
               <h3 className="text-muted-foreground">Adjustments</h3>
               <dl className="grid gap-2">
-                {receipt.adjustments.map((adjustment) => (
-                  <DetailRow
-                    key={adjustment.id}
-                    label={ADJUSTMENT_LABELS[adjustment.adjustmentKind!]}
-                  >
-                    {formatMoney(adjustment.amountPaise)}
-                  </DetailRow>
-                ))}
+                {receipt.adjustments.map(({ id, adjustmentKind, amountPaise }) =>
+                  // Adjustment lines always carry a kind; the selected column is typed nullable.
+                  adjustmentKind ? (
+                    <DetailRow key={id} label={ADJUSTMENT_LABELS[adjustmentKind]}>
+                      {formatMoney(amountPaise)}
+                    </DetailRow>
+                  ) : null,
+                )}
               </dl>
             </section>
           </>
@@ -197,14 +198,15 @@ function ReceiptSheetRoute() {
       </SheetBody>
 
       <SheetFooter>
-        <a
-          href={pdfHref}
+        <Link
+          {...pdf}
+          reloadDocument
           target="_blank"
           rel="noreferrer"
           className={buttonVariants({ variant: "outline" })}
         >
           PDF
-        </a>
+        </Link>
         {canCancel ? (
           <Button type="button" variant="destructive" onClick={() => setCancelOpen(true)}>
             Cancel receipt

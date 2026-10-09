@@ -26,7 +26,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { useVirtualRows } from "@/components/data-table/use-virtual-rows";
 import { invalidateFiles } from "@/lib/domain-invalidation";
 import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
-import { formatFileSize, openOrgFile, uploadOrgFile } from "@/lib/org-files";
+import { fileListOptions, formatFileSize, openOrgFile, uploadOrgFile } from "@/lib/org-files";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { useCan } from "@/lib/membership";
@@ -34,22 +34,11 @@ import { requireOrgPermission } from "@/lib/route-permission";
 
 import { SettingsTabs } from "./route";
 
-const filesQuery = (orgSlug: string, query: string) =>
-  orpc.file.list.infiniteOptions({
-    input: (cursor: { createdAt: string; id: string } | undefined) => ({
-      orgSlug,
-      query: query || undefined,
-      cursor,
-    }),
-    initialPageParam: undefined,
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
-
 export const Route = createFileRoute("/$orgSlug/settings/files")({
   head: () => ({ meta: [{ title: "Files · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { file: ["read"] });
-    await queryClient.infiniteQuery(filesQuery(orgSlug, "")).catch(() => {});
+    await queryClient.infiniteQuery(fileListOptions(orgSlug, "")).catch(() => {});
   },
   component: FilesRoute,
 });
@@ -66,7 +55,7 @@ function FilesRoute() {
   const canDelete = useCan(orgSlug, { file: ["delete"] });
   const canUpload = useCan(orgSlug, { file: ["upload"] });
 
-  const files = useInfiniteQuery(filesQuery(orgSlug, query));
+  const files = useInfiniteQuery(fileListOptions(orgSlug, query));
 
   const refresh = () => invalidateFiles(queryClient, orgSlug);
 
@@ -104,12 +93,12 @@ function FilesRoute() {
     }
   };
 
-  const items = files.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = files.data?.pages.flatMap((page) => page.rows) ?? [];
 
   const virtual = useVirtualRows<HTMLTableSectionElement, HTMLTableRowElement>({
     count: items.length,
     estimateSize: 56,
-    getItemKey: (index) => items[index]!.id,
+    getItemKey: (index) => items[index]?.id ?? String(index),
     nextPage: files,
   });
 
@@ -185,7 +174,9 @@ function FilesRoute() {
                   </TableRow>
                 ) : null}
                 {virtual.virtualRows.map((item) => {
-                  const file = items[item.index]!;
+                  const file = items[item.index];
+
+                  if (!file) return null;
 
                   return (
                     <TableRow key={file.id} data-index={item.index} ref={virtual.measureElement}>

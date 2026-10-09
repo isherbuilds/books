@@ -1,12 +1,5 @@
-import {
-  ZERO_MONEY,
-  computeTds,
-  enteredPaise,
-  formatMoney,
-  isPositiveMoney,
-  parseMoney,
-} from "@accly/api/core/money";
-import { documentLabel } from "@accly/api/lib/document-labels";
+import { computeTds, enteredPaise, formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { REFUND_GRANT } from "@accly/auth/access";
 import {
   Form,
   FormControl,
@@ -17,27 +10,12 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import {
-  skipToken,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { useFieldArray, useWatch, type FieldPath } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFieldArray, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  ALLOCATION_REFUSALS,
-  AllocationTable,
-  SettlementAllocationTotals,
-  checkAllocations,
-  reportRowErrors,
-  settlementRemaining,
-  type OpenDocument,
-} from "@/components/allocation-table";
+import { ALLOCATION_REFUSALS } from "@/components/allocation-table";
 import { AmountInput } from "@/components/amount-input";
 import { ReferenceNarrationFields } from "@/components/reference-narration-fields";
 import { DocumentForm, PostBar } from "@/components/document-form";
@@ -45,76 +23,90 @@ import { LinkField } from "@/components/link-field";
 import { DocumentPartyField } from "@/components/party-link-field";
 import { PaymentMethodField } from "@/components/payment-method-field";
 import { PaymentWriteOffs } from "@/components/payment-write-offs";
+import {
+  OpenDocumentsTable,
+  SettlementModeField,
+  allocationsToPost,
+  useOpenDocuments,
+} from "@/components/settlement-fields";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { accountListOptions, postableAccounts } from "@/lib/accounts";
-import { invalidateCashState } from "@/lib/domain-invalidation";
+import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { positiveAmount } from "@/lib/form-schema";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
-import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
+import {
+  applyOrpcFieldError,
+  errorReason,
+  handleWriteError,
+  type ServerFields,
+} from "@/lib/orpc-error";
 import type { PartyOption } from "@/lib/parties";
+import { tdsSectionsOptions } from "@/lib/payments";
 
-const schema = z
-  .object({
-    partyId: z.string().nullable(),
-    partyName: z.string(),
-    amount: positiveAmount,
-    paymentMethodId: z.string().min(1, "Choose a payment method"),
-    settlementKind: z.enum(["advance", "against", "direct"]),
-    exposureSide: z.enum(["payable", "receivable"]),
-    allocations: z.record(z.string(), z.string()),
-    expenseAccountId: z.string().nullable(),
-    tdsSectionId: z.string().nullable(),
-    feeAccountId: z.string().nullable(),
-    feeAmount: z.string(),
-    writeOffs: z
-      .array(z.object({ accountId: z.string().nullable(), amount: positiveAmount }))
-      .max(5),
-    reference: z.string().trim().max(120),
-    narration: z.string().trim().max(500),
-    documentDate: z.iso.date(),
-  })
-  .superRefine((values, context) => {
-    if (values.settlementKind !== "direct" && !values.partyId)
-      context.addIssue({ code: "custom", path: ["partyId"], message: "Choose a party" });
+// A picked id: the field is empty until something is chosen.
+const chosen = (message: string) => z.string().nullish().pipe(z.string(message));
 
-    if (values.settlementKind === "direct" && !values.expenseAccountId)
-      context.addIssue({
-        code: "custom",
-        path: ["expenseAccountId"],
-        message: "Choose an expense or asset account",
-      });
+const common = {
+  partyName: z.string(),
+  amount: positiveAmount,
+  paymentMethodId: z.string().min(1, "Choose a payment method"),
+  reference: z.string().trim().max(120),
+  narration: z.string().trim().max(500),
+  documentDate: z.iso.date(),
+  // Typed amounts by open document id.
+  allocations: z.record(z.string(), z.string()),
+};
 
-    if (values.tdsSectionId && values.settlementKind !== "against" && !values.partyId)
-      context.addIssue({
-        code: "custom",
-        path: ["partyId"],
-        message: "Choose a party to deduct TDS",
-      });
-
-    // Write-offs and the fee belong to a payment against bills; switching away clears them.
-    values.writeOffs.forEach((writeOff, index) => {
-      if (!writeOff.accountId)
+const schema = z.discriminatedUnion("mode", [
+  z.object({
+    ...common,
+    mode: z.literal("advance"),
+    partyId: chosen("Choose a party"),
+    tdsSectionId: z.string().nullish(),
+  }),
+  z
+    .object({
+      ...common,
+      mode: z.literal("against"),
+      partyId: chosen("Choose a party"),
+      writeOffs: z
+        .array(
+          z.object({ accountId: chosen("Choose a write-off account"), amount: positiveAmount }),
+        )
+        .max(5),
+      feeAccountId: z.string().nullish(),
+      feeAmount: z.string(),
+    })
+    .superRefine((values, context) => {
+      if (
+        (values.feeAccountId || values.feeAmount) &&
+        !(values.feeAccountId && isPositiveMoney(enteredPaise(values.feeAmount)))
+      )
         context.addIssue({
           code: "custom",
-          path: ["writeOffs", index, "accountId"],
-          message: "Choose a write-off account",
+          path: ["feeAmount"],
+          message: "Choose an expense account and enter a positive fee",
         });
-    });
-
-    if (
-      values.settlementKind === "against" &&
-      values.exposureSide === "payable" &&
-      (values.feeAccountId || values.feeAmount) &&
-      !(values.feeAccountId && isPositiveMoney(enteredPaise(values.feeAmount)))
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["feeAmount"],
-        message: "Choose an expense account and enter a positive fee",
-      });
-  });
+    }),
+  z.object({ ...common, mode: z.literal("refund"), partyId: chosen("Choose a party") }),
+  z
+    .object({
+      ...common,
+      mode: z.literal("direct"),
+      partyId: z.string().nullable(),
+      expenseAccountId: chosen("Choose an expense or asset account"),
+      tdsSectionId: z.string().nullish(),
+    })
+    .superRefine((values, context) => {
+      if (values.tdsSectionId && !values.partyId)
+        context.addIssue({
+          code: "custom",
+          path: ["partyId"],
+          message: "Choose a party to deduct TDS",
+        });
+    }),
+]);
 
 type Values = z.input<typeof schema>;
 
@@ -131,22 +123,23 @@ const SERVER_FIELDS = {
   ALLOCATION_SOURCE_INVALID: "allocations",
   ALLOCATION_EXCEEDS_OUTSTANDING: "allocations",
   ALLOCATION_EXCEEDS_SOURCE: "allocations",
-} satisfies Record<string, FieldPath<Values>>;
+} satisfies ServerFields<Values>;
 
-const defaults = (today: string, partyId: string | null, paymentMethodId = ""): Values => ({
-  partyId,
-  partyName: "",
+// The receipt's default and order, so both money screens open the same way.
+const defaults = (
+  today: string,
+  party: PartyOption | undefined,
+  paymentMethodId = "",
+  mode: Values["mode"] = "advance",
+): Values => ({
+  mode,
+  partyId: party?.id ?? null,
+  partyName: party?.name ?? "",
   amount: "",
   paymentMethodId,
-  // The receipt's default and order, so both money screens open the same way.
-  settlementKind: "advance",
-  exposureSide: "payable",
   allocations: {},
-  expenseAccountId: null,
-  tdsSectionId: null,
-  feeAccountId: null,
-  feeAmount: "",
   writeOffs: [],
+  feeAmount: "",
   reference: "",
   narration: "",
   documentDate: today,
@@ -168,79 +161,33 @@ export function PaymentForm({
   const queryClient = useQueryClient();
 
   const form = useZodForm(schema, {
-    defaultValues: {
-      ...defaults(today, initialParty?.id ?? null),
-      partyName: initialParty?.name ?? "",
-      settlementKind: initialExposureSide ? "against" : "advance",
-      exposureSide: initialExposureSide ?? "payable",
-    },
+    defaultValues: defaults(
+      today,
+      initialParty,
+      "",
+      initialExposureSide && (initialExposureSide === "payable" ? "against" : "refund"),
+    ),
   });
 
-  const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
-  const exposureSide = useWatch({ control: form.control, name: "exposureSide" });
+  const mode = useWatch({ control: form.control, name: "mode" });
   const partyId = useWatch({ control: form.control, name: "partyId" });
   const date = useWatch({ control: form.control, name: "documentDate" });
   const tdsSectionId = useWatch({ control: form.control, name: "tdsSectionId" });
   const amount = useWatch({ control: form.control, name: "amount" });
   const writeOffFields = useFieldArray({ control: form.control, name: "writeOffs" });
-
-  // Write-offs and the fee belong to settling bills; leaving that mode drops them.
-  const clearPayableExtras = () => {
-    writeOffFields.remove();
-    form.setValue("feeAccountId", null);
-    form.setValue("feeAmount", "");
-  };
-
-  const canSettle = useCan(orgSlug, { bill: ["read"], note: ["read"] });
+  const canSettle = useCan(orgSlug, { bill: ["read"] });
+  const canRefund = useCan(orgSlug, REFUND_GRANT);
+  const open = useOpenDocuments(orgSlug, partyId, mode, "payable");
+  const deductsTds = mode === "advance" || mode === "direct";
 
   const accounts = useQuery(accountListOptions(orgSlug));
   const spendAccounts = accounts.data && postableAccounts(accounts.data, ["expense", "asset"]);
   const expenseAccounts = accounts.data && postableAccounts(accounts.data, ["expense"]);
 
-  const items = useInfiniteQuery(
-    openItemsOptions(
-      settlementKind === "against" && exposureSide === "payable" && partyId
-        ? { orgSlug, partyId, side: "payable" }
-        : skipToken,
-    ),
-  );
-
-  const credits = useInfiniteQuery(
-    openCreditsOptions(
-      settlementKind === "against" && exposureSide === "receivable" && partyId
-        ? { orgSlug, partyId, side: "receivable", types: ["creditNote"] }
-        : skipToken,
-    ),
-  );
-
-  const openQuery = exposureSide === "payable" ? items : credits;
-
-  const openRows: OpenDocument[] =
-    exposureSide === "payable"
-      ? (items.data?.pages
-          .flatMap((page) => page.rows)
-          .map((row) => ({
-            ...row,
-            label: row.type === "receipt" ? "Supplier refund" : documentLabel(row.type, "payable"),
-            openPaise: row.outstandingPaise,
-          })) ?? [])
-      : (credits.data?.pages
-          .flatMap((page) => page.rows)
-          .map((row) => ({
-            ...row,
-            label: "Credit note",
-            dueDate: null,
-            openPaise: row.unappliedPaise,
-          })) ?? []);
-
-  const sections = useQuery(
-    orpc.payment.tdsSections.queryOptions({
-      input:
-        settlementKind !== "against" && z.iso.date().safeParse(date).success
-          ? { orgSlug, date }
-          : skipToken,
-    }),
-  );
+  const sections = useQuery({
+    ...tdsSectionsOptions(orgSlug, date),
+    enabled: deductsTds && z.iso.date().safeParse(date).success,
+  });
 
   const section = sections.data?.find((item) => item.id === tdsSectionId);
 
@@ -251,7 +198,11 @@ export function PaymentForm({
         toast.success(`Payment ${number} posted`);
         const { documentDate, paymentMethodId, partyId, partyName } = form.getValues();
         form.reset(
-          { ...defaults(documentDate, partyId, paymentMethodId), partyName },
+          defaults(
+            documentDate,
+            partyId ? { id: partyId, name: partyName } : undefined,
+            paymentMethodId,
+          ),
           { keepSubmitCount: true },
         );
       },
@@ -267,7 +218,8 @@ export function PaymentForm({
           refuse: async () => {
             applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the payment");
 
-            if (ALLOCATION_REFUSALS.includes(errorReason(error) ?? "")) await openQuery.refetch();
+            if (ALLOCATION_REFUSALS.has(errorReason(error)))
+              await invalidateSettlementState(queryClient, orgSlug);
           },
         }),
     }),
@@ -283,100 +235,59 @@ export function PaymentForm({
       narration: values.narration,
     };
 
-    if (values.settlementKind === "direct") {
-      if (!values.expenseAccountId) return;
-      post.mutate({
-        ...common,
-        settlementKind: "direct",
-        partyId: values.partyId ?? undefined,
-        expenseAccountId: values.expenseAccountId,
-        tdsSectionId: values.tdsSectionId ?? undefined,
-      });
+    switch (values.mode) {
+      case "advance":
+        post.mutate({
+          ...common,
+          settlementKind: "advance",
+          partyId: values.partyId,
+          tdsSectionId: values.tdsSectionId ?? undefined,
+        });
 
-      return;
+        return;
+      case "direct":
+        post.mutate({
+          ...common,
+          settlementKind: "direct",
+          partyId: values.partyId ?? undefined,
+          expenseAccountId: values.expenseAccountId,
+          tdsSectionId: values.tdsSectionId ?? undefined,
+        });
+
+        return;
+      case "refund": {
+        const checked = allocationsToPost(form.setError, open, values, []);
+
+        if (checked)
+          post.mutate({
+            ...common,
+            settlementKind: "against",
+            exposureSide: "receivable",
+            partyId: values.partyId,
+            allocations: checked.selected.map(({ id, amount }) => ({ creditNoteId: id, amount })),
+          });
+
+        return;
+      }
+
+      case "against": {
+        // Write-offs make a bill payment settle in full; a remainder posts as an advance.
+        const checked = allocationsToPost(form.setError, open, values, values.writeOffs);
+
+        if (checked)
+          post.mutate({
+            ...common,
+            settlementKind: "against",
+            exposureSide: "payable",
+            partyId: values.partyId,
+            allocations: checked.selected.map(({ id, amount }) => ({ documentId: id, amount })),
+            writeOffs: values.writeOffs.length ? values.writeOffs : undefined,
+            fee: values.feeAccountId
+              ? { accountId: values.feeAccountId, amount: values.feeAmount }
+              : undefined,
+          });
+      }
     }
-
-    if (!values.partyId) return;
-
-    if (values.settlementKind === "advance") {
-      post.mutate({
-        ...common,
-        settlementKind: "advance",
-        partyId: values.partyId,
-        tdsSectionId: values.tdsSectionId ?? undefined,
-      });
-
-      return;
-    }
-
-    if (!openQuery.isSuccess || openQuery.isFetching) {
-      form.setError("allocations", { message: "Wait for the open documents to load" });
-
-      return;
-    }
-
-    const { selected, allocatedPaise, rowErrors, tableError } = checkAllocations(
-      values.allocations,
-      openRows,
-    );
-
-    if (reportRowErrors(form.setError, rowErrors)) return;
-
-    const paidPaise = parseMoney(values.amount);
-
-    const writeOffs = values.writeOffs.map(({ accountId, amount }) => ({
-      accountId: accountId!,
-      amount,
-    }));
-
-    // A refund pays out exactly its credit notes; write-offs make a bill payment settle in full.
-    const capacityPaise =
-      paidPaise + writeOffs.reduce((total, { amount }) => total + parseMoney(amount), ZERO_MONEY);
-
-    const allocationError =
-      tableError ??
-      (values.exposureSide === "receivable"
-        ? allocatedPaise !== paidPaise
-          ? "Refund amount must equal the allocated credit notes"
-          : undefined
-        : allocatedPaise > capacityPaise
-          ? "Allocated amount cannot exceed the payment"
-          : writeOffs.length > 0 && allocatedPaise !== capacityPaise
-            ? "Allocate the full payment including write-offs"
-            : undefined);
-
-    if (allocationError) {
-      form.setError("allocations", { message: allocationError });
-
-      return;
-    }
-
-    if (values.exposureSide === "receivable") {
-      post.mutate({
-        ...common,
-        settlementKind: "against",
-        exposureSide: "receivable",
-        partyId: values.partyId,
-        allocations: selected.map(({ id, amount }) => ({ creditNoteId: id, amount })),
-      });
-
-      return;
-    }
-
-    const payableInput: Extract<Parameters<typeof post.mutate>[0], { exposureSide: "payable" }> = {
-      ...common,
-      settlementKind: "against",
-      exposureSide: "payable",
-      partyId: values.partyId,
-      allocations: selected.map(({ id, amount }) => ({ documentId: id, amount })),
-    };
-
-    if (writeOffs.length) payableInput.writeOffs = writeOffs;
-
-    if (values.feeAccountId)
-      payableInput.fee = { accountId: values.feeAccountId, amount: values.feeAmount };
-
-    post.mutate(payableInput);
   });
 
   const accountField = (
@@ -421,9 +332,9 @@ export function PaymentForm({
       >
         <DocumentPartyField
           orgSlug={orgSlug}
-          label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
-          role={exposureSide === "payable" ? "vendor" : "customer"}
-          clearable={settlementKind === "direct"}
+          label={`Party${mode === "direct" ? " (optional)" : ""}`}
+          role={open.partyRole}
+          clearable={mode === "direct"}
           onPartyChange={() => form.setValue("allocations", {})}
         />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -441,92 +352,18 @@ export function PaymentForm({
           />
           <PaymentMethodField orgSlug={orgSlug} />
         </div>
-        <FormField
-          control={form.control}
-          name="settlementKind"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Settlement kind</FormLabel>
-              <FormControl>
-                <ToggleGroup
-                  value={[field.value]}
-                  onValueChange={(next) => {
-                    if (next[0] === "direct" || next[0] === "advance" || next[0] === "against") {
-                      if (next[0] !== "against") clearPayableExtras();
-                      field.onChange(next[0]);
-                    }
-                  }}
-                  spacing={1}
-                  variant="outline"
-                  aria-label="Settlement kind"
-                >
-                  <ToggleGroupItem value="advance">Advance</ToggleGroupItem>
-                  {canSettle ? (
-                    <ToggleGroupItem value="against">Against open items</ToggleGroupItem>
-                  ) : null}
-                  <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
-                </ToggleGroup>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        <SettlementModeField
+          canAgainst={canSettle}
+          canRefund={canRefund}
+          refundLabel="Money back to customer"
         />
-        {settlementKind === "direct"
+        {mode === "direct"
           ? accountField("expenseAccountId", "Expense or asset account", spendAccounts)
           : null}
-        {settlementKind === "against" ? (
-          <FormField
-            control={form.control}
-            name="exposureSide"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Pay against</FormLabel>
-                <FormControl>
-                  <ToggleGroup
-                    value={[field.value]}
-                    onValueChange={(next) => {
-                      if (next[0] === "payable" || next[0] === "receivable") {
-                        if (next[0] === "receivable") clearPayableExtras();
-                        field.onChange(next[0]);
-                        form.setValue("allocations", {});
-                      }
-                    }}
-                    spacing={1}
-                    variant="outline"
-                    aria-label="Pay against"
-                  >
-                    <ToggleGroupItem value="payable">Bills</ToggleGroupItem>
-                    <ToggleGroupItem value="receivable">Refund credit notes</ToggleGroupItem>
-                  </ToggleGroup>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        {(mode === "against" || mode === "refund") && partyId ? (
+          <OpenDocumentsTable open={open} adjustmentsName="writeOffs" />
         ) : null}
-        {settlementKind === "against" && partyId ? (
-          <AllocationTable
-            title={exposureSide === "payable" ? "Open bills" : "Unapplied credit notes"}
-            openHeading={exposureSide === "payable" ? "Outstanding" : "Unapplied"}
-            query={openQuery}
-            rows={openRows}
-            name="allocations"
-            remainingFor={(documentId) =>
-              settlementRemaining(
-                form.getValues("amount"),
-                form.getValues("allocations"),
-                exposureSide === "payable" ? form.getValues("writeOffs") : [],
-                documentId,
-              )
-            }
-          >
-            <SettlementAllocationTotals
-              adjustmentsName={exposureSide === "payable" ? "writeOffs" : null}
-              advanceRemainder={exposureSide === "payable"}
-            />
-          </AllocationTable>
-        ) : null}
-        {settlementKind === "against" && exposureSide === "payable" ? (
+        {mode === "against" ? (
           <>
             <PaymentWriteOffs orgSlug={orgSlug} writeOffFields={writeOffFields} />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -546,7 +383,7 @@ export function PaymentForm({
             </div>
           </>
         ) : null}
-        {settlementKind !== "against" ? (
+        {deductsTds ? (
           <FormField
             control={form.control}
             name="tdsSectionId"

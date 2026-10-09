@@ -7,7 +7,7 @@ import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { ORPCError } from "@orpc/server";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { impossible } from "../lib/conflict";
+import { impossible, nth } from "../lib/conflict";
 import { insertChunks } from "../lib/insert-chunks";
 import type { Scope } from "../lib/procedures/factory";
 import { activeAllocationsOf, lockDocuments } from "./allocations";
@@ -156,7 +156,7 @@ export async function postOpening(
 
     const rows = items.map((item, index) => ({
       id: Bun.randomUUIDv7(),
-      number: numbers[index]!,
+      number: nth(numbers, index, `opening ${type} number`),
       item,
     }));
 

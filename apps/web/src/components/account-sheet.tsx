@@ -28,7 +28,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import type { AccountRow } from "@/lib/accounts";
 import { invalidateAccountState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, errorReason } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorMessage, errorReason, handleWriteError } from "@/lib/orpc-error";
 
 const accountName = shortName.max(120, "Keep the name under 120 characters");
 
@@ -95,7 +95,16 @@ function EditAccountForm({
         toast.success(account.active ? "Account marked inactive" : "Account marked active");
         onClose();
       },
-      onError: (error) => toast.error(errorMessage(error, "Could not update the account")),
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => {
+            onClose();
+
+            return invalidateAccountState(queryClient, orgSlug);
+          },
+          fallback: "Could not update the account",
+          uncertain: "The result is uncertain. Check the account before trying again.",
+        }),
     }),
   );
 

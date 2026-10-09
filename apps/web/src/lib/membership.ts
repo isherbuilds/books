@@ -3,7 +3,7 @@ import { authorize, type AppPermission } from "@accly/auth/access";
 import type { RouterClient } from "@orpc/server";
 import { useSuspenseQuery } from "@tanstack/react-query";
 
-import { orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
 
 export type Membership = Awaited<ReturnType<RouterClient<AppRouter>["member"]["me"]>>;
 
@@ -39,3 +39,10 @@ export function useMembership<T>(orgSlug: string, select?: (membership: Membersh
 export function useCan(orgSlug: string, permission: AppPermission): boolean {
   return useMembership(orgSlug, (membership) => authorize(membership.roles, permission));
 }
+
+// Members page by the server keyset, 25 at a time; pending invitations ride page one.
+export const memberListOptions = (orgSlug: string, q: string | undefined) =>
+  orpc.member.list.infiniteOptions({
+    input: (cursor: string | undefined) => ({ orgSlug, q, cursor }),
+    ...nextPage,
+  });

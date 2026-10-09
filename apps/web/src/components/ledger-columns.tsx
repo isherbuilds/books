@@ -11,6 +11,7 @@ import type { AppRouterClient } from "@accly/api/routers/index";
 import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES } from "@/components/data-table/data-table";
+import { grossOfTdsPaise } from "@/lib/reports";
 
 type StatementLine = Awaited<
   ReturnType<AppRouterClient["party"]["ledgerLines"]>
@@ -23,10 +24,6 @@ function particulars(line: StatementLine): string {
     return "Advance received";
   }
 
-  if (line.documentType === "receipt" && line.side === "payable") {
-    return "Supplier refund";
-  }
-
   return line.typeLabel;
 }
 
@@ -37,8 +34,8 @@ function TdsDetail({ line }: { line: StatementLine }) {
 
   return (
     <span className="block text-muted-foreground">
-      {line.typeLabel} {formatMoney(net + line.tdsPaise)} − TDS {formatMoney(line.tdsPaise)} ={" "}
-      {formatMoney(net)}
+      {line.typeLabel} {formatMoney(grossOfTdsPaise(net, line.tdsPaise))} − TDS{" "}
+      {formatMoney(line.tdsPaise)} = {formatMoney(net)}
     </span>
   );
 }

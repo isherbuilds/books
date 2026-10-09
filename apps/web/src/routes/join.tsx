@@ -79,6 +79,7 @@ function OrganizationPicker({ userId }: { userId: string }) {
   });
 
   // Only the founding account may create one, so only it sees the link.
+  // oxlint-disable-next-line accly/query-options-in-lib -- a one-off public query: no loader, sibling or invalidation shares its key
   const canCreate = useQuery(orpc.organization.canCreate.queryOptions());
 
   if (destinations.isPending) return <WaveLoader label="Loading organizations" />;

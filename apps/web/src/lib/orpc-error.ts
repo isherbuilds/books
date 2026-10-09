@@ -1,3 +1,4 @@
+import type { ConflictReason, RefusalReason } from "@accly/api/lib/conflict";
 import { notFound } from "@tanstack/react-router";
 import type { FieldPath, FieldValues, UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
@@ -26,15 +27,24 @@ export function hasErrorCode(error: unknown, code: string): boolean {
   return false;
 }
 
+/** A reason the server attaches to a refusal or a conflict. */
+export type ServerReason = RefusalReason | ConflictReason;
+
+/** Maps the reasons a form can show on a field to that field. */
+export type ServerFields<TFieldValues extends FieldValues> = Partial<
+  Record<ServerReason, FieldPath<TFieldValues>>
+>;
+
 /** The first reason supplied by the server; callers match only reasons they handle. */
-export function errorReason(error: unknown): string | undefined {
+export function errorReason(error: unknown): ServerReason | undefined {
   for (const link of causes(error)) {
     if (!("data" in link)) continue;
 
     const data = link.data;
 
     if (data && typeof data === "object" && "reason" in data && typeof data.reason === "string") {
-      return data.reason;
+      // SAFETY: the server sets `reason` only through `badRequest` and `conflict`.
+      return data.reason as ServerReason;
     }
   }
 
@@ -123,7 +133,7 @@ export function errorMessage(error: unknown, fallback = "Something went wrong"):
 export function applyOrpcFieldError<TFieldValues extends FieldValues, TContext, TTransformedValues>(
   form: UseFormReturn<TFieldValues, TContext, TTransformedValues>,
   error: unknown,
-  fields: Partial<Record<string, FieldPath<TFieldValues>>>,
+  fields: ServerFields<TFieldValues>,
   fallback: string,
 ): void {
   const reason = errorReason(error);

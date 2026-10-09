@@ -11,10 +11,10 @@ import { Input } from "@accly/ui/components/input";
 import { Textarea } from "@accly/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ALLOCATION_REFUSALS } from "@/components/allocation-table";
 import { DocumentForm, PostBar } from "@/components/document-form";
 import {
   blankEntryLine,
@@ -31,7 +31,12 @@ import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { partyPickerOptions } from "@/lib/parties";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
+import {
+  applyOrpcFieldError,
+  errorReason,
+  handleWriteError,
+  type ServerFields,
+} from "@/lib/orpc-error";
 import { openItemsOptions } from "@/lib/pickers";
 
 const journalSchema = z.object({
@@ -52,7 +57,7 @@ const SERVER_FIELDS = {
   ALLOCATION_EXCEEDS_OUTSTANDING: "lines",
   ALLOCATION_EXCEEDS_SOURCE: "lines",
   LOCKED: "documentDate",
-} satisfies Record<string, FieldPath<JournalFormValues>>;
+} satisfies ServerFields<JournalFormValues>;
 
 function defaults(documentDate: string): JournalFormValues {
   return {
@@ -97,14 +102,8 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
           refuse: async () => {
             applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the journal");
 
-            const reason = errorReason(error);
-
-            if (
-              reason === "ALLOCATION_TARGET_INVALID" ||
-              reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
-            ) {
+            if (ALLOCATION_REFUSALS.has(errorReason(error)))
               await invalidateSettlementState(queryClient, orgSlug);
-            }
           },
         }),
     }),
@@ -163,9 +162,7 @@ export function JournalForm({ orgSlug, onClose }: { orgSlug: string; onClose: ()
       narration: values.narration,
       reference: values.reference || undefined,
       lines: entryLinesInput(values.lines).map((line, index) => {
-        const entered = values.lines[index];
-
-        const allocations = Object.entries(entered.allocations)
+        const allocations = Object.entries(values.lines[index]?.allocations ?? {})
           .filter(([, amount]) => amount !== "")
           .map(([invoiceId, amount]) => ({ invoiceId, amount }));
 

@@ -25,7 +25,7 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Monogram } from "@/components/monogram";
 import { PaletteTrigger } from "@/components/palette/palette";
@@ -90,10 +90,7 @@ function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
     (membership) => membership.organizations,
   );
 
-  const organizations = useMemo(
-    () => sortOrganizations(membershipOrganizations),
-    [membershipOrganizations],
-  );
+  const organizations = sortOrganizations(membershipOrganizations);
 
   const founder = useMembership(activeOrgSlug, (membership) => membership.founder);
   const path = useSectionPath();

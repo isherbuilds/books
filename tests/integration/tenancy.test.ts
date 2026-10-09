@@ -49,7 +49,7 @@ test("settings are scoped by explicit input: defaults until saved, then the save
   const entry = await eventually(async () => {
     const audit = await api.audit.list({ orgSlug: organization.slug });
 
-    return audit.items.find((item) => item.action === "settings.update");
+    return audit.rows.find((item) => item.action === "settings.update");
   });
 
   expect(entry.actorId).toBe(owner.user.id);
@@ -141,7 +141,7 @@ test("a foreign org claim cannot write into that tenant's audit trail", async ()
   await drainAuditWrites();
 
   const audit = await clientFor(owner).audit.list({ orgSlug: organization.slug });
-  expect(audit.items.some((entry) => entry.actorId === visitor.user.id)).toBe(false);
+  expect(audit.rows.some((entry) => entry.actorId === visitor.user.id)).toBe(false);
 });
 
 test("one client can update settings and post receipts and payments in different orgs concurrently", async () => {
@@ -590,11 +590,11 @@ test("operators are denied audit:read, the denial is recorded, and the owner see
   const denial = await eventually(async () => {
     const audit = await ownerClient.audit.list({ orgSlug: organization.slug });
 
-    for (const entry of audit.items) {
+    for (const entry of audit.rows) {
       expect(entry.orgId).toBe(organization.id);
     }
 
-    return audit.items.find(
+    return audit.rows.find(
       (entry) => entry.action === "rbac.permission" && entry.actorId === member.user.id,
     );
   });
@@ -618,7 +618,7 @@ test("settings writes are owner-gated while reads are org-wide", async () => {
   );
 
   const membership = await clientFor(owner).member.list({ orgSlug: organization.slug });
-  const row = membership.members.find((m) => m.userId === person.user.id);
+  const row = membership.rows.find((m) => m.userId === person.user.id);
   await setMemberRoles(owner, required(row, "settings member").id, ["owner"], organization.id);
 
   const saved = await personClient.settings.update({
@@ -646,7 +646,7 @@ test("the audit trail pages by a stable tenant-scoped cursor", async () => {
   await drainAuditWrites();
 
   const first = await api.audit.list({ orgSlug: organization.slug, limit: 2 });
-  expect(first.items).toHaveLength(2);
+  expect(first.rows).toHaveLength(2);
   expect(first.nextCursor).not.toBeNull();
 
   const second = await api.audit.list({
@@ -655,9 +655,9 @@ test("the audit trail pages by a stable tenant-scoped cursor", async () => {
     cursor: first.nextCursor!,
   });
 
-  expect(second.items).toHaveLength(1);
-  const firstIds = first.items.map((entry) => entry.id);
-  expect(firstIds).not.toContain(second.items[0]!.id);
+  expect(second.rows).toHaveLength(1);
+  const firstIds = first.rows.map((entry) => entry.id);
+  expect(firstIds).not.toContain(second.rows[0]!.id);
 });
 
 test("an operator,accountant holder gets the union of both roles' permissions", async () => {
@@ -674,7 +674,7 @@ test("an operator,accountant holder gets the union of both roles' permissions", 
     orgSlug: organization.slug,
   });
 
-  const row = membership.members.find((m) => m.userId === person.user.id);
+  const row = membership.rows.find((m) => m.userId === person.user.id);
   await setMemberRoles(
     owner,
     required(row, "multi-role member").id,
@@ -686,7 +686,7 @@ test("an operator,accountant holder gets the union of both roles' permissions", 
   const ownDenial = await eventually(async () => {
     const audit = await personClient.audit.list({ orgSlug: organization.slug });
 
-    return audit.items.find(
+    return audit.rows.find(
       (entry) => entry.action === "rbac.permission" && entry.actorId === person.user.id,
     );
   });
@@ -887,6 +887,13 @@ const GUARDED_CALLS = {
       type: "creditNote",
       againstDocumentId: crypto.randomUUID(),
       narration: "Intrusion",
+      lines: [{ sourceLineId: crypto.randomUUID(), amount: "1.00" }],
+    }),
+  "note.quote": (api, claim) =>
+    api.note.quote({
+      ...claim,
+      type: "creditNote",
+      againstDocumentId: crypto.randomUUID(),
       lines: [{ sourceLineId: crypto.randomUUID(), amount: "1.00" }],
     }),
   "note.get": (api, claim) => api.note.get({ ...claim, noteId: crypto.randomUUID() }),
@@ -1102,7 +1109,7 @@ test("every procedure is FORBIDDEN when an outsider names a foreign org", async 
 
   await drainAuditWrites();
   const audit = await clientFor(owner).audit.list({ orgSlug: organization.slug });
-  expect(audit.items.some((entry) => entry.actorId === outsider.user.id)).toBe(false);
+  expect(audit.rows.some((entry) => entry.actorId === outsider.user.id)).toBe(false);
 });
 
 test("every procedure rejects a missing org claim as BAD_REQUEST, not FORBIDDEN", async () => {
@@ -1144,7 +1151,7 @@ test("member mutations reject an id belonging to another tenant", async () => {
   const stranger = await createTestUser("member-scope-stranger");
   await joinOrganization(stranger, alpha.id);
 
-  const [inAlpha] = (await clientFor(alice).member.list({ orgSlug: alpha.slug })).members.filter(
+  const [inAlpha] = (await clientFor(alice).member.list({ orgSlug: alpha.slug })).rows.filter(
     (row) => row.userId === stranger.user.id,
   );
 
@@ -1162,7 +1169,7 @@ test("member mutations reject an id belonging to another tenant", async () => {
     "NOT_FOUND",
   );
 
-  const stillThere = (await clientFor(alice).member.list({ orgSlug: alpha.slug })).members;
+  const stillThere = (await clientFor(alice).member.list({ orgSlug: alpha.slug })).rows;
   expect(stillThere.map((row) => row.userId)).toContain(stranger.user.id);
   expect(stillThere.find((row) => row.userId === stranger.user.id)?.role).toBe("operator");
 });
@@ -1203,12 +1210,11 @@ test("the roster pages members by keyset; invitations ride the first page", asyn
   });
 
   const first = await api.member.list({ orgSlug: organization.slug, limit: 1 });
-  expect(first.members.map((row) => row.userId)).toEqual([owner.user.id]);
-  expect(first.hasMore).toBe(true);
+  expect(first.rows.map((row) => row.userId)).toEqual([owner.user.id]);
   expect(first.invitations.map((row) => row.id)).toEqual([invited.id]);
 
-  const cursor = required(first.members[0], "first page member").id;
+  const cursor = required(first.nextCursor, "second member page");
   const next = await api.member.list({ orgSlug: organization.slug, limit: 1, cursor });
-  expect(next).toMatchObject({ hasMore: false, invitations: [] });
-  expect(next.members.map((row) => row.userId)).toEqual([person.user.id]);
+  expect(next).toMatchObject({ nextCursor: null, invitations: [] });
+  expect(next.rows.map((row) => row.userId)).toEqual([person.user.id]);
 });

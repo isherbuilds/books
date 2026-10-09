@@ -643,7 +643,7 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
   ]);
   expect(await api.party.openItems({ ...picker, type: "invoice", limit: 1 })).toEqual({
     rows: [expect.objectContaining({ id: laterInvoice.id, type: "invoice" })],
-    hasMore: false,
+    nextCursor: null,
   });
 
   // The reversal reopened the note; a second refund settles it, and its cancel restores it.
