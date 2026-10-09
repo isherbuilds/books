@@ -47,11 +47,15 @@ import { Fragment, useEffect, useRef, useState, type RefObject } from "react";
 import { DOCUMENT_STATE_LABELS } from "@/components/document-columns";
 import { useRegisteredPaletteActions } from "@/components/palette/use-palette-actions";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { billSearchOptions } from "@/lib/bills";
+import { invoiceSearchOptions } from "@/lib/invoices";
 import { useMembership } from "@/lib/membership";
 import { PRIMARY_NAV, SETTINGS_TABS } from "@/lib/navigation";
-import { orpc } from "@/lib/orpc";
+import { noteSearchOptions } from "@/lib/notes";
 import { rankCommands, type PaletteGroup, type PaletteItem } from "@/lib/palette";
 import { partyListOptions } from "@/lib/parties";
+import { paymentSearchOptions } from "@/lib/payments";
+import { receiptSearchOptions } from "@/lib/receipts";
 
 // The palette renders inside ClientOnly and its trigger only calls `open`, so this
 // module-level handle never binds during SSR.
@@ -134,8 +138,7 @@ const DOCUMENT_SEARCHES = [
     kind: "Invoice",
     icon: FileTextIcon,
     permission: { invoice: ["read"] } satisfies AppPermission,
-    options: (orgSlug: string, q: string) =>
-      orpc.invoice.list.queryOptions({ input: { orgSlug, q, limit: SEARCH_RESULT_LIMIT } }),
+    options: (orgSlug: string, q: string) => invoiceSearchOptions(orgSlug, q, SEARCH_RESULT_LIMIT),
     open: (orgSlug: string, id: string): NavigateOptions => ({
       to: "/$orgSlug/invoices/$invoiceId",
       params: { orgSlug, invoiceId: id },
@@ -145,8 +148,7 @@ const DOCUMENT_SEARCHES = [
     kind: "Receipt",
     icon: ReceiptIndianRupeeIcon,
     permission: { receipt: ["read"] } satisfies AppPermission,
-    options: (orgSlug: string, q: string) =>
-      orpc.receipt.list.queryOptions({ input: { orgSlug, q, limit: SEARCH_RESULT_LIMIT } }),
+    options: (orgSlug: string, q: string) => receiptSearchOptions(orgSlug, q, SEARCH_RESULT_LIMIT),
     open: (orgSlug: string, id: string): NavigateOptions => ({
       to: "/$orgSlug/receipts/$receiptId",
       params: { orgSlug, receiptId: id },
@@ -156,8 +158,7 @@ const DOCUMENT_SEARCHES = [
     kind: "Bill",
     icon: FileInputIcon,
     permission: { bill: ["read"] } satisfies AppPermission,
-    options: (orgSlug: string, q: string) =>
-      orpc.bill.list.queryOptions({ input: { orgSlug, q, limit: SEARCH_RESULT_LIMIT } }),
+    options: (orgSlug: string, q: string) => billSearchOptions(orgSlug, q, SEARCH_RESULT_LIMIT),
     open: (orgSlug: string, id: string): NavigateOptions => ({
       to: "/$orgSlug/bills/$billId",
       params: { orgSlug, billId: id },
@@ -167,8 +168,7 @@ const DOCUMENT_SEARCHES = [
     kind: "Payment",
     icon: HandCoinsIcon,
     permission: { payment: ["read"] } satisfies AppPermission,
-    options: (orgSlug: string, q: string) =>
-      orpc.payment.list.queryOptions({ input: { orgSlug, q, limit: SEARCH_RESULT_LIMIT } }),
+    options: (orgSlug: string, q: string) => paymentSearchOptions(orgSlug, q, SEARCH_RESULT_LIMIT),
     open: (orgSlug: string, id: string): NavigateOptions => ({
       to: "/$orgSlug/payments/$paymentId",
       params: { orgSlug, paymentId: id },
@@ -178,8 +178,7 @@ const DOCUMENT_SEARCHES = [
     kind: "Note",
     icon: FileDiffIcon,
     permission: { note: ["read"] } satisfies AppPermission,
-    options: (orgSlug: string, q: string) =>
-      orpc.note.list.queryOptions({ input: { orgSlug, q, limit: SEARCH_RESULT_LIMIT } }),
+    options: (orgSlug: string, q: string) => noteSearchOptions(orgSlug, q, SEARCH_RESULT_LIMIT),
     open: (orgSlug: string, id: string): NavigateOptions => ({
       to: "/$orgSlug/notes/$noteId",
       params: { orgSlug, noteId: id },

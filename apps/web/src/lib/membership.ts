@@ -46,3 +46,7 @@ export const memberListOptions = (orgSlug: string, q: string | undefined) =>
     input: (cursor: string | undefined) => ({ orgSlug, q, cursor }),
     ...nextPage,
   });
+
+// Every member as a picker option.
+export const memberPickerOptions = (orgSlug: string) =>
+  orpc.member.options.queryOptions({ input: { orgSlug } });

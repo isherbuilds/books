@@ -116,7 +116,8 @@
       "rules": { "accly/no-paise-arithmetic-in-components": "error" }
     },
     {
-      "files": ["apps/web/src/routes/**"],
+      "files": ["apps/web/src/**"],
+      "excludeFiles": ["apps/web/src/lib/**"],
       "rules": { "accly/query-options-in-lib": "error" }
     },
     {

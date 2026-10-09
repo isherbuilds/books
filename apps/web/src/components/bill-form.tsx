@@ -38,6 +38,7 @@ import { invalidateBillDrafts, invalidateSettlementState } from "@/lib/domain-in
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { tdsSectionsOptions } from "@/lib/payments";
+import { tdsAdvanceOptions } from "@/lib/pickers";
 import { settingsOptions } from "@/lib/settings";
 import { applyOrpcFieldError, handleWriteError, type ServerFields } from "@/lib/orpc-error";
 
@@ -173,19 +174,11 @@ export function BillForm({
   });
 
   const tdsAdvances = useQuery(
-    orpc.party.openCredits.queryOptions({
-      input:
-        canReadPayment && watchedPartyId && tdsSectionId
-          ? {
-              orgSlug,
-              partyId: watchedPartyId,
-              side: "payable",
-              types: ["payment"],
-              tdsOnly: true,
-              limit: 1,
-            }
-          : skipToken,
-    }),
+    tdsAdvanceOptions(
+      canReadPayment && watchedPartyId && tdsSectionId
+        ? { orgSlug, partyId: watchedPartyId }
+        : skipToken,
+    ),
   );
 
   const invalidateDrafts = () => invalidateBillDrafts(queryClient, orgSlug);

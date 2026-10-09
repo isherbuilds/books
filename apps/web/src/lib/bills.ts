@@ -26,3 +26,7 @@ export const billTotalsOptions = (
   orgSlug: string,
   filters: Omit<Parameters<AppRouterClient["bill"]["totals"]>[0], "orgSlug">,
 ) => orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } });
+
+// The command palette's number/party/reference search over bills.
+export const billSearchOptions = (orgSlug: string, q: string, limit: number) =>
+  orpc.bill.list.queryOptions({ input: { orgSlug, q, limit } });

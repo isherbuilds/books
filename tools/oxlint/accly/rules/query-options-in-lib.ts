@@ -1,13 +1,13 @@
 import { defineRule } from "@oxlint/plugins";
 
 /**
- * A route that builds `orpc.x.queryOptions(...)` inline cannot share the query key with
+ * A route or component that builds `orpc.x.queryOptions(...)` inline cannot share the query key with
  * the loader, the component and the invalidation that need the same query.
  */
 export const queryOptionsInLibRule = defineRule({
   meta: {
     type: "suggestion",
-    docs: { description: "Disallow inline oRPC query options in route files." },
+    docs: { description: "Disallow inline oRPC query options outside apps/web/src/lib." },
     messages: {
       inlineOptions:
         "Add a named query-options factory in apps/web/src/lib/<domain>.ts and call it here.",

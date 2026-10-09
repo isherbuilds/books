@@ -28,3 +28,12 @@ export const openCreditsOptions = (input: PickerInput<"openCredits"> | typeof sk
         : (cursor: DocumentCursor | undefined) => ({ ...input, cursor }),
     ...nextPage,
   });
+
+/** A party's latest unapplied TDS-bearing payment, if any. */
+export const tdsAdvanceOptions = (input: { orgSlug: string; partyId: string } | typeof skipToken) =>
+  orpc.party.openCredits.queryOptions({
+    input:
+      input === skipToken
+        ? skipToken
+        : { ...input, side: "payable", types: ["payment"], tdsOnly: true, limit: 1 },
+  });

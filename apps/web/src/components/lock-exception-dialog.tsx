@@ -30,6 +30,7 @@ import { z } from "zod";
 import { LinkField } from "@/components/link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateLockState } from "@/lib/domain-invalidation";
+import { memberPickerOptions } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, handleWriteError, type ServerFields } from "@/lib/orpc-error";
 
@@ -65,17 +66,15 @@ export function LockExceptionDialog({
   const userId = useWatch({ control: form.control, name: "userId" });
 
   // Only members who can post anything need an exception.
-  const members = useQuery(
-    orpc.member.options.queryOptions({
-      input: { orgSlug },
-      select: (rows) =>
-        rows.filter((member) => {
-          const roles = parseRoles(member.role);
+  const members = useQuery({
+    ...memberPickerOptions(orgSlug),
+    select: (rows) =>
+      rows.filter((member) => {
+        const roles = parseRoles(member.role);
 
-          return POSTING_GRANTS.some((permission) => authorize(roles, permission));
-        }),
-    }),
-  );
+        return POSTING_GRANTS.some((permission) => authorize(roles, permission));
+      }),
+  });
 
   const selectedMember = members.data?.find((member) => member.userId === userId) ?? null;
 

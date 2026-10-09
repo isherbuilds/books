@@ -26,3 +26,7 @@ export const paymentTotalsOptions = (
 // TDS sections in force on a date. Callers disable it until the date is complete.
 export const tdsSectionsOptions = (orgSlug: string, date?: string) =>
   orpc.payment.tdsSections.queryOptions({ input: { orgSlug, date } });
+
+// The command palette's number/party/reference search over payments.
+export const paymentSearchOptions = (orgSlug: string, q: string, limit: number) =>
+  orpc.payment.list.queryOptions({ input: { orgSlug, q, limit } });
