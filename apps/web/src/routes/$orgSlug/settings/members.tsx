@@ -43,7 +43,7 @@ import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/pag
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateMembership, invalidateRoster } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, handleWriteError } from "@/lib/orpc-error";
+import { handleWriteError } from "@/lib/orpc-error";
 import { formatDate, useOrgDateTime } from "@/lib/org-datetime";
 import { memberListOptions, useCan } from "@/lib/membership";
 
@@ -107,7 +107,12 @@ function InviteDialog({
       },
       onError: (error) => {
         setLastLink(null);
-        toast.error(errorMessage(error, "Could not create the invitation"));
+
+        return handleWriteError(error, {
+          settle: () => invalidateRoster(queryClient, orgSlug),
+          fallback: "Could not create the invitation",
+          uncertain: "The result is uncertain. Check the roster before inviting again.",
+        });
       },
     }),
   );

@@ -1,30 +1,10 @@
 import { defineRule } from "@oxlint/plugins";
 
-import type { ESTree } from "@oxlint/plugins";
-
 /**
  * A write that fails with CONFLICT or an uncertain 5xx must refetch what it would have
- * moved; a bare toast leaves the screen stale. handleWriteError owns those outcomes.
+ * moved; a bare toast leaves the screen stale. handleWriteError owns those outcomes, so an
+ * onError in `.mutationOptions({...})` that calls `toast.error` must also call handleWriteError.
  */
-function isToastError(node: ESTree.Node | null | undefined): boolean {
-  if (node?.type === "ExpressionStatement") return isToastError(node.expression);
-  return (
-    node?.type === "CallExpression" &&
-    node.callee.type === "MemberExpression" &&
-    node.callee.object.type === "Identifier" &&
-    node.callee.object.name === "toast" &&
-    node.callee.property.type === "Identifier" &&
-    node.callee.property.name === "error"
-  );
-}
-
-function onlyToasts(fn: ESTree.Node): boolean {
-  if (fn.type !== "ArrowFunctionExpression" && fn.type !== "FunctionExpression") return false;
-  const { body } = fn;
-  if (body?.type !== "BlockStatement") return isToastError(body);
-  return body.body.length === 1 && isToastError(body.body[0]);
-}
-
 export const writeErrorsViaHandlerRule = defineRule({
   meta: {
     type: "problem",
@@ -48,11 +28,13 @@ export const writeErrorsViaHandlerRule = defineRule({
           if (arg.type !== "ObjectExpression") continue;
           for (const property of arg.properties) {
             if (
-              property.type === "Property" &&
-              property.key.type === "Identifier" &&
-              property.key.name === "onError" &&
-              onlyToasts(property.value)
+              property.type !== "Property" ||
+              property.key.type !== "Identifier" ||
+              property.key.name !== "onError"
             )
+              continue;
+            const body = context.sourceCode.getText(property.value);
+            if (body.includes("toast.error(") && !body.includes("handleWriteError("))
               context.report({ node: property, messageId: "bareToast" });
           }
         }

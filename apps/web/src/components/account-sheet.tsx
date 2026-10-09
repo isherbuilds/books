@@ -28,7 +28,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import type { AccountRow } from "@/lib/accounts";
 import { invalidateAccountState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, errorReason, handleWriteError } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 
 const accountName = shortName.max(120, "Keep the name under 120 characters");
 
@@ -69,21 +69,35 @@ function EditAccountForm({
         toast.success("Account saved");
         onClose();
       },
+      // The edit token refuses a retried write, so an uncertain result keeps the form open.
       onError: (error) => {
-        if (errorReason(error) === "STALE_RECORD") {
-          void invalidateAccountState(queryClient, orgSlug);
-          toast.error(errorMessage(error, "This account changed elsewhere. Reload and try again."));
-          onClose();
+        // ACCOUNT_NAME_TAKEN is a CONFLICT the user fixes in the form, not a stale record.
+        if (errorReason(error) === "ACCOUNT_NAME_TAKEN") {
+          applyOrpcFieldError(
+            form,
+            error,
+            { ACCOUNT_NAME_TAKEN: "name" },
+            "Could not save the account",
+          );
 
           return;
         }
 
-        applyOrpcFieldError(
-          form,
-          error,
-          { ACCOUNT_NAME_TAKEN: "name", ACCOUNT_IN_USE: "supplyClass" },
-          "Could not save the account",
-        );
+        return handleWriteError(error, {
+          settle: async () => {
+            await invalidateAccountState(queryClient, orgSlug);
+            onClose();
+          },
+          fallback: "Could not save the account",
+          uncertain: null,
+          refuse: () =>
+            applyOrpcFieldError(
+              form,
+              error,
+              { ACCOUNT_IN_USE: "supplyClass" },
+              "Could not save the account",
+            ),
+        });
       },
     }),
   );
