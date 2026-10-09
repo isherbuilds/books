@@ -31,7 +31,8 @@
     ".roo/**",
     ".windsurf/**",
     "tools/oxlint/anti-slop/**",
-    "tools/oxlint/accly/**"
+    "tools/oxlint/accly/**",
+    "tests/fixtures/lint/**"
   ],
   "rules": {
     "oxc/no-accumulating-spread": "error",
@@ -47,9 +48,90 @@
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-readable-spacing": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "error",
-    "accly/no-pass-through-function": "error"
+    "accly/no-pass-through-function": "error",
+    "accly/no-motion-on-controls": "error"
   },
   "overrides": [
+    {
+      "files": ["apps/*/src/**", "packages/*/src/**"],
+      "excludeFiles": ["**/routeTree.gen.ts", "**/migrations/**"],
+      "rules": {
+        "eslint/max-lines": ["warn", { "max": 800, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["apps/web/**", "packages/ui/**"],
+      "rules": {
+        "accly/no-manual-memo": "error"
+      }
+    },
+    {
+      "files": ["packages/api/src/**"],
+      "excludeFiles": ["packages/api/src/lib/procedures/factory.ts"],
+      "rules": { "accly/no-permission-in-handler": "error" }
+    },
+    {
+      "files": ["packages/api/src/**", "apps/web/src/**"],
+      "excludeFiles": ["packages/api/src/core/document-roles.ts"],
+      "rules": { "accly/no-exposure-side-branch": "error" }
+    },
+    {
+      "files": ["packages/api/src/**"],
+      "excludeFiles": ["packages/api/src/lib/sql.ts"],
+      "rules": { "accly/no-raw-paise-sum": "error" }
+    },
+    {
+      "files": ["packages/api/src/**", "apps/web/src/**"],
+      "rules": { "typescript/no-non-null-assertion": "error" }
+    },
+    {
+      "files": [
+        "apps/web/src/**",
+        "packages/api/src/core/amount-in-words.ts",
+        "packages/api/src/core/document-roles.ts",
+        "packages/api/src/core/money.ts",
+        "packages/api/src/core/note-lines.ts",
+        "packages/api/src/core/number-prefixes.ts",
+        "packages/api/src/core/tax.ts",
+        "packages/api/src/lib/business-date.ts",
+        "packages/api/src/lib/document-labels.ts",
+        "packages/api/src/lib/import-limits.ts",
+        "packages/api/src/lib/indian-states.ts",
+        "packages/api/src/lib/normalized-name.ts",
+        "packages/api/src/lib/schemas.ts",
+        "packages/db/src/schema/account-kinds.ts",
+        "packages/db/src/schema/entry-sides.ts",
+        "packages/db/src/schema/lock-kinds.ts",
+        "packages/db/src/schema/settlement-kinds.ts"
+      ],
+      "rules": {
+        "accly/client-safe-imports": [
+          "error",
+          { "exempt": ["apps/web/src/lib/orpc.ts", "apps/web/src/lib/pdf-response.ts"] }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/**/*.tsx"],
+      "rules": { "accly/no-paise-arithmetic-in-components": "error" }
+    },
+    {
+      "files": ["apps/web/src/routes/**"],
+      "rules": { "accly/query-options-in-lib": "error" }
+    },
+    {
+      "files": ["apps/web/src/**"],
+      "excludeFiles": [
+        "apps/web/src/lib/orpc.ts",
+        "apps/web/src/routes/api.*",
+        "apps/web/src/routeTree.gen.ts"
+      ],
+      "rules": {
+        "accly/paging-from-orpc": "error",
+        "accly/no-api-url-literal": "error",
+        "accly/write-errors-via-handler": "error"
+      }
+    },
     {
       "files": ["tests/**"],
       "rules": {
@@ -60,8 +142,7 @@
     {
       "files": ["**/*.tsx"],
       "rules": {
-        "accly/no-bigint-in-components": "error",
-        "accly/no-motion-on-controls": "error"
+        "accly/no-bigint-in-components": "error"
       }
     },
     {

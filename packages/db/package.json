@@ -11,7 +11,6 @@
   },
   "scripts": {
     "check-types": "bun --bun tsc --noEmit",
-    "db:push": "bun --bun drizzle-kit push",
     "db:generate": "bun --bun drizzle-kit generate",
     "db:studio": "bun --bun drizzle-kit studio",
     "db:migrate": "bun src/migrate-command.ts"

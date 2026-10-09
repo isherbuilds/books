@@ -25,7 +25,7 @@ export const noBigintInComponentsRule = defineRule({
     return {
       // ESTree models `0n` as a Literal carrying a `bigint` string, not its own node type.
       Literal(node) {
-        if (typeof node.bigint === "string") {
+        if ("bigint" in node && typeof node.bigint === "string") {
           context.report({ node, messageId: "bigintLiteral" });
         }
       },

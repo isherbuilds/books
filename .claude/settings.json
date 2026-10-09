@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 600,
+            "command": "input=$(cat); cd \"$CLAUDE_PROJECT_DIR\" && bun run verify 1>&2 && exit 0; printf '%s' \"$input\" | grep -Eq '\"stop_hook_active\": *true' && exit 0; echo '`bun run verify` failed. Fix the errors above before you finish, or report them as blockers.' >&2; exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

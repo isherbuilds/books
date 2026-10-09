@@ -1,3 +1,9 @@
 {
-  "extends": "@accly/config/tsconfig.base.json"
+  "extends": "@accly/config/tsconfig.base.json",
+  // Root-level code that no workspace package typechecks.
+  "include": ["scripts/**/*.ts", "tools/**/*.ts"],
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  }
 }

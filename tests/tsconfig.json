@@ -4,11 +4,16 @@
   // DOM lib the base config (server-side) leaves out.
   "compilerOptions": {
     "jsx": "react-jsx",
+    // The lint-rule test imports the oxlint plugin by its .ts path, as oxlint loads it.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "lib": ["ESNext", "DOM"],
     "paths": {
       "@/*": ["../apps/web/src/*"],
       "@accly/ui/*": ["../packages/ui/src/*"]
     }
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  // Lint fixtures break rules on purpose; tests/unit/lint-rules.test.ts lints them.
+  "exclude": ["fixtures"]
 }
