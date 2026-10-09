@@ -15,7 +15,6 @@ import { settlementPaise } from "../core/allocations";
 import {
   organizationSnapshot,
   partySnapshot,
-  priorNoteLines,
   postDocument,
   postedNumber,
   writeDraft,
@@ -24,14 +23,15 @@ import {
   type PostDocumentLine,
 } from "../core/documents";
 import { splitDiscount } from "../core/discount";
+import { priorNotes } from "../core/note-source";
 import { formatDecimal, percentOfPaise, sumPaise } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
-import { computeTax, documentTotals, taxTotals } from "../core/tax";
+import { computeTax, documentTotals, taxTotals, withLineTax } from "../core/tax";
 import { ratesByCode } from "../core/tax-schedule";
 import { businessDate } from "../lib/business-date";
-import { badRequest } from "../lib/conflict";
+import { badRequest, impossible, nth } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
-import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import {
   draftToken,
   invoiceFields,
@@ -50,10 +50,9 @@ import {
   listClaims,
   discardDraft,
   documentSettlement,
-  orgSettings,
-  orgTimeZone,
   printedPartyName,
 } from "../lib/settlements";
+import { orgSettings, orgTimeZone } from "../lib/org-settings";
 import { auditReceiptPost, postReceipt } from "./receipt";
 
 type InvoiceFields = z.output<z.ZodObject<typeof invoiceFields>>;
@@ -149,7 +148,10 @@ async function resolveInvoice(
   // Every line is an Item (accounting-core call 5): the Item carries the income account
   // and the dated rate, and the line may override its description and price.
   const unresolvedLines = input.lines.map((line) => {
-    const stored = itemById.get(line.itemId)!;
+    const stored = itemById.get(line.itemId);
+
+    if (!stored) throw impossible(`item ${line.itemId} was not resolved`);
+
     const unitPricePaise = line.unitPrice ?? stored.item.unitPricePaise;
     const amountPaise = boundedPaise(BigInt(line.quantity) * unitPricePaise);
     const rateApplies = registered && stored.account.supplyClass === "taxable";
@@ -209,29 +211,27 @@ async function resolveInvoice(
     discountPaise,
   );
 
-  const taxableValues = unresolvedLines.map(
-    ({ line }, index) => line.amountPaise - discounts[index]!,
-  );
+  const discounted = unresolvedLines.map((resolved, index) => {
+    const discountPaise = nth(discounts, index, "invoice line discount");
+
+    return { ...resolved, discountPaise, taxablePaise: resolved.line.amountPaise - discountPaise };
+  });
 
   const intraState = settings.stateCode === input.placeOfSupplyStateCode;
 
-  const tax = computeTax({
-    intraState,
-    lines: unresolvedLines.map(({ rateBasisPoints }, index) => ({
-      taxablePaise: taxableValues[index]!,
-      rateBasisPoints,
-    })),
-  });
+  const tax = computeTax({ intraState, lines: discounted });
 
-  const lines: PostDocumentLine[] = unresolvedLines.map(({ line }, index) => ({
-    ...line,
-    amountPaise: taxableValues[index]!,
-    discountPaise: discounts[index]!,
-    itcEligible: null,
-    sourceLineId: null,
-    adjustmentKind: null,
-    ...tax.lines[index]!,
-  }));
+  const lines: PostDocumentLine[] = discounted.map(
+    ({ line, discountPaise, taxablePaise }, index) => ({
+      ...line,
+      amountPaise: taxablePaise,
+      discountPaise,
+      itcEligible: null,
+      sourceLineId: null,
+      adjustmentKind: null,
+      ...nth(tax.lines, index, "invoice line tax"),
+    }),
+  );
 
   const { roundOffPaise, ...totals } = documentTotals(lines);
   const totalPaise = boundedPaise(totals.totalPaise);
@@ -246,8 +246,8 @@ async function resolveInvoice(
     partyId: party.id,
     amountPaise: totalPaise,
     // A free line (zero price) stays on the document but has no journal leg.
-    lines: lines.flatMap((line) =>
-      line.amountPaise > 0n ? [{ accountId: line.accountId!, amountPaise: line.amountPaise }] : [],
+    lines: discounted.flatMap(({ account, taxablePaise }) =>
+      taxablePaise > 0n ? [{ accountId: account.id, amountPaise: taxablePaise }] : [],
     ),
     cgstPaise: tax.cgstPaise,
     sgstPaise: tax.sgstPaise,
@@ -318,14 +318,10 @@ export const invoiceRouter = {
 
     return {
       // The editor computes quantity times rate itself; only the dated rate is the server's.
-      lines: lineRates.map((rateBasisPoints, index) => {
-        const line = invoice.lines[index]!;
-
-        return {
-          rateBasisPoints,
-          grossPaise: line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise,
-        };
-      }),
+      lines: invoice.lines.map((line, index) => ({
+        rateBasisPoints: nth(lineRates, index, "invoice line rate"),
+        grossPaise: withLineTax(line).lineTotalPaise,
+      })),
       discountPaise: invoice.discountPaise,
       taxablePaise,
       cgstPaise,
@@ -349,11 +345,12 @@ export const invoiceRouter = {
     },
   ),
 
-  post: orgProcedure({ invoice: ["post"] }, postInput).handler(async ({ context, input }) => {
+  // A counter sale also posts a Receipt, so it needs that permission too.
+  post: orgProcedure(
+    (input) => (input.settle ? { invoice: ["post"], receipt: ["post"] } : { invoice: ["post"] }),
+    postInput,
+  ).handler(async ({ context, input }) => {
     const { scope } = context;
-
-    // A counter sale also posts a Receipt, so it needs that permission too.
-    if (input.settle) requirePermission(scope, { receipt: ["post"] });
 
     const { posted, amountPaise, receipts } = await db.transaction(async (tx) => {
       const settings = await orgSettings(scope.orgId, tx);
@@ -499,17 +496,13 @@ export const invoiceRouter = {
               )
               .orderBy(asc(documentLines.position));
 
-            const prior = canReadNotes
-              ? await priorNoteLines(
-                  tx,
-                  orgId,
-                  invoice.id,
-                  "creditNote",
-                  lines.map((line) => line.id),
-                )
-              : [];
-
-            const used = new Map(prior.map((line) => [line.sourceLineId, line]));
+            const prior = await priorNotes(
+              tx,
+              orgId,
+              { id: invoice.id, type: "invoice" },
+              lines,
+              canReadNotes,
+            );
 
             const allocations = await allocationsOf(
               tx,
@@ -540,11 +533,7 @@ export const invoiceRouter = {
 
             return {
               invoice,
-              lines: lines.map((line) => ({
-                ...line,
-                remainingPaise: line.amountPaise - (used.get(line.id)?.amountPaise ?? 0n),
-                priorNote: used.get(line.id) ?? null,
-              })),
+              lines: prior.lines,
               allocations,
               notes,
             };
@@ -565,7 +554,7 @@ export const invoiceRouter = {
         printClass: lines.some((line) => line.taxRateId !== null)
           ? ("taxInvoice" as const)
           : ("billOfSupply" as const),
-        lines: lines.map(({ taxRateId: _taxRateId, ...line }) => line),
+        lines: lines.map(({ taxRateId: _taxRateId, ...line }) => withLineTax(line)),
         totals: taxTotals(lines),
         allocations,
       };

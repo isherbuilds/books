@@ -10,7 +10,7 @@ import {
   RegisteredFormField,
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { z } from "zod";
@@ -21,7 +21,7 @@ import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
 import { positiveAmount } from "@/lib/form-schema";
 import { useListState, type ListState } from "@/lib/list-state";
-import { orpc } from "@/lib/orpc";
+import { taxRatesOptions } from "@/lib/items";
 
 export const lineSchema = z.object({
   accountId: z.string().min(1, "Choose an expense or asset account"),
@@ -218,11 +218,7 @@ export function BillLines({
   );
 
   const rates = useListState<TaxRate[]>(
-    useQuery(
-      orpc.item.taxRates.queryOptions({
-        input: documentDate ? { orgSlug, date: documentDate } : skipToken,
-      }),
-    ),
+    useQuery({ ...taxRatesOptions(orgSlug, documentDate), enabled: documentDate !== undefined }),
   );
 
   return (

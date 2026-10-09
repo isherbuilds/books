@@ -1,8 +1,12 @@
 import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import { documentLines } from "@accly/db/schema/document-lines";
-import { DOCUMENT_STATES, documents, type DocumentType } from "@accly/db/schema/documents";
-import { organizationSettings } from "@accly/db/schema/organization-settings";
+import {
+  DOCUMENT_STATES,
+  DOCUMENT_TYPES,
+  documents,
+  type DocumentType,
+} from "@accly/db/schema/documents";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { tdsSections } from "@accly/db/schema/tds-sections";
@@ -19,8 +23,10 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   lt,
   lte,
+  ne,
   or,
   sql,
   type SQL,
@@ -29,11 +35,14 @@ import { z } from "zod";
 
 import { audit } from "@accly/db/audit";
 import { allocationReversed, settlementPaise } from "../core/allocations";
+import { documentRole, type Side } from "../core/document-roles";
 import { amendDocument, postedNumber, reverseDocument } from "../core/documents";
 import { formatDecimal } from "../core/money";
 import type { DocumentPosting } from "../core/posting";
 import { businessDate } from "./business-date";
-import { impossible } from "./conflict";
+import { badRequest, impossible } from "./conflict";
+import { orgSettings, orgTimeZone } from "./org-settings";
+import { dateCursor, documentCursorOf, pageOf } from "./pagination";
 import type { Scope } from "./procedures/factory";
 import {
   documentFilterFields,
@@ -43,6 +52,7 @@ import {
   type draftToken,
   type settlementFilterFields,
 } from "./schemas";
+import { paiseSum } from "./sql";
 
 // Receipts and Payments share one read and list path. Invoices also share the cancel.
 type PostedType = DocumentPosting["type"];
@@ -65,13 +75,6 @@ type ClaimListInput = z.output<z.ZodObject<typeof claimListFields>>;
 type ClaimFilterInput = z.output<z.ZodObject<typeof claimFilterFields>>;
 
 type Claim = "invoice" | "bill";
-
-/** Splits rows fetched with `.limit(limit + 1)` into one page and an overflow flag. */
-export function pageOf<T>(rows: T[], limit: number): { rows: T[]; hasMore: boolean } {
-  return rows.length > limit
-    ? { rows: rows.slice(0, limit), hasMore: true }
-    : { rows, hasMore: false };
-}
 
 /** The party name printed on a document; registers show it and `searchText` holds it. */
 export const printedPartyName = sql<string | null>`${documents.printSnapshot}->'party'->>'name'`;
@@ -139,7 +142,7 @@ export async function settlementTotals(
     .select({
       name: paymentMethods.name,
       count: sql<number>`count(*)::int`.mapWith(Number),
-      amountPaise: sql<bigint>`sum(${documents.totalPaise})::bigint`.mapWith(BigInt),
+      amountPaise: paiseSum(documents.totalPaise),
     })
     .from(documents)
     .innerJoin(
@@ -180,16 +183,16 @@ const SEARCH_WINDOW = 1_000;
  * `SEARCH_WINDOW` documents, and reads the index for older documents only when that
  * page is not full. `documentSearchQuery` guarantees the term has a trigram.
  */
-export async function registerPage<T>(
+export async function registerPage<T extends { documentDate: string; id: string }>(
   orgId: string,
   types: readonly DocumentType[],
   input: DocumentListInput,
   read: (where: SQL | undefined) => PromiseLike<T[]>,
-): Promise<{ rows: T[]; hasMore: boolean }> {
+) {
   const cursor = dateCursor(input.cursor, "before");
   const listed = documentListWhere(orgId, types, input, cursor);
 
-  if (!input.q) return pageOf(await read(listed), input.limit);
+  if (!input.q) return pageOf(await read(listed), input.limit, documentCursorOf);
 
   const matches = ilike(documents.searchText, likePattern(input.q));
 
@@ -213,7 +216,7 @@ export async function registerPage<T>(
     ),
   );
 
-  if (!edge || recent.length > input.limit) return pageOf(recent, input.limit);
+  if (!edge || recent.length > input.limit) return pageOf(recent, input.limit, documentCursorOf);
 
   // `= any(array(…))` runs the index read once, whole, instead of letting the planner
   // walk the register again.
@@ -237,7 +240,7 @@ export async function registerPage<T>(
     ),
   );
 
-  return pageOf([...recent, ...rest], input.limit);
+  return pageOf([...recent, ...rest], input.limit, documentCursorOf);
 }
 
 export async function settlementDetail(
@@ -258,31 +261,6 @@ export async function settlementDetail(
   return detail;
 }
 
-export async function orgSettings(
-  orgId: string,
-  lock?: DbTransaction,
-  mode: "share" | "update" = "share",
-): Promise<typeof organizationSettings.$inferSelect> {
-  const query = (lock ?? db)
-    .select()
-    .from(organizationSettings)
-    .where(eq(organizationSettings.orgId, orgId))
-    .limit(1);
-
-  // Hold settings and lock dates stable until the writer commits. Exclusive readers
-  // serialize Opening Balance posts and exception revocation against those writers.
-  const [settings] = lock ? await query.for(mode) : await query;
-
-  if (!settings) throw impossible(`organization ${orgId} is missing its settings`);
-
-  return settings;
-}
-
-/** The Organization's time zone, which dates a cancellation and a default document date. */
-export async function orgTimeZone(orgId: string): Promise<string> {
-  return (await orgSettings(orgId)).timeZone;
-}
-
 // The audit runs after the commit, so it never slows or fails the cancel.
 export async function cancelDocument(
   scope: Scope,
@@ -297,8 +275,14 @@ export async function cancelDocument(
     return reverse(tx, scope, settings, types, documentId, reason);
   });
 
+  // The update matched one of `types`; finding it narrows the stored type for the action.
+  const type = types.find((candidate) => candidate === cancelled.type);
+
+  if (!type)
+    throw impossible(`cancelled ${cancelled.type} ${cancelled.id} is not a ${types.join(" or ")}`);
+
   audit({
-    action: `${cancelled.type}.cancel`,
+    action: `${type}.cancel`,
     actorId: scope.userId,
     orgId: scope.orgId,
     target: `${cancelled.type}:${cancelled.id}`,
@@ -364,7 +348,7 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
   const today = businessDate(new Date(), await orgTimeZone(orgId));
   const { capacityPaise, balancePaise } = settlementPaise(orgId, "target", null);
 
-  const { rows, hasMore } = await registerPage(orgId, [type], input, (listed) =>
+  const { rows, nextCursor } = await registerPage(orgId, [type], input, (listed) =>
     db
       .select({
         id: documents.id,
@@ -390,7 +374,7 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
       ...row,
       ...documentSettlement({ ...row, capacityPaise, outstandingPaise }, today),
     })),
-    hasMore,
+    nextCursor,
   };
 }
 
@@ -418,7 +402,7 @@ export async function claimTotals(orgId: string, type: Claim, input: ClaimFilter
   const [totals] = await db
     .select({
       count: sql<number>`count(*)::int`.mapWith(Number),
-      totalPaise: sql<bigint>`coalesce(sum(${documents.totalPaise}), 0)::bigint`.mapWith(BigInt),
+      totalPaise: paiseSum(documents.totalPaise),
     })
     .from(documents)
     .where(totalsWhere(orgId, [type], input, claimListWhere(orgId, input, today)));
@@ -495,6 +479,15 @@ export function settlementListWhere(
   );
 }
 
+/** A refund pays out exactly the credits it names, whichever side it settles. */
+export function assertRefundAmount(amountPaise: bigint, creditsPaise: bigint): void {
+  if (creditsPaise !== amountPaise)
+    throw badRequest(
+      "REFUND_AMOUNT_MISMATCH",
+      "The refund amount must equal the total of the credits you picked.",
+    );
+}
+
 /** Business-date settlement state for either side's claim. */
 export function documentSettlement(
   document: {
@@ -523,21 +516,6 @@ export function documentSettlement(
 }
 
 type PickerPage = { cursor?: DocumentCursor; limit: number };
-
-/**
- * Rows past the cursor in (date, id) order: `after` for the oldest-first pickers and
- * opening items, `before` for the newest-first registers. The cursor carries its own
- * date, so a draft whose date changes between pages cannot skip or repeat rows.
- */
-export function dateCursor(cursor: DocumentCursor | undefined, side: "after" | "before") {
-  if (!cursor) return undefined;
-
-  const position = sql`(${cursor.documentDate}::date, ${cursor.id})`;
-
-  return side === "after"
-    ? sql`(${documents.documentDate}, ${documents.id}) > ${position}`
-    : sql`(${documents.documentDate}, ${documents.id}) < ${position}`;
-}
 
 /** One page of the claims still open for the party and side, oldest first. */
 export async function openItems(
@@ -584,22 +562,8 @@ export async function openItems(
         ),
         eq(documents.state, "posted"),
         input.type ? eq(documents.type, input.type) : undefined,
-        input.side === "receivable"
-          ? or(
-              eq(documents.type, "invoice"),
-              canReadJournals ? eq(documents.type, "journal") : undefined,
-              and(
-                eq(documents.type, "payment"),
-                eq(documents.settlementKind, "against"),
-                eq(documents.exposureSide, "receivable"),
-              ),
-              and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "receivable")),
-            )
-          : or(
-              eq(documents.type, "bill"),
-              and(eq(documents.type, "receipt"), eq(documents.exposureSide, "payable")),
-              and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "payable")),
-            ),
+        hasRole("target", input.side),
+        canReadJournals ? undefined : ne(documents.type, "journal"),
         dateCursor(input.cursor, "after"),
         gt(outstandingPaise, 0n),
       ),
@@ -610,6 +574,7 @@ export async function openItems(
   return pageOf(
     rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
     input.limit,
+    documentCursorOf,
   );
 }
 
@@ -665,26 +630,7 @@ export async function openCredits(
         ),
         eq(documents.state, "posted"),
         input.types ? inArray(documents.type, [...input.types]) : undefined,
-        input.side === "receivable"
-          ? or(
-              eq(documents.type, "journal"),
-              eq(documents.type, "creditNote"),
-              and(
-                eq(documents.type, "receipt"),
-                inArray(documents.settlementKind, ["advance", "against"]),
-                eq(documents.exposureSide, "receivable"),
-              ),
-              and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "receivable")),
-            )
-          : or(
-              eq(documents.type, "debitNote"),
-              and(
-                eq(documents.type, "payment"),
-                inArray(documents.settlementKind, ["advance", "against"]),
-                eq(documents.exposureSide, "payable"),
-              ),
-              and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "payable")),
-            ),
+        hasRole("source", input.side),
         input.tdsOnly
           ? exists(
               db
@@ -715,6 +661,7 @@ export async function openCredits(
   return pageOf(
     rows.map((row) => ({ ...row, number: postedNumber(row.number, row.id) })),
     input.limit,
+    documentCursorOf,
   );
 }
 
@@ -740,4 +687,25 @@ export function adjustmentLinesOf(orgId: string, documentId: string) {
       ),
     )
     .orderBy(asc(documentLines.position));
+}
+
+/** documentRole() as a condition on `documents`: rows that are a source or target on `side`. */
+function hasRole(position: "source" | "target", side: Side): SQL | undefined {
+  return or(
+    ...DOCUMENT_TYPES.flatMap((type) =>
+      (["receivable", "payable", null] as const).flatMap((exposureSide) =>
+        documentRole({ type, exposureSide })[position] === side
+          ? [
+              and(
+                eq(documents.type, type),
+                exposureSide === null
+                  ? isNull(documents.exposureSide)
+                  : // oxlint-disable-next-line accly/no-exposure-side-branch -- translates documentRole() into SQL
+                    eq(documents.exposureSide, exposureSide),
+              ),
+            ]
+          : [],
+      ),
+    ),
+  );
 }

@@ -1,7 +1,7 @@
 import { db, type DbTransaction } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { DOCUMENT_TYPES } from "@accly/db/schema/documents";
-import { journalEntries } from "@accly/db/schema/journal-entries";
+import { journalEntries, type EntryDocumentType } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
@@ -30,15 +30,15 @@ import {
   accountLedgerLines,
   accountLedgerProbe,
   assertReportFits,
-  afterCursor,
   dayBookLines,
   dayBookProbe,
   headerFromProfile,
   reportHeader,
   reportProfile,
 } from "../lib/reports";
-import { pageOf } from "../lib/settlements";
+import { afterCursor, ledgerCursorOf, pageOf } from "../lib/pagination";
 import { dateOnly, ledgerCursor, orderedPeriod, pageLimit } from "../lib/schemas";
+import { paiseSum } from "../lib/sql";
 
 const parent = alias(accounts, "report_parent");
 
@@ -198,12 +198,12 @@ async function postingAccount(
 // An allocation has no number of its own. Its link points to the source document.
 function ledgerLabel(row: {
   documentId: string;
-  documentType: string;
+  documentType: EntryDocumentType;
   number: string | null;
   narration: string;
   kind: string;
   sourceDocumentId: string | null;
-  sourceDocumentType: string | null;
+  sourceDocumentType: EntryDocumentType | null;
   sourceNumber: string | null;
   targetNumber: string | null;
 }) {
@@ -270,7 +270,7 @@ export async function accountLedger(
 type DayBookLine = Omit<DayBookEntry, "lines"> &
   DayBookEntry["lines"][number] & {
     sourceDocumentId: string | null;
-    sourceDocumentType: string | null;
+    sourceDocumentType: EntryDocumentType | null;
     sourceNumber: string | null;
     targetNumber: string | null;
   };
@@ -350,9 +350,9 @@ async function accountLedgerPage(
     accountLedgerLines(orgId, input, input.limit + 1),
   ]);
 
-  const { rows, hasMore } = pageOf(detail, input.limit);
+  const { rows, nextCursor } = pageOf(detail, input.limit, ledgerCursorOf);
 
-  return { rows: rows.map((row) => ({ ...row, ...ledgerLabel(row) })), hasMore };
+  return { rows: rows.map((row) => ({ ...row, ...ledgerLabel(row) })), nextCursor };
 }
 
 async function accountLedgerSummary(
@@ -365,18 +365,12 @@ async function accountLedgerSummary(
     postingAccount(orgId, input.accountId),
     db
       .select({
-        openingPaise:
-          sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}) filter (where ${journalLines.entryDate} < ${input.from}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
-        debitPaise:
-          sql<bigint>`coalesce(sum(${journalLines.debit}) filter (where ${inPeriod}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
-        creditPaise:
-          sql<bigint>`coalesce(sum(${journalLines.credit}) filter (where ${inPeriod}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
+        openingPaise: paiseSum(
+          sql`${journalLines.debit} - ${journalLines.credit}`,
+          sql`${journalLines.entryDate} < ${input.from}`,
+        ),
+        debitPaise: paiseSum(journalLines.debit, inPeriod),
+        creditPaise: paiseSum(journalLines.credit, inPeriod),
       })
       .from(journalLines)
       .where(
@@ -410,7 +404,7 @@ async function dayBookPage(
   return db.transaction(
     async (tx) => {
       const ids = await tx
-        .select({ id: journalEntries.id })
+        .select({ id: journalEntries.id, entryDate: journalEntries.entryDate })
         .from(journalEntries)
         .where(
           and(
@@ -426,9 +420,9 @@ async function dayBookPage(
         .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id))
         .limit(input.limit + 1);
 
-      const { rows, hasMore } = pageOf(ids, input.limit);
+      const { rows, nextCursor } = pageOf(ids, input.limit, ledgerCursorOf);
 
-      if (rows.length === 0) return { rows: [], hasMore };
+      if (rows.length === 0) return { rows: [], nextCursor };
 
       const detail = await dayBookLines(
         orgId,
@@ -437,7 +431,7 @@ async function dayBookPage(
         tx,
       );
 
-      return { rows: groupDayBook(detail).entries, hasMore };
+      return { rows: groupDayBook(detail).entries, nextCursor };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
@@ -459,8 +453,8 @@ async function dayBookSummary(orgId: string, input: DayBookFilter) {
           sql<number>`(select count(*)::integer from ${journalEntries} where ${entries})`.mapWith(
             Number,
           ),
-        debitPaise: sql<bigint>`coalesce(sum(${journalLines.debit}), 0)::bigint`.mapWith(BigInt),
-        creditPaise: sql<bigint>`coalesce(sum(${journalLines.credit}), 0)::bigint`.mapWith(BigInt),
+        debitPaise: paiseSum(journalLines.debit),
+        creditPaise: paiseSum(journalLines.credit),
       })
       .from(journalLines)
       .where(

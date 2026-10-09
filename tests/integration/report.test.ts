@@ -586,9 +586,8 @@ test("ledger and day-book pages match the full reports without splitting entries
 
     accountRows.push(...page.rows);
 
-    if (!page.hasMore) break;
-    const last = required(page.rows.at(-1), "account page line");
-    accountCursor = { entryDate: last.entryDate, id: last.id };
+    if (!page.nextCursor) break;
+    accountCursor = page.nextCursor;
   }
 
   const fullLedger = await api.report.accountLedger(accountInput);
@@ -620,9 +619,8 @@ test("ledger and day-book pages match the full reports without splitting entries
     const page = await api.party.ledgerLines({ ...partyInput, limit: 1, cursor: partyCursor });
     partyRows.push(...page.rows);
 
-    if (!page.hasMore) break;
-    const last = required(page.rows.at(-1), "party page line");
-    partyCursor = { entryDate: last.entryDate, id: last.id };
+    if (!page.nextCursor) break;
+    partyCursor = page.nextCursor;
   }
 
   const statement = await api.party.statement(partyInput);
@@ -644,9 +642,8 @@ test("ledger and day-book pages match the full reports without splitting entries
     const page = await api.report.dayBookEntries({ ...bookInput, limit: 1, cursor });
     entries.push(...page.rows);
 
-    if (!page.hasMore) break;
-    const last = required(page.rows.at(-1), "page entry");
-    cursor = { entryDate: last.entryDate, id: last.entryId };
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
   }
 
   expect(new Set(entries.map(({ entryId }) => entryId)).size).toBe(entries.length);

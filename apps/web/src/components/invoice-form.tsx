@@ -6,7 +6,7 @@ import {
   formatMoney,
   parseBasisPoints,
 } from "@accly/api/core/money";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
+import { stateLabel } from "@accly/api/lib/indian-states";
 import { indianStateCode } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import type { PartyRecord } from "@accly/api/routers/party";
@@ -66,8 +66,13 @@ import {
 import type { InvoiceDetail } from "@/lib/invoices";
 import { useCan, useMembership } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, errorMessage, handleWriteError } from "@/lib/orpc-error";
-import type { PartyOption } from "@/lib/parties";
+import {
+  applyOrpcFieldError,
+  errorMessage,
+  handleWriteError,
+  type ServerFields,
+} from "@/lib/orpc-error";
+import { partyDetailOptions, type PartyOption } from "@/lib/parties";
 
 const invoiceSchema = z
   .object({
@@ -168,7 +173,7 @@ const SERVER_FIELDS = {
   DISCOUNT_CONFLICT: "discount",
   PAYMENT_METHOD_INVALID: "payments",
   SETTLEMENT_EXCEEDS_TOTAL: "payments",
-} satisfies Record<string, FieldPath<InvoiceFormValues>>;
+} satisfies ServerFields<InvoiceFormValues>;
 
 function defaults(documentDate: string, draft?: InvoiceDetail): InvoiceFormValues {
   if (!draft) {
@@ -354,9 +359,7 @@ export function InvoiceForm({
   const documentDate = useWatch({ control: form.control, name: "documentDate" });
 
   // One read of the chosen Party serves the Bill-to card and the state defaults.
-  const party = useQuery({
-    ...orpc.party.get.queryOptions({ input: partyId ? { orgSlug, partyId } : skipToken }),
-  });
+  const party = useQuery(partyDetailOptions(orgSlug, partyId ?? undefined));
 
   // The Party's state is the usual place of supply. It fills only fields still empty,
   // so a state chosen meanwhile stays, and a later pick wins over a slower read.
@@ -829,9 +832,7 @@ function BillToCard({ orgSlug, party }: { orgSlug: string; party: PartyRecord })
     <div className="grid gap-0.5 text-muted-foreground">
       {address ? <p className="whitespace-pre-line">{address}</p> : null}
       {cityLine ? <p>{cityLine}</p> : null}
-      <p>
-        {INDIAN_STATES[stateCode] ?? stateCode} ({stateCode})
-      </p>
+      <p>{stateLabel(stateCode)}</p>
       <p className="font-mono text-foreground">{gstin ? `GSTIN ${gstin}` : "Unregistered"}</p>
       {canEdit ? (
         <>

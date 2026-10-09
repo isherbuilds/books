@@ -10,7 +10,6 @@ import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
-import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -26,6 +25,7 @@ import {
   type AllocationPair,
   type AllocationTarget,
 } from "./allocations";
+import { documentRole } from "./document-roles";
 import { assertPeriodOpen } from "./locks";
 import { sumPaise } from "./money";
 import { financialYearOf, postNumbered } from "./numbering";
@@ -222,13 +222,8 @@ export async function writeDraft(
   numbering: DocumentNumbering,
   input: PostDocumentInput,
 ): Promise<WrittenDraft> {
-  // The router stores a supply only for money held as an advance.
-  const advanceSupply =
-    input.posting.type === "receipt" &&
-    (input.posting.settlementKind === "advance" ||
-      (input.posting.settlementKind === "against" && input.posting.exposureSide === "receivable"))
-      ? input.posting.advanceSupply
-      : null;
+  // Only a posting that can hold money as an advance carries a supply.
+  const advanceSupply = "advanceSupply" in input.posting ? input.posting.advanceSupply : null;
 
   if (advanceSupply === "taxableService") {
     throw badRequest(
@@ -597,6 +592,7 @@ export async function postDocument(
           side: "receivable",
           amountPaise: -posting.amountPaise,
         });
+        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       } else if (posting.exposureSide === "receivable") {
         const settledPaise =
           posting.amountPaise + sumPaise(posting.adjustments.map((row) => row.amountPaise));
@@ -604,6 +600,7 @@ export async function postDocument(
         ledgers.push({ partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise });
         pairs = settles(posting.allocations);
         assertFullyAllocated(pairs, posting.adjustments.length > 0, settledPaise);
+        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       } else if (posting.exposureSide === "payable") {
         ledgers.push({
           partyId: posting.partyId,
@@ -629,6 +626,7 @@ export async function postDocument(
 
       if (posting.settlementKind === "direct") break;
 
+      // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       if (posting.exposureSide === "receivable") {
         // A refund pays out credit notes; the router checked the amounts match.
         ledgers.push({
@@ -795,14 +793,9 @@ export async function reverseDocument(
 
   const active = await activeAllocationsOf(tx, scope.orgId, [documentId]);
 
-  const isRefund =
-    cancelled.settlementKind === "against" &&
-    ((cancelled.type === "payment" && cancelled.exposureSide === "receivable") ||
-      (cancelled.type === "receipt" && cancelled.exposureSide === "payable"));
-
   const asTarget = active.filter((row) => row.targetDocumentId === documentId);
 
-  if (asTarget.length > 0 && !isRefund) {
+  if (asTarget.length > 0 && !documentRole(cancelled).refund) {
     const sources = await tx
       .select({ id: documents.id, number: documents.number })
       .from(documents)
@@ -905,154 +898,6 @@ export async function reverseDocument(
   await reversePartyLedgerLines(tx, scope.orgId, [documentId], entryDate);
 
   return cancelled;
-}
-
-/** Posted notes only: cancelled notes release their source-line capacity. */
-export async function priorNoteLines(
-  tx: DbTransaction,
-  orgId: string,
-  sourceDocumentId: string,
-  type: "creditNote" | "debitNote",
-  lineIds: string[],
-) {
-  if (!lineIds.length) return [];
-
-  return tx
-    .select({
-      sourceLineId: documentLines.sourceLineId,
-      amountPaise: sql<bigint>`sum(${documentLines.amountPaise})::bigint`.mapWith(BigInt),
-      cgstPaise: sql<bigint>`sum(${documentLines.cgstPaise})::bigint`.mapWith(BigInt),
-      sgstPaise: sql<bigint>`sum(${documentLines.sgstPaise})::bigint`.mapWith(BigInt),
-      igstPaise: sql<bigint>`sum(${documentLines.igstPaise})::bigint`.mapWith(BigInt),
-    })
-    .from(documentLines)
-    .innerJoin(
-      documents,
-      and(
-        eq(documents.orgId, orgId),
-        eq(documents.id, documentLines.documentId),
-        eq(documents.type, type),
-        eq(documents.state, "posted"),
-        eq(documents.againstDocumentId, sourceDocumentId),
-      ),
-    )
-    .where(and(eq(documentLines.orgId, orgId), inArray(documentLines.sourceLineId, lineIds)))
-    .groupBy(documentLines.sourceLineId);
-}
-
-/** Lock a posted claim while resolving its note, and summarize all earlier posted notes. */
-export async function noteSource(
-  tx: DbTransaction,
-  scope: Scope,
-  sourceDocumentId: string,
-  type: "creditNote" | "debitNote",
-) {
-  const expected = type === "creditNote" ? "invoice" : "bill";
-
-  const [source] = await tx
-    .select({
-      id: documents.id,
-      partyId: documents.partyId,
-      documentDate: documents.documentDate,
-      placeOfSupplyStateCode: documents.placeOfSupplyStateCode,
-      intraState: documents.intraState,
-      totalPaise: documents.totalPaise,
-      affectsTax: documents.affectsTax,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.orgId, scope.orgId),
-        eq(documents.id, sourceDocumentId),
-        eq(documents.type, expected),
-        eq(documents.state, "posted"),
-      ),
-    )
-    .for("no key update");
-
-  if (!source || !source.partyId || source.intraState === null)
-    throw badRequest("NOTE_SOURCE_INVALID", "Choose a posted source document.");
-
-  const [tds] =
-    type === "debitNote"
-      ? await tx
-          .select({
-            tdsSectionId: tdsDeductions.tdsSectionId,
-            basePaise: tdsDeductions.basePaise,
-            amountPaise: tdsDeductions.amountPaise,
-          })
-          .from(tdsDeductions)
-          .where(
-            and(
-              eq(tdsDeductions.orgId, scope.orgId),
-              eq(tdsDeductions.documentId, sourceDocumentId),
-            ),
-          )
-          .limit(1)
-      : [];
-
-  const lines = await tx
-    .select({
-      id: documentLines.id,
-      accountId: documentLines.accountId,
-      description: documentLines.description,
-      hsnSac: documentLines.hsnSac,
-      taxRateId: documentLines.taxRateId,
-      rateBasisPoints: taxRates.rateBasisPoints,
-      itcEligible: documentLines.itcEligible,
-      amountPaise: documentLines.amountPaise,
-      cgstPaise: documentLines.cgstPaise,
-      sgstPaise: documentLines.sgstPaise,
-      igstPaise: documentLines.igstPaise,
-    })
-    .from(documentLines)
-    .leftJoin(
-      taxRates,
-      and(eq(taxRates.orgId, scope.orgId), eq(taxRates.id, documentLines.taxRateId)),
-    )
-    .where(
-      and(eq(documentLines.orgId, scope.orgId), eq(documentLines.documentId, sourceDocumentId)),
-    );
-
-  const prior = await priorNoteLines(
-    tx,
-    scope.orgId,
-    sourceDocumentId,
-    type,
-    lines.map((line) => line.id),
-  );
-
-  const [total] = await tx
-    .select({
-      amountPaise: sql<bigint>`coalesce(sum(${documents.totalPaise}), 0)::bigint`.mapWith(BigInt),
-      reversedTdsPaise: sql<bigint>`coalesce(sum(${tdsDeductions.amountPaise}), 0)::bigint`.mapWith(
-        BigInt,
-      ),
-    })
-    .from(documents)
-    .leftJoin(
-      tdsDeductions,
-      and(eq(tdsDeductions.orgId, scope.orgId), eq(tdsDeductions.documentId, documents.id)),
-    )
-    .where(
-      and(
-        eq(documents.orgId, scope.orgId),
-        eq(documents.type, type),
-        eq(documents.againstDocumentId, sourceDocumentId),
-        eq(documents.state, "posted"),
-      ),
-    );
-
-  return {
-    ...source,
-    partyId: source.partyId,
-    intraState: source.intraState,
-    lines,
-    prior,
-    priorTotalPaise: total!.amountPaise,
-    tds: tds ?? null,
-    priorReversedTdsPaise: total!.reversedTdsPaise,
-  };
 }
 
 /** Cancel a posted invoice or bill and copy its editable header and lines into a draft. */

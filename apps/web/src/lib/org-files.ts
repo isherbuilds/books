@@ -1,4 +1,14 @@
-import { orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
+
+export const fileListOptions = (orgSlug: string, query: string) =>
+  orpc.file.list.infiniteOptions({
+    input: (cursor: { createdAt: string; id: string } | undefined) => ({
+      orgSlug,
+      query: query || undefined,
+      cursor,
+    }),
+    ...nextPage,
+  });
 
 // `mimeType` overrides `file.type` for browsers that report an empty type.
 export async function uploadOrgFile(

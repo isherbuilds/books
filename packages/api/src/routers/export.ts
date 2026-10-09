@@ -1,5 +1,6 @@
 import { db } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
+import type { EntryDocumentType } from "@accly/db/schema/journal-entries";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
@@ -29,10 +30,10 @@ import {
 const BOLD_HEADER = { style: { font: { bold: true } } };
 
 // Journal entries also record allocations, which have no document of their own.
-const JOURNAL_TYPE_LABELS: Record<string, string> = {
+const JOURNAL_TYPE_LABELS = {
   ...DOCUMENT_TYPE_LABELS,
   allocation: "Amount applied",
-};
+} as const satisfies Record<EntryDocumentType, string>;
 
 // ISO dates sort by name in a folder: `tds-register-2026-04-01-to-2026-06-30.xlsx`.
 const rangeFileName = (name: string, from: string, to: string) => `${name}-${from}-to-${to}.xlsx`;
@@ -388,7 +389,7 @@ export const exportRouter = {
         ...ledger.lines.map((line) => ({
           date: line.entryDate,
           document: line.number,
-          type: JOURNAL_TYPE_LABELS[line.documentType] ?? line.documentType,
+          type: JOURNAL_TYPE_LABELS[line.documentType],
           narration: line.narration,
           contra: line.contraAccountName,
           party: line.partyName,
@@ -413,7 +414,7 @@ export const exportRouter = {
           entry.lines.map((line) => ({
             date: entry.entryDate,
             document: entry.number,
-            type: JOURNAL_TYPE_LABELS[entry.documentType] ?? entry.documentType,
+            type: JOURNAL_TYPE_LABELS[entry.documentType],
             kind: entry.kind === "reverse" ? "Cancellation" : "Posted",
             accountCode: line.accountCode,
             account: line.accountName,

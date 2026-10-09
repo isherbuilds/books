@@ -1,4 +1,5 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
+import type { RefusalReason } from "@accly/api/lib/conflict";
 import {
   NON_NEGATIVE_MONEY_PATTERN,
   ZERO_MONEY,
@@ -35,13 +36,15 @@ import { AmountInput } from "@/components/amount-input";
 import { LineGrid } from "@/components/document-form";
 import { ErrorNote, ListFooter } from "@/components/page";
 import { WaveLoader } from "@/components/wave-loader";
+import type { ServerReason } from "@/lib/orpc-error";
 
-export const ALLOCATION_REFUSALS: readonly string[] = [
+/** Refusals that mean the shown open documents are stale. */
+export const ALLOCATION_REFUSALS: ReadonlySet<ServerReason | undefined> = new Set<RefusalReason>([
   "ALLOCATION_TARGET_INVALID",
   "ALLOCATION_SOURCE_INVALID",
   "ALLOCATION_EXCEEDS_OUTSTANDING",
   "ALLOCATION_EXCEEDS_SOURCE",
-];
+]);
 
 /** An open claim or credit a settlement can allocate to, with what is still open on it. */
 export type OpenDocument = {
@@ -71,6 +74,10 @@ type AdjustmentsName = "adjustments" | "writeOffs";
 export const sumEntered = (amounts: readonly string[]) =>
   amounts.reduce((total, amount) => total + enteredPaise(amount), ZERO_MONEY);
 
+/** What a settlement can allocate as typed: its amount and its adjustments. */
+export const settlementCapacity = (amount: string, adjustments: readonly { amount: string }[]) =>
+  enteredPaise(amount) + sumEntered(adjustments.map((row) => row.amount));
+
 export function settlementRemaining(
   amount: string,
   allocations: Record<string, string>,
@@ -78,8 +85,7 @@ export function settlementRemaining(
   documentId: string,
 ) {
   return (
-    enteredPaise(amount) +
-    sumEntered(adjustments.map((row) => row.amount)) -
+    settlementCapacity(amount, adjustments) -
     sumEntered(
       Object.entries(allocations).flatMap(([id, value]) => (id === documentId ? [] : [value])),
     )
@@ -121,6 +127,7 @@ export function checkAllocations(
       rowErrors.push({ id, message });
     } else {
       selected.push({ id, amount });
+      // oxlint-disable-next-line accly/no-paise-arithmetic-in-components -- input maths on typed amounts inside the named validator
       allocatedPaise += paise;
     }
   }
@@ -192,31 +199,30 @@ function UnavailableAllocations({
   );
 }
 
-/** Allocated and remaining, subscribed apart from the rows so typing re-renders only this. */
+/**
+ * Allocated and remaining, subscribed apart from the rows so typing re-renders only this.
+ * A refund (no adjustments field) and an adjusted settlement allocate in full; any
+ * other remainder posts as an advance.
+ */
 export function SettlementAllocationTotals({
   adjustmentsName,
-  advanceRemainder,
   advanceField,
 }: {
   adjustmentsName: AdjustmentsName | null;
-  advanceRemainder: boolean;
   advanceField?: ReactNode;
 }) {
   const { control } = useFormContext<SettlementValues>();
   const amount = useWatch({ control, name: "amount" });
   const allocations = useWatch({ control, name: "allocations" });
   const adjustments = useWatch({ control, name: adjustmentsName ?? "adjustments" });
-  const adjusted = adjustmentsName !== null && (adjustments?.length ?? 0) > 0;
 
   const allocatedPaise = sumEntered(Object.values(allocations));
 
   const remainingPaise =
-    enteredPaise(amount) +
-    (adjustmentsName ? sumEntered((adjustments ?? []).map((row) => row.amount)) : ZERO_MONEY) -
-    allocatedPaise;
+    // oxlint-disable-next-line accly/no-paise-arithmetic-in-components -- live remainder of the typed amount, recomputed per keystroke
+    settlementCapacity(amount, adjustmentsName ? (adjustments ?? []) : []) - allocatedPaise;
 
-  // With adjustments, or for a refund, the whole settlement must be allocated.
-  const asAdvance = advanceRemainder && !adjusted;
+  const asAdvance = adjustmentsName !== null && (adjustments?.length ?? 0) === 0;
 
   return (
     <>

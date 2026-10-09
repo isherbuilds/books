@@ -134,7 +134,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     A lock exception lasts 1, 7 or 30 days from the database clock, so no time
     zone is typed in; see
     [Accounting core](./accounting-core.md#journal-opening-balance-and-locks-slice-5).
-    Payment offers Against only to roles that can read Bills and Notes; its
+    Payment offers Against to roles that can read Bills, and a refund (Payment
+    or supplier Receipt) to roles holding `REFUND_GRANT` (Bills and Notes); the
     Credit Note refund picker filters on the server before the page. Payment,
     Bill and Note fields and Settings > Import follow
     [Accounting core](./accounting-core.md#slices). Forms are reachable from the

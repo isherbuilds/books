@@ -1,6 +1,6 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 
-import { datedPaging, orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
 
 export const openingBalanceOptions = (orgSlug: string) =>
   orpc.openingBalance.get.queryOptions({ input: { orgSlug } });
@@ -9,5 +9,5 @@ export const openingBalanceOptions = (orgSlug: string) =>
 export const openingItemsOptions = (orgSlug: string) =>
   orpc.openingBalance.items.infiniteOptions({
     input: (cursor: DocumentCursor | undefined) => ({ orgSlug, cursor }),
-    ...datedPaging,
+    ...nextPage,
   });

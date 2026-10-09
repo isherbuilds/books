@@ -1,7 +1,7 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { datedPaging, orpc } from "@/lib/orpc";
+import { nextPage, orpc } from "@/lib/orpc";
 
 type JournalListFilters = Omit<
   Parameters<AppRouterClient["journal"]["list"]>[0],
@@ -11,7 +11,7 @@ type JournalListFilters = Omit<
 export const journalListOptions = (orgSlug: string, filters: JournalListFilters) =>
   orpc.journal.list.infiniteOptions({
     input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...datedPaging,
+    ...nextPage,
   });
 
 export const journalAccountOptions = (orgSlug: string) => ({

@@ -1,5 +1,4 @@
 import { formatMoney } from "@accly/api/core/money";
-import { Button } from "@accly/ui/components/button";
 import {
   Table,
   TableBody,
@@ -8,22 +7,19 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { DownloadIcon } from "lucide-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, linkOptions, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { ErrorNote, ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
+import { ReportDownloads } from "@/components/report-downloads";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
 import { ReportProvenance } from "@/components/report-provenance";
 import { presetRange } from "@/lib/date-presets";
-import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
-import { formatSideBalance, saveFile } from "@/lib/reports";
+import { formatSideBalance, trialBalanceOptions } from "@/lib/reports";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/reports_/trial-balance")({
@@ -40,11 +36,7 @@ export const Route = createFileRoute("/$orgSlug/reports_/trial-balance")({
 
     if (deps.from && deps.to && deps.from <= deps.to) {
       void queryClient
-        .query(
-          orpc.report.trialBalance.queryOptions({
-            input: { orgSlug, from: deps.from, to: deps.to },
-          }),
-        )
+        .query(trialBalanceOptions(orgSlug, { from: deps.from, to: deps.to }))
         .catch(() => {});
     }
   },
@@ -58,18 +50,9 @@ function TrialBalanceRoute() {
   const { from, to } = search;
   const navigate = useNavigate({ from: Route.fullPath });
   const { today, financialYearStart } = useOrgDateTime();
-  const canExport = useCan(orgSlug, { export: ["read"] });
   const period = from && to ? { from, to } : presetRange("this-year", today, financialYearStart);
   const shownPeriod = { from: shown.from ?? period.from, to: shown.to ?? period.to };
   const valid = period.from <= period.to;
-
-  const download = useMutation({
-    mutationFn: () => orpc.export.trialBalanceXlsx.call({ orgSlug, ...period }),
-    onSuccess: saveFile,
-    onError: (error) => toast.error(errorMessage(error, "Could not build the trial balance")),
-  });
-
-  const pdf = `/api/${encodeURIComponent(orgSlug)}/reports/trial-balance/pdf?${new URLSearchParams(period)}`;
 
   const setPeriod = (patch: Partial<typeof period>) =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
@@ -80,28 +63,17 @@ function TrialBalanceRoute() {
       <PageBody>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <ReportPeriod period={period} onChange={setPeriod} />
-          <div className="flex items-center gap-2">
-            {canExport ? (
-              <Button
-                variant="outline"
-                disabled={!valid || download.isPending}
-                onClick={() => download.mutate()}
-              >
-                <DownloadIcon data-icon="inline-start" />
-                {download.isPending ? "Building…" : "Download XLSX"}
-              </Button>
-            ) : null}
-            {valid ? (
-              <Button
-                render={<a href={pdf} target="_blank" rel="noopener noreferrer" />}
-                nativeButton={false}
-                variant="outline"
-              >
-                <DownloadIcon data-icon="inline-start" />
-                Download PDF
-              </Button>
-            ) : null}
-          </div>
+          <ReportDownloads
+            orgSlug={orgSlug}
+            ready={valid}
+            build={() => orpc.export.trialBalanceXlsx.call({ orgSlug, ...period })}
+            failure="Could not build the trial balance"
+            pdf={linkOptions({
+              to: "/api/$orgSlug/reports/trial-balance/pdf",
+              params: { orgSlug },
+              search: period,
+            })}
+          />
         </div>
         {!valid ? <ErrorNote title="The end date must not be before the start date." /> : null}
         <div className="min-h-24 shrink-0">
@@ -127,9 +99,7 @@ function TrialBalanceBody({
   orgSlug: string;
   period: { from: string; to: string };
 }) {
-  const report = useSuspenseQuery(
-    orpc.report.trialBalance.queryOptions({ input: { orgSlug, ...period } }),
-  );
+  const report = useSuspenseQuery(trialBalanceOptions(orgSlug, period));
 
   const rows = report.data.rows;
   const totals = report.data.totals;

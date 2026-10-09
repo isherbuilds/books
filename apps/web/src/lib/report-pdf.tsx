@@ -22,7 +22,7 @@ import type { PartyStatementReport } from "@accly/api/routers/party";
 import { colors } from "@/components/pdf/parts";
 import { formatDateTime } from "@/lib/org-datetime";
 import { renderPdf } from "@/lib/pdf-render";
-import { formatSideBalance } from "@/lib/reports";
+import { formatSideBalance, grossOfTdsPaise } from "@/lib/reports";
 
 type PdfColumn = { label: string; width: string; align?: "left" | "right" };
 
@@ -100,18 +100,18 @@ function ReportPdf({ rows, columns }: ReportPdfProps) {
             padding: "7px 0",
           }}
         >
-          {row.cells.map((cell, cellIndex) => (
+          {columns.map((column, cellIndex) => (
             <span
               key={cellIndex}
               style={{
                 overflowWrap: "anywhere",
                 paddingLeft: cellIndex === (row.indentColumn ?? 0) ? (row.indent ?? 0) * 12 : 0,
-                textAlign: columns[cellIndex].align ?? "left",
+                textAlign: column.align ?? "left",
                 whiteSpace: "pre-line",
-                width: columns[cellIndex].width,
+                width: column.width,
               }}
             >
-              {cell}
+              {row.cells[cellIndex]}
             </span>
           ))}
         </div>
@@ -236,7 +236,8 @@ export function renderBalanceSheetPdf(data: BalanceSheetReport) {
         cells: [
           "",
           "Total liabilities and equity",
-          formatMoney(data.liabilitiesPaise + data.equityPaise),
+          // The server refuses a sheet whose two sides differ.
+          formatMoney(data.assetsPaise),
         ],
         strong: true,
       },
@@ -347,7 +348,7 @@ export function renderPartyStatementPdf(data: PartyStatementReport) {
         const tdsDetail =
           line.tdsPaise === null
             ? ""
-            : ` · Gross ${formatMoney(net + line.tdsPaise)} · TDS ${formatMoney(line.tdsPaise)} · Net ${formatMoney(net)}`;
+            : ` · Gross ${formatMoney(grossOfTdsPaise(net, line.tdsPaise))} · TDS ${formatMoney(line.tdsPaise)} · Net ${formatMoney(net)}`;
 
         return {
           cells: [

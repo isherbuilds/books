@@ -11,7 +11,6 @@ import {
 } from "@accly/ui/components/table";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { AccountSheet } from "@/components/account-sheet";
@@ -23,7 +22,7 @@ import { useCan } from "@/lib/membership";
 import { groupMoneyAccounts, moneyBalanceOptions } from "@/lib/money-accounts";
 import { BANKS_MANAGE_PERMISSION, BANKS_PERMISSION } from "@/lib/navigation";
 import { orpc } from "@/lib/orpc";
-import { errorMessage, loadRouteQuery } from "@/lib/orpc-error";
+import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
 import { paymentMethodListOptions } from "@/lib/receipts";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -83,7 +82,12 @@ function BankingRoute() {
   const setActive = useMutation(
     orpc.paymentMethod.setActive.mutationOptions({
       onSuccess: () => invalidatePaymentMethods(queryClient, orgSlug),
-      onError: (error) => toast.error(errorMessage(error, "Could not update the payment method")),
+      onError: (error) =>
+        handleWriteError(error, {
+          settle: () => invalidatePaymentMethods(queryClient, orgSlug),
+          fallback: "Could not update the payment method",
+          uncertain: "The result is uncertain. Check the payment method before trying again.",
+        }),
     }),
   );
 

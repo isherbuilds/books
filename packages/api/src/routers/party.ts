@@ -14,16 +14,16 @@ import { businessDate } from "../lib/business-date";
 import { conflict, impossible, nextEditToken } from "../lib/conflict";
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
 import { documentLabel } from "../lib/document-labels";
-import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
+import { orgInput, orgProcedure } from "../lib/procedures/factory";
+import { afterCursor, ledgerCursorOf, pageOf } from "../lib/pagination";
 import {
-  afterCursor,
   headerFromProfile,
   reportProfile,
   assertReportFits,
   reportTooLarge,
   type ReportHeader,
 } from "../lib/reports";
-import { documentPeriod, openCredits, openItems, pageOf } from "../lib/settlements";
+import { documentPeriod, openCredits, openItems } from "../lib/settlements";
 import {
   documentCursor,
   editToken,
@@ -35,6 +35,7 @@ import {
   period,
   searchQuery,
 } from "../lib/schemas";
+import { paiseSum } from "../lib/sql";
 
 export type PartyRecord = typeof parties.$inferSelect;
 
@@ -190,9 +191,7 @@ export async function partyStatement(
     input.from
       ? db
           .select({
-            total: sql<bigint>`coalesce(sum(${partyLedgerLines.amountPaise}), 0)::bigint`.mapWith(
-              BigInt,
-            ),
+            total: paiseSum(partyLedgerLines.amountPaise),
           })
           .from(partyLedgerLines)
           .where(
@@ -246,11 +245,11 @@ async function partyLedgerPage(
     partyStatementRows(orgId, { ...input, to }, input.limit),
   ]);
 
-  const { rows, hasMore } = pageOf(detail, input.limit);
+  const { rows, nextCursor } = pageOf(detail, input.limit, ledgerCursorOf);
 
   return {
     rows: rows.map((row) => ({ ...row, typeLabel: documentLabel(row.documentType, row.side) })),
-    hasMore,
+    nextCursor,
   };
 }
 
@@ -271,18 +270,9 @@ async function partyLedgerSummary(
     requireParty(orgId, input.partyId),
     db
       .select({
-        openingPaise:
-          sql<bigint>`coalesce(sum(${amount}) filter (where ${opening}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
-        debitPaise:
-          sql<bigint>`coalesce(sum(${amount}) filter (where ${amount} > 0 and ${inPeriod}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
-        creditPaise:
-          sql<bigint>`coalesce(-sum(${amount}) filter (where ${amount} < 0 and ${inPeriod}), 0)::bigint`.mapWith(
-            BigInt,
-          ),
+        openingPaise: paiseSum(amount, opening),
+        debitPaise: paiseSum(amount, sql`${amount} > 0 and ${inPeriod}`),
+        creditPaise: paiseSum(sql`-${amount}`, sql`${amount} < 0 and ${inPeriod}`),
       })
       .from(partyLedgerLines)
       .where(
@@ -405,7 +395,8 @@ export const partyRouter = {
   // Receivable pickers serve the Receipt form under `party:read`; the payable side
   // exposes Bills and Debit Notes, which an operator never reads.
   openItems: orgProcedure(
-    { party: ["read"] },
+    (input) =>
+      input.side === "payable" ? { party: ["read"], bill: ["read"] } : { party: ["read"] },
     orgInput.extend({
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
@@ -414,7 +405,6 @@ export const partyRouter = {
       limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
-    if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
     await requireParty(context.scope.orgId, input.partyId);
 
     return openItems(
@@ -425,7 +415,10 @@ export const partyRouter = {
   }),
 
   openCredits: orgProcedure(
-    { party: ["read"], note: ["read"] },
+    (input) =>
+      input.side === "payable"
+        ? { party: ["read"], note: ["read"], bill: ["read"] }
+        : { party: ["read"], note: ["read"] },
     orgInput.extend({
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
@@ -440,7 +433,6 @@ export const partyRouter = {
       limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
-    if (input.side === "payable") requirePermission(context.scope, { bill: ["read"] });
     await requireParty(context.scope.orgId, input.partyId);
 
     return openCredits(context.scope.orgId, input);
@@ -477,7 +469,7 @@ export const partyRouter = {
       authorize(scope.roles, TRANSACTION_READS[type]),
     );
 
-    if (types.length === 0) return { rows: [], hasMore: false };
+    if (types.length === 0) return { rows: [], nextCursor: null };
 
     const rows = await db
       .select({
@@ -507,6 +499,7 @@ export const partyRouter = {
       // SAFETY: the query keeps only rows whose type is in `types`, a TransactionType list.
       rows.map((row) => ({ ...row, type: row.type as TransactionType })),
       input.limit,
+      (last) => last.id,
     );
   }),
 
@@ -521,7 +514,7 @@ export const partyRouter = {
       return db
         .select({
           partyId: partyLedgerLines.partyId,
-          balancePaise: sql<bigint>`sum(${partyLedgerLines.amountPaise})::bigint`.mapWith(BigInt),
+          balancePaise: paiseSum(partyLedgerLines.amountPaise),
         })
         .from(partyLedgerLines)
         .where(and(eq(partyLedgerLines.orgId, orgId), lte(partyLedgerLines.entryDate, today)))
@@ -555,7 +548,8 @@ export const partyRouter = {
         .orderBy(asc(parties.name), asc(parties.id))
         .limit(MASTER_LIST_LIMIT + 1);
 
-      return pageOf(rows, MASTER_LIST_LIMIT);
+      // Bounded, not paged: past the bound callers search with `q`.
+      return { rows: rows.slice(0, MASTER_LIST_LIMIT), hasMore: rows.length > MASTER_LIST_LIMIT };
     },
   ),
 };

@@ -419,7 +419,7 @@ test("member refusals explain duplicate invites and the last-owner invariant", a
   });
 
   const roster = await api.member.list({ orgSlug: organization.slug });
-  const ownerId = roster.members.find((row) => row.userId === owner.user.id)!.id;
+  const ownerId = roster.rows.find((row) => row.userId === owner.user.id)!.id;
   await expect(
     api.member.remove({ orgSlug: organization.slug, memberId: ownerId }),
   ).rejects.toMatchObject({

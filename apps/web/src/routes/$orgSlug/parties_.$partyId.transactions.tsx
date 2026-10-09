@@ -18,23 +18,18 @@ import { ListToolbar } from "@/components/page";
 import type { SearchRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
-import { keysetPaging, orpc } from "@/lib/orpc";
-import { partyDocumentLink, partyLedgerSummaryOptions } from "@/lib/parties";
+import {
+  partyDocumentLink,
+  partyLedgerSummaryOptions,
+  partyTransactionsOptions,
+} from "@/lib/parties";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 type TransactionRow = Awaited<ReturnType<AppRouterClient["party"]["transactions"]>>["rows"][number];
 
-const transactionListOptions = (orgSlug: string, partyId: string, range: DateBounds) =>
-  orpc.party.transactions.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, partyId, ...range, cursor }),
-    ...keysetPaging,
-  });
-
 const transactionSearch = z.object({
   ...periodSearch,
 });
-
-type DateBounds = Omit<z.infer<typeof transactionSearch>, "all">;
 
 export const Route = createFileRoute("/$orgSlug/parties_/$partyId/transactions")({
   validateSearch: transactionSearch,
@@ -44,7 +39,7 @@ export const Route = createFileRoute("/$orgSlug/parties_/$partyId/transactions")
   loader: async ({ context: { queryClient }, deps, params: { orgSlug, partyId } }) => {
     const { roles } = await queryClient.query(membershipOptions(orgSlug));
     await Promise.all([
-      queryClient.infiniteQuery(transactionListOptions(orgSlug, partyId, deps)).catch(() => {}),
+      queryClient.infiniteQuery(partyTransactionsOptions(orgSlug, partyId, deps)).catch(() => {}),
       authorize(roles, { report: ["read"] }) &&
         queryClient.query(partyLedgerSummaryOptions(orgSlug, partyId)).catch(() => {}),
     ]);
@@ -122,7 +117,7 @@ function PartyTransactions() {
   const canReadLedger = useCan(orgSlug, { report: ["read"] });
 
   const transactions = useInfiniteQuery({
-    ...transactionListOptions(orgSlug, partyId, range),
+    ...partyTransactionsOptions(orgSlug, partyId, range),
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 

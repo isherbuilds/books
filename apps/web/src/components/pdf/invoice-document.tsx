@@ -1,7 +1,7 @@
 import { formatMoney, isZeroMoney } from "@accly/api/core/money";
 import { invoicePrintTitle } from "@accly/api/core/tax";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
+import { stateLabel } from "@accly/api/lib/indian-states";
 import type { PrintSnapshot } from "@accly/db/schema/documents";
 import type { CSSProperties } from "react";
 
@@ -13,7 +13,7 @@ import {
   TotalRow,
   colors,
 } from "@/components/pdf/parts";
-import type { InvoiceDetail } from "@/lib/invoices";
+import { subtotalBeforeDiscountPaise, type InvoiceDetail } from "@/lib/invoices";
 import type { NoteDetail } from "@/lib/notes";
 
 const numericCell: CSSProperties = { flex: 1, textAlign: "right" };
@@ -45,8 +45,6 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
   const hasMrp = data.lines.some((line) => line.mrpPaise !== null);
   const hasSplitTax = !isZeroMoney(cgstPaise) || !isZeroMoney(sgstPaise);
   const hasIgst = !isZeroMoney(igstPaise);
-
-  const stateLabel = (code: string) => `${INDIAN_STATES[code] ?? code} (${code})`;
 
   const placeOfSupply = data.placeOfSupplyStateCode
     ? stateLabel(data.placeOfSupplyStateCode)
@@ -182,7 +180,10 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
       <TotalPanel label="Total" amountPaise={data.totalPaise}>
         {isZeroMoney(data.discountPaise) ? null : (
           <>
-            <TotalRow label="Subtotal" amountPaise={taxablePaise + data.discountPaise} />
+            <TotalRow
+              label="Subtotal"
+              amountPaise={subtotalBeforeDiscountPaise(taxablePaise, data.discountPaise)}
+            />
             <TotalRow
               label={
                 data.printSnapshot.discountBasisPoints === undefined

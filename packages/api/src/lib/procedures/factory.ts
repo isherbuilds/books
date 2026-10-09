@@ -2,7 +2,7 @@ import { authorize, parseRoles, type AppPermission, type RoleKey } from "@accly/
 import { ORGANIZATION_SLUG_MAX_LENGTH } from "@accly/auth/organization-slug";
 import { db } from "@accly/db";
 import { member, organization } from "@accly/db/schema/auth";
-import { ORPCError, os } from "@orpc/server";
+import { ORPCError, os, type InferSchemaOutput } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -92,8 +92,9 @@ async function authorizeOrg(
 }
 
 /**
- * The guard's permission check, for a grant that only part of an input needs (a counter
- * sale's Receipt, a payable-side picker). A denial is audited like the guard's own.
+ * The guard's permission check. Outside the guard it serves only a grant that stored
+ * data decides — an allocation that names a Journal — since the input cannot show it.
+ * A denial is audited like the guard's own.
  */
 export function requirePermission(scope: Scope, permission: AppPermission): void {
   if (authorize(scope.roles, permission)) return;
@@ -108,12 +109,21 @@ export function requirePermission(scope: Scope, permission: AppPermission): void
   throw new ORPCError("FORBIDDEN", { message: "You do not have permission to do that." });
 }
 
+/**
+ * `permission` is the grant the whole call needs. A function derives it from the parsed
+ * input when part of the input needs more (a counter sale's Receipt, a refund's credits),
+ * so every denial is decided and audited here, before the handler runs.
+ */
 export const orgProcedure = <TSchema extends z.ZodType<{ orgSlug: string }, unknown>>(
-  permission: AppPermission,
+  permission: AppPermission | ((input: InferSchemaOutput<TSchema>) => AppPermission),
   input: TSchema,
 ) =>
-  base.input(input).use(async ({ context, next }, { orgSlug }: { orgSlug: string }) => {
-    const scope = await authorizeOrg(context, orgSlug, permission);
+  base.input(input).use(async ({ context, next }, parsed: InferSchemaOutput<TSchema>) => {
+    const scope = await authorizeOrg(
+      context,
+      parsed.orgSlug,
+      typeof permission === "function" ? permission(parsed) : permission,
+    );
 
     return next({ context: { scope } });
   });

@@ -12,6 +12,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { organization, user } from "./auth";
+import type { DocumentType } from "./documents";
+
+/** What an entry posts: a document, or an allocation, which has no document of its own. */
+export type EntryDocumentType = DocumentType | "allocation";
 
 export const journalEntries = pgTable(
   "journal_entries",
@@ -20,7 +24,7 @@ export const journalEntries = pgTable(
     orgId: text("org_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    documentType: text("document_type").notNull(),
+    documentType: text("document_type").$type<EntryDocumentType>().notNull(),
     documentId: text("document_id").notNull(),
     kind: text("kind", { enum: ["post", "reverse"] }).notNull(),
     reversesEntryId: text("reverses_entry_id"),

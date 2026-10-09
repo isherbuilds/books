@@ -1,6 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
-import { INDIAN_STATES } from "@accly/api/lib/indian-states";
+import { stateLabel } from "@accly/api/lib/indian-states";
 import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -55,6 +55,7 @@ function BillSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
   const bill = useSuspenseQuery(billDetailOptions(orgSlug, billId)).data;
+  const { partyId } = bill;
 
   const [activeOverlay, setActiveOverlay] = useState<"cancel" | "amend" | "apply" | null>(null);
   const [confirm, confirmDialog] = useConfirm();
@@ -81,7 +82,6 @@ function BillSheetRoute() {
   const canPay =
     useCan(orgSlug, { payment: ["post"] }) &&
     bill.state === "posted" &&
-    bill.partyId !== null &&
     isPositiveMoney(bill.outstandingPaise);
 
   const canNote = useCan(orgSlug, { note: ["post"] }) && bill.state === "posted";
@@ -197,9 +197,7 @@ function BillSheetRoute() {
             {bill.dueDate ? formatBusinessDate(bill.dueDate) : null}
           </DetailRow>
           <DetailRow label="Place of supply">
-            {bill.placeOfSupplyStateCode
-              ? `${INDIAN_STATES[bill.placeOfSupplyStateCode]} (${bill.placeOfSupplyStateCode})`
-              : null}
+            {bill.placeOfSupplyStateCode ? stateLabel(bill.placeOfSupplyStateCode) : null}
           </DetailRow>
           {bill.amendedFromId ? (
             <DetailRow label="Amended from">
@@ -242,56 +240,46 @@ function BillSheetRoute() {
                 </TableRow>
               </TableHeader>
               <TableBody className="tabular-nums">
-                {bill.lines.map((line) => {
-                  const tax = line.cgstPaise + line.sgstPaise + line.igstPaise;
-
-                  return (
-                    <TableRow key={line.id}>
-                      <TableCell className="min-w-40 whitespace-normal">
-                        {line.description}
-                      </TableCell>
-                      <TableCell className="font-mono">{line.hsnSac ?? "—"}</TableCell>
-                      <TableCell className="text-right">{formatMoney(line.amountPaise)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatMoney(tax)}
-                        {line.taxCode ? (
-                          <span className="block text-muted-foreground">{line.taxCode}</span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>{line.itcEligible ? "Eligible" : "No"}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatMoney(line.amountPaise + tax)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {bill.lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="min-w-40 whitespace-normal">{line.description}</TableCell>
+                    <TableCell className="font-mono">{line.hsnSac ?? "—"}</TableCell>
+                    <TableCell className="text-right">{formatMoney(line.amountPaise)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatMoney(line.taxPaise)}
+                      {line.taxCode ? (
+                        <span className="block text-muted-foreground">{line.taxCode}</span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>{line.itcEligible ? "Eligible" : "No"}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatMoney(line.lineTotalPaise)}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
           <div className="divide-y divide-border md:hidden">
-            {bill.lines.map((line) => {
-              const tax = line.cgstPaise + line.sgstPaise + line.igstPaise;
-
-              return (
-                <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 break-words font-medium">{line.description}</p>
-                    <p className="shrink-0 tabular-nums">{formatMoney(line.amountPaise + tax)}</p>
-                  </div>
-                  <p className="text-muted-foreground">
-                    {line.hsnSac ?? "No HSN/SAC"} · ITC{" "}
-                    {line.itcEligible ? "eligible" : "not eligible"}
-                  </p>
-                  <div className="flex justify-between gap-3 text-muted-foreground">
-                    <span>Taxable {formatMoney(line.amountPaise)}</span>
-                    <span>
-                      GST {formatMoney(tax)}
-                      {line.taxCode ? ` · ${line.taxCode}` : ""}
-                    </span>
-                  </div>
+            {bill.lines.map((line) => (
+              <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 break-words font-medium">{line.description}</p>
+                  <p className="shrink-0 tabular-nums">{formatMoney(line.lineTotalPaise)}</p>
                 </div>
-              );
-            })}
+                <p className="text-muted-foreground">
+                  {line.hsnSac ?? "No HSN/SAC"} · ITC{" "}
+                  {line.itcEligible ? "eligible" : "not eligible"}
+                </p>
+                <div className="flex justify-between gap-3 text-muted-foreground">
+                  <span>Taxable {formatMoney(line.amountPaise)}</span>
+                  <span>
+                    GST {formatMoney(line.taxPaise)}
+                    {line.taxCode ? ` · ${line.taxCode}` : ""}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
         <Separator />
@@ -373,14 +361,14 @@ function BillSheetRoute() {
               ) : null}
             </SheetActionsMenu>
           ) : null}
-          {canPay ? (
+          {canPay && partyId !== null ? (
             <Button
               type="button"
               onClick={() =>
                 void navigate({
                   to: "/$orgSlug/payments",
                   params: { orgSlug },
-                  search: { create: true, payeeId: bill.partyId!, payAgainst: "payable" },
+                  search: { create: true, payeeId: partyId, payAgainst: "payable" },
                 })
               }
             >

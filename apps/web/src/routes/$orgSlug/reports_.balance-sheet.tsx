@@ -1,23 +1,20 @@
 import { formatMoney, isZeroMoney } from "@accly/api/core/money";
 import { businessDate } from "@accly/api/lib/business-date";
-import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { DownloadIcon } from "lucide-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, linkOptions, redirect, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
+import { ReportDownloads } from "@/components/report-downloads";
 import { ReportProvenance } from "@/components/report-provenance";
 import { StatementTree } from "@/components/statement-tree";
 import { presetRange } from "@/lib/date-presets";
-import { membershipOptions, useCan } from "@/lib/membership";
+import { membershipOptions } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
-import { saveFile } from "@/lib/reports";
+import { balanceSheetOptions } from "@/lib/reports";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 export const Route = createFileRoute("/$orgSlug/reports_/balance-sheet")({
@@ -37,9 +34,7 @@ export const Route = createFileRoute("/$orgSlug/reports_/balance-sheet")({
     await requireOrgPermission(queryClient, orgSlug, { report: ["readFinancial"] });
 
     if (deps.asOf) {
-      void queryClient
-        .query(orpc.report.balanceSheet.queryOptions({ input: { orgSlug, asOf: deps.asOf } }))
-        .catch(() => {});
+      void queryClient.query(balanceSheetOptions(orgSlug, deps.asOf)).catch(() => {});
     }
   },
   component: BalanceSheetRoute,
@@ -52,7 +47,6 @@ function BalanceSheetRoute() {
   const { asOf: searchedDate } = search;
   const navigate = useNavigate({ from: Route.fullPath });
   const { today, financialYearStart } = useOrgDateTime();
-  const canExport = useCan(orgSlug, { export: ["read"] });
   const asOf = searchedDate ?? today;
   const shownAsOf = shown.asOf ?? today;
 
@@ -60,14 +54,6 @@ function BalanceSheetRoute() {
     from: presetRange("this-year", shownAsOf, financialYearStart).from,
     to: shownAsOf,
   };
-
-  const download = useMutation({
-    mutationFn: () => orpc.export.balanceSheetXlsx.call({ orgSlug, asOf }),
-    onSuccess: saveFile,
-    onError: (error) => toast.error(errorMessage(error, "Could not build the balance sheet")),
-  });
-
-  const pdf = `/api/${encodeURIComponent(orgSlug)}/reports/balance-sheet/pdf?${new URLSearchParams({ asOf })}`;
 
   return (
     <>
@@ -84,26 +70,16 @@ function BalanceSheetRoute() {
               void navigate({ replace: true, search: { asOf: event.target.value } })
             }
           />
-          <div className="flex flex-wrap items-center gap-2">
-            {canExport ? (
-              <Button
-                variant="outline"
-                disabled={download.isPending}
-                onClick={() => download.mutate()}
-              >
-                <DownloadIcon data-icon="inline-start" />
-                {download.isPending ? "Building…" : "Download XLSX"}
-              </Button>
-            ) : null}
-            <Button
-              render={<a href={pdf} target="_blank" rel="noopener noreferrer" />}
-              nativeButton={false}
-              variant="outline"
-            >
-              <DownloadIcon data-icon="inline-start" />
-              Download PDF
-            </Button>
-          </div>
+          <ReportDownloads
+            orgSlug={orgSlug}
+            build={() => orpc.export.balanceSheetXlsx.call({ orgSlug, asOf })}
+            failure="Could not build the balance sheet"
+            pdf={linkOptions({
+              to: "/api/$orgSlug/reports/balance-sheet/pdf",
+              params: { orgSlug },
+              search: { asOf },
+            })}
+          />
         </div>
         <ReportBody
           resetKey={`${orgSlug}:${shownAsOf}`}
@@ -126,9 +102,7 @@ function BalanceSheetBody({
   asOf: string;
   period: { from: string; to: string };
 }) {
-  const report = useSuspenseQuery(
-    orpc.report.balanceSheet.queryOptions({ input: { orgSlug, asOf } }),
-  );
+  const report = useSuspenseQuery(balanceSheetOptions(orgSlug, asOf));
 
   const data = report.data;
 
@@ -177,7 +151,8 @@ function BalanceSheetBody({
           <div className="flex items-center justify-between gap-2 border-t-2 border-foreground px-3 py-2 font-medium md:gap-4">
             <span className="min-w-0 break-words">Total liabilities + equity</span>
             <span className="w-money shrink-0 text-right whitespace-nowrap tabular-nums md:w-auto">
-              {formatMoney(data.liabilitiesPaise + data.equityPaise)}
+              {/* The server refuses a sheet whose two sides differ. */}
+              {formatMoney(data.assetsPaise)}
             </span>
           </div>
         </>

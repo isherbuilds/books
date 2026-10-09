@@ -1,8 +1,7 @@
 import { formatMoney, isZeroMoney } from "@accly/api/core/money";
+import type { DayBookEntry } from "@accly/api/core/reports";
 import { formatBusinessDay } from "@accly/api/lib/business-date";
-import type { AppRouterClient } from "@accly/api/routers/index";
 import type { DocumentType } from "@accly/db/schema/documents";
-import { Button } from "@accly/ui/components/button";
 import { NativeSelect } from "@accly/ui/components/native-select";
 import {
   Table,
@@ -12,11 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@accly/ui/components/table";
-import { useMutation, useSuspenseInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { DownloadIcon } from "lucide-react";
-import { useDeferredValue, useMemo } from "react";
-import { toast } from "sonner";
+import { useSuspenseInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, linkOptions, useNavigate } from "@tanstack/react-router";
+import { useDeferredValue } from "react";
 import { z } from "zod";
 
 import { useDesktop, useVirtualRows } from "@/components/data-table/use-virtual-rows";
@@ -28,14 +25,13 @@ import {
   PageHeader,
   ReportBody,
 } from "@/components/page";
+import { ReportDownloads } from "@/components/report-downloads";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
 import { ReportProvenance } from "@/components/report-provenance";
-import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
-import { errorMessage } from "@/lib/orpc-error";
 import { documentLink } from "@/lib/parties";
-import { saveFile } from "@/lib/reports";
+import { dayBookEntriesOptions, dayBookSummaryOptions, type DayBookInput } from "@/lib/reports";
 import { requireOrgPermission } from "@/lib/route-permission";
 
 const DOCUMENT_TYPES = [
@@ -52,26 +48,7 @@ const DOCUMENT_TYPES = [
 
 const documentTypeSchema = z.enum(DOCUMENT_TYPES.map(({ value }) => value));
 
-type DayEntry = Awaited<ReturnType<AppRouterClient["report"]["dayBookEntries"]>>["rows"][number];
-
-type DayRow = { id: string; entry: DayEntry; lineIndex?: number };
-
-const dayBookEntriesOptions = (input: {
-  orgSlug: string;
-  from: string;
-  to: string;
-  documentType?: (typeof DOCUMENT_TYPES)[number]["value"];
-}) =>
-  orpc.report.dayBookEntries.infiniteOptions({
-    input: (cursor: { entryDate: string; id: string } | undefined) => ({ ...input, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (last) => {
-      if (!last.hasMore) return undefined;
-      const row = last.rows.at(-1)!;
-
-      return { entryDate: row.entryDate, id: row.entryId };
-    },
-  });
+type DayRow = { id: string; entry: DayBookEntry; line?: DayBookEntry["lines"][number] };
 
 export const Route = createFileRoute("/$orgSlug/reports_/day-book")({
   head: () => ({ meta: [{ title: "Day book · Accly Books" }] }),
@@ -89,7 +66,7 @@ export const Route = createFileRoute("/$orgSlug/reports_/day-book")({
     if (deps.from && deps.to && deps.from <= deps.to) {
       const input = { orgSlug, from: deps.from, to: deps.to, documentType: deps.documentType };
       void queryClient.infiniteQuery(dayBookEntriesOptions(input)).catch(() => {});
-      void queryClient.query(orpc.report.dayBookSummary.queryOptions({ input })).catch(() => {});
+      void queryClient.query(dayBookSummaryOptions(input)).catch(() => {});
     }
   },
   component: DayBookRoute,
@@ -105,19 +82,7 @@ function DayBookRoute() {
   const period = { from: from ?? today, to: to ?? today };
   const shownPeriod = { from: shown.from ?? today, to: shown.to ?? today };
   const valid = period.from <= period.to;
-  const canExport = useCan(orgSlug, { export: ["read"] });
   const input = { orgSlug, ...period, documentType };
-
-  const download = useMutation({
-    mutationFn: () => orpc.export.dayBookXlsx.call(input),
-    onSuccess: saveFile,
-    onError: (error) => toast.error(errorMessage(error, "Could not build the day book")),
-  });
-
-  const pdfQuery: Record<string, string> = { ...period };
-
-  if (documentType) pdfQuery.documentType = documentType;
-  const pdf = `/api/${encodeURIComponent(orgSlug)}/reports/day-book/pdf?${new URLSearchParams(pdfQuery)}`;
 
   const setSearch = (patch: { from?: string; to?: string; documentType?: typeof documentType }) =>
     void navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
@@ -144,28 +109,17 @@ function DayBookRoute() {
               ))}
             </NativeSelect>
           </div>
-          <div className="flex items-center gap-2">
-            {canExport ? (
-              <Button
-                variant="outline"
-                disabled={!valid || download.isPending}
-                onClick={() => download.mutate()}
-              >
-                <DownloadIcon data-icon="inline-start" />
-                {download.isPending ? "Building…" : "Download XLSX"}
-              </Button>
-            ) : null}
-            {valid ? (
-              <Button
-                render={<a href={pdf} target="_blank" rel="noopener noreferrer" />}
-                nativeButton={false}
-                variant="outline"
-              >
-                <DownloadIcon data-icon="inline-start" />
-                Download PDF
-              </Button>
-            ) : null}
-          </div>
+          <ReportDownloads
+            orgSlug={orgSlug}
+            ready={valid}
+            build={() => orpc.export.dayBookXlsx.call(input)}
+            failure="Could not build the day book"
+            pdf={linkOptions({
+              to: "/api/$orgSlug/reports/day-book/pdf",
+              params: { orgSlug },
+              search: { ...period, documentType },
+            })}
+          />
         </div>
         {!valid ? <ErrorNote title="The end date must not be before the start date." /> : null}
         {valid ? (
@@ -187,40 +141,27 @@ function DayBookRoute() {
   );
 }
 
-function DayBookBody({
-  input,
-}: {
-  input: {
-    orgSlug: string;
-    from: string;
-    to: string;
-    documentType?: (typeof DOCUMENT_TYPES)[number]["value"];
-  };
-}) {
+function DayBookBody({ input }: { input: DayBookInput }) {
   const { orgSlug } = input;
-  const summary = useSuspenseQuery(orpc.report.dayBookSummary.queryOptions({ input }));
+  const summary = useSuspenseQuery(dayBookSummaryOptions(input));
   const report = useSuspenseInfiniteQuery(dayBookEntriesOptions(input));
-  const entries = useMemo(() => report.data.pages.flatMap((page) => page.rows), [report.data]);
+  const entries = report.data.pages.flatMap((page) => page.rows);
 
-  const rows: DayRow[] = useMemo(
-    () =>
-      entries.flatMap((entry) => [
-        { id: entry.entryId, entry },
-        ...entry.lines.map((_, lineIndex) => ({
-          id: `${entry.entryId}-${lineIndex}`,
-          entry,
-          lineIndex,
-        })),
-      ]),
-    [entries],
-  );
+  const rows: DayRow[] = entries.flatMap((entry) => [
+    { id: entry.entryId, entry },
+    ...entry.lines.map((line, lineIndex) => ({
+      id: `${entry.entryId}-${lineIndex}`,
+      entry,
+      line,
+    })),
+  ]);
 
   const desktop = useDesktop();
 
   const tableRows = useVirtualRows<HTMLTableSectionElement>({
     count: rows.length,
     estimateSize: 40,
-    getItemKey: (index) => rows[index]!.id,
+    getItemKey: (index) => rows[index]?.id ?? String(index),
     enabled: desktop !== false,
     nextPage: desktop === true ? report : undefined,
   });
@@ -228,7 +169,7 @@ function DayBookBody({
   const cards = useVirtualRows<HTMLUListElement, HTMLLIElement>({
     count: entries.length,
     estimateSize: 100,
-    getItemKey: (index) => entries[index]!.entryId,
+    getItemKey: (index) => entries[index]?.entryId ?? String(index),
     enabled: desktop !== true,
     nextPage: desktop === false ? report : undefined,
   });
@@ -280,11 +221,12 @@ function DayBookBody({
                       </TableRow>
                     ) : null}
                     {tableRows.virtualRows.map((item) => {
-                      const { entry, lineIndex } = rows[item.index]!;
+                      const row = rows[item.index];
 
-                      if (lineIndex !== undefined) {
-                        const line = entry.lines[lineIndex]!;
+                      if (!row) return null;
+                      const { entry, line } = row;
 
+                      if (line) {
                         return (
                           <TableRow key={item.key} className="h-10">
                             <TableCell className="max-w-64 truncate whitespace-nowrap">
@@ -372,7 +314,9 @@ function DayBookBody({
                     <li aria-hidden="true" style={{ height: cards.paddingTop }} />
                   ) : null}
                   {cards.virtualRows.map((item) => {
-                    const entry = entries[item.index]!;
+                    const entry = entries[item.index];
+
+                    if (!entry) return null;
 
                     const destination = documentLink(orgSlug, entry.documentType, entry.documentId);
 

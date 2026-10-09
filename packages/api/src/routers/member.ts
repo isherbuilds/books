@@ -7,11 +7,13 @@ import { and, asc, desc, eq, gt, ilike, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "@accly/db/audit";
+import { impossible } from "../lib/conflict";
 import { isFounder } from "../lib/founder";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
-import { orgSettings, pageOf } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
+import { pageOf } from "../lib/pagination";
 
 const roleInput = z.enum(ORG_ROLES);
 
@@ -36,7 +38,10 @@ async function memberInScope(memberId: string, orgId: string) {
 export const memberRouter = {
   me: orgProcedure({ member: ["read"] }, orgInput).handler(async ({ context }) => {
     const { orgId, roles, userId } = context.scope;
-    const sessionUser = context.session!.user;
+    const sessionUser = context.session?.user;
+
+    // The guard proved the session before it resolved the scope.
+    if (!sessionUser) throw impossible("an org procedure ran without a session");
 
     const [organizations, settings] = await Promise.all([
       // Predicate on `userId` by design: this lists which orgs the user belongs to, never
@@ -124,11 +129,8 @@ export const memberRouter = {
         : [],
     ]);
 
-    const page = pageOf(members, input.limit);
-
     return {
-      members: page.rows,
-      hasMore: page.hasMore,
+      ...pageOf(members, input.limit, (last) => last.id),
       invitations: invited.map((row) => ({ ...row, url: invitationUrl(row.id) })),
     };
   }),
@@ -151,10 +153,11 @@ export const memberRouter = {
     orgInput.extend({ email: z.email(), role: roleInput }),
   ).handler(async ({ context, input }) => {
     // Better Auth already ignores expired invitations when it checks for duplicates.
-    // Retiring them here keeps the roster to one row per email after a re-invite.
-    await db
-      .update(invitation)
-      .set({ status: "canceled" })
+    // Retiring them through its own cancel keeps the roster to one row per email after
+    // a re-invite. The scoped read keeps a foreign id from reaching that path.
+    const expired = await db
+      .select({ id: invitation.id })
+      .from(invitation)
       .where(
         and(
           eq(invitation.organizationId, context.scope.orgId),
@@ -163,6 +166,9 @@ export const memberRouter = {
           lte(invitation.expiresAt, sql`now()`),
         ),
       );
+
+    for (const { id } of expired)
+      await auth.api.cancelInvitation({ body: { invitationId: id }, headers: context.headers });
 
     let created;
 

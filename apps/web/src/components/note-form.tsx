@@ -1,5 +1,3 @@
-import { computeNoteLines, noteTdsReversal } from "@accly/api/core/note-lines";
-import { documentTotals } from "@accly/api/core/tax";
 import {
   enteredPaise,
   formatDecimal,
@@ -8,6 +6,7 @@ import {
   ZERO_MONEY,
 } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
+import { NOTE_TYPE_LABELS } from "@accly/api/lib/document-labels";
 import { reason } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -20,7 +19,14 @@ import {
 } from "@accly/ui/components/form";
 import { Input } from "@accly/ui/components/input";
 import { Textarea } from "@accly/ui/components/textarea";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { cn } from "@accly/ui/lib/utils";
+import {
+  keepPreviousData,
+  skipToken,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,12 +35,23 @@ import { AmountInput } from "@/components/amount-input";
 import { DocumentForm, FieldArrayError, LineGrid, PostBar } from "@/components/document-form";
 import { DocumentTotals } from "@/components/invoice-summary";
 import { NoteSourceLink } from "@/components/note-columns";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
-import { NOTE_TYPE_LABELS, type NoteSource } from "@/lib/notes";
+import type { NoteSource } from "@/lib/notes";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
+import { applyOrpcFieldError, errorMessage, handleWriteError } from "@/lib/orpc-error";
+
+type NoteLines = { sourceLineId: string; amount: string }[];
+
+/** The lines with a positive amount typed, as the quote and the post take them. */
+const noteLines = (source: NoteSource, amounts: readonly { amount: string }[]): NoteLines =>
+  source.lines.flatMap((line, index) => {
+    const amount = amounts[index]?.amount ?? "";
+
+    return isPositiveMoney(enteredPaise(amount)) ? [{ sourceLineId: line.id, amount }] : [];
+  });
 
 export function NoteForm({
   orgSlug,
@@ -68,11 +85,13 @@ export function NoteForm({
     })
     .superRefine((values, context) => {
       let selected = false;
-      values.amounts.forEach(({ amount }, index) => {
+      source.lines.forEach((line, index) => {
+        const amount = values.amounts[index]?.amount;
+
         if (!amount) return;
         const paise = enteredPaise(amount);
 
-        if (!isPositiveMoney(paise) || paise > source.lines[index]!.remainingPaise) {
+        if (!isPositiveMoney(paise) || paise > line.remainingPaise) {
           context.addIssue({
             code: "custom",
             path: ["amounts", index, "amount"],
@@ -98,63 +117,28 @@ export function NoteForm({
     },
   });
 
-  const amounts = useWatch({ control: form.control, name: "amounts" });
+  // Deep-compared, so a reason or date keystroke re-renders nothing here.
+  const lines = useWatch({
+    control: form.control,
+    compute: (values: { amounts: { amount: string }[] }) => noteLines(source, values.amounts),
+  });
 
-  const selected =
-    amounts?.flatMap((row, index) => {
-      const amountPaise = enteredPaise(row.amount);
+  const request = canPost && lines.length > 0 ? lines : null;
+  const debounced = useDebouncedValue(request, 300);
 
-      if (!isPositiveMoney(amountPaise)) return [];
-      const line = source.lines[index]!;
-      const prior = line.priorNote;
+  const quote = useQuery({
+    ...orpc.note.quote.queryOptions({
+      input: debounced
+        ? { orgSlug, type, againstDocumentId: source.id, lines: debounced }
+        : skipToken,
+    }),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
 
-      return [
-        {
-          source: {
-            taxablePaise: line.amountPaise,
-            cgstPaise: line.cgstPaise,
-            sgstPaise: line.sgstPaise,
-            igstPaise: line.igstPaise,
-            rateBasisPoints: line.rateBasisPoints,
-          },
-          prior: {
-            taxablePaise: prior?.amountPaise ?? ZERO_MONEY,
-            cgstPaise: prior?.cgstPaise ?? ZERO_MONEY,
-            sgstPaise: prior?.sgstPaise ?? ZERO_MONEY,
-            igstPaise: prior?.igstPaise ?? ZERO_MONEY,
-          },
-          amountPaise,
-        },
-      ];
-    }) ?? [];
-
-  const calculated =
-    source.intraState === null
-      ? null
-      : computeNoteLines({ intraState: source.intraState, lines: selected });
-
-  const preview =
-    calculated?.ok && selected.length
-      ? documentTotals(
-          calculated.lines.map((line) => ({ ...line, amountPaise: line.taxablePaise })),
-        )
-      : null;
-
-  const billTds = "tds" in source ? source.tds : null;
-
-  const tdsPreview =
-    type === "debitNote" &&
-    billTds &&
-    preview &&
-    billTds.priorTaxablePaise + preview.taxablePaise <= billTds.basePaise
-      ? noteTdsReversal({
-          billTdsPaise: billTds.amountPaise,
-          billTaxablePaise: billTds.basePaise,
-          priorTaxablePaise: billTds.priorTaxablePaise,
-          priorReversedPaise: billTds.priorReversedPaise,
-          taxablePaise: preview.taxablePaise,
-        })
-      : null;
+  // With nothing to quote the last quote no longer applies; one for other amounts shows dimmed.
+  const quoted = request && debounced ? quote.data : undefined;
+  const stale = quote.isPlaceholderData || quote.isFetching || request !== debounced;
 
   const invalidate = () => invalidateSettlementState(queryClient, orgSlug);
 
@@ -187,11 +171,7 @@ export function NoteForm({
   );
 
   const submit = form.handleSubmit((values) => {
-    const lines = values.amounts.flatMap(({ amount }, index) =>
-      amount && isPositiveMoney(enteredPaise(amount))
-        ? [{ sourceLineId: source.lines[index]!.id, amount }]
-        : [],
-    );
+    const lines = noteLines(source, values.amounts);
 
     if (lines.length === 0) return;
 
@@ -283,7 +263,7 @@ export function NoteForm({
               </span>
               <span className="tabular-nums md:text-right">
                 <span className="text-muted-foreground md:hidden">Tax </span>
-                {formatMoney(line.cgstPaise + line.sgstPaise + line.igstPaise)}
+                {formatMoney(line.taxPaise)}
               </span>
               <RegisteredFormField
                 name={`amounts.${index}.amount`}
@@ -318,20 +298,22 @@ export function NoteForm({
           ))}
           <FieldArrayError control={form.control} name="amounts" />
         </LineGrid>
-        {preview ? (
-          <section aria-label="Estimated note totals" className="grid gap-2">
-            <h3 className="text-muted-foreground">Estimated totals</h3>
-            <DocumentTotals document={{ ...preview, totals: preview, discountPaise: ZERO_MONEY }} />
+        {quoted ? (
+          <section aria-label="Note totals" className={cn("grid gap-2", stale && "opacity-60")}>
+            <DocumentTotals document={{ ...quoted, totals: quoted, discountPaise: ZERO_MONEY }} />
+            {isPositiveMoney(quoted.tdsPaise) ? (
+              <p className="text-muted-foreground">
+                Lowers what you owe this supplier by{" "}
+                <span className="tabular-nums text-foreground">{formatMoney(quoted.netPaise)}</span>
+                : the note&apos;s {formatMoney(quoted.totalPaise)} less{" "}
+                {formatMoney(quoted.tdsPaise)} TDS you had kept back.
+              </p>
+            ) : null}
           </section>
         ) : null}
-        {tdsPreview !== null && preview ? (
-          <p className="text-muted-foreground">
-            Lowers what you owe this supplier by{" "}
-            <span className="tabular-nums text-foreground">
-              {formatMoney(preview.totalPaise - tdsPreview)}
-            </span>
-            : the note&apos;s {formatMoney(preview.totalPaise)} less {formatMoney(tdsPreview)} TDS
-            you had kept back.
+        {request && quote.isError ? (
+          <p role="alert" className="text-destructive">
+            {errorMessage(quote.error, "Could not work out the totals")}
           </p>
         ) : null}
         <RegisteredFormField

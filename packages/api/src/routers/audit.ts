@@ -6,7 +6,8 @@ import { z } from "zod";
 
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { likePattern, orderedPeriod, pageLimit, period, searchQuery } from "../lib/schemas";
-import { orgTimeZone } from "../lib/settlements";
+import { orgTimeZone } from "../lib/org-settings";
+import { pageOf } from "../lib/pagination";
 
 export const auditRouter = {
   list: orgProcedure(
@@ -57,17 +58,10 @@ export const auditRouter = {
       .orderBy(desc(auditLog.id))
       .limit(input.limit + 1);
 
-    const hasNextPage = rows.length > input.limit;
-
-    const items = rows.slice(0, input.limit).map(({ entry, actorName, actorEmail }) => ({
-      ...entry,
-      actorName,
-      actorEmail,
-    }));
-
-    return {
-      items,
-      nextCursor: hasNextPage ? items[items.length - 1]!.id : null,
-    };
+    return pageOf(
+      rows.map(({ entry, actorName, actorEmail }) => ({ ...entry, actorName, actorEmail })),
+      input.limit,
+      (last) => last.id,
+    );
   }),
 };

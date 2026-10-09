@@ -308,11 +308,11 @@ export async function readImportWorkbook(
     // Only a cell's detail record carries its type; plain values have none.
     for (const [key, cell] of sheet.cells ?? []) {
       if (cell.type === "formula" || cell.type === "error" || cell.type === "richText") {
-        const [row, column] = key.split(",").map(Number);
+        const { row, column } = cellPosition(key);
         reader.error(
           name,
-          row! + 1,
-          String(sheet.cells?.get(`0,${column}`)?.value ?? column! + 1),
+          row + 1,
+          String(sheet.cells?.get(`0,${column}`)?.value ?? column + 1),
           "CELL_INVALID",
           "Paste values only: no formulas, errors or formatted text.",
         );
@@ -351,10 +351,10 @@ export async function readImportWorkbook(
 
   const opening = rowsBySheet.get("Opening") ?? [];
 
-  if (opening.length > 1)
-    reader.error("Opening", opening[1]!.row, null, "ROW_EXTRA", "Enter one opening date only.");
+  const [openingRow, extraRow] = opening;
 
-  const [openingRow] = opening;
+  if (extraRow)
+    reader.error("Opening", extraRow.row, null, "ROW_EXTRA", "Enter one opening date only.");
 
   if (openingRow) workbook.openingDate = reader.date("Opening", openingRow, "Opening date");
 
@@ -526,13 +526,22 @@ function choice<T extends string>(
   const value = Object.hasOwn(options, key) ? options[key] : undefined;
 
   if (value === undefined) {
-    const labels = Object.keys(options).map((key) => key[0]!.toUpperCase() + key.slice(1));
+    const labels = Object.keys(options).map((key) => key.charAt(0).toUpperCase() + key.slice(1));
     reader.error("Opening items", row.row, column, "CELL_INVALID", `Enter ${labels.join(" or ")}.`);
 
     return null;
   }
 
   return value;
+}
+
+/** A cell key, "row,column" counted from zero, as the workbook reader writes it. */
+function cellPosition(key: string): { row: number; column: number } {
+  const [row, column] = key.split(",").map(Number);
+
+  if (row === undefined || column === undefined) throw new Error(`Malformed cell key "${key}"`);
+
+  return { row, column };
 }
 
 /** A sheet's data rows keyed by header, skipping rows with every cell blank. */
@@ -542,7 +551,7 @@ function dataRows(reader: SheetReader, sheet: SheetName, source: Sheet): DataRow
   const seen = new Set<string>();
 
   for (const [key, cell] of source.cells ?? []) {
-    const [row, column] = key.split(",").map(Number);
+    const { row, column } = cellPosition(key);
 
     if (row !== 0) continue;
     const name = typeof cell.value === "string" ? cell.value.trim() : null;
@@ -555,7 +564,7 @@ function dataRows(reader: SheetReader, sheet: SheetName, source: Sheet): DataRow
       reader.error(sheet, 1, name, "HEADER_REPEATED", `The column "${name}" appears twice.`);
 
     seen.add(name);
-    headers.set(column!, name);
+    headers.set(column, name);
   }
 
   for (const column of columns)
@@ -565,11 +574,11 @@ function dataRows(reader: SheetReader, sheet: SheetName, source: Sheet): DataRow
   const rows = new Map<number, DataRow>();
 
   for (const [key, { value }] of source.cells ?? []) {
-    const [row, column] = key.split(",").map(Number);
+    const { row, column } = cellPosition(key);
 
     if (row === 0 || value === null || (typeof value === "string" && value.trim() === "")) continue;
 
-    if (row! > MASTER_LIST_LIMIT) {
+    if (row > MASTER_LIST_LIMIT) {
       reader.error(
         sheet,
         null,
@@ -581,22 +590,22 @@ function dataRows(reader: SheetReader, sheet: SheetName, source: Sheet): DataRow
       return [];
     }
 
-    const header = headers.get(column!);
+    const header = headers.get(column);
 
     if (!header) {
       reader.error(
         sheet,
-        row! + 1,
-        String(column! + 1),
+        row + 1,
+        String(column + 1),
         "HEADER_MISSING",
         "This column has data but no template header.",
       );
       continue;
     }
 
-    const dataRow = rows.get(row!) ?? { row: row! + 1, cells: new Map<string, CellValue>() };
+    const dataRow = rows.get(row) ?? { row: row + 1, cells: new Map<string, CellValue>() };
     dataRow.cells.set(header, value);
-    rows.set(row!, dataRow);
+    rows.set(row, dataRow);
   }
 
   return [...rows.values()].sort((a, b) => a.row - b.row);

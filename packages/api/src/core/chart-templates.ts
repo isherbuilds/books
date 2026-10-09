@@ -202,7 +202,8 @@ export async function seedChartOfAccounts(
   legalType: LegalType,
 ): Promise<void> {
   const template = CHART_TEMPLATES[legalType];
-  const idsByCode = new Map(template.map((account) => [account.code, Bun.randomUUIDv7()]));
+  const withIds = template.map((account) => ({ ...account, id: Bun.randomUUIDv7() }));
+  const idsByCode = new Map(withIds.map((account) => [account.code, account.id]));
   const keys = new Set(template.flatMap((account) => account.systemKey ?? []));
 
   for (const key of SYSTEM_ACCOUNT_KEYS) {
@@ -212,7 +213,7 @@ export async function seedChartOfAccounts(
   }
 
   await tx.insert(accounts).values(
-    template.map((account) => {
+    withIds.map((account) => {
       const parentId = account.parentCode ? idsByCode.get(account.parentCode) : undefined;
 
       if (account.parentCode && !parentId) {
@@ -220,7 +221,7 @@ export async function seedChartOfAccounts(
       }
 
       return {
-        id: idsByCode.get(account.code)!,
+        id: account.id,
         orgId,
         code: account.code,
         name: account.name,
@@ -234,12 +235,12 @@ export async function seedChartOfAccounts(
   );
 
   await tx.insert(paymentMethods).values(
-    template.flatMap((account) =>
+    withIds.flatMap((account) =>
       (account.methods ?? []).map((name) => ({
         id: Bun.randomUUIDv7(),
         orgId,
         name,
-        accountId: idsByCode.get(account.code)!,
+        accountId: account.id,
       })),
     ),
   );

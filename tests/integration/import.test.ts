@@ -300,11 +300,10 @@ test("an imported cutover posts control legs and settleable opening items", asyn
   const secondPage = await api.openingBalance.items({
     ...claim,
     limit: 2,
-    cursor: firstPage.rows.at(-1)!,
+    cursor: required(firstPage.nextCursor, "second opening items page"),
   });
 
-  expect(firstPage.hasMore).toBe(true);
-  expect(secondPage.hasMore).toBe(false);
+  expect(secondPage.nextCursor).toBeNull();
   expect(
     [...firstPage.rows, ...secondPage.rows].map((item) => [item.reference, item.balancePaise]),
   ).toEqual([

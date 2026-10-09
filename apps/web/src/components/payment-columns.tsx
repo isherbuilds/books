@@ -1,3 +1,4 @@
+import { documentRole } from "@accly/api/core/document-roles";
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatMoney } from "@accly/api/core/money";
 import type { AppRouter } from "@accly/api/routers/index";
@@ -13,7 +14,7 @@ type PaymentRow = Awaited<ReturnType<RouterClient<AppRouter>["payment"]["list"]>
 const col = createColumnHelper<typeof DATA_TABLE_FEATURES, PaymentRow>();
 
 function paymentKind(payment: PaymentRow): string {
-  if (payment.exposureSide === "receivable") return "Refund";
+  if (documentRole({ type: "payment", exposureSide: payment.exposureSide }).refund) return "Refund";
 
   return SETTLEMENT_KIND_LABELS[payment.settlementKind ?? "direct"];
 }

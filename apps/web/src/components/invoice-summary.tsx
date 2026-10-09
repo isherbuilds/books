@@ -4,6 +4,7 @@ import { cn } from "@accly/ui/lib/utils";
 import type { ReactNode } from "react";
 
 import { DetailRow } from "@/components/detail-row";
+import { subtotalBeforeDiscountPaise } from "@/lib/invoices";
 
 // An ink rule above the total and the closing double rule under it (globals.css).
 const TOTAL_ROW =
@@ -61,7 +62,7 @@ export function DocumentTotals({
       {document.discountPaise > ZERO_MONEY ? (
         <>
           <DetailRow label="Subtotal">
-            {formatMoney(taxablePaise + document.discountPaise)}
+            {formatMoney(subtotalBeforeDiscountPaise(taxablePaise, document.discountPaise))}
           </DetailRow>
           <DetailRow label="Discount">{formatMoney(-document.discountPaise)}</DetailRow>
         </>

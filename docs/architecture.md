@@ -83,7 +83,11 @@ A new org-scoped domain follows the
   to the first organization's `/$orgSlug` Home and anyone without an
   organization to `/join`. A validated `redirect` on `/login` wins.
 - Growing lists use full keysets and select `limit + 1` base rows through a
-  tenant-leading index before joins. Never use `OFFSET`.
+  tenant-leading index before joins. Never use `OFFSET`. Every list procedure
+  returns `{ rows, nextCursor }` from `pageOf` (`lib/pagination.ts`), with
+  `nextCursor` null on the last page, so a client pages with
+  `getNextPageParam: (page) => page.nextCursor ?? undefined`. Bounded master
+  lists (`party.list`'s `{ rows, hasMore }`) are not pages.
 - Ledgers page oldest first on `(entry_date, id)` with an object cursor. A
   separate summary procedure returns opening, debits, credits and closing for
   the period; the client starts the running balance from the summary's opening
@@ -230,10 +234,11 @@ branch.
 - Receipt, Payment and Invoice validate posting-critical masters after locking
   settings, holding the resolved rows `FOR SHARE` until commit: the active Party
   (`activeParty`) supplies the snapshot and exposure; the direct income/expense
-  Account supplies posting eligibility and supply class; the TDS Section
-  supplies effective dates and rate; the Payment Method and its money account
-  supply their active states and the account mapping. Updates or deactivation
-  wait until the posting commits. The stored posting and snapshot
+  Account supplies posting eligibility and supply class; the Payment Method and
+  its money account supply their active states and the account mapping. Updates
+  or deactivation wait until the posting commits. The TDS Section is read without
+  a lock: sections are seeded per organization and never change, so its effective
+  dates and rate cannot move under a posting. The stored posting and snapshot
   retain those validated values. Locks belong to these transaction paths, not
   to all master reads; Item and Invoice draft validation use unlocked reads.
 - One `post` entry and at most one `reverse` entry exist per document:

@@ -2,7 +2,7 @@ import { searchQuery } from "@accly/api/lib/schemas";
 import { authorize } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { DropdownMenuCheckboxItem } from "@accly/ui/components/dropdown-menu";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { functionalUpdate, type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import { BadgeCheckIcon, CircleDotIcon, TagsIcon } from "lucide-react";
@@ -26,7 +26,6 @@ import { PARTY_COLUMNS, PARTY_SORTS, PartyCard, type PartyRow } from "@/componen
 import { PartySheet } from "@/components/party-form";
 import { PartyQuickLook } from "@/components/party-quick-look";
 import { membershipOptions, useCan } from "@/lib/membership";
-import { orpc } from "@/lib/orpc";
 import { focusRowLink } from "@/lib/row-focus";
 import {
   GST_FILTERS,
@@ -35,6 +34,7 @@ import {
   ROLE_LABELS,
   filterParties,
   partyBalancesOptions,
+  partyDetailOptions,
   partyListOptions,
   type PartyFilters,
 } from "@/lib/parties";
@@ -94,10 +94,7 @@ function PartiesRoute() {
   // A linked party past the master's bound, or outside a server search, is read on its
   // own; the quick look shares this `party.get` entry, so it costs no second request.
   const fetchedParty = useQuery(
-    orpc.party.get.queryOptions({
-      input:
-        openPartyId && parties.data && !listedParty ? { orgSlug, partyId: openPartyId } : skipToken,
-    }),
+    partyDetailOptions(orgSlug, parties.data && !listedParty ? openPartyId : undefined),
   );
 
   const openParty = listedParty ?? fetchedParty.data;

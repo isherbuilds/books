@@ -40,13 +40,21 @@ const LAKH = 100_000n;
 
 const CRORE = 10_000_000n;
 
+function wordAt(words: readonly string[], index: bigint): string {
+  const word = words[Number(index)];
+
+  if (word === undefined) throw new RangeError(`No word for ${index}`);
+
+  return word;
+}
+
 function underHundred(value: bigint): string {
   if (value < 20n) {
-    return ONES[Number(value)]!;
+    return wordAt(ONES, value);
   }
 
-  const tens = TENS[Number(value / 10n)]!;
-  const ones = ONES[Number(value % 10n)]!;
+  const tens = wordAt(TENS, value / 10n);
+  const ones = wordAt(ONES, value % 10n);
 
   return ones ? `${tens}-${ones}` : tens;
 }

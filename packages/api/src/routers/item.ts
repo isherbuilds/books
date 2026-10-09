@@ -13,7 +13,7 @@ import { impossible, nextEditToken } from "../lib/conflict";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { dateOnly, editToken } from "../lib/schemas";
-import { orgTimeZone } from "../lib/settlements";
+import { orgTimeZone } from "../lib/org-settings";
 
 export const itemRouter = {
   // The complete master; every caller filters `active` in memory from this one entry.

@@ -4,9 +4,10 @@ import { z } from "zod";
 
 import { applyAllocations, reverseAllocation } from "../core/allocations";
 import { formatDecimal } from "../core/money";
+import { nth } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { positiveMoney, reason } from "../lib/schemas";
-import { orgSettings } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
 
 export const allocationRouter = {
   apply: orgProcedure(
@@ -34,6 +35,8 @@ export const allocationRouter = {
       });
     });
 
+    const applied = nth(rows, 0, "applied allocation");
+
     audit({
       action: "allocation.apply",
       actorId: scope.userId,
@@ -42,8 +45,8 @@ export const allocationRouter = {
       meta: {
         allocationIds: rows.map((row) => row.id),
         targetDocumentId: input.targetDocumentId,
-        sourceNumber: rows[0]!.sourceNumber,
-        targetNumber: rows[0]!.targetNumber,
+        sourceNumber: applied.sourceNumber,
+        targetNumber: applied.targetNumber,
         amount: formatDecimal(input.amount),
       },
     });

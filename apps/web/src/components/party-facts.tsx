@@ -17,7 +17,7 @@ import { struck } from "@/components/document-columns";
 import { ErrorNote } from "@/components/page";
 import { Section } from "@/components/party-form";
 
-import { orpc } from "@/lib/orpc";
+import { recentReceiptsOptions } from "@/lib/receipts";
 
 function Fact({
   label,
@@ -91,9 +91,7 @@ export function PartyFactSections({ party }: { party: PartyRecord }) {
 
 /** The last five receipts, each opening its record Sheet over a list filtered to the party. */
 export function RecentReceipts({ orgSlug, partyId }: { orgSlug: string; partyId: string }) {
-  const receipts = useQuery(
-    orpc.receipt.list.queryOptions({ input: { orgSlug, partyId, limit: 5 } }),
-  );
+  const receipts = useQuery(recentReceiptsOptions(orgSlug, partyId));
 
   const rows = receipts.data?.rows ?? [];
 

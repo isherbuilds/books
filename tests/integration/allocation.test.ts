@@ -605,15 +605,14 @@ test("the credit picker reaches every credit by page and by number", async () =>
     const page = await api.party.openCredits({ ...picker, limit: 1, cursor });
 
     paged.push(...page.rows.map(({ id }) => id));
-    const last = page.rows.at(-1);
-    cursor = page.hasMore && last ? { documentDate: last.documentDate, id: last.id } : undefined;
+    cursor = page.nextCursor ?? undefined;
   } while (cursor);
 
   expect(paged).toEqual([oldest.id, middle.id, newest.id]);
 
   const found = await api.party.openCredits({ ...picker, limit: 1, q: newest.number });
 
-  expect(found).toEqual({ rows: [expect.objectContaining({ id: newest.id })], hasMore: false });
+  expect(found).toEqual({ rows: [expect.objectContaining({ id: newest.id })], nextCursor: null });
   expect((await api.party.openCredits({ ...picker, q: "NO-SUCH-CREDIT" })).rows).toEqual([]);
 });
 

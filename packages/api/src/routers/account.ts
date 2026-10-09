@@ -22,6 +22,7 @@ import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { reportProfile } from "../lib/reports";
 import { editToken, shortName } from "../lib/schemas";
+import { paiseSum } from "../lib/sql";
 
 export const accountRouter = {
   list: orgProcedure(
@@ -273,10 +274,7 @@ export const accountRouter = {
           active: accounts.active,
           groupId: moneyGroup.id,
           groupName: moneyGroup.name,
-          balancePaise:
-            sql<bigint>`coalesce(sum(${journalLines.debit} - ${journalLines.credit}), 0)::bigint`.mapWith(
-              BigInt,
-            ),
+          balancePaise: paiseSum(sql`${journalLines.debit} - ${journalLines.credit}`),
         })
         .from(accounts)
         .innerJoin(moneyGroup, underMoneyGroup(orgId))

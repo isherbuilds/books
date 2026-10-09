@@ -1,3 +1,4 @@
+import { NOTE_TYPE_LABELS } from "@accly/api/lib/document-labels";
 import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
@@ -17,7 +18,7 @@ import {
 import { NOTE_COLUMNS, NoteCard } from "@/components/note-columns";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { requireOrgPermission } from "@/lib/route-permission";
-import { noteListOptions, NOTE_TYPE_LABELS } from "@/lib/notes";
+import { noteListOptions } from "@/lib/notes";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 

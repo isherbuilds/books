@@ -13,7 +13,6 @@ import { Input } from "@accly/ui/components/input";
 import { Kbd } from "@accly/ui/components/kbd";
 import { SheetFooter } from "@accly/ui/components/sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { FieldPath } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -28,7 +27,7 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateOpeningBalanceState } from "@/lib/domain-invalidation";
 import { journalAccountOptions } from "@/lib/journals";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
+import { applyOrpcFieldError, handleWriteError, type ServerFields } from "@/lib/orpc-error";
 import { useOrgDateTime } from "@/lib/org-datetime";
 
 const openingBalanceSchema = z.object({
@@ -44,7 +43,7 @@ const SERVER_FIELDS = {
   LOCKED: "documentDate",
   OPENING_BALANCE_DATE_FUTURE: "documentDate",
   OPENING_BALANCE_AFTER_BUSINESS: "documentDate",
-} satisfies Record<string, FieldPath<OpeningBalanceFormValues>>;
+} satisfies ServerFields<OpeningBalanceFormValues>;
 
 const withoutReceivables = (rows: Awaited<ReturnType<AppRouterClient["journal"]["accounts"]>>) =>
   rows.filter((account) => account.systemKey !== "receivables");

@@ -1,9 +1,9 @@
 import { db, type DbTransaction } from "@accly/db";
-import { authorize, SUPPLIER_REFUND_GRANT } from "@accly/auth/access";
+import { authorize, REFUND_GRANT } from "@accly/auth/access";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { audit } from "@accly/db/audit";
@@ -17,13 +17,14 @@ import {
   type PostDocumentInput,
 } from "../core/documents";
 import { settlementPaise } from "../core/allocations";
+import { documentRole } from "../core/document-roles";
 import { effectiveTdsSections } from "../core/tax-schedule";
 import { formatDecimal, sumPaise } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
-import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import {
   orderedPeriod,
   positiveMoney,
@@ -35,14 +36,16 @@ import {
 import {
   adjustmentLinesOf,
   allocationsOf,
+  assertRefundAmount,
   cancelDocument,
   settlementListRow,
   registerPage,
   settlementTotals,
   settlementListWhere,
-  orgSettings,
   settlementDetail,
 } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
+import { paiseSum } from "../lib/sql";
 
 // The receipt PDF prints only the document row.
 export type ReceiptDetail = typeof documents.$inferSelect;
@@ -109,6 +112,11 @@ const postInput = z.discriminatedUnion("settlementKind", [
 
 type ReceiptInput = z.output<typeof postInput>;
 
+/** A supplier refund: a Receipt that pays out the supplier's credits. */
+const isRefund = (input: ReceiptInput) =>
+  input.settlementKind === "against" &&
+  documentRole({ type: "receipt", exposureSide: input.exposureSide }).refund === true;
+
 /** Shared transaction path for a normal receipt and an invoice's counter sale. */
 export async function postReceipt(
   tx: DbTransaction,
@@ -117,7 +125,9 @@ export async function postReceipt(
   input: ReceiptInput,
 ) {
   const { settlementKind } = input;
-  const isRefund = settlementKind === "against" && input.exposureSide === "payable";
+  const refund = isRefund(input);
+  // The input's own discriminant narrows it to the fields a customer receipt carries.
+  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   const isCustomerAgainst = settlementKind === "against" && input.exposureSide === "receivable";
 
   const allocatedPaise =
@@ -125,12 +135,7 @@ export async function postReceipt(
       ? sumPaise(input.allocations.map((allocation) => allocation.amount))
       : 0n;
 
-  if (isRefund && allocatedPaise !== input.amount) {
-    throw badRequest(
-      "REFUND_AMOUNT_MISMATCH",
-      "Amount must match the total of the debit notes and advances you picked.",
-    );
-  }
+  if (refund) assertRefundAmount(input.amount, allocatedPaise);
 
   const adjustments = isCustomerAgainst ? (input.adjustments ?? []) : [];
 
@@ -208,7 +213,7 @@ export async function postReceipt(
     };
   } else if (settlementKind === "against") {
     affectsTax = false;
-    lineDescription = isRefund
+    lineDescription = refund
       ? (input.narration ?? "Supplier refund")
       : "Receipt against open items";
 
@@ -217,7 +222,7 @@ export async function postReceipt(
       amountPaise: amount,
     }));
 
-    posting = isRefund
+    posting = refund
       ? {
           paymentMethodId: input.paymentMethodId,
           type: "receipt",
@@ -344,11 +349,10 @@ export function auditReceiptPost(
 }
 
 export const receiptRouter = {
-  post: orgProcedure({ receipt: ["post"] }, postInput).handler(async ({ context, input }) => {
-    if (input.settlementKind === "against" && input.exposureSide === "payable") {
-      requirePermission(context.scope, SUPPLIER_REFUND_GRANT);
-    }
-
+  post: orgProcedure(
+    (input) => (isRefund(input) ? { receipt: ["post"], ...REFUND_GRANT } : { receipt: ["post"] }),
+    postInput,
+  ).handler(async ({ context, input }) => {
     const result = await db.transaction(async (tx) => {
       const settings = await orgSettings(context.scope.orgId, tx);
 
@@ -371,9 +375,8 @@ export const receiptRouter = {
       const { orgId } = context.scope;
 
       const detail = await settlementDetail(orgId, "receipt", input.receiptId);
-      const isRefund = detail.exposureSide === "payable";
-
-      const canReadRelated = !isRefund || authorize(context.scope.roles, SUPPLIER_REFUND_GRANT);
+      const { refund } = documentRole(detail);
+      const canReadRelated = !refund || authorize(context.scope.roles, REFUND_GRANT);
 
       const [allocations, adjustments, [credit]] = await Promise.all([
         canReadRelated
@@ -381,14 +384,14 @@ export const receiptRouter = {
               db,
               orgId,
               input.receiptId,
-              isRefund ? "target" : "source",
-              isRefund || authorize(context.scope.roles, { journal: ["read"] })
+              refund ? "target" : "source",
+              refund || authorize(context.scope.roles, { journal: ["read"] })
                 ? undefined
                 : ["invoice", "payment"],
             )
           : Promise.resolve([]),
         adjustmentLinesOf(orgId, input.receiptId),
-        !isRefund
+        !refund
           ? db
               .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
               .from(documents)
@@ -396,18 +399,28 @@ export const receiptRouter = {
           : Promise.resolve([]),
       ]);
 
-      const unappliedPaise =
-        detail.settlementKind === "direct" || isRefund
-          ? null
-          : detail.state === "posted"
-            ? credit!.unappliedPaise
-            : 0n;
+      let unappliedPaise: bigint | null = null;
+
+      if (detail.settlementKind !== "direct" && !refund) {
+        if (!credit) throw impossible(`receipt ${detail.id} has no settlement balance`);
+        // A cancelled receipt keeps its capacity row but settles nothing.
+        unappliedPaise = detail.state === "posted" ? credit.unappliedPaise : 0n;
+      }
+
+      // Received plus adjustments less what still waits as an advance: the balance also
+      // counts allocations this reader may not list (an operator's Journals). A refund or
+      // a cancelled receipt applies what its listed allocations still hold.
+      const appliedPaise =
+        detail.state === "posted" && unappliedPaise !== null
+          ? detail.totalPaise + sumPaise(adjustments.map((row) => row.amountPaise)) - unappliedPaise
+          : sumPaise(allocations.flatMap((row) => (row.reversed ? [] : [row.amountPaise])));
 
       return {
         ...detail,
         adjustments,
         allocations,
         unappliedPaise,
+        appliedPaise,
       };
     },
   ),
@@ -447,7 +460,7 @@ export const receiptRouter = {
     const rows = await db
       .select({
         partyId: documents.partyId,
-        receivedPaise: sql<bigint>`sum(${documents.totalPaise})::bigint`.mapWith(BigInt),
+        receivedPaise: paiseSum(documents.totalPaise),
       })
       .from(documents)
       .where(

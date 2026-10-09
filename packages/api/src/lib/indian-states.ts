@@ -41,3 +41,8 @@ export const INDIAN_STATES: Record<string, string> = {
   "97": "Other Territory",
   "99": "Centre Jurisdiction",
 };
+
+/** "Karnataka (29)": the name and code a place of supply prints as. */
+export function stateLabel(code: string): string {
+  return `${INDIAN_STATES[code] ?? code} (${code})`;
+}

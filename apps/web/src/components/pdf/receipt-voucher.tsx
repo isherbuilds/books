@@ -1,5 +1,7 @@
-import { formatMoney, isPositiveMoney, ZERO_MONEY } from "@accly/api/core/money";
+import { documentRole } from "@accly/api/core/document-roles";
+import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
+import { ADJUSTMENT_LABELS } from "@accly/api/lib/document-labels";
 import type { PrintSnapshot } from "@accly/db/schema/documents";
 
 import {
@@ -16,25 +18,12 @@ type PrintableReceipt = ReceiptDetail & { number: string; printSnapshot: PrintSn
 
 export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
   const { organization, party, paymentMethod, lines } = data.printSnapshot;
+  const { refund } = documentRole(data);
 
-  // The server's balance also covers allocations this reader may not list (Journals for
-  // an operator), so applied = received + adjustments − advance reconciles for everyone.
-  const appliedPaise =
-    data.state === "posted" && data.unappliedPaise !== null
-      ? data.adjustments.reduce(
-          (sum, adjustment) => sum + adjustment.amountPaise,
-          data.totalPaise,
-        ) - data.unappliedPaise
-      : data.allocations.reduce(
-          (sum, allocation) => sum + (allocation.reversed ? ZERO_MONEY : allocation.amountPaise),
-          ZERO_MONEY,
-        );
-
-  const adjustmentLabels = {
-    fee: "Fee",
-    writeOff: "Write-off",
-    tds: "TDS deducted by customer",
-  } as const;
+  // Adjustment lines always carry a kind; the selected column is typed nullable.
+  const adjustments = data.adjustments.flatMap(({ adjustmentKind, ...adjustment }) =>
+    adjustmentKind ? [{ ...adjustment, kind: adjustmentKind }] : [],
+  );
 
   return (
     <PrintedDocument
@@ -57,9 +46,7 @@ export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
       {data.allocations.length > 0 ? (
         <section style={{ marginTop: 22 }}>
           <SectionHeading>
-            {data.exposureSide === "payable"
-              ? "Debit notes and advances refunded"
-              : "Settled documents"}
+            {refund ? "Debit notes and advances refunded" : "Settled documents"}
           </SectionHeading>
           <div
             style={{
@@ -102,16 +89,16 @@ export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
         </section>
       ) : null}
 
-      {data.adjustments.length > 0 ? (
+      {adjustments.length > 0 ? (
         <section style={{ marginTop: 22 }}>
           <SectionHeading>Adjustments</SectionHeading>
-          {data.adjustments.map((adjustment) => (
+          {adjustments.map((adjustment) => (
             <DetailRow
               key={adjustment.id}
               label={
-                adjustment.adjustmentKind === "tds" && adjustment.sectionCode
-                  ? `TDS deducted by customer (${adjustment.sectionCode})`
-                  : adjustmentLabels[adjustment.adjustmentKind!]
+                adjustment.kind === "tds" && adjustment.sectionCode
+                  ? `${ADJUSTMENT_LABELS.tds} (${adjustment.sectionCode})`
+                  : ADJUSTMENT_LABELS[adjustment.kind]
               }
             >
               {formatMoney(adjustment.amountPaise)}
@@ -121,19 +108,19 @@ export function ReceiptVoucher({ data }: { data: PrintableReceipt }) {
       ) : null}
 
       <TotalPanel
-        label={data.exposureSide === "payable" ? "Amount refunded" : "Amount received"}
+        label={refund ? "Amount refunded" : "Amount received"}
         amountPaise={data.totalPaise}
       >
-        {isPositiveMoney(appliedPaise) ? (
-          <TotalRow label="Applied" amountPaise={appliedPaise} />
+        {isPositiveMoney(data.appliedPaise) ? (
+          <TotalRow label="Applied" amountPaise={data.appliedPaise} />
         ) : null}
-        {data.adjustments.map((adjustment) => (
+        {adjustments.map((adjustment) => (
           <TotalRow
             key={adjustment.id}
             label={
-              adjustment.adjustmentKind === "tds" && adjustment.sectionCode
+              adjustment.kind === "tds" && adjustment.sectionCode
                 ? `TDS (section ${adjustment.sectionCode})`
-                : adjustmentLabels[adjustment.adjustmentKind!]
+                : ADJUSTMENT_LABELS[adjustment.kind]
             }
             amountPaise={-adjustment.amountPaise}
           />

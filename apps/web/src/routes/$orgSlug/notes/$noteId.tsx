@@ -1,4 +1,5 @@
-import { SUPPLIER_REFUND_GRANT } from "@accly/auth/access";
+import { NOTE_TYPE_LABELS } from "@accly/api/lib/document-labels";
+import { REFUND_GRANT } from "@accly/auth/access";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
@@ -15,7 +16,7 @@ import {
 } from "@accly/ui/components/table";
 import { cn } from "@accly/ui/lib/utils";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -27,7 +28,7 @@ import { NoteSourceLink } from "@/components/note-columns";
 import { RecordSheet } from "@/components/record-sheet";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
 import { useCan } from "@/lib/membership";
-import { NOTE_TYPE_LABELS, noteDetailOptions } from "@/lib/notes";
+import { noteDetailOptions } from "@/lib/notes";
 import { useOrgDateTime, formatDate } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { handleWriteError, loadRouteQuery } from "@/lib/orpc-error";
@@ -47,19 +48,20 @@ function NoteSheetRoute() {
   const queryClient = useQueryClient();
   const { timeZone } = useOrgDateTime();
   const note = useSuspenseQuery(noteDetailOptions(orgSlug, noteId)).data;
+  const { partyId } = note;
   const [cancelOpen, setCancelOpen] = useState(false);
 
   // Cancelling a note reverses the allocations it sources, so none has to be reversed first.
   const canCancel = useCan(orgSlug, { note: ["cancel"] }) && note.state === "posted";
 
   const canRefund =
-    useCan(orgSlug, { payment: ["post"], note: ["read"] }) &&
+    useCan(orgSlug, { ...REFUND_GRANT, payment: ["post"] }) &&
     note.type === "creditNote" &&
     note.state === "posted" &&
     isPositiveMoney(note.unappliedPaise);
 
   const canRefundSupplier =
-    useCan(orgSlug, { ...SUPPLIER_REFUND_GRANT, receipt: ["post"] }) &&
+    useCan(orgSlug, { ...REFUND_GRANT, receipt: ["post"] }) &&
     note.type === "debitNote" &&
     note.state === "posted" &&
     isPositiveMoney(note.unappliedPaise);
@@ -180,9 +182,7 @@ function NoteSheetRoute() {
                     <TableCell className="text-right">{formatMoney(line.sgstPaise)}</TableCell>
                     <TableCell className="text-right">{formatMoney(line.igstPaise)}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatMoney(
-                        line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise,
-                      )}
+                      {formatMoney(line.lineTotalPaise)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -194,11 +194,7 @@ function NoteSheetRoute() {
               <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
                 <div className="flex justify-between gap-3">
                   <p className="min-w-0 break-words font-medium">{line.description}</p>
-                  <span className="shrink-0 tabular-nums">
-                    {formatMoney(
-                      line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise,
-                    )}
-                  </span>
+                  <span className="shrink-0 tabular-nums">{formatMoney(line.lineTotalPaise)}</span>
                 </div>
                 <p className="text-muted-foreground">{line.hsnSac ?? "No HSN/SAC"}</p>
                 <p className="tabular-nums text-muted-foreground">
@@ -215,9 +211,7 @@ function NoteSheetRoute() {
           {note.type === "debitNote" && isPositiveMoney(note.tdsReversedPaise) ? (
             <>
               <DetailRow label="TDS reversed">{formatMoney(note.tdsReversedPaise)}</DetailRow>
-              <DetailRow label="Supplier credit">
-                {formatMoney(note.totalPaise - note.tdsReversedPaise)}
-              </DetailRow>
+              <DetailRow label="Supplier credit">{formatMoney(note.netPaise)}</DetailRow>
             </>
           ) : null}
         </dl>
@@ -226,16 +220,18 @@ function NoteSheetRoute() {
         <SheetFooter>
           {note.number !== null ? (
             // The browser's PDF viewer prints and saves, so one link covers both.
-            <a
-              href={`/api/${orgSlug}/notes/${note.id}/pdf`}
+            <Link
+              to="/api/$orgSlug/notes/$noteId/pdf"
+              params={{ orgSlug, noteId: note.id }}
+              reloadDocument
               target="_blank"
               rel="noreferrer"
               className={buttonVariants({ variant: "outline" })}
             >
               PDF
-            </a>
+            </Link>
           ) : null}
-          {canRefund && note.partyId ? (
+          {canRefund && partyId ? (
             <Button
               type="button"
               variant="outline"
@@ -243,14 +239,14 @@ function NoteSheetRoute() {
                 void navigate({
                   to: "/$orgSlug/payments",
                   params: { orgSlug },
-                  search: { create: true, payeeId: note.partyId!, payAgainst: "receivable" },
+                  search: { create: true, payeeId: partyId, payAgainst: "receivable" },
                 })
               }
             >
               Refund
             </Button>
           ) : null}
-          {canRefundSupplier && note.partyId ? (
+          {canRefundSupplier && partyId ? (
             <Button
               type="button"
               variant="outline"
@@ -258,7 +254,7 @@ function NoteSheetRoute() {
                 void navigate({
                   to: "/$orgSlug/receipts",
                   params: { orgSlug },
-                  search: { create: true, payerId: note.partyId!, refund: true },
+                  search: { create: true, payerId: partyId, refund: true },
                 })
               }
             >

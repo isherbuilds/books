@@ -45,7 +45,11 @@ export async function pdfResponse(
     if (!clientError) console.error(error);
 
     const message = clientError ? error.message : `Could not render the ${noun}`;
-    const safeMessage = message.replace(/[&<>"']/g, (character) => HTML_ENTITIES[character]!);
+
+    const safeMessage = message.replace(
+      /[&<>"']/g,
+      (character) => HTML_ENTITIES[character] ?? character,
+    );
 
     return new Response(
       `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF unavailable</title><main style="font:16px system-ui,sans-serif;max-width:40rem;margin:10vh auto;padding:1rem"><h1>PDF unavailable</h1><p>${safeMessage}</p></main></html>`,

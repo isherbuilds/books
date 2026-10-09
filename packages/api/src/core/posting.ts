@@ -200,6 +200,7 @@ export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): Jo
     },
   ];
 
+  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "payable") {
     if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
       throw new Error("Supplier refund amount must equal its allocated credits");
@@ -324,6 +325,7 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
     throw new Error("Payment TDS must be non-negative and less than the payment amount");
   }
 
+  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "receivable") {
     if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
       throw new Error("Refund amount must equal its allocated credits");
@@ -333,6 +335,7 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   const tdsPaise = document.tds?.amountPaise ?? 0n;
   const lines: JournalLineInput[] = [];
 
+  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "receivable") {
     lines.push({
       accountId: systemAccount(byKey, "receivables"),
@@ -373,6 +376,7 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   }
 
   const fee =
+    // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
     document.settlementKind === "against" && document.exposureSide === "payable"
       ? document.fee
       : null;
@@ -393,6 +397,7 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
     });
   }
 
+  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "payable") {
     for (const writeOff of document.writeOffs) {
       lines.push({
@@ -647,7 +652,11 @@ export async function recordEntry(
       .from(accounts)
       .where(and(eq(accounts.orgId, scope.orgId), isNotNull(accounts.systemKey)));
 
-    const byKey: SystemAccounts = new Map(systemRows.map((row) => [row.systemKey!, row.id]));
+    const byKey: SystemAccounts = new Map(
+      systemRows.flatMap((row): [string, string][] =>
+        row.systemKey === null ? [] : [[row.systemKey, row.id]],
+      ),
+    );
 
     switch (posting.type) {
       case "receipt":
@@ -746,8 +755,10 @@ export async function reverseEntries(
 
   for (const reversedEntryId of entryIds) {
     const stored = byEntry.get(reversedEntryId);
+    const [first] = stored ?? [];
 
-    if (!stored) throw new Error(`Journal entry ${reversedEntryId} has no lines to reverse`);
+    if (!stored || !first)
+      throw new Error(`Journal entry ${reversedEntryId} has no lines to reverse`);
 
     const lines = reverseLines(stored);
     assertBalanced(lines);
@@ -757,8 +768,8 @@ export async function reverseEntries(
     entryRows.push({
       id: entryId,
       orgId: scope.orgId,
-      documentType: stored[0]!.documentType,
-      documentId: stored[0]!.documentId,
+      documentType: first.documentType,
+      documentId: first.documentId,
       kind: "reverse",
       reversesEntryId: reversedEntryId,
       entryDate: meta.entryDate,

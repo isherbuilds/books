@@ -2,25 +2,20 @@ import { db, type DbTransaction } from "@accly/db";
 import { allocations } from "@accly/db/schema/allocations";
 import { accounts } from "@accly/db/schema/accounts";
 import { documents } from "@accly/db/schema/documents";
-import { journalEntries } from "@accly/db/schema/journal-entries";
+import { journalEntries, type EntryDocumentType } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
-import { and, asc, eq, gte, inArray, lt, lte, sql, type AnyColumn } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "./conflict";
-
-export type LedgerCursor = { entryDate: string; id: string };
+import { afterCursor } from "./pagination";
+import { paiseSum } from "./sql";
 
 const sourceDocument = alias(documents, "report_source_document");
 
 const targetDocument = alias(documents, "report_target_document");
-
-// A row comparison, not `a > x OR (a = x AND b > y)`: PostgreSQL seeks the
-// (…, entry_date, id) index to the cursor instead of filtering every earlier row.
-export const afterCursor = (date: AnyColumn, id: AnyColumn, cursor: LedgerCursor) =>
-  sql`(${date}, ${id}) > (${cursor.entryDate}::date, ${cursor.id})`;
 
 export type ReportHeader = {
   organization: { legalName: string; gstin: string | null };
@@ -51,8 +46,8 @@ export async function accountActivity(
   return executor
     .select({
       accountId: journalLines.accountId,
-      debitPaise: sql<bigint>`sum(${journalLines.debit})::bigint`.mapWith(BigInt),
-      creditPaise: sql<bigint>`sum(${journalLines.credit})::bigint`.mapWith(BigInt),
+      debitPaise: paiseSum(journalLines.debit),
+      creditPaise: paiseSum(journalLines.credit),
     })
     .from(journalLines)
     .where(
@@ -73,16 +68,16 @@ export async function accountActivitySince(
   return executor
     .select({
       accountId: journalLines.accountId,
-      debitPaise: sql<bigint>`sum(${journalLines.debit})::bigint`.mapWith(BigInt),
-      creditPaise: sql<bigint>`sum(${journalLines.credit})::bigint`.mapWith(BigInt),
-      sinceDebitPaise:
-        sql<bigint>`coalesce(sum(${journalLines.debit}) filter (where ${journalLines.entryDate} >= ${range.since}), 0)::bigint`.mapWith(
-          BigInt,
-        ),
-      sinceCreditPaise:
-        sql<bigint>`coalesce(sum(${journalLines.credit}) filter (where ${journalLines.entryDate} >= ${range.since}), 0)::bigint`.mapWith(
-          BigInt,
-        ),
+      debitPaise: paiseSum(journalLines.debit),
+      creditPaise: paiseSum(journalLines.credit),
+      sinceDebitPaise: paiseSum(
+        journalLines.debit,
+        sql`${journalLines.entryDate} >= ${range.since}`,
+      ),
+      sinceCreditPaise: paiseSum(
+        journalLines.credit,
+        sql`${journalLines.entryDate} >= ${range.since}`,
+      ),
     })
     .from(journalLines)
     .where(and(eq(journalLines.orgId, orgId), lte(journalLines.entryDate, range.through)))
@@ -256,7 +251,7 @@ export function accountLedgerProbe(
 /** Probe the day book's line bound without selecting or materializing report detail. */
 export function dayBookProbe(
   orgId: string,
-  input: { from: string; to: string; documentType?: string },
+  input: { from: string; to: string; documentType?: EntryDocumentType },
   executor: typeof db | DbTransaction = db,
 ) {
   return executor
@@ -279,7 +274,7 @@ export function dayBookProbe(
 
 export async function dayBookLines(
   orgId: string,
-  input: { from: string; to: string; documentType?: string; entryIds?: string[] },
+  input: { from: string; to: string; documentType?: EntryDocumentType; entryIds?: string[] },
   limit: number | undefined,
   executor: typeof db | DbTransaction = db,
 ) {

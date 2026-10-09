@@ -10,3 +10,7 @@ export const itemListOptions = (orgSlug: string) => ({
   ...orpc.item.list.queryOptions({ input: { orgSlug } }),
   staleTime: 5 * 60_000,
 });
+
+// Tax rates in force on a date, or today without one.
+export const taxRatesOptions = (orgSlug: string, date?: string) =>
+  orpc.item.taxRates.queryOptions({ input: { orgSlug, date } });

@@ -14,7 +14,7 @@ import { createOrganization, createOrganizationInput } from "@accly/api/core/org
 import { normalizedName } from "@accly/api/lib/normalized-name";
 import { businessDate } from "@accly/api/lib/business-date";
 import type { Scope } from "@accly/api/lib/procedures/factory";
-import { orgSettings } from "@accly/api/lib/settlements";
+import { orgSettings } from "@accly/api/lib/org-settings";
 import { auth } from "@accly/auth";
 import type { RoleKey } from "@accly/auth/access";
 import { createUserWithPassword } from "@accly/auth/manual-user";

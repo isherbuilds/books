@@ -1,3 +1,4 @@
+import { NOTE_TYPE_LABELS } from "@accly/api/lib/document-labels";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
@@ -6,7 +7,7 @@ import { NoteForm } from "@/components/note-form";
 import { ErrorNote, PageBody, PageHeader } from "@/components/page";
 import { billDetailOptions } from "@/lib/bills";
 import { invoiceDetailOptions } from "@/lib/invoices";
-import { NOTE_TYPE_LABELS, type NoteSource } from "@/lib/notes";
+import type { NoteSource } from "@/lib/notes";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { loadRouteQuery } from "@/lib/orpc-error";
 import { requireOrgPermission } from "@/lib/route-permission";

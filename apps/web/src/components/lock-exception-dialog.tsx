@@ -1,4 +1,4 @@
-import { reason } from "@accly/api/lib/schemas";
+import { LOCK_EXCEPTION_DAYS, reason } from "@accly/api/lib/schemas";
 import { POSTING_GRANTS, authorize, parseRoles } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -23,7 +23,7 @@ import { Textarea } from "@accly/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientOnly } from "@tanstack/react-router";
-import { useWatch, type FieldPath } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -31,20 +31,18 @@ import { LinkField } from "@/components/link-field";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
-
-const DURATIONS = [1, 7, 30] as const;
+import { applyOrpcFieldError, handleWriteError, type ServerFields } from "@/lib/orpc-error";
 
 type ExceptionFormValues = {
   userId: string;
-  days: (typeof DURATIONS)[number];
+  days: (typeof LOCK_EXCEPTION_DAYS)[number];
   reason: string;
 };
 
 const SERVER_FIELDS = {
   MEMBER_INVALID: "userId",
   EXCEPTION_ACTIVE: "userId",
-} satisfies Record<string, FieldPath<ExceptionFormValues>>;
+} satisfies ServerFields<ExceptionFormValues>;
 
 export function LockExceptionDialog({
   orgSlug,
@@ -58,7 +56,7 @@ export function LockExceptionDialog({
   const form = useZodForm(
     z.object({
       userId: z.string().min(1, "Choose a member"),
-      days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
+      days: z.literal(LOCK_EXCEPTION_DAYS),
       reason,
     }),
     { defaultValues: { userId: "", days: 7, reason: "" } },
@@ -155,7 +153,9 @@ export function LockExceptionDialog({
                           <ToggleGroup
                             value={[String(field.value)]}
                             onValueChange={(next) => {
-                              const days = DURATIONS.find((option) => String(option) === next[0]);
+                              const days = LOCK_EXCEPTION_DAYS.find(
+                                (option) => String(option) === next[0],
+                              );
 
                               if (days) field.onChange(days);
                             }}
@@ -163,7 +163,7 @@ export function LockExceptionDialog({
                             variant="outline"
                             aria-label="For how long"
                           >
-                            {DURATIONS.map((days) => (
+                            {LOCK_EXCEPTION_DAYS.map((days) => (
                               <ToggleGroupItem key={days} value={String(days)}>
                                 {days === 1 ? "1 day" : `${days} days`}
                               </ToggleGroupItem>

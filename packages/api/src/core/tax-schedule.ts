@@ -1,4 +1,4 @@
-import { db, type DbTransaction } from "@accly/db";
+import type { db, DbTransaction } from "@accly/db";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, eq, gte, inArray, isNull, lte, or, type Column } from "drizzle-orm";

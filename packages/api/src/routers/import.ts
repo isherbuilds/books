@@ -11,7 +11,7 @@ import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { importTemplate, readImportWorkbook } from "../lib/import-workbook";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { orgSettings } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
 
 export const importRouter = {
   template: orgProcedure(IMPORT_GRANT, orgInput).handler(() => importTemplate()),

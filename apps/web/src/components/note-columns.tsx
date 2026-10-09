@@ -1,3 +1,4 @@
+import { NOTE_TYPE_LABELS } from "@accly/api/lib/document-labels";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { Badge } from "@accly/ui/components/badge";
@@ -7,7 +8,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 
 import { DATA_TABLE_FEATURES, TextOrDash } from "@/components/data-table/data-table";
 import { struck } from "@/components/document-columns";
-import { NOTE_TYPE_LABELS, type NoteListRow } from "@/lib/notes";
+import type { NoteListRow } from "@/lib/notes";
 
 /** A note's source: the invoice a credit note reduces, or the bill a debit note does. */
 export function NoteSourceLink({
@@ -56,16 +57,19 @@ export const NOTE_COLUMNS = [
   column.accessor("againstNumber", {
     header: "Against",
     meta: { className: "w-36" },
-    cell: ({ row: { original: note }, table }) =>
-      note.againstDocumentId ? (
+    cell: ({ row: { original: note }, table }) => {
+      const orgSlug = table.options.meta?.orgSlug;
+
+      return note.againstDocumentId && orgSlug ? (
         <NoteSourceLink
-          orgSlug={table.options.meta!.orgSlug}
+          orgSlug={orgSlug}
           noteType={note.type}
           source={{ id: note.againstDocumentId, number: note.againstNumber }}
         />
       ) : (
         "—"
-      ),
+      );
+    },
   }),
   column.accessor("partyName", {
     header: "Party",

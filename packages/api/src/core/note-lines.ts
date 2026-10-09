@@ -71,14 +71,14 @@ export function computeNoteLines(args: {
   for (const [index, line] of args.lines.entries()) {
     const { source, prior, amountPaise } = line;
 
-    const tax =
-      partial[partialIndex]?.index === index
-        ? calculated.lines[partialIndex++]!
-        : {
-            cgstPaise: source.cgstPaise - prior.cgstPaise,
-            sgstPaise: source.sgstPaise - prior.sgstPaise,
-            igstPaise: source.igstPaise - prior.igstPaise,
-          };
+    const shared =
+      partial[partialIndex]?.index === index ? calculated.lines[partialIndex++] : undefined;
+
+    const tax = shared ?? {
+      cgstPaise: source.cgstPaise - prior.cgstPaise,
+      sgstPaise: source.sgstPaise - prior.sgstPaise,
+      igstPaise: source.igstPaise - prior.igstPaise,
+    };
 
     if (
       tax.cgstPaise < 0n ||

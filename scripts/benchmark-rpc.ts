@@ -129,7 +129,7 @@ const org = { orgSlug: ORG_SLUG };
 // A register page: at most `limit` rows, newest first, and a page flag. Registers order
 // by (document date, id); party transactions keep creation (id) order.
 function page(
-  result: { rows: { id: string; documentDate?: string }[]; hasMore: boolean },
+  result: { rows: { id: string; documentDate?: string }[]; nextCursor: unknown },
   expect: { min?: number; max?: number; includes?: string; order?: "date" | "id" } = {},
 ): string {
   const { rows } = result;
@@ -151,7 +151,7 @@ function page(
     rows.length <= (expect.max ?? 25),
     `expected at most ${expect.max} rows, got ${rows.length}`,
   );
-  check(!result.hasMore || rows.length === 25, "hasMore on a short page");
+  check(result.nextCursor === null || rows.length === 25, "a next page after a short page");
 
   if (expect.includes) {
     check(
@@ -160,7 +160,7 @@ function page(
     );
   }
 
-  return `${rows.length} rows${result.hasMore ? ", more" : ""}`;
+  return `${rows.length} rows${result.nextCursor === null ? "" : ", more"}`;
 }
 
 // Every row of a search shows the term in a column it returns, unless it matched the
@@ -348,19 +348,19 @@ const reads: Scenario[] = [
     name: "member_list",
     route: "settings/members",
     kind: "read",
-    run: async () => `${(await client.member.list(org)).members.length} members`,
+    run: async () => `${(await client.member.list(org)).rows.length} members`,
   },
   {
     name: "audit_list",
     route: "settings/audit",
     kind: "read",
-    run: async () => `${(await client.audit.list(org)).items.length} rows`,
+    run: async () => `${(await client.audit.list(org)).rows.length} rows`,
   },
   {
     name: "file_list",
     route: "settings/files",
     kind: "read",
-    run: async () => `${(await client.file.list(org)).items.length} files`,
+    run: async () => `${(await client.file.list(org)).rows.length} files`,
   },
 
   // Masters.
@@ -553,7 +553,7 @@ type RegisterList = (input: {
   partyId?: string;
 }) => Promise<{
   rows: { id: string; number: string | null; documentDate: string; partyName: string | null }[];
-  hasMore: boolean;
+  nextCursor: { documentDate: string; id: string } | null;
 }>;
 
 const registers: { name: string; route: string; list: RegisterList }[] = [
@@ -595,8 +595,7 @@ for (const { list, ...register } of registers) {
       route: register.route,
       kind: "read",
       prepare: async () => {
-        const last = (await list(org)).rows.at(-1);
-        const cursor = last && { documentDate: last.documentDate, id: last.id };
+        const cursor = (await list(org)).nextCursor ?? undefined;
 
         return async () => page(await list({ ...org, cursor }));
       },

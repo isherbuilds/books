@@ -13,6 +13,7 @@ export function authErrorMessage(error: { status: number; message?: string }, fa
 export const authClient = createAuthClient({
   // better-auth derives its route-matching base from this URL's path, so the
   // public auth path must equal the server-side mount (/api/auth everywhere)
+  // oxlint-disable-next-line accly/no-api-url-literal -- Better Auth's own base URL on the API origin, not an app route
   baseURL: new URL("/api/auth", env.VITE_SERVER_URL).toString(),
   plugins: [
     invitationClaimClient(),

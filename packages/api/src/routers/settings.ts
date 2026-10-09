@@ -7,7 +7,7 @@ import { z } from "zod";
 import { audit } from "@accly/db/audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { orgSettings } from "../lib/settlements";
+import { orgSettings } from "../lib/org-settings";
 import {
   deriveOrganizationIdentity,
   documentPrefix,

@@ -133,7 +133,7 @@ export function DataTable<T extends RowData>({
   const tableRows = useVirtualRows<HTMLTableSectionElement>({
     count: rows.length,
     estimateSize: 40,
-    getItemKey: (index) => rows[index]!.id,
+    getItemKey: (index) => rows[index]?.id ?? String(index),
     enabled: desktop !== false,
     nextPage: desktop === true ? nextPage : undefined,
   });
@@ -141,7 +141,7 @@ export function DataTable<T extends RowData>({
   const cards = useVirtualRows<HTMLUListElement, HTMLLIElement>({
     count: rows.length,
     estimateSize: 72,
-    getItemKey: (index) => rows[index]!.id,
+    getItemKey: (index) => rows[index]?.id ?? String(index),
     enabled: desktop !== true,
     nextPage: desktop === false ? nextPage : undefined,
   });
@@ -246,7 +246,9 @@ export function DataTable<T extends RowData>({
                 </tr>
               ) : null}
               {tableRows.virtualRows.map((item) => {
-                const row = rows[item.index]!;
+                const row = rows[item.index];
+
+                if (!row) return null;
 
                 return (
                   <DataTableRow
@@ -279,7 +281,9 @@ export function DataTable<T extends RowData>({
             <li aria-hidden="true" style={{ height: cards.paddingTop }} />
           ) : null}
           {cards.virtualRows.map((item) => {
-            const row = rows[item.index]!;
+            const row = rows[item.index];
+
+            if (!row) return null;
 
             return (
               <li
