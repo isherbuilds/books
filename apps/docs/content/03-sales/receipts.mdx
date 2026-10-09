@@ -23,24 +23,25 @@ The filter icon in the search box offers **Date**, **Payment method**, **State**
 (Posted or Cancelled) and **Settlement** (Advance, Against open items or Direct). The
 **⋯** at the end of a row offers **Print** and **Copy number**.
 
-Below the filters, **Documents** and **Total** count and sum every matching receipt,
-not just the receipts currently loaded. **By payment method** lists the name, count
-and amount for each method; choose the same day for **From** and **To** to check
-that day's receipts by cash, bank transfer or other methods. The method amounts
-add up to **Total**. Cancelled receipts remain in these figures when **State**
-is unfiltered; choose **Posted** for the receipts still in your books.
+One line under the filters counts and adds up every matching receipt, not just the
+receipts on screen, for example "12 receipts · ₹4,500.00 · Cash ₹500.00 · UPI
+₹4,000.00". It lists each payment method only when there is more than one. Choose
+the same day for **From** and **To** to check that day's receipts by cash, bank
+transfer or other methods. The line counts posted receipts only, unless you filter
+**State** to **Cancelled**. It refreshes when you post or cancel a receipt, or when
+you come back to the tab.
 
 ## Choose the settlement kind
 
 You choose what the money is for, the [settlement kind](/glossary#settlement-kind).
 Accly Books never guesses.
 
-| Kind                   | Use it when                                                                        | What it settles                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Advance**            | The customer pays before you invoice, for example against a purchase order         | Nothing yet. The money waits as the customer's advance until you [apply it](/sales/apply-credit) to an invoice |
-| **Against open items** | The customer pays invoices you have posted                                         | The invoices you choose in **Open items**. Any amount you do not allocate is kept as an advance                |
-| **Direct**             | Income with no invoice and no customer balance, such as exempt (GST-free) interest | An income account. No party balance changes                                                                    |
-| **Refund supplier**    | The supplier pays back an unapplied debit note or payment advance                  | The supplier credits you choose in **Unapplied debit notes and payment advances**, allocated in full           |
+| Kind                         | Use it when                                                                        | What it settles                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Advance**                  | The customer pays before you invoice, for example against a purchase order         | Nothing yet. The money waits as the customer's advance until you [apply it](/sales/apply-credit) to an invoice |
+| **Against open items**       | The customer pays invoices you have posted                                         | The invoices you choose in **Open items**. Any amount you do not allocate is kept as an advance                |
+| **Direct**                   | Income with no invoice and no customer balance, such as exempt (GST-free) interest | An income account. No party balance changes                                                                    |
+| **Money back from supplier** | The supplier pays back an unapplied debit note or payment advance                  | The rows you choose in **What this supplier owes you** (**Debit note** or **Advance paid**), allocated in full |
 
 ## Record an advance
 
@@ -176,7 +177,7 @@ Components has **Cash** (Cash in Hand) and **Bank transfer**, **UPI** and **Card
 
 Click a receipt to open its record: amount, date, method, settlement kind, reference,
 **Unapplied** (money not yet matched to an invoice), any **Adjustments**, and the
-**Allocations** it made. Click **PDF** to open the receipt PDF for printing or saving.
+**Allocations** it made. A TDS adjustment shows as **TDS deducted by customer**. Click **PDF** to open the receipt PDF for printing or saving.
 
 <Frame caption="RCT26-27/8: ₹40,000 with ₹62 customer TDS, matched to INV26-27/7.">
   ![Receipt record with adjustments and allocations](./images/receipts-record-sheet.webp)
@@ -185,17 +186,18 @@ Click a receipt to open its record: amount, date, method, settlement kind, refer
 The PDF is a receipt voucher (the printed proof of payment) with your organization's
 details, date, party, method, reference, amount in figures and words, and narration.
 It lists each document settled by number, document date and amount applied, plus
-any fees, write-offs and TDS (with its section). The applied amounts, less
+any fees, write-offs and TDS, for example "TDS deducted by customer (194J)". The applied amounts, less
 adjustments, plus any remaining advance, reconcile to the amount received. Supplier
 refund PDFs list the debit notes and payment advances refunded.
 
 ## Refund a supplier
 
 Open an unapplied [debit note](/purchases/debit-notes#when-the-supplier-refunds-you)
-and click **Refund**, or create a receipt and choose **Refund supplier**. Choose
-the supplier, enter the amount and payment method, and allocate the full amount
-to the supplier's debit notes or payment advances. The refund must equal its
-allocations exactly. Only Owners and Accountants, who can read the related notes
+and click **Refund**, or create a receipt and choose **Money back from supplier**.
+Choose the supplier, and enter the amount and payment method. The table **What this
+supplier owes you** lists each **Debit note** or **Advance paid**, with the amount
+**Owed to you**. Allocate the full amount to these rows. The amount must equal the
+total you pick exactly. Only Owners and Accountants, who can read the related notes
 and bills, can use this settlement kind.
 
 ## What happens in the books
@@ -258,7 +260,7 @@ tax-locked for a receipt that belongs in a GST register.
 
 | Message                                                                                    | What to do                                                                                                                     |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Choose a party                                                                             | Advance, Against open items and Refund supplier need a party                                                                   |
+| Choose a party                                                                             | Advance, Against open items and Money back from supplier need a party                                                          |
 | Choose a payment method                                                                    | Pick how the money came in                                                                                                     |
 | Choose what the advance is for                                                             | Pick Goods or Exempt supply                                                                                                    |
 | Choose what the remaining advance is for                                                   | Part of the receipt is not allocated. Pick what the advance is for, or allocate it all                                         |
@@ -267,7 +269,7 @@ tax-locked for a receipt that belongs in a GST register.
 | Allocated amount cannot exceed the receipt and adjustments                                 | Lower the allocations                                                                                                          |
 | Allocate the full receipt and adjustments                                                  | With adjustments, allocate the whole amount                                                                                    |
 | Choose an expense account                                                                  | Fee and write-off adjustments need an account                                                                                  |
-| Refund amount must equal the allocated debit notes and payment advances                    | Allocate the whole supplier refund, without an advance remainder                                                               |
+| Amount must match the total you picked below                                               | Allocate the whole supplier refund, without an advance remainder                                                               |
 | Taxable income must be invoiced before it is received.                                     | Use an invoice, or choose an exempt or non-GST income account                                                                  |
 | Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Use a date after the lock, or ask your CA for an [exception](/glossary#lock-exception) (see [Period locks](/accounting/locks)) |
 

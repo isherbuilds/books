@@ -169,12 +169,12 @@ Books does not warn about the same reference. The accountant cancels the duplica
 
 Accly Books keeps the receipt and posts a [reversal](/glossary#reversal), an equal and opposite entry, on the receipt's original date (today in this example):
 
-| Entry                      | Account           | Debit      | Credit     |
-| -------------------------- | ----------------- | ---------- | ---------- |
-| RCT26-27/51118             | 1001 Cash in Hand | ₹18,500.00 |            |
-|                            | 5010 Fees         |            | ₹18,500.00 |
-| Reversal of RCT26-27/51118 | 5010 Fees         | ₹18,500.00 |            |
-|                            | 1001 Cash in Hand |            | ₹18,500.00 |
+| Entry                    | Account           | Debit      | Credit     |
+| ------------------------ | ----------------- | ---------- | ---------- |
+| RCT26-27/51118           | 1001 Cash in Hand | ₹18,500.00 |            |
+|                          | 5010 Fees         |            | ₹18,500.00 |
+| Cancelled RCT26-27/51118 | 5010 Fees         | ₹18,500.00 |            |
+|                          | 1001 Cash in Hand |            | ₹18,500.00 |
 
 The receipt panel shows "Cancelled on 4 Oct 2026" but not the reason. The reason is in
 the [audit log](/administration/audit-log), the record of sensitive actions ([audit log](/glossary#audit-log)).

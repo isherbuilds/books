@@ -27,10 +27,6 @@ organization starts its year in another month). It lists **Number**, **Against**
 note is set against bills, **Unapplied** when some [credit](/glossary#credit) is left to use, or **Cancelled**.
 Search by number, [party](/glossary#party) or reason.
 
-The **Documents**, **Total** and **Unapplied** line covers all matching debit
-notes, not just the loaded page. Cancelled notes still count toward the total
-when shown, but contribute zero to the unapplied amount.
-
 There is no **New** button here: you raise a debit note from the bill it reduces.
 
 <Frame caption="Debit notes for this year. DN26-27/3 still has ₹1,180.00 unapplied.">
@@ -54,10 +50,11 @@ states).
     note. It cannot be earlier than the bill date.
   </Step>
   <Step title="Enter the amount for each line">
-    **Source lines** lists the bill's lines with their **Remaining taxable** value, GST **Rate** and
-    **Tax**. In **Amount**, type the taxable value to take off the line, before GST. **Full** enters
-    only the remainder after earlier posted debit notes. Leave a line empty to leave it unchanged.
-    The totals preview shows taxable value, GST, round-off and the note total.
+    **Source lines** lists the bill's lines with **Left to return** (the taxable value not yet
+    returned), GST **Rate** and **Tax**. In **Amount**, type the taxable value to take off the line,
+    before GST. **Full** enters only the remainder after earlier posted debit notes. Leave a line
+    empty to leave it unchanged. The totals preview shows taxable value, GST, round-off and the note
+    total.
   </Step>
   <Step title="Add the supplier's reference and reason">
     If the supplier sent a credit note, enter its number in **Supplier credit note number**
@@ -79,8 +76,9 @@ The preview calculates tax from the bill line's rate: here 18% IGST of ₹10,400
 latest source balance.
 
 If the bill deducted TDS, the form also estimates the TDS to reverse from the
-selected taxable value. The amount you can apply against the supplier's bill
-is the note total **less** that TDS reversal; GST is not part of the TDS base.
+selected taxable value. It shows a line such as "Lowers what you owe this supplier
+by ₹Y: the note's ₹Z less ₹X TDS you had kept back." GST is not part of the TDS
+base.
 
 For a price reduction, enter the reduction in taxable value on each line it applies to.
 For a purchase return, enter the value of the returned quantity.
@@ -139,14 +137,14 @@ debit notes appear in the same list. Or request a refund from the supplier.
 ## When the supplier refunds you
 
 Open a posted debit note with an **Unapplied** balance and click **Refund**. A
-**New receipt** form opens with the supplier selected and **Refund supplier** chosen.
+**New receipt** form opens with the supplier selected and **Money back from supplier** chosen.
 Enter the amount received, choose the payment method, and allocate the full amount
-to the supplier's unapplied debit notes or payment advances. Click **Post**. The
+to the rows in **What this supplier owes you**. Click **Post**. The
 receipt debits the bank or cash account and credits Payables; it does not record
 income again. The note's unapplied balance falls by the allocation. Cancelling the
 receipt restores the unapplied credit.
 
-You can also start from **Sales → Receipts** and select **Refund supplier**.
+You can also start from **Sales → Receipts** and select **Money back from supplier**.
 
 ## Limits
 

@@ -106,11 +106,11 @@ in the same organization, and the report opens with the same period.
 | Party ledger (party statement) | Yes, up to 1,00,000 lines | Yes, up to 5,000 lines |
 
 **Download XLSX** saves a workbook. Its first four rows hold your legal name, the report
-title, the period and "Generated … · period not closed". Amounts are numbers, so you
+title, the period and the time it was generated. Amounts are numbers, so you
 can add and filter them in Excel.
 
-The workbook name includes its report and readable dates, for example
-`day-book-01-Apr-2026-to-30-Jun-2026.xlsx`. Document types and reversal kinds
+The workbook name includes its report and its dates in year-month-day form, for example
+`day-book-2026-04-01-to-2026-06-30.xlsx`. Document types and reversal kinds
 appear as labels rather than internal codes.
 
 **Download PDF** opens the PDF in a new browser tab. Use the viewer's download or print
@@ -120,15 +120,6 @@ When a period holds more lines than the limit, the download stops with "This rep
 exceeds 1,00,000 lines; choose a shorter period." (XLSX) or opens a small error page
 with "This report exceeds 5,000 lines; choose a shorter period." (PDF). Nothing is
 cut off. Choose a shorter period, for example one month, and download each part.
-
-## "Period not closed"
-
-Every accounting report header shows the organization's legal name, optional GSTIN,
-the chosen period or as-of date, its generation time and **Period not closed**.
-Accly Books does not close a financial year with a closing entry. Instead, the balance
-sheet works out the profit of the current year and of earlier years each time you
-open it. A [lock](/glossary#lock) ([Locks](/accounting/locks)) stops new postings in
-a period, but the header still says "Period not closed".
 
 ## Who can see reports
 

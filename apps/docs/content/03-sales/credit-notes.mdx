@@ -23,10 +23,6 @@ with **Number**, **Type**, **Against** (the invoice), **Party**, **Date**, **Tot
 **Unapplied** and **Status**. **Unapplied** is the part of the note not yet used
 against an invoice or refunded, its unapplied [credit](/glossary#credit).
 
-The **Documents**, **Total** and **Unapplied** line covers every matching note,
-not only the loaded page. Cancelled notes count toward the total when shown,
-but contribute nothing to the unapplied amount.
-
 You do not start a credit note from this register. Start it from the invoice it
 corrects.
 
@@ -44,9 +40,9 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
   </Step>
   <Step title="Enter the taxable amount per line">
     **Source lines** lists each line of the invoice with its [HSN or SAC](/glossary#hsn-sac) code
-    (the GST classification code), taxable value, GST rate and tax. In **Amount**, type the taxable
-    value to credit on each line you are reducing, here **4410** on the valve line. Click **Full**
-    to credit a whole line. Leave the other lines empty.
+    (the GST classification code), **Left to return** (the taxable value not yet credited), GST rate
+    and tax. In **Amount**, type the taxable value to credit on each line you are reducing, here
+    **4410** on the valve line. Click **Full** to credit a whole line. Leave the other lines empty.
   </Step>
   <Step title="Give the reason">
     Type the **Reason**, for example the customer's return note number and why the goods came back.
@@ -71,7 +67,7 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
   [CGST/SGST or IGST](/glossary#cgst-sgst-igst)
   split. You cannot change them.
 - The form previews taxable value, GST, round-off and total before posting.
-  The source line's **Remaining taxable** excludes earlier posted credit notes;
+  The source line's **Left to return** excludes earlier posted credit notes;
   **Full** fills only that remainder. A cancelled note releases its amount again.
   If another note posts while this form is open, refresh the source and try again.
 - Crediting a whole line returns exactly the tax that line still carries, so a full
@@ -179,13 +175,13 @@ Cancellation is refused if the note date is tax-locked, or books-locked without 
 
 ## Common messages
 
-| Message                                          | What to do                                                              |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| Enter an amount on at least one line             | Type a taxable amount on a line                                         |
-| Enter an amount within this line's taxable value | The amount is more than the line's original taxable value               |
-| The note exceeds what remains of "…".            | Earlier notes already credited part of this line; type a smaller amount |
-| Note total exceeds the source document total.    | Earlier notes already credit most of the invoice                        |
-| Date must be on or after the source date         | Move the note date on or after the invoice date                         |
+| Message                                                   | What to do                                                              |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Enter an amount on at least one line                      | Type a taxable amount on a line                                         |
+| Enter an amount up to what is left to return on this line | The amount is more than the line's **Left to return**                   |
+| The note exceeds what remains of "…".                     | Earlier notes already credited part of this line; type a smaller amount |
+| Note total exceeds the source document total.             | Earlier notes already credit most of the invoice                        |
+| Date must be on or after the source date                  | Move the note date on or after the invoice date                         |
 
 ## Related pages
 

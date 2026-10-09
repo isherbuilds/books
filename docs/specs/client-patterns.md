@@ -97,15 +97,13 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     carries only what its columns, card, palette entry and cursor read;
     everything else is one click away in the record Sheet. Search still
     matches the reference and narration on the server.
-    Each Receipts, Payments, Invoices, Bills and Notes register loads a separate
-    tenant-scoped aggregate over the full current filter, not the loaded page:
-    document count and amount, plus unapplied on Notes. The Receipts aggregate
-    also lists count and amount by Payment Method. Choose a single Date in the
-    Receipts filter to use that breakdown as day-close totals. A status-filtered
-    register totals exactly its listed states; absent a state filter, cancelled
-    documents remain included and the amount is gross, not a ledger net.
-    Aggregates have no cursor, share the list predicate, and refetch through
-    the existing domain invalidations.
+    Receipts, Payments, Invoices and Bills show one line under the filters from a
+    tenant-scoped aggregate over the full filter, not the loaded page: count,
+    amount, unpaid on Invoices and Bills, and the split by Payment Method on
+    Receipts and Payments when more than one method appears. Posted documents
+    only, unless the filter names drafts or cancelled ones. Choose a single Date
+    on Receipts for day-close totals. Aggregates have no cursor, share the list
+    predicate and refetch through the existing domain invalidations and on focus.
     Open-item and credit picker paging follows
     [Accounting core](./accounting-core.md#slices). Apply credit is a compact
     Dialog over the record

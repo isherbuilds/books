@@ -26,10 +26,10 @@ acted.
 
 ## What is recorded
 
-| Area                  | Entries (as the **Action** column shows them)                                                                                                                                                                                                                                                                                                                  |
+| Area                  | Entries (as **What happened** shows them)                                                                                                                                                                                                                                                                                                                      |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Documents             | **Invoice posted**, **Receipt posted**, **Bill posted**, **Payment posted**, **Credit note posted**, **Debit note posted**, **Journal posted**, **Opening balance posted**, and the same with **cancelled**. **Invoice amended** and **Bill amended** when a posted invoice or bill is cancelled and reopened as a [draft](/glossary#draft), an unposted copy. |
-| Credits               | **Allocation applied**, **Allocation reversed** (an [allocation](/glossary#allocation) sets an advance or credit note against an invoice or bill)                                                                                                                                                                                                              |
+| Credits               | **Amount applied**, **Applied amount undone** (an [allocation](/glossary#allocation) sets an advance or credit note against an invoice or bill)                                                                                                                                                                                                                |
 | Import                | **Workbook imported** when a workbook is imported                                                                                                                                                                                                                                                                                                              |
 | Locks                 | **Period lock changed**, **Lock exception granted**, **Lock exception revoked** (a [lock exception](/glossary#lock-exception) lets one person post into a locked period for a limited time)                                                                                                                                                                    |
 | Settings and accounts | **Settings updated**, **Organization created**, **Account status changed**                                                                                                                                                                                                                                                                                     |
@@ -49,17 +49,17 @@ acted.
 
 Each row has five columns:
 
-| Column      | What it shows                                                                                                                            |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **When**    | Date and time in the organization's time zone, for example "4 Oct 2026, 12:49 am".                                                       |
-| **Action**  | What happened, in words. A **Denied** badge marks a refused request.                                                                     |
-| **Actor**   | The person's name and email. If their account no longer exists, an internal id.                                                          |
-| **Target**  | The business identifier (document number, file name, member name or email) where available. Hover to see the stored `type:id` reference. |
-| **Details** | Saved facts as readable `Label: value` pairs; internal ID fields are omitted.                                                            |
+| Column            | What it shows                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **When**          | Date and time in the organization's time zone, for example "4 Oct 2026, 12:49 am".                                                       |
+| **Who**           | The person's name and email. If their account no longer exists, an internal id.                                                          |
+| **What happened** | The action, in words. A **Denied** badge marks a refused request.                                                                        |
+| **On**            | The business identifier (document number, file name, member name or email) where available. Hover to see the stored `type:id` reference. |
+| **Details**       | Saved facts as readable `Label: value` pairs; internal ID fields are omitted.                                                            |
 
 The **Details** column is usually the one to read. For example:
 
-| Action              | Details                                                                                          | Meaning                                                                                                                           |
+| What happened       | Details                                                                                          | Meaning                                                                                                                           |
 | ------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | Receipt posted      | `Amount: 14632.00 · Number: RCT26-27/11 · Settlement Kind: against · Allocated Amount: 14632.00` | Receipt RCT26-27/11 for ₹14,632.00, settled fully against open invoices ([settlement kind](/glossary#settlement-kind) `against`). |
 | Payment posted      | `TDS: 0.00 · Amount: 531.00 · Number: PMT26-27/6 · Settlement Kind: against`                     | Payment PMT26-27/6 of ₹531.00, no [TDS](/glossary#tds) (tax deducted at source) withheld.                                         |
@@ -73,9 +73,9 @@ To find the document, search its number from **Details** in the
 **Member invited** and **Invitation cancelled** entries identify the invitee
 by email. **Member joined**, **Member role changed** and **Member removed**
 retain their name and email after a membership is gone.
-**Allocation applied** and **Allocation reversed** show source and target
-document numbers in **Target**, so the credit remains identifiable after
-reversal. The stored record reference is available on hover.
+**Amount applied** and **Applied amount undone** show source and target
+document numbers in **On**, so the credit remains identifiable after it is
+undone. The stored record reference is available on hover.
 ::::
 
 ### Refused requests
@@ -96,12 +96,12 @@ are worth a conversation.
 
 ## Find an entry
 
-The log lists entries newest first and loads more as you scroll. Search looks
-through target identifiers and saved details (including file names). Use **All
-actions** to narrow by action, **Actor name or email** to find a person, and
-**From** and **To** for inclusive dates in your organization's time zone.
-Filters run on the whole log, not only the rows already loaded. Clear a field or
-choose **All actions** to return to the full log.
+The log lists entries newest first and loads more as you scroll. Use the one
+search box, **Person or document number**. It matches who acted, by name or
+email, and values in **Details**, such as a document number, a member's name or
+email, or a file name. Use the period menu to limit the dates; they follow your
+organization's time zone. The search and period run on the whole log, not only
+the rows already loaded. Clear the search to return to the full log.
 
 ## Related pages
 

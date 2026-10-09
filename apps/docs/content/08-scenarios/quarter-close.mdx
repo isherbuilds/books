@@ -168,8 +168,7 @@ Accumulated Depreciation ₹2,250, reference `DEP-Q1-ADJ`. Posting is refused:
 </Frame>
 
 The owner clicks **Grant exception** on **Settings → Locks**, chooses the member who
-will post, and sets **Expires** a few minutes ahead, at 12:55 am on 4 Oct 2026 (India
-time), with the reason "Post the missed Q1 depreciation on the CNC lathe
+will post, and chooses **1 day** in **For how long**, with the reason "Post the missed Q1 depreciation on the CNC lathe
 (DEP-Q1-ADJ), as agreed with the CA." The journal form keeps the entry, so the
 accountant clicks **Post again**, and JV26-27/5 posts on 30 Jun 2026.
 
@@ -182,12 +181,12 @@ accountant clicks **Post again**, and JV26-27/5 posts on 30 Jun 2026.
 | Depreciation                           | ₹2,250.00 |           |
 | Accumulated Depreciation               |           | ₹2,250.00 |
 
-At 12:55 am the exception expires by itself. A test posting dated 30 Jun a minute
-later is refused again with "Books are locked through 30 Jun 2026. Ask for an
+The owner then clicks **Revoke** so the exception does not stay open. A test posting
+dated 30 Jun is refused again with "Books are locked through 30 Jun 2026. Ask for an
 exception to post on or before that date." The grant stays in
 [Settings → Audit](/administration/audit-log), the [audit log](/glossary#audit-log)
 of sensitive actions, as "Lock exception granted", with the
-member, expiry and reason.
+member's name and email, the number of days and the reason.
 
 This correction journal names no GST accounts, so the tax lock did not need to move.
 Had the CA found a wrong GST invoice instead, the fix would be a

@@ -151,6 +151,17 @@ Check UI items in the running app on desktop and mobile, in both themes.
   address, register Load more after a draft date change, at desktop and 390 px;
   Members Re-invite replacing the expired row; customer-refund Payment cancel
   from its Sheet; supplier-refund Receipt refusal refreshing its credits.
+  Simplification pass (2026-10-09): register totals are one line, posted-only,
+  with unpaid on Invoices/Bills and no Notes totals or polling; lock history
+  removed (Audit covers it); exception expiry is 1/7/30 days for posting members
+  only; Audit has one search box; "Period not closed" removed; plain-language
+  labels. Types, lint and the full suite pass. Not run in a browser: the
+  browser tool's Chrome exited on launch. Next: drive Receipts/Invoices totals
+  line, Grant exception, Audit search, supplier refund and debit-note forms at
+  1440 and 390 px in both themes; recapture the user-guide screenshots listed
+  as outdated; Shift+Tab leaving a typed Link Field or Apply credit search;
+  audit search timing at `db:seed:mega`. CA question: may a supplier refund
+  settle an opening supplier credit?
 - **[Banking](./specs/accounting-core.md)**: Verification. Next: add bank account
   → payment method with account preselected; toggle method inactive/active;
   Receipt post/cancel changes/restores balance; active method prevents account

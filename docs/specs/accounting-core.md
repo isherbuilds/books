@@ -148,9 +148,9 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    ingestion and API keys arrive together.
 9. **Reports.** P&L and balance sheet come from Statement Definitions: account
    `type` and the chart's group tree (slice 6). Each accounting report shows
-   the legal name, optional GSTIN, range or as-of date, generation time and
-   "period not closed" until period close exists. XLSX exports use readable
-   document and reversal labels and business-date file names.
+   the legal name, optional GSTIN, range or as-of date and generation time.
+   XLSX exports use readable document and reversal labels and ISO-date file
+   names.
 10. **Roles.** `owner`: everything. `accountant`: masters, every document,
     allocations, reports, exports. `ca`: reads everything, exports, sets locks
     and exceptions, never posts. `operator`: creates and posts Receipt, Payment
@@ -281,16 +281,13 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    The Notes register lists two types, so it sorts their two index ranges.
    Party-filtered registers use `(org_id, party_id, document_date, id)`. Only
    Invoice and Bill registers exempt drafts from the period.
-   `receipt.totals`, `payment.totals`, `invoice.totals`, `bill.totals` and
-   `note.totals` aggregate all rows matching their register's period, party,
-   search and state/type/method filters, without a cursor or page-size input.
-   The count and amount include cancelled documents whenever the unfiltered
-   register includes them; filter to Posted to exclude them. Draft Invoices
-   and Bills remain visible and counted outside the selected period, with
-   their saved total included. Notes also sum the posted notes' unapplied balance
-   (cancelled notes contribute zero). Receipt totals group by the named
-   Payment Method, and their groups add up to the overall count and amount.
-   A one-day Receipts period provides day-close totals by method.
+   `receipt.totals`, `payment.totals`, `invoice.totals` and `bill.totals`
+   aggregate the rows matching their register's period, party, search and
+   state/method filters, without a cursor or page-size input. They count posted
+   documents only, unless the filter names drafts or cancelled documents.
+   Receipt and Payment totals group by Payment Method; Invoice and Bill totals
+   add the posted documents' unpaid balance. A one-day Receipts period provides
+   day-close totals by method.
    Open: CA acceptance, and posting p95
    under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
    receipts per organization).
@@ -1401,8 +1398,8 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   entry `affectsTax`. Procedures and permissions: `lock.get` (`lock:read` —
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
-  ca; grants refuse with `EXPIRY_PAST`, `EXPIRY_TOO_LATE`, `MEMBER_INVALID`,
-  `MEMBER_CANNOT_POST`, or `EXCEPTION_ACTIVE`; revoke of an inactive row is
+  ca; a grant lasts 1, 7 or 30 days from the database clock and refuses with
+  `MEMBER_INVALID` or `EXCEPTION_ACTIVE`; revoke of an inactive row is
   `CONFLICT`); all three mutations audited. Revoke takes no reason, only a
   confirmation: an exception expires by itself, and Zoho Books asks only for
   confirmation to end a partial unlock. Web: Settings > Opening balance
@@ -1411,8 +1408,7 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
   requires a loaded lock state. Switching Organization or lock kind starts a
   fresh form; a refetch preserves the original expected lock date for CAS.
-  Expiry retains minute-precision local time in the Organization zone and rejects
-  nonexistent DST times instead of shifting them. Exceptions are
+  The Grant Dialog lists only members who can post. Exceptions are
   user-scoped until revoked or expired: removing membership denies all access,
   but re-admitting the same user does not revoke a still-live grant.
 
@@ -1479,7 +1475,6 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   them. Gates: multi-currency's spec; a pilot Organization with a second
   GSTIN; cost centres as in the Journal table.
 - **A time-zone setting.** Gate: the first Organization outside India.
-- **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
 - **Statutory statements** (Schedule III layout, current and non-current
   split, notes). Slice 6 prints management statements from the chart. Gate: a

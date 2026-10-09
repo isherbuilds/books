@@ -34,10 +34,11 @@ Search by bill number, party or supplier invoice number. The filter icon in the 
 box offers **Date** and **Status**: **Draft**, **Posted**, **Cancelled**, **Open**
 (something still to pay) and **Overdue** (open and past its due date).
 
-The **Documents** and **Total** line counts and sums all matching bills, even
-beyond the loaded page. Cancelled bills are included unless you choose another
-**Status**. Drafts remain in the register outside the selected period and their
-saved totals count too.
+One line under the filters counts and adds up all matching bills, even beyond the
+loaded page, for example "5 bills · ₹1,18,000.00 · ₹23,600.00 unpaid". It counts
+posted bills only, unless you filter **Status** to **Draft** or **Cancelled**.
+Drafts remain in the register outside the selected period. The line refreshes when
+you post or cancel a bill, or when you come back to the tab.
 
 <Frame caption="July bills for Cedar Components: three paid, one cancelled duplicate, and a draft.">
   ![Bill register filtered to July 2026](./images/bills-register.webp)
@@ -164,7 +165,8 @@ is the earlier of credit or payment for most sections, so you do not deduct it a
 you pay.
 
 If you choose a TDS section while this supplier has an open advance Payment with TDS,
-the form warns you that TDS was already deducted. The warning does not block posting:
+the form warns: "You already deducted TDS when you paid this supplier an advance. Make
+sure you don't deduct it twice." The warning does not block posting:
 review the deduction with your accountant because the two entries are not netted.
 
 The sections follow the Income-tax Act, 2025, which applies from 1 April 2026. They use
