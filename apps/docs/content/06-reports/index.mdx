@@ -61,9 +61,9 @@ Open **Reports** in the sidebar. The hub lists the reports your role can open.
   ![Reports hub with financial reports and period registers](./images/index-hub.webp)
 </Frame>
 
-**Financial reports** opens each accounting report on its own page. The
-[party ledger](/reports/party-ledger), a [ledger](/glossary#ledger) (running list of entries) for one customer or vendor, is not in this list. Open it from the party's
-page: **Parties**, the party name, then the **Ledger** tab.
+**Financial reports** opens each accounting report on its own page. **Party
+statements** takes you to **Parties**: choose the party, then open its **Ledger**
+tab to view and download the statement.
 
 **Period registers** builds the GST and TDS workbooks for one period:
 
@@ -106,23 +106,20 @@ in the same organization, and the report opens with the same period.
 | Party ledger (party statement) | Yes, up to 1,00,000 lines | Yes, up to 5,000 lines |
 
 **Download XLSX** saves a workbook. Its first four rows hold your legal name, the report
-title, the period and "Generated … · period not closed". Amounts are numbers, so you
+title, the period and the time it was generated. Amounts are numbers, so you
 can add and filter them in Excel.
+
+The workbook name includes its report and its dates in year-month-day form, for example
+`day-book-2026-04-01-to-2026-06-30.xlsx`. Document types and reversal kinds
+appear as labels rather than internal codes.
 
 **Download PDF** opens the PDF in a new browser tab. Use the viewer's download or print
 button to keep it. Each page repeats the header, and the footer numbers the pages.
 
 When a period holds more lines than the limit, the download stops with "This report
-exceeds 1,00,000 lines; choose a shorter period." (XLSX) or "This report exceeds 5,000
-lines; choose a shorter period." (PDF). Nothing is cut off. Choose a shorter period, for
-example one month, and download each part.
-
-## "Period not closed"
-
-Every report header says **Period not closed**. Accly Books does not close a financial
-year with a closing entry. Instead, the balance sheet works out the profit of the
-current year and of earlier years each time you open it. A [lock](/glossary#lock) ([Locks](/accounting/locks))
-stops new postings in a period, but the header still says "Period not closed".
+exceeds 1,00,000 lines; choose a shorter period." (XLSX) or opens a small error page
+with "This report exceeds 5,000 lines; choose a shorter period." (PDF). Nothing is
+cut off. Choose a shorter period, for example one month, and download each part.
 
 ## Who can see reports
 

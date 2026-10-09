@@ -1,13 +1,15 @@
 ---
 title: Receipts
-description: Record money received as an advance, against open invoices, or as direct income, with fees, write-offs and TDS
+description: Record money received as an advance, against open invoices, a supplier refund, or direct income, with fees, write-offs and TDS
 ---
 
 A [receipt](/glossary#receipt) records money that comes in: a customer's
 [advance](/glossary#advance) (money paid before you bill), payment for invoices you
-raised, or income that has no invoice. It debits the cash or bank account behind the
-[payment method](/glossary#payment-method) and credits the customer or the income
-([debit and credit](/glossary#debit-credit) are the two equal sides of every entry).
+raised, a supplier's refund of an unapplied debit note or payment advance, or
+income that has no invoice. It debits the cash or bank account behind the
+[payment method](/glossary#payment-method) and credits the customer, supplier
+payables, or income ([debit and credit](/glossary#debit-credit) are the two equal
+sides of every entry).
 
 **Who can do it** (see [roles](/glossary#roles))**:** an Owner, Accountant or Operator
 [posts](/glossary#post) (records in your books) receipts. Only an Owner or
@@ -21,16 +23,25 @@ The filter icon in the search box offers **Date**, **Payment method**, **State**
 (Posted or Cancelled) and **Settlement** (Advance, Against open items or Direct). The
 **⋯** at the end of a row offers **Print** and **Copy number**.
 
+One line under the filters counts and adds up every matching receipt, not just the
+receipts on screen, for example "12 receipts · ₹4,500.00 · Cash ₹500.00 · UPI
+₹4,000.00". It lists each payment method only when there is more than one. Choose
+the same day for **From** and **To** to check that day's receipts by cash, bank
+transfer or other methods. The line counts posted receipts only, unless you filter
+**State** to **Cancelled**. It refreshes when you post or cancel a receipt, or when
+you come back to the tab.
+
 ## Choose the settlement kind
 
 You choose what the money is for, the [settlement kind](/glossary#settlement-kind).
 Accly Books never guesses.
 
-| Kind                   | Use it when                                                                        | What it settles                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Advance**            | The customer pays before you invoice, for example against a purchase order         | Nothing yet. The money waits as the customer's advance until you [apply it](/sales/apply-credit) to an invoice |
-| **Against open items** | The customer pays invoices you have posted                                         | The invoices you choose in **Open items**. Any amount you do not allocate is kept as an advance                |
-| **Direct**             | Income with no invoice and no customer balance, such as exempt (GST-free) interest | An income account. No party balance changes                                                                    |
+| Kind                         | Use it when                                                                        | What it settles                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Advance**                  | The customer pays before you invoice, for example against a purchase order         | Nothing yet. The money waits as the customer's advance until you [apply it](/sales/apply-credit) to an invoice |
+| **Against open items**       | The customer pays invoices you have posted                                         | The invoices you choose in **Open items**. Any amount you do not allocate is kept as an advance                |
+| **Direct**                   | Income with no invoice and no customer balance, such as exempt (GST-free) interest | An income account. No party balance changes                                                                    |
+| **Money back from supplier** | The supplier pays back an unapplied debit note or payment advance                  | The rows you choose in **What this supplier owes you** (**Debit note** or **Advance paid**), allocated in full |
 
 ## Record an advance
 
@@ -144,11 +155,10 @@ adjustment so that the invoice is fully settled. You can add up to five.
 With adjustments, the allocation must equal the money received plus the adjustments:
 nothing can be left as an advance.
 
-:::tip
-Note the TDS section and rate in **Narration** (for example "TDS code 1031 deducted").
-The TDS adjustment records only the amount, and you will need the detail to match
-Form 26AS, the tax department's statement of TDS deposited for you.
-:::
+Choose the TDS section for each customer TDS adjustment. The receipt keeps its
+section and amount so the PDF can identify the deduction; keep any additional
+details (such as the customer's TDS certificate reference) in **Narration** for
+matching the tax department's Form 26AS.
 
 ## Direct income
 
@@ -167,16 +177,28 @@ Components has **Cash** (Cash in Hand) and **Bank transfer**, **UPI** and **Card
 
 Click a receipt to open its record: amount, date, method, settlement kind, reference,
 **Unapplied** (money not yet matched to an invoice), any **Adjustments**, and the
-**Allocations** it made. Click **Print** for the PDF.
+**Allocations** it made. A TDS adjustment shows as **TDS deducted by customer**. Click **PDF** to open the receipt PDF for printing or saving.
 
 <Frame caption="RCT26-27/8: ₹40,000 with ₹62 customer TDS, matched to INV26-27/7.">
   ![Receipt record with adjustments and allocations](./images/receipts-record-sheet.webp)
 </Frame>
 
-The PDF is a receipt voucher (the printed proof of payment) with your organization's details, the date, the party,
-the method, what it was received towards, the reference, the amount in figures and
-words, and the narration. It does not list the invoices settled or the TDS, so add
-them to the narration if the customer needs them on the voucher.
+The PDF is a receipt voucher (the printed proof of payment) with your organization's
+details, date, party, method, reference, amount in figures and words, and narration.
+It lists each document settled by number, document date and amount applied, plus
+any fees, write-offs and TDS, for example "TDS deducted by customer (194J)". The applied amounts, less
+adjustments, plus any remaining advance, reconcile to the amount received. Supplier
+refund PDFs list the debit notes and payment advances refunded.
+
+## Refund a supplier
+
+Open an unapplied [debit note](/purchases/debit-notes#when-the-supplier-refunds-you)
+and click **Refund**, or create a receipt and choose **Money back from supplier**.
+Choose the supplier, and enter the amount and payment method. The table **What this
+supplier owes you** lists each **Debit note** or **Advance paid**, with the amount
+**Owed to you**. Allocate the full amount to these rows. The amount must equal the
+total you pick exactly. Only Owners and Accountants, who can read the related notes
+and bills, can use this settlement kind.
 
 ## What happens in the books
 
@@ -202,6 +224,10 @@ An unallocated remainder is credited to **Customer Advances**. A fee or write-of
 debits its expense account in place of TDS Receivable. A **Direct** receipt credits
 the income account you chose.
 
+A supplier refund debits the bank or cash account and credits **Accounts Payable**
+for the same amount. It reduces the supplier's unapplied credit without recording
+income a second time.
+
 On the customer's party ledger, a receipt is a credit for the money plus any
 adjustments: ₹40,062.00 for RCT26-27/8. Rao Engineering Supplies then owes ₹33,098.00.
 
@@ -220,8 +246,8 @@ Cancelling:
 - posts a [reversal](/glossary#reversal), an equal and opposite
   [journal entry](/glossary#journal-entry), of the receipt's entry, so the cash or bank account and the customer
   balance go back;
-- reverses every allocation the receipt made, so the invoices it paid are open again
-  and show their outstanding amount;
+- reverses every allocation the receipt made (or, for a supplier refund, received),
+  restoring outstanding invoices or unapplied supplier credits;
 - reverses any entry that moved its money between Customer Advances and Accounts
   Receivable;
 - keeps the receipt in the register, marked **Cancelled**, with the cancellation date.
@@ -234,7 +260,7 @@ tax-locked for a receipt that belongs in a GST register.
 
 | Message                                                                                    | What to do                                                                                                                     |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Choose a party                                                                             | Advance and Against open items need a party                                                                                    |
+| Choose a party                                                                             | Advance, Against open items and Money back from supplier need a party                                                          |
 | Choose a payment method                                                                    | Pick how the money came in                                                                                                     |
 | Choose what the advance is for                                                             | Pick Goods or Exempt supply                                                                                                    |
 | Choose what the remaining advance is for                                                   | Part of the receipt is not allocated. Pick what the advance is for, or allocate it all                                         |
@@ -243,6 +269,7 @@ tax-locked for a receipt that belongs in a GST register.
 | Allocated amount cannot exceed the receipt and adjustments                                 | Lower the allocations                                                                                                          |
 | Allocate the full receipt and adjustments                                                  | With adjustments, allocate the whole amount                                                                                    |
 | Choose an expense account                                                                  | Fee and write-off adjustments need an account                                                                                  |
+| Amount must match the total you picked below                                               | Allocate the whole supplier refund, without an advance remainder                                                               |
 | Taxable income must be invoiced before it is received.                                     | Use an invoice, or choose an exempt or non-GST income account                                                                  |
 | Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Use a date after the lock, or ask your CA for an [exception](/glossary#lock-exception) (see [Period locks](/accounting/locks)) |
 
@@ -251,5 +278,6 @@ tax-locked for a receipt that belongs in a GST register.
 - [Invoices](/sales/invoices)
 - [Apply credit](/sales/apply-credit): use an advance against a later invoice
 - [Credit notes](/sales/credit-notes): refunds
+- [Debit notes](/purchases/debit-notes): supplier refunds
 - [Party ledger](/reports/party-ledger)
 - [A month of trading](/scenarios/trading-month)

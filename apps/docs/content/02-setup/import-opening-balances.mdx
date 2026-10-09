@@ -133,8 +133,8 @@ you fill.
 | ---- | -------- | ------------------------------------- | ------- |
 | B1   | Yes      | The template version; leave it as `1` | `1`     |
 
-The rest of the sheet holds instructions, not records. The label in A1 does not
-matter.
+The sheet starts with **A1 = `Template version`** and **B1 = `1`**; leave both
+as they are. The remaining rows explain how to fill the workbook.
 
 ### Opening
 
@@ -178,9 +178,14 @@ Only include items you need to create.
 | Name           | Yes                    | A new item name                                                                                                               | `Tuition`                                                  |
 | Income account | Yes                    | Code or name of an active income account that takes postings, not a group or system account; may be created in **Accounts**   | `Tuition Fees`                                             |
 | Unit price     | Yes                    | Non-negative rupee amount; zero is allowed                                                                                    | `0`                                                        |
-| HSN/SAC        | No                     | Four to eight digits ([HSN or SAC](/glossary#hsn-sac) code)                                                                   | `999293`                                                   |
+| HSN/SAC        | For taxable items      | Four to eight digits ([HSN or SAC](/glossary#hsn-sac) code)                                                                   | `999293`                                                   |
 | Unit           | No                     | Unit text                                                                                                                     | `month`                                                    |
 | Tax code       | For taxable items only | A GST rate code effective in your organization, as shown in the **GST rate** column of **Items**; leave blank for other items | `GST18`; leave blank for `Tuition` under an exempt account |
+
+The available GST rate codes are `GST5`, `GST12`, `GST18`, `GST28` and `GST40`.
+They come from your organization's GST rate schedule; older rates may no longer
+be effective. Use the **GST rate** column in **Items** to choose an effective code
+for a taxable item. Leave the tax code blank for non-taxable items.
 
 ### Trial balance
 
@@ -251,11 +256,9 @@ control balance with no matching opening items is refused, even if total debits 
 credits agree.
 
 :::warning[Fix row errors before the totals]
-When an opening item row has its own error, such as a bad due date or amount, Check
-leaves that row out of the item totals. The control-total message then shows a
-smaller figure: one bad due date on Kavya Shetty's ₹24,000 claim turned
-"receivable items net to ₹38,500.00" into "₹14,500.00". Fix the **Opening items**
-errors first, then Check again before you change the trial balance.
+If an **Opening items** row has a bad amount, date, party or other row error, Check
+does not compare the incomplete item totals with the trial balance. Correct the
+row errors and Check again; then any real control-account mismatch appears.
 :::
 
 ## Worked example: start on 1 April 2026
@@ -272,7 +275,7 @@ Blank table cells below mean blank Excel cells. Money cells have no rupee symbol
 thousands separators, so you can paste them into Excel. The opening date is an Excel
 date; the opening-item dates are `YYYY-MM-DD` text. In each sheet below, the table
 heading is Excel row 1 and data starts on row 2. **Read me** keeps the template's
-text, with **B1 = `1`**.
+text, with **A1 = `Template version`** and **B1 = `1`**.
 
 <Accordion>
   <AccordionItem title="Opening, Accounts, Parties and Items">

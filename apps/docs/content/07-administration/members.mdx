@@ -15,7 +15,7 @@ and take access away.
 Read [Roles and access](/getting-started/roles-and-access) first to choose the
 right role.
 
-<Frame caption="The member list for an owner: pending invitations, marked Invited, sit above the current members.">
+<Frame caption="The member list for an owner: pending invitations sit above current members and show Invited or Expired.">
   ![Members page with three invited people and the owner](./images/members-pending.webp)
 </Frame>
 
@@ -72,29 +72,27 @@ only to the person invited, and cancel the invitation if the link reaches
 someone else.
 :::
 
-:::note[Inviting from a phone]
-On a narrow phone screen, the **Operator** button can be hidden past the right
-edge of the form. Invite operators from a computer or tablet.
-:::
+On a phone, the role buttons wrap so all four roles remain available, including
+**Operator**.
 
 ### If the invitation cannot be created
 
-| Message                           | Cause                                                                                                                                                                               | What to do                                                                                                                                                                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Enter a valid email address"     | The email box is empty or not an email address.                                                                                                                                     | Correct it.                                                                                                                                                                                                                                          |
-| "Select a role"                   | No role is chosen.                                                                                                                                                                  | Click a role.                                                                                                                                                                                                                                        |
-| "Could not create the invitation" | The email address already has a pending invitation to this organization, or the person is already a member. The same message appears when the connection drops or the server fails. | Check the list first. If the person is already invited, copy the existing link, or cancel that invitation and invite again. To change a member's role, use [Change a role](#change-a-role). If neither applies, check your connection and try again. |
+| Message                                          | Cause                                           | What to do                            |
+| ------------------------------------------------ | ----------------------------------------------- | ------------------------------------- |
+| "Enter a valid email address"                    | The email box is empty or not an email address. | Correct it.                           |
+| "Select a role"                                  | No role is chosen.                              | Click a role.                         |
+| "&lt;email&gt; already has a pending invitation" | This email already has a live invitation.       | Copy the existing link from the list. |
+| "Could not create the invitation"                | The request failed or the connection dropped.   | Check your connection and try again.  |
 
-<Frame caption="A second invitation for the same email address fails while the first is pending.">
-  ![Invitation form with the error Could not create the
-  invitation](./images/members-already-invited.webp)
+<Frame caption="A second invitation for the same email address points you to the existing link.">
+  ![Invitation form showing a duplicate-invitation error](./images/members-already-invited.webp)
 </Frame>
 
 ## Pending invitations
 
-Invitations not yet accepted appear at the top of the list with an **Invited**
-badge, the role, and the date they expire. An invitation expires **48 hours**
-after you create it.
+Invitations not yet accepted appear at the top of the list with their role
+and expiry date. Live invitations show **Invited**; expired ones show
+**Expired**. A new invitation expires **48 hours** after it is created.
 
 - **Copy the link again:** point at the invitation row, click **⋯**, then
   **Copy link**.
@@ -110,9 +108,11 @@ after you create it.
   ![Cancel this invitation confirmation](./images/members-cancel-invitation.webp)
 </Frame>
 
-An invitation that expires disappears from the list without notice. If the
-person did not join in time, invite them again; the old link already shows
-"This invitation is no longer available".
+An expired invitation stays in the list with an **Expired** badge. Use **⋯ →
+Re-invite** to create a fresh invitation; it replaces the expired row. Copy its
+link from the new row. Until then, the old link says "This invitation has
+expired. Ask the sender for a new link." After the re-invite, it says the
+invitation is no longer available. It cannot be copied as if it were still valid.
 
 Only owners see pending invitations. Other members see only the people who
 have joined.
@@ -121,10 +121,10 @@ have joined.
 
 1. Point at the member's row and click **⋯**.
 2. Under **Change role**, click the new role. The current role is greyed out.
+3. Read the confirmation and click **Change role**.
 
-The change saves at once with the message "Role updated". There is no
-confirmation step, so take care with **Owner**: an owner can do everything,
-including removing you.
+The change then saves with the message "Role updated". Be especially careful
+with **Owner**: an owner can do everything, including removing you.
 
 <Frame caption="The member menu: change role or remove.">
   ![Member row menu with Change role options and Remove from
@@ -153,10 +153,10 @@ come back only through a new invitation.
 ## The organization always keeps an owner
 
 Accly Books does not let the last owner leave. If you are the only owner and
-try to remove yourself or change your own role, the app shows "Could not update
-the roster" and nothing changes. To hand the organization over, first invite
-the new owner, then change or remove your own membership. See
-[Handover](/administration/handover).
+try to remove yourself or change your own role, the app says "Add another owner
+before you leave" and nothing changes. To hand the organization over, first
+invite the new owner and wait for them to join, then change or remove your own
+membership. See [Handover](/administration/handover).
 
 ## Search the list
 

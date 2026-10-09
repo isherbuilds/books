@@ -46,10 +46,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   group, with generated codes. A user never creates, retypes or archives a
   system account, or converts a posting account into a group.
 - **Item**: an Organization-unique `name` through `normalizedName`, optional
-  `hsnSac` and `unit`, integer `unitPricePaise`, an income Account, and an
-  `active` flag. The form never preselects the income Account: its supply class
-  decides the tax treatment. `taxCode` is required exactly when the income Account is
-  `taxable`.
+  `unit`, integer `unitPricePaise`, an income Account, and an `active` flag.
+  `hsnSac` is required for an Item under a `taxable` income Account and optional
+  otherwise (`HSN_SAC_REQUIRED` when missing). The form never preselects the
+  income Account: its supply class decides the tax treatment. `taxCode` is
+  required exactly when the income Account is `taxable`.
   If an unused account changes from exempt to taxable, a registered
   organization's invoice refuses Items still lacking a rate
   (`ITEM_TAX_CODE_REQUIRED`); edit those Items before invoicing.
@@ -76,7 +77,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
   split. `amountPaise` remains the taxable value.
 - **Exposure Side** (`receivable`, `payable` or null) is the control that a
   document settles, not the cash direction. A customer refund is a
-  `receivable` Payment.
+  `receivable` Payment; a supplier refund is a `payable` Receipt.
 - **Party Ledger Line**: exposure per document, party and side, positive when
   the Party owes the Organization. An Invoice, a non-direct Receipt and an
   advance Payment write one; a Journal writes one per party and side it
@@ -84,8 +85,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 - **TDS Section**: a Form 140 `code` (Income-tax Act 2025), `rateBasisPoints`,
   `effectiveFrom` and an inclusive `effectiveTo`. Rows are never edited. The
   database refuses a duplicate (org, code, start); the writer keeps ranges
-  apart. **TDS Deduction**: one `tds_deductions` row per Payment, kept when it
-  rounds to zero.
+  apart. A customer TDS Receipt retains its section on the adjustment line,
+  not as a deduction by this Organization. **TDS Deduction**: one
+  `tds_deductions` row per Bill, Payment or TDS-bearing Debit Note, retained
+  even when it rounds to zero.
 
 ## Architecture calls
 
@@ -144,8 +147,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
 8. **External posting is post-MVP.** References, digests, deduplication,
    ingestion and API keys arrive together.
 9. **Reports.** P&L and balance sheet come from Statement Definitions: account
-   `type` and the chart's group tree (slice 6). Each report states its range,
-   and prints "period not closed" until period close exists.
+   `type` and the chart's group tree (slice 6). Each accounting report shows
+   the legal name, optional GSTIN, range or as-of date and generation time.
+   XLSX exports use readable document and reversal labels and ISO-date file
+   names.
 10. **Roles.** `owner`: everything. `accountant`: masters, every document,
     allocations, reports, exports. `ca`: reads everything, exports, sets locks
     and exceptions, never posts. `operator`: creates and posts Receipt, Payment
@@ -155,6 +160,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     and action (`read`, `create`, `post`, `cancel`), plus `allocation` `apply`
     and `reverse`.
 11. **Audit** follows [Architecture](../architecture.md#audit-and-files).
+    Accepting an invitation records its organization, invitee and role. Member
+    role changes and removals retain the member's name and email in metadata,
+    even after removal. Credit application and reversal retain source and target
+    document numbers in metadata; writes remain outside domain transactions.
 12. **Migrations** follow [Development](../development.md#code-rules).
 13. **Time.** `documentDate` and `entryDate` are dates in the Organization time
     zone; `postedAt` is an instant. The financial year derives from
@@ -195,14 +204,15 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     out. An `advance` stores `advanceSupply`: `goods` (no GST, Notification
     66/2017), `exempt`, or `taxableService`, which is refused
     (`ADVANCE_TAX_UNSUPPORTED`) until GST advance documents exist. The database
-    requires `advanceSupply` on an `advance` and forbids it on a `direct`
-    Receipt. The receipt router stores it on an `against` Receipt only when an
-    advance remainder exists, and refuses a remainder without it
-    (`ADVANCE_SUPPLY_REQUIRED`). Allocations made at post fix the kind; a later
-    `allocation.apply` never changes it. An `against` Receipt credits
-    `receivables` for the allocated amount and `customerAdvances` for the
-    remainder; its party ledger line is the negative full amount. Applying an
-    advance to an Invoice posts Dr `customerAdvances` / Cr `receivables`.
+    requires `advanceSupply` on an `advance` and forbids it on `direct` and
+    supplier-refund (`against` / `payable`) Receipts. The receipt router stores
+    it on an `against` / `receivable` Receipt only when an advance remainder
+    exists, and refuses a remainder without it (`ADVANCE_SUPPLY_REQUIRED`).
+    Allocations made at post fix the kind; a later `allocation.apply` never
+    changes it. An `against` / `receivable` Receipt credits `receivables`
+    for the allocated amount and `customerAdvances` for the remainder; its
+    party ledger line is the negative full amount. Applying an advance to
+    an Invoice posts Dr `customerAdvances` / Cr `receivables`.
     Supplier allocation, note allocation and Payment settlement follow the
     [4b-ii contract](#slices).
 
@@ -238,8 +248,10 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
     `receivables`, such as a Journal credit, allocates and reverses with no
     entry: its credit is posted once.
     A target with active allocations refuses cancellation
-    (`CONFLICT`, naming the sources); the record Sheet offers Cancel only once
-    every allocation is reversed. Receipt and Journal
+    (`CONFLICT`, naming the sources), except refund Payments (`against` /
+    `receivable`) and refund Receipts (`against` / `payable`): cancelling a refund
+    reverses its own allocations and restores the source credits. Other target
+    record Sheets offer Cancel only once every allocation is reversed. Receipt and Journal
     cancellation append reverse rows for their active allocations, with no
     journal entry of their own, and reverse every
     un-reversed allocation journal entry from the document. Each allocation's
@@ -257,17 +269,25 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
    application check, `PARTY_GSTIN_TAKEN`), master lists complete to 5,000
    rows then `MASTER_LIST_LIMIT` (parties search the server instead), money
    accounts and methods.
-2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`;
-   no draft), `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and
-   the snapshot PDF at `/api/$orgSlug/receipts/$receiptId/pdf`. `against`
-   allocations use `party.openItems`; credits use `party.openCredits` (4b-ii).
+2. **Receipt.** Implemented: `receipt.post` (`direct`, `advance`, and `against`
+   with `receivable` for customers or `payable` for supplier refunds; no draft),
+   `get`, `list`, `partyTotals`, `cancel`, the day book XLSX, and the snapshot PDF
+   at `/api/$orgSlug/receipts/$receiptId/pdf`. Customer `against` allocations
+   use `party.openItems`; supplier refunds use payable `party.openCredits` (4b-ii).
    Document registers page newest document date first, then id, through
-   `(org_id, type, document_date, id)`; their cursor remains a document id,
-   resolved inside the page's statement (`dateCursor`). A cursor draft
-   discarded between pages ends the list until its next refetch.
+   `(org_id, type, document_date, id)`; their cursor is the last row's
+   `{ documentDate, id }` (`dateCursor`), so a draft edited or discarded between
+   pages cannot skip or repeat rows.
    The Notes register lists two types, so it sorts their two index ranges.
    Party-filtered registers use `(org_id, party_id, document_date, id)`. Only
    Invoice and Bill registers exempt drafts from the period.
+   `receipt.totals`, `payment.totals`, `invoice.totals` and `bill.totals`
+   aggregate the rows matching their register's period, party, search and
+   state/method filters, without a cursor or page-size input. They count posted
+   documents only, unless the filter names drafts or cancelled documents.
+   Receipt and Payment totals group by Payment Method; Invoice and Bill totals
+   add the posted documents' unpaid balance. A one-day Receipts period provides
+   day-close totals by method.
    Open: CA acceptance, and posting p95
    under 30 ms on native PostgreSQL at 100,000 lines (`db:seed:volume`, 100,000
    receipts per organization).
@@ -345,7 +365,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      | Side         | Targets (claim)                        | Sources (settle)                                    | Ledger sign        |
      | ------------ | -------------------------------------- | --------------------------------------------------- | ------------------ |
      | `receivable` | Invoice; refund Payment (`receivable`) | Receipt `advance`/`against`; Credit Note            | target +, source − |
-     | `payable`    | Bill                                   | Payment `advance`/`against` (`payable`); Debit Note | target −, source + |
+     | `payable`    | Bill; refund Receipt (`payable`)       | Payment `advance`/`against` (`payable`); Debit Note | target −, source + |
 
      An allocation pairs one source and one target of the same Party and
      side. Outstanding, unapplied, locking, append-only rows and cancellation
@@ -391,42 +411,76 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      posted Bill (Debit Note) with `documentDate` on or after the source's.
      Lines are `{ sourceLineId, amount }`, 1–100, each a distinct line of the
      source; `amount` is the taxable value credited, and the note's tax uses
-     the source line's rate and the source's supply type. The cumulative
-     taxable per source line across posted notes may not exceed the line's
-     (`NOTE_EXCEEDS_SOURCE`); a line credited in full takes exactly the
-     line's remaining tax components, otherwise `computeTax` and the same
+     the source line's rate and the source's supply type. Source document reads
+     return each line's remaining taxable value and prior posted note tax
+     components; the note form caps each amount and **Full** at the remainder
+     and previews taxable, GST, round-off and total using the posting calculation.
+     The cumulative taxable per source line across posted notes may not exceed the
+     line's taxable value (`NOTE_EXCEEDS_SOURCE`); a line credited in full takes exactly
+     the line's remaining tax components, otherwise `computeTax` and the same
      bound per component. The note total rounds as the Invoice, and the
      cumulative note total is bounded by the source total. A Credit Note
      posts Dr income per account, Dr output GST, Cr `receivables`; a Debit
-     Note posts Dr `payables`, Cr each account (including ineligible tax), Cr
-     input GST for eligible tax. Both copy `affectsTax` from the source. At
-     post a note allocates to its source up to the source's outstanding; the
-     rest stays an unapplied source. Numbering uses `creditNotePrefix` and
-     `debitNotePrefix`.
+     Note posts Dr `payables` for the note total less reversed TDS, Dr
+     `tdsPayable` for that TDS, Cr each account (including ineligible tax),
+     Cr input GST for eligible tax. A Debit Note against a TDS Bill reverses
+     the Bill's TDS in proportion to the note's taxable value (excluding GST),
+     half-up to a rupee; the final note returning all remaining taxable value
+     takes the exact TDS remainder, and cumulative reversal never exceeds the
+     Bill deduction. Its `tds_deductions` row retains the original section,
+     taxable base and positive reversed amount; the TDS register displays it
+     as a negative deduction in the note's period. The party ledger, automatic
+     source allocation and unapplied credit use the net supplier credit, while
+     the note total remains gross for tax reporting. Reversed TDS may equal the
+     note total: that final note posts no `payables` line or party credit.
+     Reversed TDS above the total is refused (`NOTE_TDS_EXCEEDS_TOTAL`).
+     Cancelling reverses the entry and party credit and removes the register
+     row from active deductions.
+     Both copy `affectsTax` from the source. At post a note allocates to its
+     source up to the source's outstanding; the rest stays an unapplied source.
+     A Debit Note may store the supplier's credit note number in the
+     document `reference` (optional, at most 40 characters); it appears on
+     the note record and PDF independently of the reason.
+     Numbering uses `creditNotePrefix` and `debitNotePrefix`.
    - **Payment `against`.** `exposureSide` is explicit input. `payable`:
      `allocations` of `{ documentId, amount }` target posted Bills of the
      Party (1–50); the remainder is a supplier advance (Dr `supplierAdvances`).
      It takes no TDS: the Bill deducts at credit.
      `receivable` is a refund: the targets are the Payment itself and the
      allocations name Credit Notes as sources; the amount equals their sum
-     exactly and no TDS is allowed. Unused Receipt advances stay unrefundable
-     (Deferred).
+     exactly and no TDS is allowed. Cancelling reverses the entry and its allocations,
+     restoring the Credit Notes' unapplied amounts. Unused Receipt advances stay
+     unrefundable (Deferred).
      Bill **Pay** opens the Payment with its supplier and `against` / `payable`
      selected; Credit Note **Refund** opens it with its customer and `against` /
      `receivable` selected. The party lookup settles before the form opens;
      if it fails, the user can pick a party without losing the Payments page.
      Allocation amounts are still entered by the user.
+   - **Receipt `against` / `payable`.** A supplier's unapplied Debit Notes and payable Payment
+     advances are allocation sources; the Receipt is the payable target.
+     `allocations` of `{ documentId, amount }` (1–50) must sum exactly to
+     the receipt amount. Posting Dr the payment method's cash/bank account and
+     Cr `payables` settles the supplier credit without tax, TDS, adjustments
+     or an advance remainder. The same party, side and available-balance checks,
+     period locks and allocation reversals apply. Cancelling reverses the entry
+     and active allocations, restoring the notes or advances. Debit Note
+     **Refund** opens a Receipt with supplier and `against` / `payable` selected; if the
+     party lookup fails, the form still opens for manual selection.
    - **Fee, write-off and customer TDS.** A Receipt `against` may carry
-     `adjustments` of `{ kind: "fee" | "writeOff" | "tds", accountId?, amount }`,
-     at most 5: `fee` and `writeOff` name an active non-system expense leaf,
-     and `tds` posts to `tdsReceivable` with no account input. Each is a debit
-     that settles with the money: capacity is the amount received plus the
-     adjustments. A Payment `against` `payable` may carry `writeOff` (credit
-     to an active non-system income or expense leaf, settles) and `fee` (Dr
-     an expense leaf, Cr the method; does not settle). A document with
+     `adjustments` of `{ kind: "fee" | "writeOff", accountId, amount }` or
+     `{ kind: "tds", tdsSectionId, amount }`, at most 5. Fee and write-off
+     name an active non-system expense leaf; customer TDS requires a section
+     effective on the receipt date (`TDS_SECTION_INVALID` for an ineffective
+     or foreign section) and posts to `tdsReceivable` with no account input.
+     The section is retained on the adjustment line and shown with its amount
+     on the receipt. Each is a debit that settles with the money: capacity is
+     the amount received plus the adjustments. A Payment `against` `payable`
+     may carry `writeOff` (credit to an active non-system income or expense
+     leaf, settles) and `fee` (Dr an expense leaf, Cr the method; does not
+     settle). A document with
      settling adjustments allocates its whole capacity, so no advance
      remainder mixes with a write-off (`ADJUSTMENT_UNALLOCATED`). Adjustments
-     are stored as account lines with `adjustmentKind`.
+     are stored as account lines with `adjustmentKind` (and `tdsSectionId` for TDS).
    - **Header discount** (Invoice). Optional `discount` or `discountPercent`
      (up to two decimals, above 0 and at most 100, half-up to the paisa on the
      subtotal) splits pro rata over each line's pre-discount value, half-up.
@@ -456,7 +510,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      and `party.openCredits({ partyId, side, type?, q? })` returns sources with unapplied
      credit (`{ id, type, number, documentDate, unappliedPaise }`). Both return a
      page (`limit`, default 25) oldest first by date then id, with `hasMore`; the
-     next page passes the last row's id as `cursor`, so no row is out of reach.
+     next page passes the last row's `{ documentDate, id }` as `cursor`, so no row is out of reach.
      The optional credit `type` and the search `q` (number, reference or
      narration) filter before the page;
      reading credits requires the Note read grant. `allocation.apply` takes
@@ -489,6 +543,11 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      46(q)). Line HSN/SAC meets rule 46, so there is no HSN summary table; the
      GSTR-1 register carries that summary. One PDF link opens it inline; the
      browser viewer prints and saves.
+     The Receipt PDF uses `receipt.get` and lists the settled documents by number,
+     document date and amount applied (including debit notes and payment advances
+     on supplier refunds), plus fee, write-off and customer TDS adjustments with
+     the stored TDS section when available. Applied amounts less adjustments,
+     plus any remaining advance, reconcile to the amount received.
    - **Note PDF** at `/api/$orgSlug/notes/$noteId/pdf` uses `note.get` with
      `note:read` and the Invoice layout. It prints "Credit Note" or "Debit Note",
      the supplier and recipient snapshot names, addresses and GSTINs, note number
@@ -551,15 +610,15 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      party ledger lists use keyset pages plus separate totals; a CA can scroll
      a whole period. Full detail reports for JSON/PDF and XLSX use server-chosen
      limits of 5,000 and 100,000 lines respectively. XLSX calls the builder,
-     not the capped JSON procedure. The full-report query fetches limit + 1
-     lines and, above the limit, returns `BAD_REQUEST` `REPORT_TOO_LARGE` with
-     "choose a shorter period"; nothing is truncated.
+     not the capped JSON procedure. Before the joined detail read, a narrow
+     probe seeks to line `limit + 1` and returns `BAD_REQUEST` `REPORT_TOO_LARGE`
+     with "choose a shorter period"; nothing is truncated.
    - **Permissions.** Accounting reports need `report:readFinancial` (owner,
      accountant, ca). XLSX adds `export:read`. A PDF route calls the JSON
      procedure, so it needs the same grant. The party statement keeps
      `{ party: read, report: read }`; its XLSX adds `export:read`.
    - **Header.** Each result carries a `ReportHeader`: `organization:
-{ legalName, gstin: string | null }` and `timeZone` from
+     { legalName, gstin: string | null }` and `timeZone` from
      `organization_settings`, the range as requested, and `generatedAt` (an
      instant). XLSX rows 1–4 hold the legal name, the report title, the range
      and "Generated <date and time in the Organization zone> · period not
@@ -612,7 +671,7 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      30 March (`Cash in Hand` 50,000 Dr, `Capital Account` 50,000 Cr); an
      exempt Invoice to Priya for 10,000 on 10 April; a Receipt `against` it
      for 4,000 on 12 April, into `Cash in Hand`; a Journal Dr `Sibling
-Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
+     Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      on 28 April, cancelled during the test, so `reverseDocument` dates its
      reversal 28 April. The April trial balance shows `Cash in Hand`
      opening 50,000 Dr and closing 54,000 Dr, and both Journal entries; the
@@ -625,7 +684,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      (`buildTrialBalance` Dr/Cr netting and zero-row drop), and `GUARDED_CALLS`.
    - Interfaces: `accountActivity(orgId, { before } | { from, to })` returns
      `{ accountId, debitPaise, creditPaise }[]`; `accountActivitySince(orgId,
-{ through, since })` also returns `sinceDebitPaise` and `sinceCreditPaise`.
+     { through, since })` also returns `sinceDebitPaise` and `sinceCreditPaise`.
      `reportHeader(orgId, range)` returns `ReportHeader = { organization: { legalName: string; gstin: string | null }; timeZone: string; range: { from: string; to: string } | { asOf: string }; generatedAt: Date }`.
      `reportProfile(orgId)` returns the settings row with `financialYearStart`;
      `headerFromProfile(profile, range)` builds the header from it.
@@ -659,9 +718,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      of the financial year containing `asOf` through `asOf`, so the ledger's
      closing equals the row.
    - Acceptance, on the 6a fixture plus a `direct` Payment of 3,000 to an
-     expense on 20 April: April P&L shows income 10,000, expenses 3,500 (the
-     payment and the Journal) and net profit 6,500; the balance sheet at 30
-     April balances with a current-year row of 6,500; a posting dated in the
+     expense on 20 April: April P&L shows income 10,000, expenses 3,000 (the
+     payment; the Journal and its reversal net to zero) and net profit 7,000; the
+     balance sheet at 30 April balances with a current-year row of 7,000; a posting dated in the
      previous financial year lands in the earlier-years row; the P&L for a
      whole financial year equals the balance sheet's current-year row on its
      last day. `profit_and_loss` and `balance_sheet` benchmark scenarios over
@@ -677,23 +736,26 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      Organization, archived and system accounts included; a group is
      `BAD_REQUEST` `ACCOUNT_INVALID`, and a foreign id is `NOT_FOUND`. It
      returns `openingPaise`, `lines` of
-     `{ id, entryId, entryDate, kind, documentId, documentType, number, narration, partyName, debitPaise, creditPaise, balancePaise }`
+     `{ id, entryId, entryDate, kind, documentId, documentType, number, narration, partyName, contraAccountName, debitPaise, creditPaise, balancePaise }`
      ordered by entry date and line id, and `closingPaise`;
-     balances are signed, debit positive. A `reverse` row reads "Reversal of
-     <number>". An allocation entry (document type `allocation`) shows
-     "Allocation" and no link.
+     balances are signed, debit positive. `contraAccountName` is the other account
+     on the journal entry, or "Multiple" for several distinct other accounts.
+     A `reverse` row reads "Reversal of <number>: <cancellation reason>".
+     An allocation entry reads "Allocation: <source number> → <target number>"
+     and links to the source document.
    - `report.accountLedgerLines({ accountId, from, to, cursor?, limit })`
      pages ledger lines by entry date and line id; `report.accountLedgerSummary`
-     returns opening, debit, credit and closing amounts with the account.
+     returns the header, opening, debit, credit and closing amounts with the account.
    - `report.dayBook({ from, to, documentType? })` returns entries
      `{ entryId, entryDate, kind, documentId, documentType, number, narration, lines: [{ accountCode, accountName, partyName, debitPaise, creditPaise }] }`
      ordered by entry date, then entry id and line id, with debit and credit
-     totals; the size bound counts lines. `number` is `string | null`: an
-     allocation entry shows number null, narration "Allocation" and no link,
-     as in the ledger, and `documentType` may filter on `allocation`.
+     totals; the size bound counts lines. An allocation entry reads
+     "Allocation: <source number> → <target number>" and links to its source
+     document; `documentType` may filter on `allocation`. A reversal preserves
+     the cancellation reason in its narration.
    - `report.dayBookEntries({ from, to, documentType?, cursor?, limit })`
      pages complete entries by entry date and id; `report.dayBookSummary`
-     returns entry count and debit/credit totals in one statement.
+     returns the header, entry count and debit/credit totals in one statement.
      `export.dayBookXlsx({ from, to, documentType? })` reads the day book result.
    - Web: `/$orgSlug/reports/account-ledger?accountId=&from=&to=`, with an
      account combobox over `account.list` (archived included); a trial
@@ -723,6 +785,11 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      (either parameter may be absent): header, the Party block, opening, rows
      with running balance, closing. The party Ledger tab offers Download XLSX
      and PDF for its selected period.
+     A Bill row exposes `tdsPaise` when deducted: particulars show the gross
+     Bill and its TDS separately while the signed party line, debit/credit
+     amount and running balance remain net of TDS. The reversed Bill shows
+     the same gross and TDS, undoing the net exposure. This presentation
+     applies to the ledger, statement XLSX and PDF; the TDS register is unchanged.
    - Acceptance: Priya's April statement from the 6a fixture shows the
      Invoice, the Receipt and a closing balance of 6,000 in JSON, XLSX and
      PDF; a foreign `partyId` is `NOT_FOUND`.
@@ -774,8 +841,9 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      an opening credit writes no entry: it is already on the control account.
      Receipt `against` may target receivable claims, Payment `against`
      payable claims, and Apply credit may pair an opening credit with an
-     Invoice, a Bill or a claim of its side. Receipt and payable Payment
-     `allocations` take `documentId`; the refund takes `creditNoteId`.
+     Invoice, a Bill or a claim of its side. Both sides of Receipt `against`
+     and payable Payment allocations take `documentId`; a customer refund
+     Payment takes `creditNoteId`.
      Journal line `allocations.invoiceId` keeps its name: a Journal credit allocates only
      to Invoices (`applyAllocations`), never to an opening claim.
      `party.openItems` and `party.openCredits` list the items with the others,
@@ -808,15 +876,15 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      with its header on row 1 and data from row 2; every sheet but `Read me`
      may be empty:
 
-     | Sheet           | Columns (\* required)                                                                                  | Rules                                                                                                           |
-     | --------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-     | `Read me`       | Instructions; `B1` holds the template version `1`                                                      | Another version is `TEMPLATE_VERSION`                                                                           |
-     | `Opening`       | Opening date\*                                                                                         | One row; required when either of the last two sheets has rows; not in the future                                |
-     | `Accounts`      | Name\*, Parent\*, GST supply class                                                                     | Parent is a group's code or name or a type (Assets, …); `account.create` rules                                  |
-     | `Parties`       | Name\*, Roles\*, GSTIN, PAN, State code, Address, City, PIN code, Email, Phone                         | Roles comma-separated; `party.create` rules, GSTIN derivation included                                          |
-     | `Items`         | Name\*, Income account\*, Unit price\*, HSN/SAC, Unit, Tax code                                        | `item.create` rules; Unit price may be zero                                                                     |
-     | `Trial balance` | Account\*, Debit, Credit                                                                               | Exactly one amount above zero; Opening Balance account rules, except the two control rows                       |
-     | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\* | Unique by Party, Side, Type and Reference (trimmed, case-insensitive); Due date on claims only, not before Date |
+     | Sheet           | Columns (\* required)                                                                                                                                     | Rules                                                                                                           |
+     | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+     | `Read me`       | `A1` is `Template version`; `B1` holds the template version `1`; instructions include available GST tax codes and their organization rate-schedule source | Another version is `TEMPLATE_VERSION`                                                                           |
+     | `Opening`       | Opening date\*                                                                                                                                            | One row; required when either of the last two sheets has rows; not in the future                                |
+     | `Accounts`      | Name\*, Parent\*, GST supply class                                                                                                                        | Parent is a group's code or name or a type (Assets, …); `account.create` rules                                  |
+     | `Parties`       | Name\*, Roles\*, GSTIN, PAN, State code, Address, City, PIN code, Email, Phone                                                                            | Roles comma-separated; `party.create` rules, GSTIN derivation included                                          |
+     | `Items`         | Name\*, Income account\*, Unit price\*, HSN/SAC, Unit, Tax code                                                                                           | `item.create` rules; Unit price may be zero                                                                     |
+     | `Trial balance` | Account\*, Debit, Credit                                                                                                                                  | Exactly one amount above zero; Opening Balance account rules, except the two control rows                       |
+     | `Opening items` | Party\*, Side\* (Receivable, Payable), Type\* (Claim, Credit), Reference\*, Date\*, Due date, Amount\*                                                    | Unique by Party, Side, Type and Reference (trimmed, case-insensitive); Due date on claims only, not before Date |
 
      A cell is text, a number or a date. `readImportWorkbook` reads each
      cell's `type` and value from `sheet.cells` in sparse mode (a `formula`,
@@ -864,7 +932,10 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      Whenever the trial balance or opening items sheet has rows, each control
      row's signed net must equal its derived net (`OPENING_ITEMS_MISMATCH`,
      naming both figures); a missing control row and an empty items sheet
-     each count as zero, so a control balance without items is refused. Party
+     each count as zero, so a control balance without items is refused. If any
+     opening-item row has a read or domain error, neither control comparison
+     runs: an incomplete item total is not a trustworthy reconciliation.
+     Once the rows are corrected, mismatched controls are reported. Party
      balances are therefore checked at their control, as a CA ties AR and AP
      to the legacy trial balance. Control rows name the accounts by code or
      name (`1300 Accounts Receivable`, `2000 Accounts Payable` in the
@@ -1034,7 +1105,7 @@ Discount` (an expense leaf from `account.create`) / Cr `Cash in Hand` 500
      Account residual) is `TALLY_BILLS_MISMATCH`. The party balances become
      the `receivables` and `payables` trial balance rows. Every other
      ledger is an `Accounts` row under its mapped parent plus a `Trial
-balance` row for a non-zero balance; a name matching an existing
+     balance` row for a non-zero balance; a name matching an existing
      account maps to it instead. A non-zero income or expense balance is
      `TALLY_MID_YEAR`: 7d supports a financial-year-boundary cutover until a
      mid-year export is checked.
@@ -1072,11 +1143,13 @@ balance` row for a non-zero balance; a name matching an existing
      derives the type from it. A group already has children; posting leaves
      cannot become parents. A foreign parent is `NOT_FOUND`.
    - Income requires `supplyClass`; other types refuse it (`BAD_REQUEST`).
-     Codes are generated after the highest existing code in the applicable
-     range: assets 1200–1999, liabilities 2000–2999, equity 3001–3999, income
-     5000–5999 and expenses 6000–6799. Templates reserve 3000 and 6800–6999.
-     Cash and bank children retain their group's 99-code range. Exhaustion is
-     `ACCOUNT_CODES_FULL`; a concurrent code collision is `CONFLICT`.
+     A root leaf takes the next code after the highest existing code of its type:
+     assets 1200–1999, liabilities 2000–2999, equity 3001–3999, income
+     5000–5999 and expenses 6000–6799. Under a group, use the first free
+     code in that group's range (the type range under Current Assets or Current
+     Liabilities, the next 99 codes under Cash or Bank Accounts). Templates
+     reserve 3000 and 6800–6999. Exhaustion is `ACCOUNT_CODES_FULL`;
+     a concurrent code collision is `CONFLICT`.
    - A case-insensitive duplicate active account name is
      `ACCOUNT_NAME_TAKEN`, enforced by a partial unique index on the active
      rows' `lower(name)`; restoring an archived account whose name is now taken
@@ -1306,10 +1379,14 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   while a stale date is `CONFLICT`. A fresh value deliberately permits reopening
   with an earlier date or null. The update appends its `period_locks` history row
   `{ kind: general | tax, lockedThrough | null, reason, createdBy }` atomically.
-  History's highest identity id per kind supplies the latest reason and setter
-  to the settings screen, not a posting-time lookup. `lock_exceptions` stores
+  The append-only history feeds the Locks page in identity order, showing each
+  change's prior and new date, kind, setter, time and reason. History's highest
+  identity id per kind supplies the latest reason and setter to the settings
+  screen, not a posting-time lookup. `lock_exceptions` stores
   `{ userId, expiresAt, reason, grantedBy, revokedAt/revokedBy }`;
-  active means not revoked and not expired on the database clock.
+  active means not revoked and not expired on the database clock. Granting
+  requires a current member with at least one posting permission (union of roles),
+  expiry in the next 30 days, and no other active exception for that member.
   Every posting, cancellation and allocation reads settings once `FOR SHARE` (or stronger)
   inside its transaction, before document locks. `lock.set` and
   `lock.revokeException` take `FOR UPDATE` and wait for those readers to commit.
@@ -1321,7 +1398,8 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   entry `affectsTax`. Procedures and permissions: `lock.get` (`lock:read` —
   owner, accountant, ca), `lock.set` (`lock:set` — owner, ca),
   `lock.grantException`/`lock.revokeException` (`lock:grantException` — owner,
-  ca; `EXPIRY_PAST`, `MEMBER_INVALID`, revoke of an inactive row is
+  ca; a grant lasts 1, 7 or 30 days from the database clock and refuses with
+  `MEMBER_INVALID` or `EXCEPTION_ACTIVE`; revoke of an inactive row is
   `CONFLICT`); all three mutations audited. Revoke takes no reason, only a
   confirmation: an exception expires by itself, and Zoho Books asks only for
   confirmation to end a partial unlock. Web: Settings > Opening balance
@@ -1330,8 +1408,7 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   `LOCKED` on the date field. Change and Grant are URL-backed Dialogs; Change
   requires a loaded lock state. Switching Organization or lock kind starts a
   fresh form; a refetch preserves the original expected lock date for CAS.
-  Expiry retains minute-precision local time in the Organization zone and rejects
-  nonexistent DST times instead of shifting them. Exceptions are
+  The Grant Dialog lists only members who can post. Exceptions are
   user-scoped until revoked or expired: removing membership denies all access,
   but re-admitting the same user does not revoke a still-live grant.
 
@@ -1356,14 +1433,17 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   cost.
 - **Gateways, bank reconciliation, mandatory bank references, bank details on
   invoices.** Gate: the [Product](../product.md#scope) evidence gates.
+- **Files attached to Invoices, Bills, Receipts and Parties.** Files stay
+  organization-level until a pilot asks to keep source papers with a record.
 - **Period-close balance snapshot** (like ERPNext's Account Closing Balance).
   Gate: a trial balance or ledger misses its latency budget at pilot volume.
 - **Partitioning `journal_lines`.** Gate: ten million rows.
 - **TDS thresholds, amount overrides and the no-PAN rate** (§397(2)). A
   Payment `against` Bills takes no TDS; the Bill deducts at credit. An advance
   Payment with TDS followed by a Bill with TDS is not netted: the accountant
-  reconciles by Journal. Gate for thresholds, overrides and the no-PAN rate:
-  the first pilot case.
+  reconciles by Journal. When the supplier has an open TDS-deducted advance,
+  choosing a TDS section on a Bill shows a non-blocking warning, not a refusal.
+  Gate for thresholds, overrides and the no-PAN rate: the first pilot case.
 - **TDS schedule updates for existing Organizations.** Gate: the first statute
   change after pilot data exists.
 - **Clearing TDS Payable** by Journal, on purpose: a Payment cannot name a
@@ -1395,7 +1475,6 @@ Implemented. CA acceptance is open; party-line settlement is in slice 9.
   them. Gates: multi-currency's spec; a pilot Organization with a second
   GSTIN; cost centres as in the Journal table.
 - **A time-zone setting.** Gate: the first Organization outside India.
-- **Lock history view.** The rows exist; a list arrives when a CA asks.
 - **Year-end close.** Gate: the first pilot year end.
 - **Statutory statements** (Schedule III layout, current and non-current
   split, notes). Slice 6 prints management statements from the chart. Gate: a
@@ -1430,14 +1509,12 @@ Built decisions are incorporated in the contracts above. The
 [work registry](../README.md#work-lifecycle) tracks unfinished work; revisit
 these rules with the CA.
 
-| #   | Status             | Rule                                                                                                                                                                                                                                       | Basis                                                                                |
-| --- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| D6  | Decided, not built | A Receipt can refund a supplier: `refund` settles a vendor's unapplied Debit Notes and Payment advances, mirroring Payment refunds of Credit Notes.                                                                                        | Zoho Vendor Credits and Payments Made offer Refund.                                  |
-| D7  | Decided, not built | A Debit Note against a Bill with TDS reverses TDS in proportion to the taxable value returned.                                                                                                                                             | ERPNext returns recompute withholding on the negative net total.                     |
-| D9  | Policy             | Payment Method is one name bound to one money account, with no receipt-only or payment-only flag.                                                                                                                                          | ERPNext and Zoho share modes across both directions.                                 |
-| D10 | Policy             | Reversing an allocation returns a released credit to its source's unapplied balance under its own `advanceSupply`. It has no tax effect while `taxableService` advances are refused; GST advance documents must reopen the GST adjustment. | ERPNext UnReconcile restores unallocated money; Zoho restores Excess Payment credit. |
-| D12 | Policy             | No negative-cash block or warning, no future-lock-date block. Inactive parties and accounts may keep a balance; inactivity blocks new documents, so reactivate to settle.                                                                  | ERPNext and Zoho allow all three by default.                                         |
-| D14 | Policy             | TDS is half-up to the rupee per deduction so whole-rupee challan deposits match the ledger.                                                                                                                                                | No statutory per-deduction rule found; ERPNext offers rupee rounding.                |
+| #   | Status | Rule                                                                                                                                                                                                                                       | Basis                                                                                |
+| --- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| D9  | Policy | Payment Method is one name bound to one money account, with no receipt-only or payment-only flag.                                                                                                                                          | ERPNext and Zoho share modes across both directions.                                 |
+| D10 | Policy | Reversing an allocation returns a released credit to its source's unapplied balance under its own `advanceSupply`. It has no tax effect while `taxableService` advances are refused; GST advance documents must reopen the GST adjustment. | ERPNext UnReconcile restores unallocated money; Zoho restores Excess Payment credit. |
+| D12 | Policy | No negative-cash block or warning, no future-lock-date block. Inactive parties and accounts may keep a balance; inactivity blocks new documents, so reactivate to settle.                                                                  | ERPNext and Zoho allow all three by default.                                         |
+| D14 | Policy | TDS is half-up to the rupee per deduction so whole-rupee challan deposits match the ledger.                                                                                                                                                | No statutory per-deduction rule found; ERPNext offers rupee rounding.                |
 
 ### CA acceptance
 
@@ -1451,3 +1528,11 @@ Bill; a Receipt shared by two Invoices, one allocation reversed, then cancelled;
 cutover with open Invoices and an advance for one Party; a TPA settlement net of TDS
 with a disallowance; a dealer receipt net of TDS and a bank charge; a school caution
 deposit; an IPD deposit. None blocks building; each blocks CA acceptance.
+
+Open questions for the CA from the walkthrough, not built until answered:
+whether a lock exception opens every locked date or only a named range; whether
+the TDS register "Net" means taxable value less TDS or the amount paid; whether
+GST 3% and 0.25% join the rate schedule for a pilot's goods. Built as owner
+defaults, to confirm: a 30-day maximum exception, required HSN/SAC on taxable
+Items, a Bill warning when the supplier has an open TDS-deducted advance, and
+audited file uploads and deletes.

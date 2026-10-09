@@ -26,8 +26,8 @@ see this page.
 
 Open **Settings → Locks**. **Period locks** shows **Books** and **Tax period**, each
 with **Locked through** (or "Not locked"), the **Reason**, and **Set by** with the
-date and time of the change. **Active exceptions** lists the people who may post into
-the locked books right now.
+date and time of the change. **Active exceptions**
+lists the people who may post into the locked books right now.
 
 <Frame caption="Cedar Components after closing April–June 2026: both locks at 30 Jun 2026.">
   ![Locks page with both locks set](./images/locks-page-locked.webp)
@@ -115,20 +115,21 @@ The tax message comes first when both apply. An exception does not clear it.
 
 ## Let one person post a late correction
 
-An exception lets one member post on or before the books lock until a time you
-choose. Use it for a correction your CA asks for after the close. The tax lock has no
+An exception lets one member post or cancel documents dated on or before the books
+lock, for 1, 7 or 30 days. Use it for a correction your CA asks for after the close. The tax lock has no
 exceptions: to post a GST document into a filed period you must move the tax lock
 itself, which you should do only with your CA.
 
 <Steps>
   <Step title="Open Grant exception">In **Settings → Locks**, click **Grant exception**.</Step>
   <Step title="Choose the member">
-    In **Member**, choose the person who will post, for example Priya Nair, the accountant.
+    In **Member**, choose the person who will post, for example Priya Nair, the accountant. The list
+    shows only members who can post documents. A member who already has an active exception must use
+    that grant or have it revoked before another is issued.
   </Step>
-  <Step title="Choose when it expires">
-    **Expires** is a date and time in the organization's time zone (the hint reads "Local time in
-    Asia/Kolkata."), whatever time zone your own computer uses. Keep it short: the end of the
-    working day is usually enough.
+  <Step title="Choose for how long">
+    In **For how long**, choose **1 day**, **7 days** or **30 days**. Keep it short: 1 day is
+    usually enough. You can revoke it sooner.
   </Step>
   <Step title="Give the reason and grant">
     Name the entry and who asked for it, then click **Grant exception**. The message "Exception
@@ -136,9 +137,12 @@ itself, which you should do only with your CA.
   </Step>
 </Steps>
 
-<Frame caption="An exception for Priya until 6:00 pm on 4 Oct 2026.">
+<Frame caption="An exception for Priya.">
   ![Grant exception dialog](./images/locks-exception-dialog.webp)
 </Frame>
+
+The dialog reminds you: "For a short time, this member can post or cancel documents
+dated on or before the books lock. The tax lock always stays closed."
 
 The exception appears under **Active exceptions** with the member, **Expires**,
 **Reason** and **Granted by**. Until it expires, that member can post any document
@@ -166,17 +170,17 @@ Grant it for the shortest time that works, and revoke it as soon as the correcti
 is posted.
 :::
 
-## Lock history
+## Find lock changes in the audit log
 
-The Locks page shows only the current lock for each kind, with its reason and who
-set it. The full history is in [Settings → Audit](/administration/audit-log), the
-[audit log](/glossary#audit-log) that records every sensitive action:
+The Locks page shows only the current locks and active exceptions. To see earlier
+changes, open [Settings → Audit](/administration/audit-log) and search or choose a
+period:
 
-| Audit action           | Details                                         |
-| ---------------------- | ----------------------------------------------- |
-| Period lock changed    | kind (general or tax), the new date, the reason |
-| Lock exception granted | the member, the expiry, the reason              |
-| Lock exception revoked | the exception                                   |
+| Audit action           | Details                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| Period lock changed    | kind (general or tax), the new date, the reason             |
+| Lock exception granted | the member's name and email, the number of days, the reason |
+| Lock exception revoked | the exception                                               |
 
 Expired exceptions do not appear on the Locks page; their grant stays in the audit
 log.
@@ -187,13 +191,13 @@ log.
 | ------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------- |
 | Books are locked through 30 Jun 2026. Ask for an exception to post on or before that date. | Any document form                               | Date the document after the lock, or ask the owner or CA for an exception |
 | The tax period is locked through 30 Jun 2026.                                              | Invoice, bill, note, GST receipt or GST journal | Post in the open period, or ask the owner or CA to reopen the tax lock    |
-| Choose an expiry in the future.                                                            | Grant exception                                 | Pick a later time; the server's clock decides                             |
-| Choose a local time that exists in Asia/Kolkata                                            | Grant exception                                 | Pick another time (applies only in zones with daylight saving)            |
 | Choose a member                                                                            | Grant exception                                 | Pick the person who will post                                             |
+| Choose a member of this organization.                                                      | Grant exception                                 | The person left or was removed; refresh and choose a current member       |
+| This member already has an active exception.                                               | Grant exception                                 | Use the existing grant, or revoke it before granting another              |
 | This lock changed after you opened it.                                                     | Change lock                                     | Reopen the dialog and review the new date                                 |
 | This exception is not active.                                                              | Revoke                                          | It already expired or was revoked; refresh the page                       |
 
-<Frame caption="An expiry in the past is refused.">
+<Frame caption="An earlier version of the Grant exception dialog, which asked for an expiry date and time.">
   ![Past expiry error](./images/locks-exception-past-expiry.webp)
 </Frame>
 

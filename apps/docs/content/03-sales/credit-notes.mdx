@@ -40,9 +40,9 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
   </Step>
   <Step title="Enter the taxable amount per line">
     **Source lines** lists each line of the invoice with its [HSN or SAC](/glossary#hsn-sac) code
-    (the GST classification code), taxable value, GST rate and tax. In **Amount**, type the taxable
-    value to credit on each line you are reducing, here **4410** on the valve line. Click **Full**
-    to credit a whole line. Leave the other lines empty.
+    (the GST classification code), **Left to return** (the taxable value not yet credited), GST rate
+    and tax. In **Amount**, type the taxable value to credit on each line you are reducing, here
+    **4410** on the valve line. Click **Full** to credit a whole line. Leave the other lines empty.
   </Step>
   <Step title="Give the reason">
     Type the **Reason**, for example the customer's return note number and why the goods came back.
@@ -66,12 +66,10 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
 - The note uses the invoice's own GST rate, [place of supply](/glossary#place-of-supply) and
   [CGST/SGST or IGST](/glossary#cgst-sgst-igst)
   split. You cannot change them.
-- The tax is worked out when you post. "Tax and round-off are calculated on posting"
-  under the lines shows only the selected taxable value.
-- A line cannot be credited beyond what remains of it after earlier credit notes.
-  The form shows the line's original taxable value and **Full** fills that, so after
-  an earlier partial note type the remaining amount yourself. Otherwise the post is
-  refused with "The note exceeds what remains of "Brass ball valve 25mm"."
+- The form previews taxable value, GST, round-off and total before posting.
+  The source line's **Left to return** excludes earlier posted credit notes;
+  **Full** fills only that remainder. A cancelled note releases its amount again.
+  If another note posts while this form is open, refresh the source and try again.
 - Crediting a whole line returns exactly the tax that line still carries, so a full
   return leaves no stray paise.
 - The note total is rounded to whole rupees, like an invoice.
@@ -82,9 +80,9 @@ discount, so the taxable value (the value before GST) to credit is 10 × ₹441 
   ![Credit note record](./images/credit-notes-record-sheet.webp)
 </Frame>
 
-The record shows the total, **Unapplied**, the date, **Against** (a link to the
-invoice), the reason, the **Allocations** it made, and each line with taxable value,
-CGST, SGST, IGST and total.
+The **Credit note** record shows its number and party, the total, **Unapplied**, the
+date, **Against** (a link to the invoice), the reason, the **Allocations** it made,
+and each line with taxable value, CGST, SGST, IGST and total.
 
 For CN26-27/2: taxable ₹4,410.00, CGST ₹396.90, SGST ₹396.90, total ₹5,203.80
 rounded to **₹5,204.00**.
@@ -95,8 +93,9 @@ Click **PDF** on the record to open the **Credit Note** in a new tab. Use the
 browser viewer to print or save it. It shows your organization's and the customer's
 names, addresses and GSTINs, the note number and date, the original invoice number
 and date, each line's taxable value, GST rate and tax, place of supply, totals,
-reason and signature line. If the invoice had a delivery address, the note keeps
-that **Ship to** address, state name and code. A cancelled note prints **CANCELLED**.
+reason and signature line. If the invoice delivered to an address other than the
+customer's address on the note, the note prints that original address as **Ship to**,
+with its state name and code. A cancelled note prints **CANCELLED**.
 
 ## Apply to the invoice
 
@@ -176,13 +175,13 @@ Cancellation is refused if the note date is tax-locked, or books-locked without 
 
 ## Common messages
 
-| Message                                          | What to do                                                              |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| Enter an amount on at least one line             | Type a taxable amount on a line                                         |
-| Enter an amount within this line's taxable value | The amount is more than the line's original taxable value               |
-| The note exceeds what remains of "…".            | Earlier notes already credited part of this line; type a smaller amount |
-| Note total exceeds the source document total.    | Earlier notes already credit most of the invoice                        |
-| Date must be on or after the source date         | Move the note date on or after the invoice date                         |
+| Message                                                   | What to do                                                              |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Enter an amount on at least one line                      | Type a taxable amount on a line                                         |
+| Enter an amount up to what is left to return on this line | The amount is more than the line's **Left to return**                   |
+| The note exceeds what remains of "…".                     | Earlier notes already credited part of this line; type a smaller amount |
+| Note total exceeds the source document total.             | Earlier notes already credit most of the invoice                        |
+| Date must be on or after the source date                  | Move the note date on or after the invoice date                         |
 
 ## Related pages
 

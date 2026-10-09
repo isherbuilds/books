@@ -102,7 +102,10 @@ Run the [founder command](./development.md#accounts-and-seed-data) once;
 the founder creates Organizations at `/create` and staff join at `/join`.
 Invitations follow [Architecture](./architecture.md#tenancy-and-authorization):
 hand links over directly, treat them like temporary passwords, and cancel a
-leaked link. There is no password reset yet.
+leaked link. An owner can copy a live pending link again from Settings → Members
+when an invited user loses it. There is no password reset yet; users locked out
+should contact the person who operates their Accly Books installation, not
+expect an organization owner to reset their password.
 
 ## Backups and restore
 

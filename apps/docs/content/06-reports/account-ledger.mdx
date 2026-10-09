@@ -55,14 +55,14 @@ The line above the table sums up the period:
 
 The table heading shows the account code and name. The columns are:
 
-| Column                | Meaning                                                                             |
-| --------------------- | ----------------------------------------------------------------------------------- |
-| **Date**              | The document date                                                                   |
-| **Document**          | The document number. Click it to open the document.                                 |
-| **Narration**         | The [narration](/glossary#narration), the short note typed on the document          |
-| **Party**             | The [party](/glossary#party) (customer or vendor) on this line, if the line has one |
-| **Debit**, **Credit** | The amount of this line ([debit and credit](/glossary#debit-credit))                |
-| **Balance**           | The running balance after this line, Dr or Cr                                       |
+| Column                | Meaning                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Date**              | The document date                                                                                                 |
+| **Document**          | The document number. Click it to open the document.                                                               |
+| **Narration**         | The [narration](/glossary#narration), the document note, with its counterpart account (or "Multiple" for several) |
+| **Party**             | The [party](/glossary#party) (customer or vendor) on this line, if the line has one                               |
+| **Debit**, **Credit** | The amount of this line ([debit and credit](/glossary#debit-credit))                                              |
+| **Balance**           | The running balance after this line, Dr or Cr                                                                     |
 
 The first row is **Opening** and the last row is **Closing**.
 
@@ -73,13 +73,11 @@ JV26-27/4 for Orion Fabrication) take off ₹2,37,761.00. The closing balance is
 
 ### Special lines
 
-| Line                        | What it means                                                                                                                                                                                                                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Reversal of RCT26-27/5"    | The document was cancelled. The [reversal](/glossary#reversal) is dated the document's original date and undoes the original line.                                                                                                                                                                                     |
-| "Allocation" with no number | An [allocation](/glossary#allocation): an [advance](/glossary#advance) or credit was applied to an invoice or bill. It moves the amount between accounts, for example from Customer Advances to Accounts Receivable. It has no document of its own, so it has no link. Open the party's invoice to see the allocation. |
-
-The reason you type when you cancel a document does not appear in the ledger. Find it
-in the [audit log](/administration/audit-log), the record of sensitive actions ([audit log](/glossary#audit-log)).
+| Line                                                      | What it means                                                                                                                                                               |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Cancelled RCT26-27/5: Duplicate receipt"                 | The document was cancelled for the stated reason. The [reversal](/glossary#reversal) is dated the original document date and undoes the original line.                      |
+| "RCT26-27/2 applied to INV26-27/3"                        | An [allocation](/glossary#allocation) applied a credit to another document. Its document link opens the source receipt or note; the narration names both source and target. |
+| "Undone: RCT26-27/2 applied to INV26-27/3: Wrong invoice" | Someone undid the applied amount for the stated reason. The credit is free to apply again.                                                                                  |
 
 ## Long ledgers
 

@@ -47,9 +47,10 @@ shortcuts. Each interaction (select Party, add line, post) paints within
    Invoice quoting and payment lines follow the
    [Invoice editor contract](./invoice-editor.md#contract).
 5. **Keyboard.** Enter moves to the next field (a Link Field first commits its
-   match), except in a textarea or during IME composition. Mod+Enter posts. Esc
-   closes the innermost popup, then the panel, then the overlay, one per press.
-   Tab commits a highlighted match; Create needs Enter or a click.
+   match), except in a textarea or during IME composition. Mod+Enter posts;
+   its footer hint is shown only on non-touch desktop widths. Esc closes the
+   innermost popup, then the panel, then the overlay, one per press.
+   Tab commits a highlighted match only after typing; Create needs Enter or a click.
 6. **Two bindings**: Mod+K for the palette, and Mod+Enter per form. No
    registry, customizer or F-keys until H4 fails.
 7. **Palette**: a cmdk `Command` (`shouldFilter={false}`) in the Base UI
@@ -96,6 +97,13 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     carries only what its columns, card, palette entry and cursor read;
     everything else is one click away in the record Sheet. Search still
     matches the reference and narration on the server.
+    Receipts, Payments, Invoices and Bills show one line under the filters from a
+    tenant-scoped aggregate over the full filter, not the loaded page: count,
+    amount, unpaid on Invoices and Bills, and the split by Payment Method on
+    Receipts and Payments when more than one method appears. Posted documents
+    only, unless the filter names drafts or cancelled ones. Choose a single Date
+    on Receipts for day-close totals. Aggregates have no cursor, share the list
+    predicate and refetch through the existing domain invalidations and on focus.
     Open-item and credit picker paging follows
     [Accounting core](./accounting-core.md#slices). Apply credit is a compact
     Dialog over the record

@@ -25,8 +25,9 @@ outside it can open them.
    message says, for example, "Uploaded GST-registration-certificate.pdf", and
    the file appears at the top of the list.
 
-The list shows each file's name, type, size and the date and time it was added.
-Any file type is accepted. Upload one file at a time.
+The list shows each file's name, type, uploader's name, size and the date and
+time it was added. If the uploader's account has been deleted, it shows
+**Former member**. Any file type is accepted. Upload one file at a time.
 
 If the upload fails, the message says why. A file over the size limit set for
 your installation shows "File too large. Maximum allowed size is … bytes."
@@ -73,11 +74,12 @@ organization or send the file itself.
   ![Delete file confirmation](./images/files-delete-confirm.webp)
 </Frame>
 
-A deleted file cannot be restored. Each deletion is written to the
-[audit log](/administration/audit-log) (the record of sensitive actions) as **File deleted**. The **Target** column shows the file's storage key
-(`file:<organization id>/<id>/<name>`), which ends in the file name with spaces
-and special characters replaced by hyphens.
-Uploads are not recorded there, and the list does not show who uploaded a file.
+Successful uploads and deletions are written to the
+[audit log](/administration/audit-log) (the record of sensitive actions) as
+**File uploaded** and **File deleted**. The original file name appears in
+**On** and **Details**. Hover over **On** to see the stored reference
+(`file:<organization id>/<id>/<sanitized name>`). Failed or unfinished uploads
+are not recorded as successes.
 
 ## When there are no files
 
@@ -86,5 +88,5 @@ A new organization shows "No files yet".
 ## Related pages
 
 - [Roles and access](/getting-started/roles-and-access): who can upload and delete.
-- [Audit log](/administration/audit-log): file deletions and refused attempts.
+- [Audit log](/administration/audit-log): uploads, deletions and refused attempts.
 - [Handover](/administration/handover): which files to collect before a handover.
