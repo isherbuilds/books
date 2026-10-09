@@ -618,6 +618,85 @@ test("cancelling a supplier refund leaves another payment's released advance alo
   expect(lines.reduce((total, line) => total + line.debit - line.credit, 0n)).toBe(5_000n);
 });
 
+test("cancelling a supplier refund releases a payment that settled it at post", async () => {
+  const vendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Settled Refund Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  const supplierAdvances = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ systemKey }) => systemKey === "supplierAdvances",
+    ),
+    "supplier advances account",
+  );
+
+  const advance = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "advance",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+  });
+
+  const refund = await api.receipt.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ documentId: advance.id, amount: "25.00" }],
+  });
+
+  const reason = "entered in error";
+
+  const [refundApply] = (
+    await api.receipt.get({ orgSlug: organization.slug, receiptId: refund.id })
+  ).allocations;
+
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: required(refundApply, "refund allocation").id,
+    reason,
+  });
+
+  // The refund is now an open payable claim; a payment settles it at post and stays applied.
+  const payment = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ documentId: refund.id, amount: "25.00" }],
+  });
+
+  await api.receipt.cancel({ orgSlug: organization.slug, receiptId: refund.id, reason });
+
+  const lines = await db
+    .select({ debit: journalLines.debit, credit: journalLines.credit })
+    .from(journalLines)
+    .where(
+      and(
+        eq(journalLines.orgId, organization.id),
+        eq(journalLines.accountId, supplierAdvances.id),
+        eq(journalLines.partyId, vendor.id),
+      ),
+    );
+
+  // Cancelling the refund releases the payment into an advance, and the GL agrees.
+  expect(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id })).unappliedPaise,
+  ).toBe(2_500n);
+  expect(lines.reduce((total, line) => total + line.debit - line.credit, 0n)).toBe(5_000n);
+});
+
 test("supplier refund refuses amounts above the unapplied source", async () => {
   const vendor = await api.party.create({
     orgSlug: organization.slug,
