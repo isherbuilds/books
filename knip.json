@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "bun": false,
+  "ignoreWorkspaces": ["apps/docs"],
+  "ignore": ["**/routeTree.gen.ts", "tests/fixtures/**", "tests/support/assets.d.ts"],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "chrome-devtools-axi",
+    "oxfmt",
+    "oxlint",
+    "portless",
+    "turbo"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.ts",
+        "tools/oxlint/*/index.ts",
+        "tests/**/*.test.ts",
+        "tests/isolated/*.ts",
+        "tests/support/preload.ts"
+      ]
+    },
+    "apps/web": {
+      "entry": [
+        "src/routes/**/*.tsx",
+        "src/router.tsx",
+        "src/start.ts",
+        "src/lib/cmdk-dialog-stub.ts",
+        "server/**/*.ts"
+      ]
+    },
+    "apps/server": { "entry": ["src/index.ts"] },
+    "packages/*": { "entry": ["src/index.ts"] }
+  }
+}

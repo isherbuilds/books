@@ -94,16 +94,11 @@ receive their own visual themes.
 
 ## 6. Test — `tests/integration/tenancy.test.ts`
 
-Four questions, all of them:
-
-1. Is the data invisible from another org?
-2. Does the same client work with two org inputs concurrently?
-3. Is a request naming a **foreign** org `FORBIDDEN`?
-4. Is a **removed** member `FORBIDDEN` on the very next request?
-
-Use `createTestUser`, `createOrganization`, `joinOrganization`, `clientFor`, and
-`expectORPCCode`. Assert oRPC codes, not message text. For anything that reads
-back a fire-and-forget `audit()` write, use `eventually`.
+Add a `GUARDED_CALLS` entry for each new procedure. The suite fails if an
+org-scoped procedure lacks one, and it proves the foreign-org and removed-member
+refusals for every entry. Hand-write a test only for a domain-specific leak, with
+`createTestUser`, `createOrganization`, `joinOrganization`, `clientFor` and
+`expectORPCCode`. Assert oRPC codes, not message text.
 
 ## 7. Gate
 
@@ -115,5 +110,5 @@ Run `bun run check-types`, then `bun run test` for the tenancy test. `test` wipe
 
 - [ ] Hard rules 1, 2, 4 and 5 hold for every file touched.
 - [ ] Edit-token columns are `timestamptz(3)`, and writes set them with `nextEditToken` (`lib/conflict.ts`).
-- [ ] The tenancy test answers all four questions for this domain.
+- [ ] Each new procedure has a `GUARDED_CALLS` entry in the tenancy test.
 - [ ] Behaviour that changed has its doc updated in the same change.

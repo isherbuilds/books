@@ -100,7 +100,8 @@ local database and file-store data. The command refuses non-local Docker context
 | --------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `bun run dev`                                             | Services, migrations, all apps                                              |
 | `bun run dev:status`                                      | Read-only service and migration check                                       |
-| `bun run check-types`                                     | Type-check packages and `tests/`                                            |
+| `bun run verify`                                          | Read-only gate: lint, format check, types, migration drift                  |
+| `bun run check-types`                                     | Type-check packages, `tests/`, `scripts/` and `tools/`                      |
 | `bunx oxlint`                                             | Non-writing lint check                                                      |
 | `bunx oxfmt --check .`                                    | Non-writing repository format check                                         |
 | `bun run check`                                           | Run oxlint, then write formatting                                           |
@@ -108,6 +109,8 @@ local database and file-store data. The command refuses non-local Docker context
 | `bun run build`                                           | Production-build all workspaces                                             |
 | `bun run db:up`                                           | Start PostgreSQL and SeaweedFS                                              |
 | `bun run db:generate`                                     | Generate a migration from the schema                                        |
+| `bun run db:check`                                        | Fail if migrations differ from what `db:generate` writes; no database       |
+| `bun run knip`                                            | Unused files, exports and dependencies (knip brings its own TypeScript 5)   |
 | `bun run db:migrate`                                      | Apply migrations                                                            |
 | `bun run db:seed -- --reset`                              | Reset and seed; deletes local data                                          |
 | `bun run db:seed:volume`                                  | 100,000 receipts each for Meridian Traders and Ridgeview Academy by default |
@@ -133,10 +136,14 @@ organization. The JSON report goes to
 stdout and one checked line per scenario to stderr. Quote a performance number
 only on `db:seed:volume` data or more.
 
-**Check policy.** Validation and deployment are manual. GitHub Actions is
-disabled; this repository has no CI/CD workflows or required automated status
-checks. Run the checks appropriate to each change before pushing. `bun run
-check` is a local fixer because it writes formatting. A focused change runs the
+**Check policy.** Deployment is manual. GitHub Actions is disabled; this
+repository has no CI/CD workflows or required automated status checks. `bun run
+verify` is the read-only gate. `bun install` points `core.hooksPath` at
+`.githooks`, whose pre-commit hook runs it, and `.claude/settings.json` runs it
+when an agent stops and returns any failure to the agent. Tests stay out of both
+hooks because they wipe the test database. Run the checks appropriate to each
+change before pushing. `bun run check` is a local fixer because it writes
+formatting. A focused change runs the
 smallest existing checks that cover it. A docs-only change runs `bunx oxfmt
 --check <files>`. End-user content runs `bun run --cwd apps/docs build`. An
 SSR or UI change needs a production build and the running app. A read-only
@@ -176,8 +183,9 @@ Follow the [repository hard rules](../AGENTS.md#hard-rules).
 React Compiler runs through oxc (`viteReact({ compiler: true })`), whose pass
 rewrites bigint literals inside a component to `undefined`. Amounts therefore go
 through `@accly/api/core/money` helpers, and `oxlint` bans bigint literals in
-`.tsx`. Extract an owner before `memo` or `useMemo`, and cite a measurement for
-any that stay. `DataTable` columns live at module scope.
+`.tsx`. The compiler also memoizes, so `accly/no-manual-memo` bans `useMemo`,
+`useCallback` and `memo` in `apps/web` and `packages/ui`. `DataTable` columns
+live at module scope.
 
 | Value                              | Owner                           |
 | ---------------------------------- | ------------------------------- |
@@ -218,5 +226,9 @@ different dates. It switches the mounted Dialog from Books to Tax, checks fresh
 drafts and the outgoing CAS snapshot, and intercepts submission without saving.
 Network requests stay blocked in that document, including after a failed check.
 Reload the page afterward to restore normal operation.
+
+Each `accly` lint rule has a fixture pair in `tests/fixtures/lint`:
+`<rule>.bad.<ext>` must be flagged and `<rule>.good.<ext>` must not.
+`tests/unit/lint-rules.test.ts` fails when a rule has no pair.
 
 When a mistake repeats, promote the fix: doc, test, type, lint, script.

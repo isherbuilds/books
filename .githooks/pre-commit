@@ -1,0 +1,4 @@
+#!/bin/sh
+# Read-only gate: lint, format check, types, migration drift. Tests stay out because
+# they wipe the test database. Enabled by `bun install` (the root `prepare` script).
+exec bun run verify

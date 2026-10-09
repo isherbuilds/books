@@ -67,22 +67,37 @@ Run this before reporting UI, route, or API work.
 
 A rule with only `prose` behind it that an agent breaks again moves up a level in the same change.
 
-| Rule                                                           | Enforced by                                                                     |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| No bigint literal in `.tsx`                                    | lint `accly/no-bigint-in-components`                                            |
-| No transition or animation class outside overlays (design §11) | lint `accly/no-motion-on-controls`; overlays exempt by file in `.oxlintrc.json` |
-| No function that only forwards its parameters to one call      | lint `accly/no-pass-through-function`                                           |
-| Tenant predicate, scope-only authorization (rules 1–2)         | test `tests/integration/tenancy.test.ts`                                        |
-| Roles authorize as a union (rule 2)                            | `@accly/auth/access` is the only parser; test `tests/unit/access.test.ts`       |
-| Migrations come from `db:generate` (rule 4)                    | `prose`                                                                         |
-| Base UI `data-pressed:` not Radix `data-[state=…]:` (UI)       | `prose`; no occurrence in the tree yet                                          |
-| Agent never stages or commits                                  | `prose` (personal guidance)                                                     |
+| Rule                                                                   | Enforced by                                                                          |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| All checks below run before a commit and before an agent stops         | `bun run verify` in `.githooks/pre-commit` and the `.claude/settings.json` Stop hook |
+| Tenant predicate, scope-only authorization (rules 1–2)                 | test `tests/integration/tenancy.test.ts`                                             |
+| Every domain table has `org_id NOT NULL` (rule 1)                      | test `tests/unit/schema-org-id.test.ts`                                              |
+| Permission passed to `orgProcedure`, not checked in a handler (rule 2) | lint `accly/no-permission-in-handler`                                                |
+| Roles authorize as a union (rule 2)                                    | `@accly/auth/access` is the only parser; test `tests/unit/access.test.ts`            |
+| Migrations come from `db:generate` (rule 4)                            | `bun run db:check`                                                                   |
+| No server-only module in client code (rule 6)                          | lint `accly/client-safe-imports`; allowlist in `tools/oxlint/accly/client-safe.ts`   |
+| Settlement roles come from `core/document-roles.ts`                    | lint `accly/no-exposure-side-branch`                                                 |
+| Money sums go through `paiseSum`                                       | lint `accly/no-raw-paise-sum`                                                        |
+| No bigint literal in `.tsx`                                            | lint `accly/no-bigint-in-components`                                                 |
+| No paise maths in components                                           | lint `accly/no-paise-arithmetic-in-components`                                       |
+| No non-null assertion in `packages/api` and `apps/web`                 | lint `typescript/no-non-null-assertion`                                              |
+| Query options live in `apps/web/src/lib`; paging uses `nextPage`       | lint `accly/query-options-in-lib`, `accly/paging-from-orpc`                          |
+| PDF links are typed routes, not `/api/` strings                        | lint `accly/no-api-url-literal`                                                      |
+| Failed writes go through `handleWriteError`                            | lint `accly/write-errors-via-handler`                                                |
+| No manual memoization (React Compiler)                                 | lint `accly/no-manual-memo`                                                          |
+| No transition or animation class outside overlays (design §11)         | lint `accly/no-motion-on-controls`; overlays exempt in `.oxlintrc.json`              |
+| No function that only forwards its parameters to one call              | lint `accly/no-pass-through-function`                                                |
+| Files stay under 800 code lines                                        | lint `max-lines` (warning)                                                           |
+| Each `accly` rule flags its bad fixture and passes its good one        | test `tests/unit/lint-rules.test.ts`                                                 |
+| Base UI `data-pressed:` not Radix `data-[state=…]:` (UI)               | `prose`; no occurrence in the tree yet                                               |
+| Agent never stages or commits                                          | `prose` (personal guidance)                                                          |
 
 ## How to work
 
 Personal guidance covers ownership, reviews, git, testing, and verification; this
 file adds the project rules.
 
+- Run `bun run verify` before finishing; the Stop hook runs it.
 - Fail loud on config, auth, money, and data-integrity errors: no defaults, no broad catches.
 - Irreversible operations need confirmation right before execution. Git revert, branch switch, running tests, and read-only analysis are not irreversible.
 - Missing runtime evidence is Verification, not completion: record the blocker and next action in the [work registry](./docs/README.md#work-lifecycle).

@@ -37,16 +37,16 @@
   "scripts": {
     "dev": "bun run db:up && bun run db:migrate && bun --bun turbo run dev",
     "build": "bun --bun turbo run build",
-    "check-types": "bun --bun turbo run check-types && bun --bun tsc --noEmit -p tests/tsconfig.json",
+    "check-types": "bun --bun turbo run check-types --output-logs=errors-only && bun --bun tsc --noEmit -p tests/tsconfig.json && bun --bun tsc --noEmit -p tsconfig.json",
     "test": "bun test --max-concurrency 1 --timeout 15000 tests && bun test --max-concurrency 1 --timeout 15000 ./tests/isolated/files-delete-resilience.isolated.ts",
     "dev:web": "bun --bun turbo run dev -F web",
     "dev:server": "bun --bun turbo run dev -F server",
     "dev:status": "bun scripts/dev-status.ts",
     "db:up": "docker compose -f packages/db/docker-compose.dev.yaml up -d --wait",
-    "db:push": "bun --bun turbo run db:push -F @accly/db",
     "db:studio": "bun --bun turbo run db:studio -F @accly/db",
     "db:generate": "bun --bun turbo run db:generate -F @accly/db",
     "db:migrate": "bun --bun turbo run db:migrate -F @accly/db",
+    "db:check": "bun scripts/check-migrations.ts",
     "db:seed": "bun scripts/seed.ts",
     "db:seed:demo": "bun scripts/seed-demo.ts",
     "db:seed:volume": "bun scripts/seed-volume.ts",
@@ -59,7 +59,10 @@
     "create-user": "bun scripts/create-user.ts",
     "create-founder": "bun scripts/create-founder.ts",
     "cleanup-uploads": "bun scripts/cleanup-uploads.ts",
-    "check": "bun --bun oxlint && bun --bun oxfmt --write"
+    "check": "bun --bun oxlint && bun --bun oxfmt --write",
+    "knip": "bunx knip@5.88.1 --no-progress",
+    "verify": "bun --bun oxlint && bun --bun oxfmt --check && bun run check-types && bun run db:check",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
     "@accly/env": "workspace:*"
