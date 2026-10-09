@@ -34,6 +34,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
   apply-credit ledger and quarter-close screenshots (and the quarter-close
   table) on a re-seeded demo.
 
+- **[Audit edit trail](./specs/audit-edit-trail.md)**: Active. Spec ready;
+  parties, accounts, items, payment methods and settings record who changed
+  what, old and new. Audit stays fire-and-forget. Next: Slice 1 (account
+  trail, end to end).
+
 - **[Product family](./specs/product-family.md)**: Active. One SaaS, one
   database, School and HMS as modules on Finance; supersedes the 2026-09-13
   separate-apps decision. Next: Slice 1 (module switch and document source).
