@@ -82,6 +82,10 @@ export const clientSafeImportsRule = defineRule({
       ImportExpression(node) {
         if (node.source.type === "Literal" && typeof node.source.value === "string")
           check(node, node.source.value);
+        else if (node.source.type === "TemplateLiteral" && node.source.expressions.length === 0) {
+          const cooked = node.source.quasis[0]?.value.cooked;
+          if (cooked) check(node, cooked);
+        }
       },
     };
   },
