@@ -817,8 +817,9 @@
             <code>[old, new]</code>. When <code>account.update</code> clears linked items'
             <code>taxCode</code>, <code>changes</code> also holds
             <code>clearedItemTaxCodes: [["&lt;item name&gt;: &lt;tax code&gt;", …], []]</code>. It
-            renders "Cleared item tax codes: Widget: GST18, … → —". The update reads the items in
-            its transaction; the row is written after commit.
+            renders "Cleared item tax codes: Widget: GST18, … → —". The update reads the item rows
+            <code>FOR UPDATE</code> in its transaction before it builds and clears the list; the row
+            is written after commit.
           </div>
           <div class="req" id="r8"><b>R8</b> A save with no change writes no row.</div>
           <div class="req" id="r8a">

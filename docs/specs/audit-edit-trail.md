@@ -79,8 +79,9 @@ the old and the new value of each changed field.
   supply class of an unused income account leaves `taxable`). Then `changes`
   also holds `clearedItemTaxCodes: [["<item name>: <tax code>", …], []]`.
   R1 renders it as `Cleared item tax codes: Widget: GST18, … → —`. The update
-  reads these items inside its transaction. The row is written after commit
-  like the rest.
+  reads these item rows `FOR UPDATE` inside its transaction, before it builds
+  and clears the list, so no concurrent `item.update` can change them. The row
+  is written after commit like the rest.
 - **R8** A save in which no field changed writes no row.
 - **R8a** `item.setActive` and `paymentMethod.setActive` follow the existing
   `account.setActive` row: meta `{ name, active }`, written on every success.
