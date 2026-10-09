@@ -1,6 +1,7 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
+import { OPERATIONAL_REFETCH } from "@/lib/operational-query";
 import { nextPage, orpc } from "@/lib/orpc";
 
 type BillListFilters = Omit<
@@ -25,7 +26,10 @@ export const billDetailOptions = (orgSlug: string, billId: string) =>
 export const billTotalsOptions = (
   orgSlug: string,
   filters: Omit<Parameters<AppRouterClient["bill"]["totals"]>[0], "orgSlug">,
-) => orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } });
+) => ({
+  ...orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } }),
+  ...OPERATIONAL_REFETCH,
+});
 
 // The command palette's number/party/reference search over bills.
 export const billSearchOptions = (orgSlug: string, q: string, limit: number) =>

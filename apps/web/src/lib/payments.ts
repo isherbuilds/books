@@ -1,6 +1,7 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
+import { OPERATIONAL_REFETCH } from "@/lib/operational-query";
 import { nextPage, orpc } from "@/lib/orpc";
 
 type PaymentListFilters = Omit<
@@ -21,7 +22,10 @@ export const paymentDetailOptions = (orgSlug: string, paymentId: string) =>
 export const paymentTotalsOptions = (
   orgSlug: string,
   filters: Omit<Parameters<AppRouterClient["payment"]["totals"]>[0], "orgSlug">,
-) => orpc.payment.totals.queryOptions({ input: { orgSlug, ...filters } });
+) => ({
+  ...orpc.payment.totals.queryOptions({ input: { orgSlug, ...filters } }),
+  ...OPERATIONAL_REFETCH,
+});
 
 // TDS sections in force on a date. Callers disable it until the date is complete.
 export const tdsSectionsOptions = (orgSlug: string, date?: string) =>

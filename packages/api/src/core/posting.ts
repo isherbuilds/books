@@ -200,7 +200,6 @@ export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): Jo
     },
   ];
 
-  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "payable") {
     if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
       throw new Error("Supplier refund amount must equal its allocated credits");
@@ -325,7 +324,6 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
     throw new Error("Payment TDS must be non-negative and less than the payment amount");
   }
 
-  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "receivable") {
     if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
       throw new Error("Refund amount must equal its allocated credits");
@@ -335,7 +333,6 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   const tdsPaise = document.tds?.amountPaise ?? 0n;
   const lines: JournalLineInput[] = [];
 
-  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "receivable") {
     lines.push({
       accountId: systemAccount(byKey, "receivables"),
@@ -376,7 +373,6 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
   }
 
   const fee =
-    // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
     document.settlementKind === "against" && document.exposureSide === "payable"
       ? document.fee
       : null;
@@ -397,7 +393,6 @@ export function postPayment(document: PaymentPosting, byKey: SystemAccounts): Jo
     });
   }
 
-  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   if (document.settlementKind === "against" && document.exposureSide === "payable") {
     for (const writeOff of document.writeOffs) {
       lines.push({

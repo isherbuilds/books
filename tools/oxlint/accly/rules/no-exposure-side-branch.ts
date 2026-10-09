@@ -5,7 +5,8 @@ import type { ESTree } from "@oxlint/plugins";
 /**
  * A document's settlement role (source, target, refund, advance) is derived from its
  * type and exposure side in one table, core/document-roles.ts. Comparing `.exposureSide`
- * to a side elsewhere re-derives that role and drifts from the table.
+ * to a side in the web app re-derives that role and drifts from the table. The rule runs
+ * on apps/web only: server code narrows its request unions on the side.
  */
 function isExposureSide(node: ESTree.Node): boolean {
   return (
@@ -21,10 +22,10 @@ const isSide = (node: ESTree.Node) =>
 export const noExposureSideBranchRule = defineRule({
   meta: {
     type: "problem",
-    docs: { description: "Disallow branching on exposureSide outside core/document-roles.ts." },
+    docs: { description: "Disallow branching on exposureSide in the web app." },
     messages: {
       sideBranch:
-        "Ask documentRole() in packages/api/src/core/document-roles.ts (or hasRole() in lib/settlements.ts for SQL) instead of comparing `.exposureSide`.",
+        "Ask documentRole() in packages/api/src/core/document-roles.ts instead of comparing `.exposureSide`.",
     },
   },
   createOnce(context) {
@@ -39,16 +40,6 @@ export const noExposureSideBranchRule = defineRule({
       },
       SwitchStatement(node) {
         if (isExposureSide(node.discriminant)) context.report({ node, messageId: "sideBranch" });
-      },
-      CallExpression(node) {
-        const [column] = node.arguments;
-        if (
-          node.callee.type === "Identifier" &&
-          node.callee.name === "eq" &&
-          column &&
-          isExposureSide(column)
-        )
-          context.report({ node, messageId: "sideBranch" });
       },
     };
   },

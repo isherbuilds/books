@@ -12,7 +12,8 @@ const SERVER_ONLY = /^(?:@accly\/db(?:\/|$)|drizzle-orm|pg$|node:|@accly\/env\/s
  * Keep server modules out of the web bundle. In web code (the default), a value import
  * from `@accly/api` or `@accly/db` must name a module in `client-safe.ts`. In one of
  * those modules, a value import must not reach drizzle, pg, node built-ins, server env,
- * the database package or a relative module off the list. `import type` is always fine.
+ * the database package or a relative module off the list. Re-exports and string `import()` count as
+ * imports; `import type` and `export type` are always fine.
  * Option `exempt`: path suffixes of server-only web files (createIsomorphicFn server
  * branches, server routes).
  */
@@ -33,17 +34,12 @@ export const clientSafeImportsRule = defineRule({
     },
   },
   createOnce(context) {
-    const check = (node: ESTree.ImportDeclaration) => {
-      if (node.importKind === "type") return;
-      const specifiers = node.specifiers;
-      if (
-        specifiers.length > 0 &&
-        specifiers.every(
-          (specifier) => specifier.type === "ImportSpecifier" && specifier.importKind === "type",
-        )
-      )
-        return;
-      const source = node.source.value;
+    const exempt = () => {
+      const [options] = context.options as [{ exempt?: string[] }?];
+      return options?.exempt?.some((suffix) => context.filename.endsWith(suffix)) ?? false;
+    };
+    const check = (node: ESTree.Node, source: string) => {
+      if (exempt()) return;
       const file = context.filename;
       const own = moduleOfFile(file);
       let target = source;
@@ -59,9 +55,37 @@ export const clientSafeImportsRule = defineRule({
     };
     return {
       ImportDeclaration(node) {
-        const [options] = context.options as [{ exempt?: string[] }?];
-        if (options?.exempt?.some((suffix) => context.filename.endsWith(suffix))) return;
-        check(node);
+        if (node.importKind === "type") return;
+        const specifiers = node.specifiers;
+        if (
+          specifiers.length > 0 &&
+          specifiers.every(
+            (specifier) => specifier.type === "ImportSpecifier" && specifier.importKind === "type",
+          )
+        )
+          return;
+        check(node, node.source.value);
+      },
+      ExportNamedDeclaration(node) {
+        if (!node.source || node.exportKind === "type") return;
+        if (
+          node.specifiers.length > 0 &&
+          node.specifiers.every((specifier) => specifier.exportKind === "type")
+        )
+          return;
+        check(node, node.source.value);
+      },
+      ExportAllDeclaration(node) {
+        if (node.exportKind === "type") return;
+        check(node, node.source.value);
+      },
+      ImportExpression(node) {
+        if (node.source.type === "Literal" && typeof node.source.value === "string")
+          check(node, node.source.value);
+        else if (node.source.type === "TemplateLiteral" && node.source.expressions.length === 0) {
+          const cooked = node.source.quasis[0]?.value.cooked;
+          if (cooked) check(node, cooked);
+        }
       },
     };
   },

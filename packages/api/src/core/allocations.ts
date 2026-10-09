@@ -399,19 +399,19 @@ export async function applyAllocations(
   }));
 }
 
-/** Append a reverse, then reverse its entry or release a source allocated at post. */
-export async function reverseAllocation(
+type ApplyRow = {
+  sourceDocumentId: string;
+  targetDocumentId: string;
+  amountPaise: bigint;
+  entryDate: string;
+  postEntryId: string | null;
+};
+
+async function activeApplyRow(
   tx: DbTransaction,
   scope: Scope,
-  settings: typeof organizationSettings.$inferSelect,
   allocationId: string,
-  narration: string,
-): Promise<{
-  id: string;
-  amountPaise: bigint;
-  sourceNumber: string | null;
-  targetNumber: string | null;
-}> {
+): Promise<ApplyRow> {
   const [apply] = await tx
     .select({
       sourceDocumentId: allocations.sourceDocumentId,
@@ -441,18 +441,19 @@ export async function reverseAllocation(
 
   if (!apply) throw new ORPCError("CONFLICT", { message: "This allocation is not active." });
 
-  const locked = await lockDocuments(tx, scope.orgId, [
-    apply.sourceDocumentId,
-    apply.targetDocumentId,
-  ]);
+  return apply;
+}
 
-  const source = locked.find((document) => document.id === apply.sourceDocumentId);
-  const target = locked.find((document) => document.id === apply.targetDocumentId);
-
-  if (!source || !target) throw impossible(`allocation ${allocationId} lost a document`);
-
+/** Append a reverse, then reverse its entry or release a source allocated at post. */
+async function reverseApply(
+  tx: DbTransaction,
+  scope: Scope,
+  allocationId: string,
+  apply: ApplyRow,
+  source: LockedDocument,
+  narration: string,
+): Promise<string> {
   const entryDate = apply.entryDate;
-  await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: false });
 
   const [reversed] = await tx
     .insert(allocations)
@@ -501,10 +502,78 @@ export async function reverseAllocation(
     }
   }
 
+  return reversed.id;
+}
+
+/** Lock source and target in id order, then reverse the apply. */
+export async function reverseAllocation(
+  tx: DbTransaction,
+  scope: Scope,
+  settings: typeof organizationSettings.$inferSelect,
+  allocationId: string,
+  narration: string,
+): Promise<{
+  id: string;
+  amountPaise: bigint;
+  sourceNumber: string | null;
+  targetNumber: string | null;
+}> {
+  const apply = await activeApplyRow(tx, scope, allocationId);
+
+  const locked = await lockDocuments(tx, scope.orgId, [
+    apply.sourceDocumentId,
+    apply.targetDocumentId,
+  ]);
+
+  const source = locked.find((document) => document.id === apply.sourceDocumentId);
+  const target = locked.find((document) => document.id === apply.targetDocumentId);
+
+  if (!source || !target) throw impossible(`allocation ${allocationId} lost a document`);
+
+  await assertPeriodOpen(tx, scope, settings, { entryDate: apply.entryDate, affectsTax: false });
+
+  const id = await reverseApply(tx, scope, allocationId, apply, source, narration);
+
   return {
-    id: reversed.id,
+    id,
     amountPaise: apply.amountPaise,
     sourceNumber: source.number,
     targetNumber: target.number,
   };
+}
+
+/**
+ * Reverse an apply targeting a document being cancelled. The cancel already holds
+ * the target's row lock; the source is read unlocked (its posting fields are
+ * immutable after post) so cancellation takes no other document's lock out of order.
+ */
+export async function reverseAllocationToCancelled(
+  tx: DbTransaction,
+  scope: Scope,
+  settings: typeof organizationSettings.$inferSelect,
+  allocationId: string,
+  narration: string,
+): Promise<void> {
+  const apply = await activeApplyRow(tx, scope, allocationId);
+
+  const [source] = await tx
+    .select({
+      id: documents.id,
+      number: documents.number,
+      type: documents.type,
+      state: documents.state,
+      settlementKind: documents.settlementKind,
+      exposureSide: documents.exposureSide,
+      partyId: documents.partyId,
+      documentDate: documents.documentDate,
+    })
+    .from(documents)
+    .where(and(eq(documents.orgId, scope.orgId), eq(documents.id, apply.sourceDocumentId)))
+    .limit(1);
+
+  if (!source) throw impossible(`allocation ${allocationId} lost a document`);
+
+  await assertPeriodOpen(tx, scope, settings, { entryDate: apply.entryDate, affectsTax: false });
+
+  await reverseApply(tx, scope, allocationId, apply, source, narration);
 }

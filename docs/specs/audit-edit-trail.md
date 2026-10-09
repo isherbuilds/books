@@ -4,7 +4,7 @@ Status: ready
 Authority: owner decision, 2026-10-09. Close the audit-trail gaps in master data
 and settings found against the MCA edit-log rule (Companies (Accounts) Rules,
 rule 3(1) proviso, in force 1 April 2023). `audit()` stays fire-and-forget
-([hard rule 3](../../CLAUDE.md#hard-rules)) until a customer needs a stronger
+([hard rule 3](../../AGENTS.md#hard-rules)) until a customer needs a stronger
 guarantee.
 Supersedes: none. [Visual companion](./audit-edit-trail.html).
 
@@ -48,7 +48,8 @@ the old and the new value of each changed field.
 
 - **R1** An edit row's Details lists each changed field as `Label: old → new`,
   in the order the record's form shows them, separated by `·`. An empty old
-  or new value shows `—`. `true` and `false` show `Yes` and `No`. A list
+  or new value shows `—`. `true` and `false` show `Yes` and `No`, in `changes`
+  and in the top-level `active` of every `setActive` row. A list
   (party roles) shows its items joined by `, `.
 - **R2** New action labels: `party.create` "Party created", `party.update`
   "Party changed", `account.create` "Account created", `account.update`
@@ -61,7 +62,9 @@ the old and the new value of each changed field.
   search reads top-level `meta` values).
 - **R4** The page description reads "Changes to your books, records and
   settings, and every permission denial".
-- **R5** Rows written before this change render as they do today.
+- **R5** Rows written before this change render as they do today. One
+  exception: an old `account.setActive` row (`{ active }`) shows
+  `Active: Yes` or `Active: No` (R1).
 
 ### F1 — Writing the trail (server)
 
@@ -72,7 +75,13 @@ the old and the new value of each changed field.
   write one row after commit with meta
   `{ name, changes }`. `changes` maps each changed field to `[old, new]` and
   holds only fields whose value differs. For `settings.update`, `name` is the
-  legal name.
+  legal name. An `account.update` can clear `taxCode` on linked items (the
+  supply class of an unused income account leaves `taxable`). Then `changes`
+  also holds `clearedItemTaxCodes: [["<item name>: <tax code>", …], []]`.
+  R1 renders it as `Cleared item tax codes: Widget: GST18, … → —`. The update
+  reads these item rows `FOR UPDATE` inside its transaction, before it builds
+  and clears the list, so no concurrent `item.update` can change them. The row
+  is written after commit like the rest.
 - **R8** A save in which no field changed writes no row.
 - **R8a** `item.setActive` and `paymentMethod.setActive` follow the existing
   `account.setActive` row: meta `{ name, active }`, written on every success.
@@ -104,12 +113,20 @@ the old and the new value of each changed field.
 - **Item income account.** `item.update` records the income account by name.
   The old and new names come from the accounts table in the same transaction.
 - **Rendering.** `describeMeta` in `settings/audit.tsx` renders the `changes`
-  key per R1 and keeps today's output for other keys. Field labels use the
+  key per R1 and keeps today's output for other keys, with two exceptions.
+  On every row written under R6, R7 or R8a (chosen by action), the top-level
+  `name` feeds only the On column (R3) and search, not the Details cell. Other
+  rows that store `{ name }` (file upload and delete) keep today's Details
+  (R5). A top-level boolean (`active`) shows `Yes` or `No` (R1, R5). Field
+  labels use the
   existing camelCase-to-words rule plus the existing GSTIN/TDS fixes, and add
   PAN, PIN and HSN/SAC.
 - **No schema change.** `audit_log.meta` already holds nested values.
-- **Docs.** `docs/architecture.md` "Audit and files" lists the new events and
-  states that edits store changed fields.
+- **Docs.** Slice 2 updates `docs/architecture.md` "Audit and files": it lists
+  the new events, states that edits store changed fields, and names
+  master-data edits to financial and tax records as sensitive actions under
+  [hard rule 3](../../AGENTS.md#hard-rules) (MCA edit-log). It also changes
+  the line that audit covers "never reads or ordinary writes" to agree.
 
 ## Test Seams
 
@@ -135,8 +152,10 @@ after `drainAuditWrites()`, as `tests/integration/lock.test.ts` does.
     running app at 1440 and 390 px, light and dark.
   - Depends on: none.
   - Owns/Touches: `packages/db/src/audit.ts`,
-    `packages/api/src/routers/account.ts`,
-    `apps/web/src/routes/$orgSlug/settings/audit.tsx`,
+    `packages/db/src/schema/audit.ts` (`account.create`, `account.update` in
+    `AuditAction`), `packages/api/src/lib/document-labels.ts`
+    (`AUDIT_ACTION_LABELS`), `packages/api/src/routers/account.ts`,
+    `apps/web/src/routes/$orgSlug/settings/audit.tsx` (rendering),
     `tests/integration/account.test.ts`.
   - Interfaces: produces
     `auditChanges(before: Record<string, AuditValue>, after: Record<string, AuditValue>): Record<string, [AuditValue, AuditValue]> | undefined`
@@ -159,7 +178,9 @@ after `drainAuditWrites()`, as `tests/integration/lock.test.ts` does.
     `packages/api/src/routers/settings.ts`,
     `packages/api/src/routers/payment-method.ts`,
     `packages/api/src/routers/account.ts` (`setActive` only),
-    `apps/web/src/routes/$orgSlug/settings/audit.tsx` (labels only),
+    `packages/db/src/schema/audit.ts` (new `AuditAction` members),
+    `packages/api/src/lib/document-labels.ts` (labels in
+    `AUDIT_ACTION_LABELS`),
     `docs/architecture.md`.
   - Interfaces: consumes `auditChanges` and `AuditValue` from Slice 1.
 

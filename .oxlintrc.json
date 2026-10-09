@@ -71,11 +71,6 @@
       "rules": { "accly/no-permission-in-handler": "error" }
     },
     {
-      "files": ["packages/api/src/**", "apps/web/src/**"],
-      "excludeFiles": ["packages/api/src/core/document-roles.ts"],
-      "rules": { "accly/no-exposure-side-branch": "error" }
-    },
-    {
       "files": ["packages/api/src/**"],
       "excludeFiles": ["packages/api/src/lib/sql.ts"],
       "rules": { "accly/no-raw-paise-sum": "error" }
@@ -130,7 +125,8 @@
       "rules": {
         "accly/paging-from-orpc": "error",
         "accly/no-api-url-literal": "error",
-        "accly/write-errors-via-handler": "error"
+        "accly/write-errors-via-handler": "error",
+        "accly/no-exposure-side-branch": "error"
       }
     },
     {
