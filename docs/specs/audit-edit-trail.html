@@ -788,7 +788,8 @@
           <h3>A1 — Audit page</h3>
           <div class="req" id="r1">
             <b>R1</b> Details lists each changed field as <code>Label: old → new</code>, in form
-            order, joined by " · ". Empty shows "—"; true/false show Yes/No; lists join with ", ".
+            order, joined by " · ". Empty shows "—"; true/false show Yes/No, also for the top-level
+            <code>active</code> of every <code>setActive</code> row; lists join with ", ".
           </div>
           <div class="req" id="r2">
             <b>R2</b> New labels: Party created/changed, Account created/changed, Item
@@ -800,7 +801,10 @@
             <b>R4</b> Description: "Changes to your books, records and settings, and every
             permission denial".
           </div>
-          <div class="req" id="r5"><b>R5</b> Older rows render as today.</div>
+          <div class="req" id="r5">
+            <b>R5</b> Older rows render as today. Exception: older <code>account.setActive</code>
+            rows show <code>Active: Yes/No</code>.
+          </div>
 
           <h3>F1 — Writing the trail</h3>
           <div class="req" id="r6">
@@ -810,7 +814,11 @@
           <div class="req" id="r7">
             <b>R7</b> party, account, item and settings <code>update</code> write
             <code>{ name, changes }</code>; <code>changes</code> holds only differing fields as
-            <code>[old, new]</code>.
+            <code>[old, new]</code>. When <code>account.update</code> clears linked items'
+            <code>taxCode</code>, <code>changes</code> also holds
+            <code>clearedItemTaxCodes: [["&lt;item name&gt;: &lt;tax code&gt;", …], []]</code>. It
+            renders "Cleared item tax codes: Widget: GST18, … → —". The update reads the items in
+            its transaction; the row is written after commit.
           </div>
           <div class="req" id="r8"><b>R8</b> A save with no change writes no row.</div>
           <div class="req" id="r8a">
@@ -861,10 +869,20 @@
               <code>item.update</code> records income account names read in the same transaction.
             </li>
             <li>
-              <code>describeMeta</code> renders <code>meta.changes</code>; labels add PAN, PIN and
-              HSN/SAC.
+              <code>describeMeta</code> renders <code>meta.changes</code>. On every
+              <code>account.create</code>, <code>account.update</code>, party and item create and
+              update, <code>paymentMethod.create</code>, <code>settings.update</code> and <code>setActive</code> row (R6, R7,
+              R8a), top-level <code>name</code> feeds only On and search, not Details. Other rows
+              with <code>{ name }</code> (file upload and delete) keep today's Details (R5).
+              Top-level booleans show Yes/No. Labels add PAN, PIN and HSN/SAC.
             </li>
-            <li>No schema change. <code>docs/architecture.md</code> lists the new events.</li>
+            <li>No schema change.</li>
+            <li>
+              Docs: <code>docs/architecture.md</code> "Audit and files" lists the new events, states
+              that edits store changed fields, and names master-data edits to financial and tax
+              records as sensitive actions under hard rule 3 (MCA edit-log). It also changes the
+              line that audit "never reads or ordinary writes" to match.
+            </li>
           </ul>
           <h2>Test seams</h2>
           <ul>
@@ -878,8 +896,9 @@
           <h2>Slices</h2>
           <h3>Slice 1 — Account trail, end to end (proof)</h3>
           <p>
-            Owns <code>db/src/audit.ts</code>, <code>routers/account.ts</code>,
-            <code>settings/audit.tsx</code>, <code>account.test.ts</code>. Verify:
+            Owns <code>db/src/audit.ts</code>, <code>db/src/schema/audit.ts</code> (actions),
+            <code>api/src/lib/document-labels.ts</code> (labels), <code>routers/account.ts</code>,
+            <code>settings/audit.tsx</code> (rendering), <code>account.test.ts</code>. Verify:
             <code>bun run test</code>, <code>bun run check-types</code>, <code>bunx oxlint</code>,
             Audit page at 1440/390 px in both themes.
           </p>
@@ -887,7 +906,8 @@
           <p>
             Depends on Slice 1. Owns <code>routers/party.ts</code>, <code>item.ts</code>,
             <code>payment-method.ts</code>, <code>settings.ts</code>,
-            <code>account.ts</code> (setActive), labels in <code>audit.tsx</code>,
+            <code>account.ts</code> (setActive), actions in <code>schema/audit.ts</code>, labels in
+            <code>document-labels.ts</code>,
             <code>docs/architecture.md</code>. Same checks.
           </p>
         </section>
