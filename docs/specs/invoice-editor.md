@@ -17,7 +17,7 @@ the [work registry](../README.md#work-lifecycle).
 - **`invoice.quote`** (`invoice: ["create"]`) takes the invoice input without
   `draft`, runs `resolveInvoice` and writes nothing. It returns
   `{ lines: [{ rateBasisPoints, grossPaise }], discountPaise, taxablePaise,
-cgstPaise, sgstPaise, igstPaise, roundOffPaise, totalPaise }`, lines in request
+  cgstPaise, sgstPaise, igstPaise, roundOffPaise, totalPaise }`, lines in request
   order. The editor computes quantity times rate; `grossPaise` is the discounted,
   tax-inclusive line amount. Refusals are `resolveInvoice`'s own reasons.
   Tax and totals come from the server quote, never a client tax formula.

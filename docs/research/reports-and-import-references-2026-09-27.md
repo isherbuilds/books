@@ -39,7 +39,7 @@ see the [report fit check](./report-fit-and-indian-records-2026-09-27.md).
   ([manage reports](https://www.zoho.com/in/books/help/reports/manage-reports.html)).
 - **Performance.** ERPNext's GL Entry declares partial indexes on
   `(company, posting_date, account)` and `(company, account, posting_date)
-include (debit, credit)` on PostgreSQL, and reads an Account Closing Balance
+  include (debit, credit)` on PostgreSQL, and reads an Account Closing Balance
   checkpoint after a period closing voucher
   ([gl_entry.py](https://github.com/frappe/erpnext/blob/develop/erpnext/accounts/doctype/gl_entry/gl_entry.py)).
   Our journal lines carry no date, so slice 6a measures the join first and

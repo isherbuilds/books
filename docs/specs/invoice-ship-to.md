@@ -8,7 +8,7 @@ meets rule 46(p). Remaining runtime checks are in the
 ## Contract
 
 - **Storage.** Optional `PrintSnapshot.shipTo: { address: string; stateCode:
-string }` is a printed fact, frozen at post, with no accounting, tax or
+  string }` is a printed fact, frozen at post, with no accounting, tax or
   register effect.
   `saveDraft` and `post` write it, `invoice.get` returns it, and amend copies it.
 - **Input.** Optional `invoiceFields.shipTo` is a strict object: `address` is
