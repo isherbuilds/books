@@ -11,7 +11,7 @@ mock.module("@accly/storage", () => ({
   maxUploadBytes: () => 100,
 }));
 
-const { drainAuditWrites } = await import("@accly/api/audit");
+const { drainAuditWrites } = await import("@accly/db/audit");
 
 const { db } = await import("@accly/db");
 

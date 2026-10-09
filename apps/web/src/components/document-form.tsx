@@ -106,7 +106,9 @@ export function PostBar({
         {post ? (
           <Button type="submit">
             {post.isPending ? "Posting…" : post.isError ? "Post again" : postLabel}
-            <Kbd>⌘↵</Kbd>
+            <Kbd className="hidden [@media(min-width:640px)_and_(hover:hover)_and_(pointer:fine)]:inline-flex">
+              ⌘↵
+            </Kbd>
           </Button>
         ) : null}
       </div>

@@ -4,7 +4,7 @@ import { ORPCError } from "@orpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
 import { formatDecimal } from "../core/money";

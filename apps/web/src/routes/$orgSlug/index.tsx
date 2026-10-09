@@ -100,6 +100,8 @@ const CREATE: readonly {
 ];
 
 export const Route = createFileRoute("/$orgSlug/")({
+  validateSearch: (search: Record<string, unknown>): { access?: "denied" } =>
+    search.access === "denied" ? { access: "denied" } : {},
   head: () => ({ meta: [{ title: "Home · Accly Books" }] }),
   loader: async ({ context: { queryClient }, params: { orgSlug } }) => {
     const membership = await queryClient.query(membershipOptions(orgSlug));
@@ -119,6 +121,7 @@ export const Route = createFileRoute("/$orgSlug/")({
 
 function HomeRoute() {
   const { orgSlug } = Route.useParams();
+  const { access } = Route.useSearch();
   const roles = useMembership(orgSlug, (membership) => membership.roles);
 
   const allowed = <Row extends { permission: AppPermission }>(rows: readonly Row[]) =>
@@ -131,6 +134,11 @@ function HomeRoute() {
   return (
     <>
       <PageHeader title="Home" description="What needs attention" />
+      {access === "denied" ? (
+        <p role="alert" className="mx-4 border-l-2 border-border pl-3 text-sm">
+          Your role cannot open that page.
+        </p>
+      ) : null}
       <PageBody>
         {create.length > 0 && (
           <div className="flex flex-wrap gap-2">

@@ -25,12 +25,12 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Monogram } from "@/components/monogram";
 import { PaletteTrigger } from "@/components/palette/palette";
 import { authClient } from "@/lib/auth-client";
-import { useMembership } from "@/lib/membership";
+import { sortOrganizations, useMembership } from "@/lib/membership";
 import { NAV_GROUPS, PRIMARY_NAV, SETTINGS_TABS, type NavGroup } from "@/lib/navigation";
 
 // One class for every rail row, links and menu triggers alike. TanStack Link marks
@@ -85,7 +85,16 @@ function OrgIdentity({ name }: { name: string }) {
 }
 
 function OrgSwitcher({ activeOrgSlug }: { activeOrgSlug: string }) {
-  const organizations = useMembership(activeOrgSlug, (membership) => membership.organizations);
+  const membershipOrganizations = useMembership(
+    activeOrgSlug,
+    (membership) => membership.organizations,
+  );
+
+  const organizations = useMemo(
+    () => sortOrganizations(membershipOrganizations),
+    [membershipOrganizations],
+  );
+
   const founder = useMembership(activeOrgSlug, (membership) => membership.founder);
   const path = useSectionPath();
   const section = sectionIn(path) ?? "/$orgSlug";

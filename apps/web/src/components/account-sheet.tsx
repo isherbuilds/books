@@ -263,7 +263,9 @@ function CreateAccountForm({
                       </option>
                       {types.map((type) => (
                         <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-                          {parentIds === undefined ? <option value={type}>Top level</option> : null}
+                          {parentIds === undefined ? (
+                            <option value={type}>Top level ({ACCOUNT_TYPE_LABELS[type]})</option>
+                          ) : null}
                           {groups
                             .filter((account) => account.type === type)
                             .map((account) => (

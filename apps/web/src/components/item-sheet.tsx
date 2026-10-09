@@ -121,6 +121,7 @@ function ItemForm({
       form,
       error,
       {
+        HSN_SAC_REQUIRED: "hsnSac",
         ITEM_NAME_TAKEN: "name",
         INCOME_ACCOUNT_INVALID: "incomeAccountId",
         TAX_CODE_REQUIRED: "taxCode",
@@ -171,6 +172,12 @@ function ItemForm({
   const onSubmit = form.handleSubmit((values) => {
     // Sent as held: choosing a non-taxable account clears it, and the server owns the
     // taxable rule even before the account list has loaded.
+    if (taxable && !values.hsnSac) {
+      form.setError("hsnSac", { message: "Enter an HSN/SAC code for a taxable item." });
+
+      return;
+    }
+
     const fields = {
       name: values.name,
       hsnSac: values.hsnSac || undefined,
@@ -218,6 +225,7 @@ function ItemForm({
                       <Input
                         {...field}
                         inputMode="numeric"
+                        required={taxable}
                         pattern="[0-9]{4,8}"
                         maxLength={8}
                         placeholder="998313"

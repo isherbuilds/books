@@ -1,5 +1,5 @@
-import { db } from "@accly/db";
-import { auditLog } from "@accly/db/schema/audit";
+import { db } from "./index";
+import { auditLog } from "./schema/audit";
 
 type AuditEntry = Omit<typeof auditLog.$inferInsert, "id" | "createdAt">;
 

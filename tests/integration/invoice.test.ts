@@ -152,6 +152,7 @@ test("items enforce the income account tax policy and normalized name uniqueness
     api.item.create({
       orgSlug: organization.slug,
       name: "Taxable without a rate",
+      hsnSac: "9983",
       unitPrice: "1.00",
       incomeAccountId: taxableIncome.id,
     }),
@@ -162,6 +163,7 @@ test("items enforce the income account tax policy and normalized name uniqueness
     api.item.create({
       orgSlug: organization.slug,
       name: "  TAXABLE CONSULTING  ",
+      hsnSac: "9983",
       unitPrice: "1.00",
       incomeAccountId: taxableIncome.id,
       taxCode: "GST18",
@@ -572,6 +574,7 @@ test("an unregistered organization invoices a date with no effective rate", asyn
     unregistered.api.item.create({
       orgSlug: unregistered.organization.slug,
       name: "Late rate consulting",
+      hsnSac: "9983",
       unit: "hour",
       unitPrice: "1000.00",
       incomeAccountId: income.id,
@@ -772,6 +775,9 @@ test("a counter sale splits across methods, may fall short, and never exceeds th
     lines: [{ kind: "item" as const, itemId: exemptItem.id, quantity: 1 }],
   };
 
+  const openFilter = { orgSlug: organization.slug, partyId: party.id, status: "open" as const };
+  const openBefore = await api.invoice.totals(openFilter);
+
   const posted = await api.invoice.post({
     ...fields,
     settle: {
@@ -792,6 +798,10 @@ test("a counter sale splits across methods, may fall short, and never exceeds th
       ]),
     },
   );
+  expect(await api.invoice.totals(openFilter)).toMatchObject({
+    count: openBefore.count + 1,
+    totalPaise: openBefore.totalPaise + 50_000n,
+  });
 
   const [before] = await db.select({ count: count() }).from(documents);
 

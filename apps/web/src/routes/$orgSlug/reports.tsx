@@ -32,7 +32,7 @@ export const Route = createFileRoute("/$orgSlug/reports")({
       !authorize(membership.roles, EXPORT_PERMISSION) &&
       !authorize(membership.roles, FINANCIAL_PERMISSION)
     ) {
-      throw redirect({ to: "/$orgSlug", params: { orgSlug } });
+      throw redirect({ to: "/$orgSlug", params: { orgSlug }, search: { access: "denied" } });
     }
   },
   component: ReportsRoute,
@@ -80,6 +80,11 @@ const FINANCIAL_REPORTS = [
     detail: "Entries and running balance for an account",
   },
   { to: "/$orgSlug/reports/day-book", label: "Day book", detail: "Entries posted during a period" },
+  {
+    to: "/$orgSlug/parties",
+    label: "Party statements",
+    detail: "Choose a party, then open Ledger to download its statement",
+  },
 ] as const;
 
 function ReportsRoute() {

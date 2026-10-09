@@ -1,5 +1,5 @@
 import { formatMoney, isZeroMoney } from "@accly/api/core/money";
-import { businessDate, formatBusinessDate } from "@accly/api/lib/business-date";
+import { businessDate } from "@accly/api/lib/business-date";
 import { Button } from "@accly/ui/components/button";
 import { Input } from "@accly/ui/components/input";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
@@ -10,10 +10,11 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
+import { ReportProvenance } from "@/components/report-provenance";
 import { StatementTree } from "@/components/statement-tree";
 import { presetRange } from "@/lib/date-presets";
 import { membershipOptions, useCan } from "@/lib/membership";
-import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
+import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { saveFile } from "@/lib/reports";
@@ -131,62 +132,56 @@ function BalanceSheetBody({
 
   const data = report.data;
 
-  return data.assets.length === 0 &&
-    data.liabilities.length === 0 &&
-    data.equity.length === 0 &&
-    isZeroMoney(data.currentYearProfitPaise) &&
-    isZeroMoney(data.earlierYearsProfitPaise) ? (
-    <ListEmpty>No account balances as of this date.</ListEmpty>
-  ) : (
+  return (
     <div className="flex flex-col gap-4">
-      <div className="text-sm">
-        <p className="text-xl font-medium">{data.header.organization.legalName}</p>
-        {data.header.organization.gstin ? (
-          <p className="text-muted-foreground">GSTIN {data.header.organization.gstin}</p>
-        ) : null}
-        <p>As of {formatBusinessDate(asOf)}</p>
-        <p className="text-muted-foreground">
-          Generated {formatDateTime(data.header.generatedAt, data.header.timeZone)} · Period not
-          closed
-        </p>
-      </div>
-      <StatementTree
-        title="Assets"
-        nodes={data.assets}
-        totalPaise={data.assetsPaise}
-        orgSlug={orgSlug}
-        period={period}
-      />
-      <StatementTree
-        title="Liabilities"
-        nodes={data.liabilities}
-        totalPaise={data.liabilitiesPaise}
-        orgSlug={orgSlug}
-        period={period}
-      />
-      <StatementTree
-        title="Equity"
-        nodes={data.equity}
-        totalPaise={data.equityPaise}
-        orgSlug={orgSlug}
-        period={period}
-        computedRows={[
-          {
-            label: "Profit and loss, current year",
-            amountPaise: data.currentYearProfitPaise,
-          },
-          {
-            label: "Profit and loss, earlier years",
-            amountPaise: data.earlierYearsProfitPaise,
-          },
-        ]}
-      />
-      <div className="flex items-center justify-between gap-2 border-t-2 border-foreground px-3 py-2 font-medium md:gap-4">
-        <span className="min-w-0 break-words">Total liabilities + equity</span>
-        <span className="w-money shrink-0 text-right whitespace-nowrap tabular-nums md:w-auto">
-          {formatMoney(data.liabilitiesPaise + data.equityPaise)}
-        </span>
-      </div>
+      <ReportProvenance header={data.header} />
+      {data.assets.length === 0 &&
+      data.liabilities.length === 0 &&
+      data.equity.length === 0 &&
+      isZeroMoney(data.currentYearProfitPaise) &&
+      isZeroMoney(data.earlierYearsProfitPaise) ? (
+        <ListEmpty>No account balances as of this date.</ListEmpty>
+      ) : (
+        <>
+          <StatementTree
+            title="Assets"
+            nodes={data.assets}
+            totalPaise={data.assetsPaise}
+            orgSlug={orgSlug}
+            period={period}
+          />
+          <StatementTree
+            title="Liabilities"
+            nodes={data.liabilities}
+            totalPaise={data.liabilitiesPaise}
+            orgSlug={orgSlug}
+            period={period}
+          />
+          <StatementTree
+            title="Equity"
+            nodes={data.equity}
+            totalPaise={data.equityPaise}
+            orgSlug={orgSlug}
+            period={period}
+            computedRows={[
+              {
+                label: "Profit and loss, current year",
+                amountPaise: data.currentYearProfitPaise,
+              },
+              {
+                label: "Profit and loss, earlier years",
+                amountPaise: data.earlierYearsProfitPaise,
+              },
+            ]}
+          />
+          <div className="flex items-center justify-between gap-2 border-t-2 border-foreground px-3 py-2 font-medium md:gap-4">
+            <span className="min-w-0 break-words">Total liabilities + equity</span>
+            <span className="w-money shrink-0 text-right whitespace-nowrap tabular-nums md:w-auto">
+              {formatMoney(data.liabilitiesPaise + data.equityPaise)}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

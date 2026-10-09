@@ -26,12 +26,15 @@ import {
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { RECEIPT_COLUMNS, ReceiptCard } from "@/components/receipt-columns";
+import { RegisterTotals } from "@/components/register-totals";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
 import { WaveLoader } from "@/components/wave-loader";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
 import { useOrgDateTime } from "@/lib/org-datetime";
+import { orpc } from "@/lib/orpc";
 import { paymentMethodListOptions, receiptListOptions } from "@/lib/receipts";
+import { partyDetailOptions } from "@/lib/parties";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -41,6 +44,8 @@ const RECEIPT_STATES = ["posted", "cancelled"] as const;
 // URL keys equal receipt.list input keys, so no mapping layer exists.
 const receiptSearch = z.object({
   create: z.boolean().optional().catch(undefined),
+  payerId: z.uuid().optional().catch(undefined),
+  refund: z.boolean().optional().catch(undefined),
   q: documentSearchQuery.catch(undefined),
   partyId: z.uuid().optional().catch(undefined),
   ...periodSearch,
@@ -49,7 +54,7 @@ const receiptSearch = z.object({
   settlementKind: z.enum(SETTLEMENT_KINDS).optional().catch(undefined),
 });
 
-type ReceiptFilters = Omit<z.infer<typeof receiptSearch>, "create">;
+type ReceiptFilters = Omit<z.infer<typeof receiptSearch>, "create" | "payerId" | "refund">;
 
 export const Route = createFileRoute("/$orgSlug/receipts")({
   head: () => ({ meta: [{ title: "Receipts · Accly Books" }] }),
@@ -57,7 +62,10 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
   beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
     requirePeriod(queryClient, orgSlug, location, search, "this-month"),
   // `create` stays out: opening the overlay must not refetch the list.
-  loaderDeps: ({ search: { create: _create, all: _all, ...filters } }) => filters,
+  loaderDeps: ({ search: { create, payerId, refund: _refund, all: _all, ...filters } }) => ({
+    filters,
+    payerId: create ? payerId : undefined,
+  }),
   // The method master loads with the list, in one batch; awaited, so the server
   // renders the method chip the client hydrates.
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
@@ -66,7 +74,13 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
     await Promise.all([
       authorize(membership.roles, { paymentMethod: ["read"] }) &&
         queryClient.query(paymentMethodListOptions(orgSlug)).catch(() => {}),
-      queryClient.infiniteQuery(receiptListOptions(orgSlug, deps)).catch(() => {}),
+      queryClient.infiniteQuery(receiptListOptions(orgSlug, deps.filters)).catch(() => {}),
+      queryClient.prefetchQuery(
+        orpc.receipt.totals.queryOptions({ input: { orgSlug, ...deps.filters } }),
+      ),
+      deps.payerId
+        ? queryClient.prefetchQuery(partyDetailOptions(orgSlug, deps.payerId)).catch(() => {})
+        : undefined,
     ]);
   },
   component: ReceiptsRoute,
@@ -74,7 +88,7 @@ export const Route = createFileRoute("/$orgSlug/receipts")({
 
 function ReceiptsRoute() {
   const { orgSlug } = Route.useParams();
-  const { create, all: _all, ...filters } = Route.useSearch();
+  const { create, payerId, refund, all: _all, ...filters } = Route.useSearch();
   const { q, partyId, from, to, paymentMethodIds, state, settlementKind } = filters;
   const { today } = useOrgDateTime();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -87,6 +101,8 @@ function ReceiptsRoute() {
     ...receiptListOptions(orgSlug, filters),
     ...OPERATIONAL_INFINITE_REFETCH,
   });
+
+  const totals = useQuery(orpc.receipt.totals.queryOptions({ input: { orgSlug, ...filters } }));
 
   // Every method, not only active ones: old receipts name retired methods.
   const methods = useQuery({ ...paymentMethodListOptions(orgSlug), enabled: canReadMethods });
@@ -101,7 +117,7 @@ function ReceiptsRoute() {
 
   const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   // Both Clear buttons unmount once the filters go, so focus moves to the box first.
   const clear = () => {
@@ -160,7 +176,12 @@ function ReceiptsRoute() {
   const closeOverlay = () =>
     void navigate({
       replace: true,
-      search: (previous) => ({ ...previous, create: undefined }),
+      search: (previous) => ({
+        ...previous,
+        create: undefined,
+        payerId: undefined,
+        refund: undefined,
+      }),
     }).then(() => newTrigger.current?.focus());
 
   const empty = (
@@ -251,6 +272,7 @@ function ReceiptsRoute() {
           <FilterChips filters={chips} field={field} onClear={clear} />
         </ListToolbar>
 
+        <RegisterTotals query={totals} noun={filters.state ? "receipt" : "posted receipt"} />
         <DataTable
           columns={RECEIPT_COLUMNS}
           data={rows}
@@ -275,8 +297,11 @@ function ReceiptsRoute() {
 
       {canPost ? (
         <ReceiptOverlay
+          key={`${payerId ?? ""}:${refund ?? ""}`}
           orgSlug={orgSlug}
           today={today}
+          payerId={payerId}
+          refund={refund}
           open={create === true}
           onClose={closeOverlay}
         />

@@ -89,6 +89,7 @@ CREATE TABLE "document_lines" (
 	"account_id" text,
 	"entry_side" text,
 	"adjustment_kind" text,
+	"tds_section_id" text,
 	"item_id" text,
 	"party_id" text,
 	"description" text NOT NULL,
@@ -108,6 +109,7 @@ CREATE TABLE "document_lines" (
 	CONSTRAINT "document_lines_kind_check" CHECK ("document_lines"."kind" in ('item', 'account')),
 	CONSTRAINT "document_lines_entry_side_check" CHECK ("document_lines"."entry_side" is null or "document_lines"."entry_side" in ('debit', 'credit')),
 	CONSTRAINT "document_lines_adjustment_kind_check" CHECK ("document_lines"."adjustment_kind" is null or "document_lines"."adjustment_kind" in ('fee', 'writeOff', 'tds')),
+	CONSTRAINT "document_lines_tds_section_check" CHECK (("document_lines"."tds_section_id" is not null) = ("document_lines"."adjustment_kind" is not distinct from 'tds')),
 	CONSTRAINT "document_lines_quantity_check" CHECK ("document_lines"."quantity" is null or "document_lines"."quantity" >= 1),
 	CONSTRAINT "document_lines_cgst_paise_check" CHECK ("document_lines"."cgst_paise" >= 0),
 	CONSTRAINT "document_lines_sgst_paise_check" CHECK ("document_lines"."sgst_paise" >= 0),
@@ -426,6 +428,7 @@ ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_account_id_ac
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_item_id_items_org_id_id_fk" FOREIGN KEY ("org_id","item_id") REFERENCES "public"."items"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_party_id_parties_org_id_id_fk" FOREIGN KEY ("org_id","party_id") REFERENCES "public"."parties"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_tax_rate_id_tax_rates_org_id_id_fk" FOREIGN KEY ("org_id","tax_rate_id") REFERENCES "public"."tax_rates"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_tds_section_id_tds_sections_org_id_id_fk" FOREIGN KEY ("org_id","tds_section_id") REFERENCES "public"."tds_sections"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_lines" ADD CONSTRAINT "document_lines_org_id_source_line_id_document_lines_org_id_id_fk" FOREIGN KEY ("org_id","source_line_id") REFERENCES "public"."document_lines"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "party_ledger_lines" ADD CONSTRAINT "party_ledger_lines_org_id_organization_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "party_ledger_lines" ADD CONSTRAINT "party_ledger_lines_org_id_party_id_parties_org_id_id_fk" FOREIGN KEY ("org_id","party_id") REFERENCES "public"."parties"("org_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -481,7 +484,7 @@ CREATE UNIQUE INDEX "journal_entries_org_reverses_entry_idx" ON "journal_entries
 CREATE INDEX "journal_entries_org_date_idx" ON "journal_entries" USING btree ("org_id","entry_date","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_number_idx" ON "documents" USING btree ("org_id","type","financial_year","number") WHERE "documents"."number" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_org_opening_balance_idx" ON "documents" USING btree ("org_id") WHERE "documents"."type" = 'openingBalance' and "documents"."state" = 'posted';--> statement-breakpoint
-CREATE INDEX "documents_org_type_date_id_idx" ON "documents" USING btree ("org_id","type","document_date","id");--> statement-breakpoint
+CREATE INDEX "documents_org_type_date_id_idx" ON "documents" USING btree ("org_id","type","document_date","id","state","total_paise","party_id","payment_method_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_bill_reference_idx" ON "documents" USING btree ("org_id","party_id","financial_year",lower("reference")) WHERE "documents"."type" = 'bill' and "documents"."state" = 'posted';--> statement-breakpoint
 CREATE INDEX "documents_org_party_idx" ON "documents" USING btree ("org_id","party_id","id");--> statement-breakpoint
 CREATE INDEX "documents_org_party_date_id_idx" ON "documents" USING btree ("org_id","party_id","document_date","id");--> statement-breakpoint

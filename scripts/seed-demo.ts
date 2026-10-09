@@ -1,4 +1,4 @@
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import { createOrganization, createOrganizationInput } from "@accly/api/core/organizations";
 import { createRequestContext } from "@accly/api/lib/context";
 import { appRouter } from "@accly/api/routers/index";
@@ -410,6 +410,7 @@ export async function seedDemo(): Promise<void> {
     api.receipt.post({
       ...claim,
       settlementKind: "against",
+      exposureSide: "receivable",
       partyId: puneBuyer.id,
       paymentMethodId: bankMethod.id,
       documentDate: daysFromToday(-2),

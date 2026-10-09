@@ -36,6 +36,13 @@ import { LineGrid } from "@/components/document-form";
 import { ErrorNote, ListFooter } from "@/components/page";
 import { WaveLoader } from "@/components/wave-loader";
 
+export const ALLOCATION_REFUSALS: readonly string[] = [
+  "ALLOCATION_TARGET_INVALID",
+  "ALLOCATION_SOURCE_INVALID",
+  "ALLOCATION_EXCEEDS_OUTSTANDING",
+  "ALLOCATION_EXCEEDS_SOURCE",
+];
+
 /** An open claim or credit a settlement can allocate to, with what is still open on it. */
 export type OpenDocument = {
   id: string;
@@ -281,6 +288,7 @@ export function AllocationTable({
         : "",
       { shouldValidate: true },
     );
+    form.clearErrors(name);
   };
 
   return (
@@ -305,7 +313,7 @@ export function AllocationTable({
                       <TableHead className="hidden text-right sm:table-cell">
                         {openHeading}
                       </TableHead>
-                      <TableHead className="w-36 text-right">Allocate</TableHead>
+                      <TableHead className="w-52 text-right">Allocate</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -334,15 +342,15 @@ export function AllocationTable({
                         <TableCell className="hidden text-right tabular-nums sm:table-cell">
                           {formatMoney(row.openPaise)}
                         </TableCell>
-                        <TableCell className="w-36">
+                        <TableCell className="w-52">
                           <RegisteredFormField
                             name={`${name}.${row.id}`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="sr-only">Amount for {row.number}</FormLabel>
-                                <div className="flex min-w-32 items-center gap-1">
+                                <div className="flex min-w-48 items-center gap-1">
                                   <FormControl>
-                                    <AmountInput {...field} className="h-7 min-w-0" />
+                                    <AmountInput {...field} className="h-7" />
                                   </FormControl>
                                   <Button
                                     type="button"

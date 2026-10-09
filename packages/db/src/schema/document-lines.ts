@@ -18,6 +18,7 @@ import { ENTRY_SIDES } from "./entry-sides";
 import { items } from "./items";
 import { parties } from "./parties";
 import { taxRates } from "./tax-rates";
+import { tdsSections } from "./tds-sections";
 
 export const ADJUSTMENT_KINDS = ["fee", "writeOff", "tds"] as const;
 
@@ -37,6 +38,7 @@ export const documentLines = pgTable(
     accountId: text("account_id"),
     entrySide: text("entry_side", { enum: ENTRY_SIDES }),
     adjustmentKind: text("adjustment_kind", { enum: ADJUSTMENT_KINDS }),
+    tdsSectionId: text("tds_section_id"),
     itemId: text("item_id"),
     partyId: text("party_id"),
     description: text("description").notNull(),
@@ -78,6 +80,10 @@ export const documentLines = pgTable(
       foreignColumns: [taxRates.orgId, taxRates.id],
     }),
     foreignKey({
+      columns: [table.orgId, table.tdsSectionId],
+      foreignColumns: [tdsSections.orgId, tdsSections.id],
+    }),
+    foreignKey({
       columns: [table.orgId, table.sourceLineId],
       foreignColumns: [table.orgId, table.id],
     }),
@@ -92,6 +98,10 @@ export const documentLines = pgTable(
     check(
       "document_lines_adjustment_kind_check",
       sql`${table.adjustmentKind} is null or ${table.adjustmentKind} in ('fee', 'writeOff', 'tds')`,
+    ),
+    check(
+      "document_lines_tds_section_check",
+      sql`(${table.tdsSectionId} is not null) = (${table.adjustmentKind} is not distinct from 'tds')`,
     ),
     check(
       "document_lines_quantity_check",

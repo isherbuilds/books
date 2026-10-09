@@ -4,6 +4,9 @@ import { documentLines } from "@accly/db/schema/document-lines";
 import { DOCUMENT_STATES, documents, type DocumentType } from "@accly/db/schema/documents";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
+import { paymentMethods } from "@accly/db/schema/payment-methods";
+import { tdsSections } from "@accly/db/schema/tds-sections";
+import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { ORPCError } from "@orpc/server";
 import {
   and,
@@ -24,7 +27,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { allocationReversed, settlementPaise } from "../core/allocations";
 import { amendDocument, postedNumber, reverseDocument } from "../core/documents";
 import { formatDecimal } from "../core/money";
@@ -33,10 +36,12 @@ import { businessDate } from "./business-date";
 import { impossible } from "./conflict";
 import type { Scope } from "./procedures/factory";
 import {
+  documentFilterFields,
   documentListFields,
   likePattern,
+  type DocumentCursor,
   type draftToken,
-  type settlementListFields,
+  type settlementFilterFields,
 } from "./schemas";
 
 // Receipts and Payments share one read and list path. Invoices also share the cancel.
@@ -44,15 +49,20 @@ type PostedType = DocumentPosting["type"];
 
 type DocumentListInput = z.output<z.ZodObject<typeof documentListFields>>;
 
-type SettlementListInput = z.output<z.ZodObject<typeof settlementListFields>>;
+type DocumentFilterInput = z.output<z.ZodObject<typeof documentFilterFields>>;
 
-/** The Invoice and Bill registers' filters. A status is a state, or a posted claim still open. */
-export const claimListFields = {
-  ...documentListFields,
-  status: z.enum([...DOCUMENT_STATES, "open", "overdue"]).optional(),
-};
+type SettlementFilterInput = z.output<z.ZodObject<typeof settlementFilterFields>>;
+
+/** The Invoice and Bill registers' status: a state, or a posted claim still open. */
+const claimStatus = z.enum([...DOCUMENT_STATES, "open", "overdue"]).optional();
+
+export const claimFilterFields = { ...documentFilterFields, status: claimStatus };
+
+export const claimListFields = { ...documentListFields, status: claimStatus };
 
 type ClaimListInput = z.output<z.ZodObject<typeof claimListFields>>;
+
+type ClaimFilterInput = z.output<z.ZodObject<typeof claimFilterFields>>;
 
 type Claim = "invoice" | "bill";
 
@@ -80,11 +90,11 @@ export function documentPeriod(input: { from?: string; to?: string }) {
 }
 
 /** The keyset, party and period predicates every document register shares. */
-function documentListWhere(
+export function documentListWhere(
   orgId: string,
   types: readonly DocumentType[],
-  input: DocumentListInput,
-  cursor: SQL | undefined,
+  input: DocumentFilterInput,
+  cursor?: SQL,
 ) {
   // Only Invoices and Bills have drafts outside the period. An unnecessary draft
   // OR prevents the other registers from seeking their date range in the index.
@@ -102,6 +112,58 @@ function documentListWhere(
   );
 }
 
+/**
+ * Totals share the page's tenant, type, period, party and search predicate. They count
+ * posted documents only, unless the user filters to drafts or cancelled ones.
+ */
+function totalsWhere(
+  orgId: string,
+  types: readonly DocumentType[],
+  input: DocumentFilterInput,
+  filter: SQL | undefined,
+) {
+  return and(
+    documentListWhere(orgId, types, input),
+    input.q ? ilike(documents.searchText, likePattern(input.q)) : undefined,
+    filter ?? eq(documents.state, "posted"),
+  );
+}
+
+/** Receipt and Payment totals, split by payment method. */
+export async function settlementTotals(
+  orgId: string,
+  type: "receipt" | "payment",
+  input: SettlementFilterInput,
+) {
+  const methods = await db
+    .select({
+      name: paymentMethods.name,
+      count: sql<number>`count(*)::int`.mapWith(Number),
+      amountPaise: sql<bigint>`sum(${documents.totalPaise})::bigint`.mapWith(BigInt),
+    })
+    .from(documents)
+    .innerJoin(
+      paymentMethods,
+      and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.id, documents.paymentMethodId)),
+    )
+    .where(
+      totalsWhere(
+        orgId,
+        [type],
+        input,
+        and(settlementListWhere(input), input.state ? undefined : eq(documents.state, "posted")),
+      ),
+    )
+    .groupBy(paymentMethods.id, paymentMethods.name)
+    .orderBy(paymentMethods.name);
+
+  return {
+    count: methods.reduce((count, method) => count + method.count, 0),
+    totalPaise: methods.reduce((total, method) => total + method.amountPaise, 0n),
+    methods,
+  };
+}
+
 // A search first walks this many of the newest documents, then reads the trigram
 // index for older ones only if the page is not full.
 const SEARCH_WINDOW = 1_000;
@@ -109,7 +171,7 @@ const SEARCH_WINDOW = 1_000;
 /**
  * One register page, newest document date first. `read` runs the register's own query
  * with `where` and its own filters, ordered by `(document_date, id)` descending and
- * limited to `limit + 1`. The cursor stays a document id (`dateCursor`).
+ * limited to `limit + 1`. The cursor is the last row's `(documentDate, id)` (`dateCursor`).
  *
  * A search term matches a substring of `documents.search_text`. PostgreSQL estimates
  * that match across every organization, so a term common elsewhere or in old history
@@ -124,7 +186,7 @@ export async function registerPage<T>(
   input: DocumentListInput,
   read: (where: SQL | undefined) => PromiseLike<T[]>,
 ): Promise<{ rows: T[]; hasMore: boolean }> {
-  const cursor = dateCursor(orgId, input.cursor, "before");
+  const cursor = dateCursor(input.cursor, "before");
   const listed = documentListWhere(orgId, types, input, cursor);
 
   if (!input.q) return pageOf(await read(listed), input.limit);
@@ -317,20 +379,7 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
         outstandingPaise: balancePaise,
       })
       .from(documents)
-      .where(
-        and(
-          listed,
-          input.status === "open" || input.status === "overdue"
-            ? and(
-                eq(documents.state, "posted"),
-                gt(balancePaise, 0n),
-                input.status === "overdue" ? lt(documents.dueDate, today) : undefined,
-              )
-            : input.status
-              ? eq(documents.state, input.status)
-              : undefined,
-        ),
-      )
+      .where(and(listed, claimListWhere(orgId, input, today)))
       .orderBy(desc(documents.documentDate), desc(documents.id))
       .limit(input.limit + 1),
   );
@@ -343,6 +392,40 @@ export async function listClaims(orgId: string, type: Claim, input: ClaimListInp
     })),
     hasMore,
   };
+}
+
+/** Keep open/overdue and state filters identical for pages and aggregates. */
+export function claimListWhere(
+  orgId: string,
+  input: Pick<ClaimFilterInput, "status">,
+  today: string,
+) {
+  if (input.status === "open" || input.status === "overdue") {
+    return and(
+      eq(documents.state, "posted"),
+      gt(settlementPaise(orgId, "target", null).balancePaise, 0n),
+      input.status === "overdue" ? lt(documents.dueDate, today) : undefined,
+    );
+  }
+
+  return input.status ? eq(documents.state, input.status) : undefined;
+}
+
+/** Invoice and Bill totals. */
+export async function claimTotals(orgId: string, type: Claim, input: ClaimFilterInput) {
+  const today = businessDate(new Date(), await orgTimeZone(orgId));
+
+  const [totals] = await db
+    .select({
+      count: sql<number>`count(*)::int`.mapWith(Number),
+      totalPaise: sql<bigint>`coalesce(sum(${documents.totalPaise}), 0)::bigint`.mapWith(BigInt),
+    })
+    .from(documents)
+    .where(totalsWhere(orgId, [type], input, claimListWhere(orgId, input, today)));
+
+  if (!totals) throw impossible("register aggregate returned no row");
+
+  return totals;
 }
 
 /**
@@ -368,6 +451,7 @@ export async function allocationsOf(
       otherDocumentId: documents.id,
       otherType: documents.type,
       otherNumber: documents.number,
+      otherDocumentDate: documents.documentDate,
       amountPaise: allocations.amountPaise,
       entryDate: allocations.entryDate,
       reversed: allocationReversed(orgId),
@@ -401,7 +485,9 @@ export const settlementListRow = {
 };
 
 /** The Receipt and Payment registers' own filters, beside `registerPage`'s. */
-export function settlementListWhere(input: SettlementListInput) {
+export function settlementListWhere(
+  input: Pick<SettlementFilterInput, "paymentMethodIds" | "state" | "settlementKind">,
+) {
   return and(
     input.paymentMethodIds ? inArray(documents.paymentMethodId, input.paymentMethodIds) : undefined,
     input.state ? eq(documents.state, input.state) : undefined,
@@ -436,25 +522,21 @@ export function documentSettlement(
   };
 }
 
-type PickerPage = { cursor?: string; limit: number };
+type PickerPage = { cursor?: DocumentCursor; limit: number };
 
 /**
- * Rows past the cursor document in (date, id) order: `after` for the oldest-first
- * pickers and opening items, `before` for the newest-first registers. The position
- * is read inside the page's own statement. A posted document's date never changes,
- * so a cursor keeps its place between pages.
+ * Rows past the cursor in (date, id) order: `after` for the oldest-first pickers and
+ * opening items, `before` for the newest-first registers. The cursor carries its own
+ * date, so a draft whose date changes between pages cannot skip or repeat rows.
  */
-export function dateCursor(orgId: string, cursor: string | undefined, side: "after" | "before") {
+export function dateCursor(cursor: DocumentCursor | undefined, side: "after" | "before") {
   if (!cursor) return undefined;
 
-  const position = db
-    .select({ documentDate: documents.documentDate, id: documents.id })
-    .from(documents)
-    .where(and(eq(documents.orgId, orgId), eq(documents.id, cursor)));
+  const position = sql`(${cursor.documentDate}::date, ${cursor.id})`;
 
   return side === "after"
-    ? sql`(${documents.documentDate}, ${documents.id}) > (${position})`
-    : sql`(${documents.documentDate}, ${documents.id}) < (${position})`;
+    ? sql`(${documents.documentDate}, ${documents.id}) > ${position}`
+    : sql`(${documents.documentDate}, ${documents.id}) < ${position}`;
 }
 
 /** One page of the claims still open for the party and side, oldest first. */
@@ -515,9 +597,10 @@ export async function openItems(
             )
           : or(
               eq(documents.type, "bill"),
+              and(eq(documents.type, "receipt"), eq(documents.exposureSide, "payable")),
               and(eq(documents.type, "openingClaim"), eq(documents.exposureSide, "payable")),
             ),
-        dateCursor(orgId, input.cursor, "after"),
+        dateCursor(input.cursor, "after"),
         gt(outstandingPaise, 0n),
       ),
     )
@@ -539,7 +622,8 @@ export async function openCredits(
   input: PickerPage & {
     partyId: string;
     side: "receivable" | "payable";
-    type?: "receipt" | "creditNote" | "payment" | "debitNote" | "journal";
+    types?: readonly ("receipt" | "creditNote" | "payment" | "debitNote" | "journal")[];
+    tdsOnly?: boolean;
     q?: string;
   },
 ) {
@@ -580,7 +664,7 @@ export async function openCredits(
           ),
         ),
         eq(documents.state, "posted"),
-        input.type ? eq(documents.type, input.type) : undefined,
+        input.types ? inArray(documents.type, [...input.types]) : undefined,
         input.side === "receivable"
           ? or(
               eq(documents.type, "journal"),
@@ -588,6 +672,7 @@ export async function openCredits(
               and(
                 eq(documents.type, "receipt"),
                 inArray(documents.settlementKind, ["advance", "against"]),
+                eq(documents.exposureSide, "receivable"),
               ),
               and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "receivable")),
             )
@@ -600,13 +685,27 @@ export async function openCredits(
               ),
               and(eq(documents.type, "openingCredit"), eq(documents.exposureSide, "payable")),
             ),
+        input.tdsOnly
+          ? exists(
+              db
+                .select({ id: tdsDeductions.id })
+                .from(tdsDeductions)
+                .where(
+                  and(
+                    eq(tdsDeductions.orgId, orgId),
+                    eq(tdsDeductions.documentId, documents.id),
+                    gt(tdsDeductions.amountPaise, 0n),
+                  ),
+                ),
+            )
+          : undefined,
         input.q
           ? or(
               ilike(documents.number, likePattern(input.q)),
               ilike(documents.reference, likePattern(input.q)),
             )
           : undefined,
-        dateCursor(orgId, input.cursor, "after"),
+        dateCursor(input.cursor, "after"),
         gt(unappliedPaise, 0n),
       ),
     )
@@ -626,8 +725,13 @@ export function adjustmentLinesOf(orgId: string, documentId: string) {
       id: documentLines.id,
       adjustmentKind: documentLines.adjustmentKind,
       amountPaise: documentLines.amountPaise,
+      sectionCode: tdsSections.code,
     })
     .from(documentLines)
+    .leftJoin(
+      tdsSections,
+      and(eq(tdsSections.orgId, orgId), eq(tdsSections.id, documentLines.tdsSectionId)),
+    )
     .where(
       and(
         eq(documentLines.orgId, orgId),

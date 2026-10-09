@@ -19,14 +19,14 @@ export function AmountInput({
       autoComplete="off"
       placeholder="0.00"
       {...props}
-      className={cn("text-right tabular-nums", symbol && "pl-6", className)}
+      className={cn("min-w-32 text-right tabular-nums", symbol && "pl-6", className)}
     />
   );
 
   if (!symbol) return input;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-32">
       <span
         aria-hidden
         className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-muted-foreground"

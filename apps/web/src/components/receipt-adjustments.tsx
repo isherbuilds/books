@@ -9,7 +9,8 @@ import {
 } from "@accly/ui/components/form";
 
 import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { useFormContext, Watch } from "react-hook-form";
 
 import { AmountInput } from "@/components/amount-input";
@@ -17,8 +18,16 @@ import { FieldArrayError, LineGrid } from "@/components/document-form";
 import { LinkField } from "@/components/link-field";
 import { accountListOptions, postableAccounts, type AccountListRow } from "@/lib/accounts";
 import { useListState, type ListState } from "@/lib/list-state";
+import { orpc } from "@/lib/orpc";
 
-type Adjustment = { kind: "fee" | "writeOff" | "tds"; accountId: string | null; amount: string };
+type Adjustment = {
+  kind: "fee" | "writeOff" | "tds";
+  accountId: string | null;
+  tdsSectionId: string | null;
+  amount: string;
+};
+
+type TdsSection = { id: string; code: string; description: string; rateBasisPoints: number };
 
 type AdjustmentForm = { adjustments: Adjustment[] };
 
@@ -28,11 +37,12 @@ const expenseAccounts = (rows: AccountListRow[]) => postableAccounts(rows, ["exp
 function AdjustmentRow({
   index,
   accounts,
+  sections,
   remove,
 }: {
   index: number;
   accounts: ListState<AccountListRow[]>;
-  /** `useFieldArray`'s stable `remove`, so a row's props change only with its own index. */
+  sections: ListState<TdsSection[]>;
   remove: (index: number) => void;
 }) {
   const form = useFormContext<AdjustmentForm>();
@@ -55,6 +65,7 @@ function AdjustmentRow({
                   if (next[0] === "fee" || next[0] === "writeOff" || next[0] === "tds") {
                     field.onChange(next[0]);
                     form.setValue(`adjustments.${index}.accountId`, null);
+                    form.setValue(`adjustments.${index}.tdsSectionId`, null);
                   }
                 }}
               >
@@ -72,7 +83,30 @@ function AdjustmentRow({
           name={`adjustments.${index}.kind`}
           render={(kind) =>
             kind === "tds" ? (
-              <span className="self-end text-muted-foreground">TDS receivable</span>
+              <FormField
+                control={form.control}
+                name={`adjustments.${index}.tdsSectionId`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>TDS section</FormLabel>
+                    <FormControl>
+                      <LinkField
+                        items={sections.data}
+                        query={sections}
+                        noun="TDS sections"
+                        getKey={(section) => section.id}
+                        getLabel={(section) => `${section.code} · ${section.description}`}
+                        getCode={(section) => section.code}
+                        value={sections.data?.find((section) => section.id === field.value) ?? null}
+                        onSelect={(section) => field.onChange(section?.id ?? null)}
+                        inputRef={field.ref}
+                        placeholder="Choose a TDS section"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             ) : (
               <FormField
                 control={form.control}
@@ -131,9 +165,11 @@ function AdjustmentRow({
 /** A receipt's fee, write-off, and TDS adjustments; the host owns the field array so settlement changes clear it. */
 export function ReceiptAdjustments({
   orgSlug,
+  documentDate,
   adjustmentFields,
 }: {
   orgSlug: string;
+  documentDate: string;
   adjustmentFields: {
     fields: { id: string }[];
     append: (adjustment: Adjustment) => void;
@@ -146,6 +182,16 @@ export function ReceiptAdjustments({
     useQuery({ ...accountListOptions(orgSlug), select: expenseAccounts }),
   );
 
+  const sections = useListState<TdsSection[]>(
+    useQuery(
+      orpc.payment.tdsSections.queryOptions({
+        input: z.iso.date().safeParse(documentDate).success
+          ? { orgSlug, date: documentDate }
+          : skipToken,
+      }),
+    ),
+  );
+
   return (
     <LineGrid
       title="Adjustments"
@@ -155,7 +201,14 @@ export function ReceiptAdjustments({
           size="xs"
           variant="outline"
           disabled={adjustmentFields.fields.length >= 5}
-          onClick={() => adjustmentFields.append({ kind: "fee", accountId: null, amount: "" })}
+          onClick={() =>
+            adjustmentFields.append({
+              kind: "fee",
+              accountId: null,
+              tdsSectionId: null,
+              amount: "",
+            })
+          }
         >
           Add adjustment
         </Button>
@@ -166,6 +219,7 @@ export function ReceiptAdjustments({
           key={adjustment.id}
           index={index}
           accounts={accounts}
+          sections={sections}
           remove={adjustmentFields.remove}
         />
       ))}

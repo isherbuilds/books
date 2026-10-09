@@ -139,6 +139,22 @@ test("account creation and restoration refuse foreign parents and taken names", 
   // Templates own 6800–6999; user expense codes must never run into Round Off (6900).
   expect(Number(repairs.code)).toBeLessThan(6800);
 
+  const assetGroup = required(
+    (await accountantApi.account.list({ orgSlug, type: "asset" })).find(
+      ({ code }) => code === "100",
+    ),
+    "current assets group",
+  );
+
+  const grouped = await accountantApi.account.create({
+    orgSlug,
+    parent: { accountId: assetGroup.id },
+    name: "Fixed Asset Equipment",
+  });
+
+  expect(grouped.code).toBe("1200");
+  expect(grouped.parentId).toBe(assetGroup.id);
+
   const duplicate = await expectORPCCode(
     accountantApi.account.create({ orgSlug, parent: { type: "expense" }, name: "bus repairs" }),
     "CONFLICT",
@@ -318,10 +334,22 @@ test("an unused income account changes its supply class and clears its items' GS
   const item = await accountantApi.item.create({
     orgSlug,
     name: "Membership",
+    hsnSac: "9992",
     unitPrice: "100.00",
     incomeAccountId: income.id,
     taxCode: "GST18",
   });
+
+  await expectReason(
+    accountantApi.item.create({
+      orgSlug,
+      name: "Taxable missing HSN",
+      unitPrice: "100.00",
+      incomeAccountId: income.id,
+      taxCode: "GST18",
+    }),
+    "HSN_SAC_REQUIRED",
+  );
 
   const changed = await accountantApi.account.update({
     orgSlug,

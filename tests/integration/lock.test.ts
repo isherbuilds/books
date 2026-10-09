@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import { assertPeriodOpen } from "@accly/api/core/locks";
 import type { Scope } from "@accly/api/lib/procedures/factory";
 import { orgSettings } from "@accly/api/lib/settlements";
@@ -234,9 +234,19 @@ test("a general lock is inclusive and only an active user exception bypasses it"
   const exception = await caApi.lock.grantException({
     ...claim,
     userId: fixture.accountant.user.id,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    days: 1,
     reason: "Complete one adjustment",
   });
+
+  await expectReason(
+    caApi.lock.grantException({
+      ...claim,
+      userId: fixture.accountant.user.id,
+      days: 1,
+      reason: "Duplicate active grant",
+    }),
+    "EXCEPTION_ACTIVE",
+  );
 
   await postJournal(
     fixture.api,
@@ -265,17 +275,8 @@ test("a general lock is inclusive and only an active user exception bypasses it"
   await expectReason(
     caApi.lock.grantException({
       ...claim,
-      userId: fixture.accountant.user.id,
-      expiresAt: new Date(Date.now() - 60_000).toISOString(),
-      reason: "Already expired",
-    }),
-    "EXPIRY_PAST",
-  );
-  await expectReason(
-    caApi.lock.grantException({
-      ...claim,
       userId: crypto.randomUUID(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      days: 1,
       reason: "Not an organization member",
     }),
     "MEMBER_INVALID",
@@ -518,7 +519,7 @@ test("a lock change waits for a posting that already passed its check", async ()
   const exception = await caApi.lock.grantException({
     ...claim,
     userId: fixture.accountant.user.id,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    days: 1,
     reason: "One adjustment",
   });
 

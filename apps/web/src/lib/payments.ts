@@ -1,6 +1,7 @@
+import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { keysetPaging, orpc } from "@/lib/orpc";
+import { datedPaging, orpc } from "@/lib/orpc";
 
 type PaymentListFilters = Omit<
   Parameters<AppRouterClient["payment"]["list"]>[0],
@@ -9,8 +10,8 @@ type PaymentListFilters = Omit<
 
 export const paymentListOptions = (orgSlug: string, filters: PaymentListFilters) =>
   orpc.payment.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...keysetPaging,
+    input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
+    ...datedPaging,
   });
 
 export const paymentDetailOptions = (orgSlug: string, paymentId: string) =>

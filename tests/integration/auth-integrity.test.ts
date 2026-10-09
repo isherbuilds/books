@@ -6,6 +6,7 @@ import { auth, invitationUrl } from "@accly/auth";
 import { createUserWithPassword } from "@accly/auth/manual-user";
 import { db } from "@accly/db";
 import { invitation, member, user } from "@accly/db/schema/auth";
+import { auditLog } from "@accly/db/schema/audit";
 import { file } from "@accly/db/schema/file";
 import { env } from "@accly/env/server";
 import { createRouterClient } from "@orpc/server";
@@ -18,7 +19,7 @@ import {
   createTestUser,
   joinOrganization,
 } from "../support/auth";
-import { clientFor, expectAuthStatus, expectORPCCode } from "../support/client";
+import { clientFor, eventually, expectAuthStatus, expectORPCCode } from "../support/client";
 import { resetTestDatabase } from "../support/database";
 
 beforeAll(async () => {
@@ -251,9 +252,8 @@ test("only the browser's organization endpoints are served over HTTP", async () 
   expect(listed.status).toBe(200);
   expect(await listed.json()).toEqual([expect.objectContaining({ id: organization.id })]);
 
-  const invitations = await call("GET", "list-user-invitations");
-  expect(invitations.status).toBe(200);
-  expect(await invitations.json()).toEqual([]);
+  // Pending invitation ids are sign-up proof, so the browser never lists them.
+  expect((await call("GET", "list-user-invitations")).status).toBe(404);
 });
 
 test("an invitee creates an account from the invitation id, joins, and signs in with the password", async () => {
@@ -277,6 +277,7 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
     expect(status.status).toBe(200);
     expect(await status.json()).toEqual({
       accountExists: false,
+      role: "operator",
       email,
       organizationName,
       organizationSlug: organization.slug,
@@ -307,6 +308,7 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
   expect(created.user.emailVerified).toBe(false);
   expect(await auth.api.invitationClaimStatus({ query: { invitationId: invited.id } })).toEqual({
     accountExists: true,
+    role: "operator",
     email,
     organizationName,
     organizationSlug: organization.slug,
@@ -316,11 +318,33 @@ test("an invitee creates an account from the invitation id, joins, and signs in 
   await auth.api.acceptInvitation({ body: { invitationId: invited.id }, headers });
 
   const [membership] = await db
-    .select({ role: member.role })
+    .select({ id: member.id, role: member.role })
     .from(member)
     .where(and(eq(member.organizationId, organization.id), eq(member.userId, created.user.id)));
 
   expect(membership?.role).toBe("operator");
+
+  const joined = await eventually(async () => {
+    const [entry] = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.orgId, organization.id),
+          eq(auditLog.actorId, created.user.id),
+          eq(auditLog.action, "member.join"),
+        ),
+      );
+
+    return entry;
+  });
+
+  expect(joined.meta).toMatchObject({
+    name: "Invited User",
+    email,
+    role: "operator",
+  });
+  expect(joined.target).toBe(`member:${membership?.id}`);
   expect((await auth.api.signInEmail({ body: { email, password } })).user.id).toBe(created.user.id);
 });
 
@@ -366,10 +390,69 @@ test("an invitation id creates only its own invited email while it is live", asy
     `/api/auth/invitation/claim-status?invitationId=${expired.id}`,
   );
 
-  expect(expiredStatus.status).toBe(404);
+  expect(expiredStatus.status).toBe(410);
+  expect(await expiredStatus.json()).toMatchObject({
+    code: "INVITATION_EXPIRED",
+    message: "This invitation has expired. Ask the sender for a new link.",
+  });
+  const roster = await clientFor(owner).member.list({ orgSlug: organization.slug });
+  expect(roster.invitations.map((row) => row.id)).toContain(expired.id);
   await expectAuthStatus(
     signUp({ email, invitationId: expired.id }),
     "FORBIDDEN",
     "INVITATION_REQUIRED",
   );
+});
+
+test("member refusals explain duplicate invites and the last-owner invariant", async () => {
+  const owner = await createTestUser("roster-refusals-owner");
+  const organization = await createOrganization(owner, "roster-refusals");
+  const api = clientFor(owner);
+  const email = `roster-refusals-${Bun.randomUUIDv7()}@example.com`;
+
+  await api.member.invite({ orgSlug: organization.slug, email, role: "operator" });
+  await expect(
+    api.member.invite({ orgSlug: organization.slug, email, role: "operator" }),
+  ).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: `${email} already has a pending invitation`,
+  });
+
+  const roster = await api.member.list({ orgSlug: organization.slug });
+  const ownerId = roster.members.find((row) => row.userId === owner.user.id)!.id;
+  await expect(
+    api.member.remove({ orgSlug: organization.slug, memberId: ownerId }),
+  ).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: "Add another owner before you leave",
+  });
+  await expect(
+    api.member.updateRole({ orgSlug: organization.slug, memberId: ownerId, role: "operator" }),
+  ).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: "Add another owner before you leave",
+  });
+});
+
+test("re-inviting an expired email leaves one pending roster invitation", async () => {
+  const owner = await createTestUser("reinvite-owner");
+  const organization = await createOrganization(owner, "reinvite");
+  const api = clientFor(owner);
+  const email = `reinvite-${Bun.randomUUIDv7()}@example.com`;
+  const expired = await api.member.invite({ orgSlug: organization.slug, email, role: "operator" });
+  await db
+    .update(invitation)
+    .set({ expiresAt: new Date(Date.now() - 60_000) })
+    .where(and(eq(invitation.organizationId, organization.id), eq(invitation.id, expired.id)));
+
+  const replacement = await api.member.invite({
+    orgSlug: organization.slug,
+    email: email.toUpperCase(),
+    role: "operator",
+  });
+
+  const roster = await api.member.list({ orgSlug: organization.slug });
+  expect(roster.invitations.filter((row) => row.email === email)).toEqual([
+    expect.objectContaining({ id: replacement.id }),
+  ]);
 });

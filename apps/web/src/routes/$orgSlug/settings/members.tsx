@@ -113,14 +113,16 @@ function InviteDialog({
         // Returned, so the form stays pending until the list shows the invitation.
         return invalidateRoster(queryClient, orgSlug);
       },
-      onError: (error) => toast.error(errorMessage(error, "Could not create the invitation")),
+      onError: (error) => {
+        setLastLink(null);
+        toast.error(errorMessage(error, "Could not create the invitation"));
+      },
     }),
   );
 
   // `lastLink` is a single-use credential for one address — it must never survive
   // into the next invitation, so it clears the moment a new one is submitted.
   const submit = form.handleSubmit((values) => {
-    setLastLink(null);
     invite.mutate({ orgSlug, ...values });
   });
 
@@ -146,7 +148,12 @@ function InviteDialog({
           </DialogHeader>
 
           <Form {...form}>
-            <form noValidate onSubmit={submit} className="flex min-w-0 flex-col gap-3">
+            <form
+              noValidate
+              onSubmitCapture={() => setLastLink(null)}
+              onSubmit={submit}
+              className="flex min-w-0 flex-col gap-3"
+            >
               <RegisteredFormField
                 name="email"
                 render={({ field }) => (
@@ -171,7 +178,7 @@ function InviteDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role</FormLabel>
-                    <div role="group" aria-label="Role" className="flex gap-1">
+                    <div role="group" aria-label="Role" className="flex flex-wrap gap-1">
                       {ORG_ROLES.map((option) => (
                         <Button
                           key={option}
@@ -284,17 +291,20 @@ function RosterRole({ row }: { row: RosterRow }) {
   return row.role ? <RoleBadge role={row.role} /> : <span>Unassigned</span>;
 }
 
-// Every member is active, so only a pending invitation carries a status, inline.
+// Pending invitations remain visible after expiry so an owner can re-invite.
 function PendingInvitation({ email, expiresAt }: { email: string; expiresAt: Date }) {
   const { timeZone } = useOrgDateTime();
+  const expired = expiresAt <= new Date();
 
   return (
     <div className="min-w-0 text-muted-foreground">
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate">{email}</span>
-        <Badge variant="warn">Invited</Badge>
+        <Badge variant="warn">{expired ? "Expired" : "Invited"}</Badge>
       </span>
-      <div className="truncate">Expires {formatDate(expiresAt, timeZone)}</div>
+      <div className="truncate">
+        {expired ? "Expired" : "Expires"} {formatDate(expiresAt, timeZone)}
+      </div>
     </div>
   );
 }
@@ -357,6 +367,16 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
     }),
   );
 
+  const reInvite = useMutation(
+    orpc.member.invite.mutationOptions({
+      onSuccess: async () => {
+        await invalidateRoster(queryClient, orgSlug);
+        toast.success("Invitation renewed; copy the new link from the row");
+      },
+      onError: (error) => toast.error(errorMessage(error, "Could not renew the invitation")),
+    }),
+  );
+
   if (row.kind === "member") {
     if (!canManage) return null;
 
@@ -370,7 +390,14 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
             <DropdownMenuItem
               key={option}
               disabled={parseRoles(row.role).includes(option) || updateRole.isPending}
-              onClick={() => updateRole.mutate({ orgSlug, memberId: row.id, role: option })}
+              onClick={() =>
+                confirm({
+                  title: `Change ${name}'s role to ${ROLE_LABELS[option]}?`,
+                  description: `This changes what ${name} can access in this organization immediately.`,
+                  confirmLabel: "Change role",
+                  run: () => updateRole.mutate({ orgSlug, memberId: row.id, role: option }),
+                })
+              }
             >
               {ROLE_LABELS[option]}
             </DropdownMenuItem>
@@ -401,17 +428,33 @@ function RosterActions({ orgSlug, row }: { orgSlug: string; row: RosterRow }) {
   return (
     <>
       <RowActionsMenu label={`Actions for the invitation to ${row.email}`}>
-        <DropdownMenuItem
-          onClick={() =>
-            navigator.clipboard.writeText(row.url).then(
-              () => toast.success("Invitation link copied"),
-              () => toast.error("Could not copy the link"),
-            )
-          }
-        >
-          <CopyIcon />
-          Copy link
-        </DropdownMenuItem>
+        {row.expiresAt > new Date() ? (
+          <DropdownMenuItem
+            onClick={() =>
+              navigator.clipboard.writeText(row.url).then(
+                () => toast.success("Invitation link copied"),
+                () => toast.error("Could not copy the link"),
+              )
+            }
+          >
+            <CopyIcon />
+            Copy link
+          </DropdownMenuItem>
+        ) : null}
+        {row.expiresAt <= new Date() ? (
+          <DropdownMenuItem
+            disabled={reInvite.isPending}
+            onClick={() =>
+              reInvite.mutate({
+                orgSlug,
+                email: row.email,
+                role: z.enum(ORG_ROLES).parse(row.role),
+              })
+            }
+          >
+            Re-invite
+          </DropdownMenuItem>
+        ) : null}
         {canRevoke ? (
           <DropdownMenuItem
             variant="destructive"

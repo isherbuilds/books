@@ -63,13 +63,13 @@ function StatementRow({
           )}
           <span className="hidden font-mono text-muted-foreground md:inline">{node.code}</span>
           {group ? (
-            <span className="min-w-0 break-words capitalize">{node.name}</span>
+            <span className="min-w-0 break-words">{node.name}</span>
           ) : (
             <Link
               to="/$orgSlug/reports/account-ledger"
               params={{ orgSlug }}
               search={{ accountId: node.accountId, ...period }}
-              className="min-w-0 break-words capitalize underline-offset-4 hover:underline"
+              className="min-w-0 break-words underline-offset-4 hover:underline"
             >
               {node.name}
             </Link>

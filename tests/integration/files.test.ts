@@ -2,6 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 
 import { cleanupUploads } from "@accly/api/lib/upload-cleanup";
 import { db } from "@accly/db";
+import { drainAuditWrites } from "@accly/db/audit";
 import { file } from "@accly/db/schema/file";
 import { listObjects } from "@accly/storage";
 import { and, eq, inArray } from "drizzle-orm";
@@ -31,7 +32,7 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
 
   const upload = await api.file.createUpload({
     orgSlug: org.slug,
-    name: "notes.txt",
+    name: "notes report.txt",
     mimeType: "text/plain",
     size: body.length,
   });
@@ -57,8 +58,26 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   );
 
   const listed = await api.file.list({ orgSlug: org.slug });
+  expect(listed.items.find((item) => item.id === upload.key)?.uploaderName).toBe(owner.user.name);
+  await drainAuditWrites();
+  const uploads = await api.audit.list({ orgSlug: org.slug, q: "notes report" });
+  expect(uploads.items).toEqual([
+    expect.objectContaining({
+      action: "file.upload",
+      actorId: owner.user.id,
+      target: `file:${upload.key}`,
+      meta: { name: "notes report.txt" },
+    }),
+  ]);
+  expect((await api.audit.list({ orgSlug: org.slug, q: owner.user.name })).items).toContainEqual(
+    expect.objectContaining({ action: "file.upload" }),
+  );
+  expect(
+    (await api.audit.list({ orgSlug: org.slug, q: "notes report", from: "2099-01-01" })).items,
+  ).toEqual([]);
+  expect((await api.audit.list({ orgSlug: org.slug, q: "no-such-actor" })).items).toEqual([]);
   expect(listed.items.map((file) => file.id)).toContain(upload.key);
-  const matching = await api.file.list({ orgSlug: org.slug, query: "OTES.T" });
+  const matching = await api.file.list({ orgSlug: org.slug, query: "OTES R" });
   expect(matching.items.map((file) => file.id)).toContain(upload.key);
   expect((await api.file.list({ orgSlug: org.slug, query: "no-such-file-zz" })).items).toEqual([]);
 
@@ -77,6 +96,24 @@ test("a file is uploaded, finalized, read only via a signature, and deleted", as
   expect(unsigned.status).toBeGreaterThanOrEqual(400);
 
   await api.file.delete({ orgSlug: org.slug, key: upload.key });
+  await drainAuditWrites();
+  const first = await api.audit.list({ orgSlug: org.slug, q: "notes report", limit: 1 });
+  expect(first.items).toEqual([
+    expect.objectContaining({ action: "file.delete", meta: { name: "notes report.txt" } }),
+  ]);
+  expect(first.items).toHaveLength(1);
+  expect(first.nextCursor).not.toBeNull();
+
+  const second = await api.audit.list({
+    orgSlug: org.slug,
+    q: "notes report",
+    limit: 1,
+    cursor: first.nextCursor!,
+  });
+
+  expect(second.items).toHaveLength(1);
+  expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
+  expect(second.nextCursor).toBeNull();
   expect((await api.file.list({ orgSlug: org.slug })).items).toHaveLength(0);
   await expectORPCCode(api.file.getReadUrl({ orgSlug: org.slug, key: upload.key }), "NOT_FOUND");
 });

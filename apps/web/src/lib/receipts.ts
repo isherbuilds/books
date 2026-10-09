@@ -1,18 +1,21 @@
+import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { keysetPaging, orpc } from "@/lib/orpc";
+import { datedPaging, orpc } from "@/lib/orpc";
 
 type ReceiptListFilters = Omit<
   Parameters<AppRouterClient["receipt"]["list"]>[0],
   "orgSlug" | "cursor" | "limit"
 >;
 
+export type ReceiptDetail = Awaited<ReturnType<AppRouterClient["receipt"]["get"]>>;
+
 // One newest-first keyset list per filter set. The receipts page and a party's
 // Receipts tab share it, so posting a receipt refreshes both through one key.
 export const receiptListOptions = (orgSlug: string, filters: ReceiptListFilters) =>
   orpc.receipt.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...keysetPaging,
+    input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
+    ...datedPaging,
   });
 
 // A cached master like party.list: every method, active or not, since old receipts

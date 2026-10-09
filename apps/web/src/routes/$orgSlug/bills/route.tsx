@@ -1,6 +1,6 @@
 import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { CircleDotIcon } from "lucide-react";
 import { useRef } from "react";
@@ -20,10 +20,12 @@ import {
   OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { RegisterTotals } from "@/components/register-totals";
 import { billListOptions } from "@/lib/bills";
 import { useCan } from "@/lib/membership";
 import { requireOrgPermission } from "@/lib/route-permission";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
+import { orpc } from "@/lib/orpc";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 const STATUSES = ["draft", "posted", "cancelled", "open", "overdue"] as const;
@@ -47,7 +49,10 @@ export const Route = createFileRoute("/$orgSlug/bills")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { bill: ["read"] });
-    await queryClient.infiniteQuery(billListOptions(orgSlug, deps)).catch(() => {});
+    await Promise.all([
+      queryClient.infiniteQuery(billListOptions(orgSlug, deps)).catch(() => {}),
+      queryClient.prefetchQuery(orpc.bill.totals.queryOptions({ input: { orgSlug, ...deps } })),
+    ]);
   },
   component: BillsRoute,
 });
@@ -65,6 +70,8 @@ function BillsRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
+  const totals = useQuery(orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } }));
+
   const activeRowId = useMatch({ from: "/$orgSlug/bills/$billId", shouldThrow: false })?.params
     .billId;
 
@@ -75,7 +82,7 @@ function BillsRoute() {
 
   const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -138,6 +145,7 @@ function BillsRoute() {
           />
           <FilterChips filters={chips} field={field} onClear={clear} />
         </ListToolbar>
+        <RegisterTotals query={totals} noun={filters.status ? "bill" : "posted bill"} />
         <DataTable
           columns={BILL_COLUMNS}
           data={rows}

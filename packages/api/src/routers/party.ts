@@ -4,6 +4,7 @@ import type { DbTransaction } from "@accly/db";
 import { documents } from "@accly/db/schema/documents";
 import { parties } from "@accly/db/schema/parties";
 import { partyLedgerLines } from "@accly/db/schema/party-ledger-lines";
+import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -12,7 +13,7 @@ import { claimParties, createParties, partyInputFields, partyValues } from "../c
 import { businessDate } from "../lib/business-date";
 import { conflict, impossible, nextEditToken } from "../lib/conflict";
 import { MASTER_LIST_LIMIT } from "../lib/master-list";
-import { openingItemLabel } from "../lib/opening-item-label";
+import { documentLabel } from "../lib/document-labels";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import {
   afterCursor,
@@ -24,6 +25,7 @@ import {
 } from "../lib/reports";
 import { documentPeriod, openCredits, openItems, pageOf } from "../lib/settlements";
 import {
+  documentCursor,
   editToken,
   deriveFromGstin,
   likePattern,
@@ -37,27 +39,6 @@ import {
 export type PartyRecord = typeof parties.$inferSelect;
 
 const STATEMENT_LIMIT = 5000;
-
-const STATEMENT_TYPE_LABELS = {
-  receipt: "Receipt",
-  payment: "Payment",
-  invoice: "Invoice",
-  bill: "Bill",
-  creditNote: "Credit Note",
-  debitNote: "Debit Note",
-  journal: "Journal",
-  openingBalance: "Opening Balance",
-} as const;
-
-/** A statement row's label; opening items read by their type and side. */
-function statementLabel(row: {
-  documentType: keyof typeof STATEMENT_TYPE_LABELS | "openingClaim" | "openingCredit";
-  side: "receivable" | "payable";
-}): string {
-  return row.documentType === "openingClaim" || row.documentType === "openingCredit"
-    ? openingItemLabel(row.documentType, row.side)
-    : STATEMENT_TYPE_LABELS[row.documentType];
-}
 
 // The documents a party's Transactions tab lists, each shown only to a reader of its
 // type: an operator sees invoices, receipts and payments, but no bills or notes.
@@ -119,6 +100,7 @@ export type PartyStatementReport = {
     number: string | null;
     settlementKind: (typeof documents.$inferSelect)["settlementKind"];
     reference: string | null;
+    tdsPaise: bigint | null;
     typeLabel: string;
     balancePaise: bigint;
   }>;
@@ -143,11 +125,20 @@ function partyStatementRows(
       settlementKind: documents.settlementKind,
       reference: documents.reference,
       side: partyLedgerLines.side,
+      tdsPaise: tdsDeductions.amountPaise,
     })
     .from(partyLedgerLines)
     .innerJoin(
       documents,
       and(eq(documents.orgId, orgId), eq(documents.id, partyLedgerLines.documentId)),
+    )
+    .leftJoin(
+      tdsDeductions,
+      and(
+        eq(tdsDeductions.orgId, orgId),
+        eq(tdsDeductions.documentId, documents.id),
+        inArray(documents.type, ["bill", "debitNote"]),
+      ),
     )
     .where(
       and(
@@ -222,7 +213,7 @@ export async function partyStatement(
   const lines = rows.map((row) => {
     balancePaise += row.amountPaise;
 
-    return { ...row, typeLabel: statementLabel(row), balancePaise };
+    return { ...row, typeLabel: documentLabel(row.documentType, row.side), balancePaise };
   });
 
   return {
@@ -258,7 +249,7 @@ async function partyLedgerPage(
   const { rows, hasMore } = pageOf(detail, input.limit);
 
   return {
-    rows: rows.map((row) => ({ ...row, typeLabel: statementLabel(row) })),
+    rows: rows.map((row) => ({ ...row, typeLabel: documentLabel(row.documentType, row.side) })),
     hasMore,
   };
 }
@@ -419,7 +410,7 @@ export const partyRouter = {
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
       type: z.literal("invoice").optional(),
-      cursor: z.uuid().optional(),
+      cursor: documentCursor.optional(),
       limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {
@@ -438,9 +429,14 @@ export const partyRouter = {
     orgInput.extend({
       partyId: z.uuid(),
       side: z.enum(["receivable", "payable"]),
-      type: z.enum(["receipt", "creditNote", "payment", "debitNote", "journal"]).optional(),
+      types: z
+        .array(z.enum(["receipt", "creditNote", "payment", "debitNote", "journal"]))
+        .min(1)
+        .max(5)
+        .optional(),
+      tdsOnly: z.boolean().optional(),
       q: searchQuery,
-      cursor: z.uuid().optional(),
+      cursor: documentCursor.optional(),
       limit: pageLimit,
     }),
   ).handler(async ({ context, input }) => {

@@ -131,9 +131,8 @@ shortcuts. Each interaction (select Party, add line, post) paints within
     picks the method; `DocumentTotals` renders Invoice or Bill totals and
     `ClaimStatus` renders settlement.
 14. **Remaining forms.** Journal and Opening Balance share `entry-lines.tsx`.
-    Lock exception expiry uses `orgLocalToInstant` for wall-clock time in the
-    Organization zone, with `@date-fns/tz` only for offsets; round-trip gap
-    rejection and separate date-only arithmetic follow
+    A lock exception lasts 1, 7 or 30 days from the database clock, so no time
+    zone is typed in; see
     [Accounting core](./accounting-core.md#journal-opening-balance-and-locks-slice-5).
     Payment offers Against only to roles that can read Bills and Notes; its
     Credit Note refund picker filters on the server before the page. Payment,

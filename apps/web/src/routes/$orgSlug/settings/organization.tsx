@@ -299,7 +299,7 @@ function SettingsForm({ orgSlug, defaults }: { orgSlug: string; defaults: Settin
               name="financialYearStart"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Fiscal year starts in</FormLabel>
+                  <FormLabel>Financial year starts in</FormLabel>
                   <FormControl>
                     <OptionField
                       options={MONTH_OPTIONS}

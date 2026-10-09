@@ -32,10 +32,10 @@ import {
   assertReportFits,
   afterCursor,
   dayBookLines,
+  dayBookProbe,
   headerFromProfile,
   reportHeader,
   reportProfile,
-  reportTooLarge,
 } from "../lib/reports";
 import { pageOf } from "../lib/settlements";
 import { dateOnly, ledgerCursor, orderedPeriod, pageLimit } from "../lib/schemas";
@@ -195,16 +195,43 @@ async function postingAccount(
   return posting;
 }
 
-// An allocation has no number of its own; a reversal names what it reverses.
-function ledgerLabel<
-  T extends { documentType: string; number: string | null; narration: string; kind: string },
->(row: T): T {
-  if (row.documentType === "allocation") return { ...row, number: null, narration: "Allocation" };
+// An allocation has no number of its own. Its link points to the source document.
+function ledgerLabel(row: {
+  documentId: string;
+  documentType: string;
+  number: string | null;
+  narration: string;
+  kind: string;
+  sourceDocumentId: string | null;
+  sourceDocumentType: string | null;
+  sourceNumber: string | null;
+  targetNumber: string | null;
+}) {
+  if (row.documentType === "allocation") {
+    // Allocation foreign keys are NOT NULL and same-org, so the source always joins.
+    if (!row.sourceDocumentId || !row.sourceDocumentType) {
+      throw impossible("allocation entry without its source document");
+    }
 
-  if (row.kind === "reverse")
-    return { ...row, narration: `Reversal of ${row.number ?? row.narration}` };
+    const label = `${row.sourceNumber} applied to ${row.targetNumber}`;
 
-  return row;
+    return {
+      documentId: row.sourceDocumentId,
+      documentType: row.sourceDocumentType,
+      number: row.sourceNumber,
+      narration: row.kind === "reverse" ? `Undone: ${label}: ${row.narration}` : label,
+    };
+  }
+
+  return {
+    documentId: row.documentId,
+    documentType: row.documentType,
+    number: row.number,
+    narration:
+      row.kind === "reverse"
+        ? `Cancelled ${row.number ?? row.documentType}: ${row.narration}`
+        : row.narration,
+  };
 }
 
 export async function accountLedger(
@@ -228,7 +255,7 @@ export async function accountLedger(
       const lines = detail.map((row) => {
         balancePaise += row.debitPaise - row.creditPaise;
 
-        return { ...ledgerLabel(row), balancePaise };
+        return { ...row, ...ledgerLabel(row), balancePaise };
       });
 
       const header = await reportHeader(orgId, { from: input.from, to: input.to }, tx);
@@ -240,7 +267,13 @@ export async function accountLedger(
 }
 
 // One selected journal line with its entry's fields, as `dayBookLines` returns it.
-type DayBookLine = Omit<DayBookEntry, "lines"> & DayBookEntry["lines"][number];
+type DayBookLine = Omit<DayBookEntry, "lines"> &
+  DayBookEntry["lines"][number] & {
+    sourceDocumentId: string | null;
+    sourceDocumentType: string | null;
+    sourceNumber: string | null;
+    targetNumber: string | null;
+  };
 
 // Consecutive lines of one entry become that entry, in line order.
 function groupDayBook(detail: DayBookLine[]) {
@@ -252,13 +285,13 @@ function groupDayBook(detail: DayBookLine[]) {
     let entry = entries.at(-1);
 
     if (entry?.entryId !== row.entryId) {
-      const { number, narration } = ledgerLabel(row);
+      const { documentId, documentType, number, narration } = ledgerLabel(row);
       entry = {
         entryId: row.entryId,
         entryDate: row.entryDate,
         kind: row.kind,
-        documentId: row.documentId,
-        documentType: row.documentType,
+        documentId,
+        documentType,
         number,
         narration,
         lines: [],
@@ -287,9 +320,8 @@ export async function dayBook(
 ): Promise<DayBookReport> {
   return db.transaction(
     async (tx) => {
+      await assertReportFits(dayBookProbe(orgId, input, tx), limit);
       const detail = await dayBookLines(orgId, input, limit, tx);
-
-      if (detail.length > limit) throw reportTooLarge(limit);
       const { entries, debitPaise, creditPaise } = groupDayBook(detail);
 
       const header = await reportHeader(orgId, { from: input.from, to: input.to }, tx);
@@ -315,12 +347,12 @@ async function accountLedgerPage(
 ) {
   const [, detail] = await Promise.all([
     postingAccount(orgId, input.accountId),
-    accountLedgerLines(orgId, input, input.limit),
+    accountLedgerLines(orgId, input, input.limit + 1),
   ]);
 
   const { rows, hasMore } = pageOf(detail, input.limit);
 
-  return { rows: rows.map(ledgerLabel), hasMore };
+  return { rows: rows.map((row) => ({ ...row, ...ledgerLabel(row) })), hasMore };
 }
 
 async function accountLedgerSummary(
@@ -329,7 +361,7 @@ async function accountLedgerSummary(
 ) {
   const inPeriod = gte(journalLines.entryDate, input.from);
 
-  const [account, [amounts]] = await Promise.all([
+  const [account, [amounts], header] = await Promise.all([
     postingAccount(orgId, input.accountId),
     db
       .select({
@@ -354,12 +386,14 @@ async function accountLedgerSummary(
           lte(journalLines.entryDate, input.to),
         ),
       ),
+    reportHeader(orgId, { from: input.from, to: input.to }),
   ]);
 
   if (!amounts) throw impossible("aggregate returned no row");
   const { openingPaise, debitPaise, creditPaise } = amounts;
 
   return {
+    header,
     account,
     openingPaise,
     debitPaise,
@@ -418,33 +452,36 @@ async function dayBookSummary(orgId: string, input: DayBookFilter) {
     input.documentType ? eq(journalEntries.documentType, input.documentType) : undefined,
   );
 
-  const [summary] = await db
-    .select({
-      entryCount:
-        sql<number>`(select count(*)::integer from ${journalEntries} where ${entries})`.mapWith(
-          Number,
+  const [[summary], header] = await Promise.all([
+    db
+      .select({
+        entryCount:
+          sql<number>`(select count(*)::integer from ${journalEntries} where ${entries})`.mapWith(
+            Number,
+          ),
+        debitPaise: sql<bigint>`coalesce(sum(${journalLines.debit}), 0)::bigint`.mapWith(BigInt),
+        creditPaise: sql<bigint>`coalesce(sum(${journalLines.credit}), 0)::bigint`.mapWith(BigInt),
+      })
+      .from(journalLines)
+      .where(
+        and(
+          eq(journalLines.orgId, orgId),
+          gte(journalLines.entryDate, input.from),
+          lte(journalLines.entryDate, input.to),
+          input.documentType
+            ? inArray(
+                journalLines.entryId,
+                db.select({ id: journalEntries.id }).from(journalEntries).where(entries),
+              )
+            : undefined,
         ),
-      debitPaise: sql<bigint>`coalesce(sum(${journalLines.debit}), 0)::bigint`.mapWith(BigInt),
-      creditPaise: sql<bigint>`coalesce(sum(${journalLines.credit}), 0)::bigint`.mapWith(BigInt),
-    })
-    .from(journalLines)
-    .where(
-      and(
-        eq(journalLines.orgId, orgId),
-        gte(journalLines.entryDate, input.from),
-        lte(journalLines.entryDate, input.to),
-        input.documentType
-          ? inArray(
-              journalLines.entryId,
-              db.select({ id: journalEntries.id }).from(journalEntries).where(entries),
-            )
-          : undefined,
       ),
-    );
+    reportHeader(orgId, { from: input.from, to: input.to }),
+  ]);
 
   if (!summary) throw impossible("aggregate returned no row");
 
-  return summary;
+  return { ...summary, header };
 }
 
 export const reportRouter = {

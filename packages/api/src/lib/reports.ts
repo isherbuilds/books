@@ -1,4 +1,5 @@
 import { db, type DbTransaction } from "@accly/db";
+import { allocations } from "@accly/db/schema/allocations";
 import { accounts } from "@accly/db/schema/accounts";
 import { documents } from "@accly/db/schema/documents";
 import { journalEntries } from "@accly/db/schema/journal-entries";
@@ -6,10 +7,15 @@ import { journalLines } from "@accly/db/schema/journal-lines";
 import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { parties } from "@accly/db/schema/parties";
 import { and, asc, eq, gte, inArray, lt, lte, sql, type AnyColumn } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "./conflict";
 
 export type LedgerCursor = { entryDate: string; id: string };
+
+const sourceDocument = alias(documents, "report_source_document");
+
+const targetDocument = alias(documents, "report_target_document");
 
 // A row comparison, not `a > x OR (a = x AND b > y)`: PostgreSQL seeks the
 // (…, entry_date, id) index to the cursor instead of filtering every earlier row.
@@ -168,6 +174,22 @@ export async function accountLedgerLines(
       number: documents.number,
       narration: journalEntries.narration,
       partyName: parties.name,
+      contraAccountName: sql<string | null>`(
+        select case
+          when count(distinct contra_line.account_id) > 1 then 'Multiple'
+          else min(contra_account.name)
+        end
+        from journal_lines contra_line
+        join accounts contra_account
+          on contra_account.org_id = ${orgId} and contra_account.id = contra_line.account_id
+        where contra_line.org_id = ${orgId}
+          and contra_line.entry_id = ${journalLines.entryId}
+          and contra_line.account_id <> ${journalLines.accountId}
+      )`,
+      sourceDocumentId: sourceDocument.id,
+      sourceDocumentType: sourceDocument.type,
+      sourceNumber: sourceDocument.number,
+      targetNumber: targetDocument.number,
       debitPaise: journalLines.debit,
       creditPaise: journalLines.credit,
     })
@@ -181,6 +203,22 @@ export async function accountLedgerLines(
       and(eq(documents.orgId, orgId), eq(documents.id, journalEntries.documentId)),
     )
     .leftJoin(parties, and(eq(parties.orgId, orgId), eq(parties.id, journalLines.partyId)))
+    .leftJoin(
+      allocations,
+      and(
+        eq(allocations.orgId, orgId),
+        eq(allocations.id, journalEntries.documentId),
+        eq(journalEntries.documentType, "allocation"),
+      ),
+    )
+    .leftJoin(
+      sourceDocument,
+      and(eq(sourceDocument.orgId, orgId), eq(sourceDocument.id, allocations.sourceDocumentId)),
+    )
+    .leftJoin(
+      targetDocument,
+      and(eq(targetDocument.orgId, orgId), eq(targetDocument.id, allocations.targetDocumentId)),
+    )
     .where(
       and(
         accountLedgerWhere(orgId, input),
@@ -190,7 +228,7 @@ export async function accountLedgerLines(
       ),
     )
     .orderBy(asc(journalLines.entryDate), asc(journalLines.id))
-    .limit(limit + 1);
+    .limit(limit);
 }
 
 function accountLedgerWhere(orgId: string, input: { accountId: string; from: string; to: string }) {
@@ -215,6 +253,30 @@ export function accountLedgerProbe(
     .orderBy(asc(journalLines.entryDate), asc(journalLines.id));
 }
 
+/** Probe the day book's line bound without selecting or materializing report detail. */
+export function dayBookProbe(
+  orgId: string,
+  input: { from: string; to: string; documentType?: string },
+  executor: typeof db | DbTransaction = db,
+) {
+  return executor
+    .select({ id: journalLines.id })
+    .from(journalEntries)
+    .innerJoin(
+      journalLines,
+      and(eq(journalLines.orgId, orgId), eq(journalLines.entryId, journalEntries.id)),
+    )
+    .where(
+      and(
+        eq(journalEntries.orgId, orgId),
+        gte(journalEntries.entryDate, input.from),
+        lte(journalEntries.entryDate, input.to),
+        input.documentType ? eq(journalEntries.documentType, input.documentType) : undefined,
+      ),
+    )
+    .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id), asc(journalLines.id));
+}
+
 export async function dayBookLines(
   orgId: string,
   input: { from: string; to: string; documentType?: string; entryIds?: string[] },
@@ -230,6 +292,10 @@ export async function dayBookLines(
       documentType: journalEntries.documentType,
       number: documents.number,
       narration: journalEntries.narration,
+      sourceDocumentId: sourceDocument.id,
+      sourceDocumentType: sourceDocument.type,
+      sourceNumber: sourceDocument.number,
+      targetNumber: targetDocument.number,
       accountCode: accounts.code,
       accountName: accounts.name,
       partyName: parties.name,
@@ -247,6 +313,22 @@ export async function dayBookLines(
       documents,
       and(eq(documents.orgId, orgId), eq(documents.id, journalEntries.documentId)),
     )
+    .leftJoin(
+      allocations,
+      and(
+        eq(allocations.orgId, orgId),
+        eq(allocations.id, journalEntries.documentId),
+        eq(journalEntries.documentType, "allocation"),
+      ),
+    )
+    .leftJoin(
+      sourceDocument,
+      and(eq(sourceDocument.orgId, orgId), eq(sourceDocument.id, allocations.sourceDocumentId)),
+    )
+    .leftJoin(
+      targetDocument,
+      and(eq(targetDocument.orgId, orgId), eq(targetDocument.id, allocations.targetDocumentId)),
+    )
     .where(
       and(
         eq(journalEntries.orgId, orgId),
@@ -259,5 +341,5 @@ export async function dayBookLines(
     .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id), asc(journalLines.id))
     .$dynamic();
 
-  return limit === undefined ? query : query.limit(limit + 1);
+  return limit === undefined ? query : query.limit(limit);
 }

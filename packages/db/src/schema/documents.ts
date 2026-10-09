@@ -135,11 +135,17 @@ export const documents = pgTable(
       .on(table.orgId)
       .where(sql`${table.type} = 'openingBalance' and ${table.state} = 'posted'`),
     // Register periods and newest-first (document date, id) keysets share this index.
+    // The trailing columns follow the unique id, so they never change the order; they
+    // let register totals sum by state, party and payment method from the index alone.
     index("documents_org_type_date_id_idx").on(
       table.orgId,
       table.type,
       table.documentDate,
       table.id,
+      table.state,
+      table.totalPaise,
+      table.partyId,
+      table.paymentMethodId,
     ),
     // A supplier invoice number posts once per supplier and financial year (D5).
     // Cancelling releases it; drafts are unchecked.

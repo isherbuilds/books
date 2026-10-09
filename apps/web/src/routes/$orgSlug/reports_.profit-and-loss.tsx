@@ -1,5 +1,4 @@
 import { formatMoney, isPositiveMoney, isZeroMoney } from "@accly/api/core/money";
-import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { Button } from "@accly/ui/components/button";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -10,10 +9,11 @@ import { z } from "zod";
 
 import { ErrorNote, ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
+import { ReportProvenance } from "@/components/report-provenance";
 import { StatementTree } from "@/components/statement-tree";
 import { presetRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
-import { formatDateTime, useOrgDateTime } from "@/lib/org-datetime";
+import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
 import { errorMessage } from "@/lib/orpc-error";
 import { saveFile } from "@/lib/reports";
@@ -125,47 +125,39 @@ function ProfitAndLossBody({
 
   const data = report.data;
 
-  return data.income.length === 0 && data.expenses.length === 0 ? (
-    <ListEmpty>No income or expense activity in this period.</ListEmpty>
-  ) : (
+  return (
     <div className="flex flex-col gap-4">
-      <div className="text-sm">
-        <p className="text-xl font-medium">{data.header.organization.legalName}</p>
-        {data.header.organization.gstin ? (
-          <p className="text-muted-foreground">GSTIN {data.header.organization.gstin}</p>
-        ) : null}
-        <p>
-          {formatBusinessDate(period.from)} – {formatBusinessDate(period.to)}
-        </p>
-        <p className="text-muted-foreground">
-          Generated {formatDateTime(data.header.generatedAt, data.header.timeZone)} · Period not
-          closed
-        </p>
-      </div>
-      <StatementTree
-        title="Income"
-        nodes={data.income}
-        totalPaise={data.incomePaise}
-        orgSlug={orgSlug}
-        period={period}
-      />
-      <StatementTree
-        title="Expenses"
-        nodes={data.expenses}
-        totalPaise={data.expensesPaise}
-        orgSlug={orgSlug}
-        period={period}
-      />
-      <div className="flex items-center justify-between gap-2 border-t-2 border-foreground px-3 py-2 font-medium md:gap-4">
-        <span className="min-w-0 break-words">
-          {isPositiveMoney(data.netProfitPaise) || isZeroMoney(data.netProfitPaise)
-            ? "Net profit"
-            : "Net loss"}
-        </span>
-        <span className="w-money shrink-0 text-right whitespace-nowrap tabular-nums md:w-auto">
-          {formatMoney(data.netProfitPaise)}
-        </span>
-      </div>
+      <ReportProvenance header={data.header} />
+      {data.income.length === 0 && data.expenses.length === 0 ? (
+        <ListEmpty>No income or expense activity in this period.</ListEmpty>
+      ) : (
+        <>
+          <StatementTree
+            title="Income"
+            nodes={data.income}
+            totalPaise={data.incomePaise}
+            orgSlug={orgSlug}
+            period={period}
+          />
+          <StatementTree
+            title="Expenses"
+            nodes={data.expenses}
+            totalPaise={data.expensesPaise}
+            orgSlug={orgSlug}
+            period={period}
+          />
+          <div className="flex items-center justify-between gap-2 border-t-2 border-foreground px-3 py-2 font-medium md:gap-4">
+            <span className="min-w-0 break-words">
+              {isPositiveMoney(data.netProfitPaise) || isZeroMoney(data.netProfitPaise)
+                ? "Net profit"
+                : "Net loss"}
+            </span>
+            <span className="w-money shrink-0 text-right whitespace-nowrap tabular-nums md:w-auto">
+              {formatMoney(data.netProfitPaise)}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

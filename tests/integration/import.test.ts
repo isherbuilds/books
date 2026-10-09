@@ -39,6 +39,7 @@ async function workbook(
     parties?: Cell[][];
     items?: Cell[][];
     openingItems?: Cell[][];
+    openingClaimAmount?: Cell;
   } = {},
 ): Promise<File> {
   const bytes = await writeXlsx({
@@ -79,7 +80,15 @@ async function workbook(
         name: "Opening items",
         rows: [
           ["Party", "Side", "Type", "Reference", "Date", "Due date", "Amount"],
-          ["Priya", "Receivable", "Claim", "INV-88", "2026-02-10", "2026-03-12", 10000],
+          [
+            "Priya",
+            "Receivable",
+            "Claim",
+            "INV-88",
+            "2026-02-10",
+            "2026-03-12",
+            masters.openingClaimAmount ?? 10000,
+          ],
           ["Priya", "Receivable", "Credit", "ADV-3", "2026-03-01", null, "2000.00"],
           ["Mehta Traders", "Payable", "Claim", "B-17", "2026-03-05", "2026-04-30", 5000],
           ...(masters.openingItems ?? []),
@@ -164,6 +173,12 @@ test("an imported cutover posts control legs and settleable opening items", asyn
   expect(await api.import.check({ ...claim, file: mismatchFile })).toMatchObject({
     errorCount: 1,
     errors: [{ sheet: "Trial balance", row: null, code: "OPENING_ITEMS_MISMATCH" }],
+  });
+
+  const badAmountFile = await workbook(cutoverTrialBalance, { openingClaimAmount: "₹10,000" });
+  expect(await api.import.check({ ...claim, file: badAmountFile })).toMatchObject({
+    errorCount: 1,
+    errors: [{ sheet: "Opening items", row: 2, column: "Amount", code: "AMOUNT_INVALID" }],
   });
 
   const mismatch = await expectORPCCode(
@@ -259,6 +274,7 @@ test("an imported cutover posts control legs and settleable opening items", asyn
   const receipt = await api.receipt.post({
     ...claim,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: priya.id,
     amount: "8000.00",
     paymentMethodId: method.id,
@@ -284,7 +300,7 @@ test("an imported cutover posts control legs and settleable opening items", asyn
   const secondPage = await api.openingBalance.items({
     ...claim,
     limit: 2,
-    cursor: firstPage.rows.at(-1)!.id,
+    cursor: firstPage.rows.at(-1)!,
   });
 
   expect(firstPage.hasMore).toBe(true);
@@ -338,6 +354,20 @@ test("import checks without writes and creates masters with their opening balanc
 
   const before = await counts(fixture.organization.id);
   const template = await api.import.template(claim);
+
+  const sample = new File(
+    [
+      await Bun.file(
+        new URL("../../apps/docs/public/samples/opening-balances-example.xlsx", import.meta.url),
+      ).arrayBuffer(),
+    ],
+    "sample.xlsx",
+  );
+
+  // The published sample stays on the importer's template version.
+  expect((await api.import.check({ ...claim, file: sample })).errors).not.toContainEqual(
+    expect.objectContaining({ code: "TEMPLATE_VERSION" }),
+  );
   const empty = await api.import.check({ ...claim, file: template });
   expect(empty.errorCount).toBe(0);
 

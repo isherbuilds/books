@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import { OPENING_ITEM_PREFIX } from "@accly/api/core/number-prefixes";
 import { appRouter, type AppRouterClient } from "@accly/api/routers/index";
 import { auth } from "@accly/auth";
@@ -825,6 +825,7 @@ const GUARDED_CALLS = {
     }),
   "invoice.get": (api, claim) => api.invoice.get({ ...claim, invoiceId: crypto.randomUUID() }),
   "invoice.list": (api, claim) => api.invoice.list({ ...claim }),
+  "invoice.totals": (api, claim) => api.invoice.totals({ ...claim }),
   "invoice.amend": (api, claim) =>
     api.invoice.amend({ ...claim, invoiceId: crypto.randomUUID(), reason: "intrusion" }),
   "invoice.cancel": (api, claim) =>
@@ -841,6 +842,7 @@ const GUARDED_CALLS = {
     }),
   "receipt.get": (api, claim) => api.receipt.get({ ...claim, receiptId: crypto.randomUUID() }),
   "receipt.list": (api, claim) => api.receipt.list({ ...claim }),
+  "receipt.totals": (api, claim) => api.receipt.totals({ ...claim }),
   "receipt.partyTotals": (api, claim) => api.receipt.partyTotals({ ...claim }),
   "party.openItems": (api, claim) =>
     api.party.openItems({ ...claim, partyId: crypto.randomUUID(), side: "receivable" }),
@@ -849,7 +851,7 @@ const GUARDED_CALLS = {
       ...claim,
       partyId: crypto.randomUUID(),
       side: "receivable",
-      type: "journal",
+      types: ["journal"],
     }),
   "party.transactions": (api, claim) =>
     api.party.transactions({ ...claim, partyId: crypto.randomUUID() }),
@@ -872,6 +874,7 @@ const GUARDED_CALLS = {
     }),
   "bill.get": (api, claim) => api.bill.get({ ...claim, billId: crypto.randomUUID() }),
   "bill.list": (api, claim) => api.bill.list({ ...claim }),
+  "bill.totals": (api, claim) => api.bill.totals({ ...claim }),
   "bill.cancel": (api, claim) =>
     api.bill.cancel({ ...claim, billId: crypto.randomUUID(), reason: "intrusion" }),
   "bill.discardDraft": (api, claim) =>
@@ -918,7 +921,7 @@ const GUARDED_CALLS = {
     api.lock.grantException({
       ...claim,
       userId: crypto.randomUUID(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      days: 1,
       reason: "Intrusion",
     }),
   "lock.revokeException": (api, claim) =>
@@ -1019,6 +1022,7 @@ const GUARDED_CALLS = {
     }),
   "payment.get": (api, claim) => api.payment.get({ ...claim, paymentId: crypto.randomUUID() }),
   "payment.list": (api, claim) => api.payment.list({ ...claim }),
+  "payment.totals": (api, claim) => api.payment.totals({ ...claim }),
   "payment.tdsSections": (api, claim) => api.payment.tdsSections({ ...claim }),
   "payment.cancel": (api, claim) =>
     api.payment.cancel({ ...claim, paymentId: crypto.randomUUID(), reason: "intrusion" }),

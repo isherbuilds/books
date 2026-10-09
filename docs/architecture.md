@@ -43,7 +43,7 @@ manages members, invitations and settings, and uploads or deletes files. Client
 checks only hide controls.
 
 Over HTTP, Better Auth serves only the organization endpoints the browser uses:
-`list`, `list-user-invitations` and `accept-invitation`. Every other one answers
+`list` and `accept-invitation`. Every other one answers
 404, because several hand pending invitation ids to any member. Server code
 reaches them through `auth.api`, behind the guarded `member.*` procedures.
 

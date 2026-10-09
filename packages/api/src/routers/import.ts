@@ -2,7 +2,7 @@ import { IMPORT_GRANT } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { validateImport } from "../core/import-plan";
 import { createAccounts, createItems, createParties } from "../core/masters";
 import { formatDecimal } from "../core/money";

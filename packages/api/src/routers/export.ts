@@ -7,6 +7,7 @@ import { writeXlsx } from "hucre/xlsx";
 import { z } from "zod";
 
 import { formatDecimal } from "../core/money";
+import { DOCUMENT_TYPE_LABELS } from "../lib/document-labels";
 import { buildInwardRegister, buildOutwardRegister, type RegisterLine } from "../core/gst-register";
 import type { StatementNode } from "../core/reports";
 import { gstRegisterRows } from "../lib/gst-register-rows";
@@ -26,6 +27,15 @@ import {
 } from "./report";
 
 const BOLD_HEADER = { style: { font: { bold: true } } };
+
+// Journal entries also record allocations, which have no document of their own.
+const JOURNAL_TYPE_LABELS: Record<string, string> = {
+  ...DOCUMENT_TYPE_LABELS,
+  allocation: "Amount applied",
+};
+
+// ISO dates sort by name in a folder: `tds-register-2026-04-01-to-2026-06-30.xlsx`.
+const rangeFileName = (name: string, from: string, to: string) => `${name}-${from}-to-${to}.xlsx`;
 
 type Sheet = Parameters<typeof writeXlsx>[0]["sheets"][number];
 
@@ -84,7 +94,7 @@ export function reportXlsx(
     [header.organization.legalName],
     [title],
     [range],
-    [`Generated ${format.format(header.generatedAt)} · period not closed`],
+    [`Generated ${format.format(header.generatedAt)}`],
     ...extraProvenanceRows,
   ];
 
@@ -96,12 +106,14 @@ export function reportXlsx(
 
   if (totals) sheetRows.push(columns.map((column) => totals[column.key ?? ""] ?? null));
 
-  const slug = title.toLowerCase().replaceAll(" ", "-");
+  const slug = sheetName.toLowerCase().replaceAll(" ", "-");
 
-  const dates =
-    "asOf" in header.range ? header.range.asOf : `${header.range.from}-${header.range.to}`;
+  const fileName =
+    "asOf" in header.range
+      ? `${slug}-${header.range.asOf}.xlsx`
+      : rangeFileName(slug, header.range.from, header.range.to);
 
-  return xlsxSheets(`${slug}-${dates}.xlsx`, [
+  return xlsxSheets(fileName, [
     {
       name: sheetName,
       columns,
@@ -171,6 +183,7 @@ const ledgerColumns = [
   ...dateDocumentColumns,
   { header: "Type", key: "type", width: 18 },
   { header: "Narration", key: "narration", width: 40 },
+  { header: "Contra account", key: "contra", width: 26 },
   { header: "Party", key: "party", width: 26 },
   ...debitCreditColumns,
   { header: "Balance (Dr +)", key: "balance", width: 20 },
@@ -191,6 +204,8 @@ const partyStatementColumns = [
   ...dateDocumentColumns,
   { header: "Type", key: "type", width: 20 },
   { header: "Reference", key: "reference", width: 36 },
+  { header: "Amount before TDS", key: "gross", width: 22 },
+  { header: "TDS", key: "tds", width: 18 },
   ...debitCreditColumns,
   { header: "Balance (Dr +)", key: "balance", width: 20 },
 ];
@@ -373,8 +388,9 @@ export const exportRouter = {
         ...ledger.lines.map((line) => ({
           date: line.entryDate,
           document: line.number,
-          type: line.documentType,
+          type: JOURNAL_TYPE_LABELS[line.documentType] ?? line.documentType,
           narration: line.narration,
+          contra: line.contraAccountName,
           party: line.partyName,
           debit: money(line.debitPaise),
           credit: money(line.creditPaise),
@@ -397,8 +413,8 @@ export const exportRouter = {
           entry.lines.map((line) => ({
             date: entry.entryDate,
             document: entry.number,
-            type: entry.documentType,
-            kind: entry.kind,
+            type: JOURNAL_TYPE_LABELS[entry.documentType] ?? entry.documentType,
+            kind: entry.kind === "reverse" ? "Cancellation" : "Posted",
             accountCode: line.accountCode,
             account: line.accountName,
             party: line.partyName,
@@ -435,6 +451,13 @@ export const exportRouter = {
           document: line.number,
           type: line.kind === "reverse" ? "Cancellation" : line.typeLabel,
           reference: line.reference,
+          gross:
+            line.tdsPaise === null
+              ? null
+              : money(
+                  (line.amountPaise < 0n ? -line.amountPaise : line.amountPaise) + line.tdsPaise,
+                ),
+          tds: line.tdsPaise === null ? null : money(line.tdsPaise),
           debit: line.amountPaise > 0n ? money(line.amountPaise) : 0,
           credit: line.amountPaise < 0n ? money(-line.amountPaise) : 0,
           balance: money(line.balancePaise),
@@ -453,8 +476,8 @@ export const exportRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      // Deductions in force. Cancelled Bills and Payments drop out; a filed quarter is
-      // corrected through a Form 140 correction statement, with its reversal in the day book.
+      // Active deductions and debit-note reversals only. Cancelled documents drop out;
+      // a filed quarter is corrected through a Form 140 correction statement.
       const rows = await db
         .select({
           documentDate: documents.documentDate,
@@ -479,7 +502,7 @@ export const exportRouter = {
         .where(
           and(
             eq(documents.orgId, orgId),
-            inArray(documents.type, ["payment", "bill"]),
+            inArray(documents.type, ["payment", "bill", "debitNote"]),
             eq(documents.state, "posted"),
             gte(documents.documentDate, input.from),
             lte(documents.documentDate, input.to),
@@ -487,21 +510,25 @@ export const exportRouter = {
         )
         .orderBy(asc(documents.documentDate), asc(documents.id));
 
-      return xlsxSheets(`tds-register-${input.from}-${input.to}.xlsx`, [
+      return xlsxSheets(rangeFileName("tds-register", input.from, input.to), [
         {
           name: "TDS register",
           columns: tdsColumns,
           data: rows.map((row) => ({
             date: row.documentDate,
             document: row.number,
-            type: row.type === "bill" ? "Bill" : "Payment",
+            type: DOCUMENT_TYPE_LABELS[row.type],
             section: row.code,
             rate: row.rateBasisPoints / 100,
             party: row.partyName,
             partyPan: row.partyPan,
-            gross: money(row.basePaise),
-            tds: money(row.tdsPaise),
-            net: money(row.basePaise - row.tdsPaise),
+            gross: money(row.type === "debitNote" ? -row.basePaise : row.basePaise),
+            tds: money(row.type === "debitNote" ? -row.tdsPaise : row.tdsPaise),
+            net: money(
+              row.type === "debitNote"
+                ? -(row.basePaise - row.tdsPaise)
+                : row.basePaise - row.tdsPaise,
+            ),
           })),
         },
       ]);
@@ -513,7 +540,7 @@ export const exportRouter = {
       const rows = await gstRegisterRows(orgId, input.from, input.to, "outward");
       const register = buildOutwardRegister(rows);
 
-      return xlsxSheets(`gst-outward-${input.from}-${input.to}.xlsx`, [
+      return xlsxSheets(rangeFileName("gst-outward", input.from, input.to), [
         { name: "B2B", columns: gstColumns, data: register.b2b.map(gstDocument) },
         { name: "B2CL", columns: gstColumns, data: register.b2cl.map(gstDocument) },
         {
@@ -569,7 +596,7 @@ export const exportRouter = {
       const rows = await gstRegisterRows(context.scope.orgId, input.from, input.to, "inward");
       const register = buildInwardRegister(rows);
 
-      return xlsxSheets(`gst-inward-${input.from}-${input.to}.xlsx`, [
+      return xlsxSheets(rangeFileName("gst-inward", input.from, input.to), [
         {
           name: "Bills",
           columns: [

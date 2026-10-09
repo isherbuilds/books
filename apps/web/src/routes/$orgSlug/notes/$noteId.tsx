@@ -1,3 +1,4 @@
+import { SUPPLIER_REFUND_GRANT } from "@accly/auth/access";
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { Badge } from "@accly/ui/components/badge";
@@ -52,8 +53,14 @@ function NoteSheetRoute() {
   const canCancel = useCan(orgSlug, { note: ["cancel"] }) && note.state === "posted";
 
   const canRefund =
-    useCan(orgSlug, { payment: ["post"] }) &&
+    useCan(orgSlug, { payment: ["post"], note: ["read"] }) &&
     note.type === "creditNote" &&
+    note.state === "posted" &&
+    isPositiveMoney(note.unappliedPaise);
+
+  const canRefundSupplier =
+    useCan(orgSlug, { ...SUPPLIER_REFUND_GRANT, receipt: ["post"] }) &&
+    note.type === "debitNote" &&
     note.state === "posted" &&
     isPositiveMoney(note.unappliedPaise);
 
@@ -90,7 +97,7 @@ function NoteSheetRoute() {
   return (
     <RecordSheet
       rowId={noteId}
-      title={note.number}
+      title={<span className="font-sans">{NOTE_TYPE_LABELS[note.type]}</span>}
       status={
         <Badge variant={note.state === "cancelled" ? "neutral" : "settled"}>
           {note.state === "cancelled" ? "Cancelled" : "Posted"}
@@ -98,7 +105,8 @@ function NoteSheetRoute() {
       }
       description={
         <>
-          {NOTE_TYPE_LABELS[note.type]} · {note.printSnapshot?.party?.name ?? "No party"}
+          <span className="font-mono">{note.number}</span> ·{" "}
+          {note.printSnapshot?.party?.name ?? "No party"}
         </>
       }
       onClose={close}
@@ -133,6 +141,9 @@ function NoteSheetRoute() {
               <NoteSourceLink orgSlug={orgSlug} noteType={note.type} source={note.against} />
             ) : null}
           </DetailRow>
+          {note.type === "debitNote" && note.reference ? (
+            <DetailRow label="Supplier credit note">{note.reference}</DetailRow>
+          ) : null}
           {note.cancelledAt ? (
             <DetailRow label="Cancelled">{formatDate(note.cancelledAt, timeZone)}</DetailRow>
           ) : null}
@@ -146,8 +157,8 @@ function NoteSheetRoute() {
         <Separator />
         <section className="grid grid-cols-1 gap-2">
           <h3 className="text-muted-foreground">Lines</h3>
-          <div className="hidden md:block">
-            <Table>
+          <div className="hidden min-w-0 md:block">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   <TableHead>Description</TableHead>
@@ -183,7 +194,7 @@ function NoteSheetRoute() {
               <div key={line.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
                 <div className="flex justify-between gap-3">
                   <p className="min-w-0 break-words font-medium">{line.description}</p>
-                  <span className="tabular-nums">
+                  <span className="shrink-0 tabular-nums">
                     {formatMoney(
                       line.amountPaise + line.cgstPaise + line.sgstPaise + line.igstPaise,
                     )}
@@ -201,11 +212,19 @@ function NoteSheetRoute() {
         <Separator />
         <dl className="grid gap-2">
           <DetailRow label="Round-off">{formatMoney(note.roundOffPaise)}</DetailRow>
+          {note.type === "debitNote" && isPositiveMoney(note.tdsReversedPaise) ? (
+            <>
+              <DetailRow label="TDS reversed">{formatMoney(note.tdsReversedPaise)}</DetailRow>
+              <DetailRow label="Supplier credit">
+                {formatMoney(note.totalPaise - note.tdsReversedPaise)}
+              </DetailRow>
+            </>
+          ) : null}
         </dl>
       </SheetBody>
-      {note.state === "posted" || canRefund || canCancel ? (
+      {note.number !== null || canRefund || canRefundSupplier || canCancel ? (
         <SheetFooter>
-          {note.state === "posted" ? (
+          {note.number !== null ? (
             // The browser's PDF viewer prints and saves, so one link covers both.
             <a
               href={`/api/${orgSlug}/notes/${note.id}/pdf`}
@@ -225,6 +244,21 @@ function NoteSheetRoute() {
                   to: "/$orgSlug/payments",
                   params: { orgSlug },
                   search: { create: true, payeeId: note.partyId!, payAgainst: "receivable" },
+                })
+              }
+            >
+              Refund
+            </Button>
+          ) : null}
+          {canRefundSupplier && note.partyId ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void navigate({
+                  to: "/$orgSlug/receipts",
+                  params: { orgSlug },
+                  search: { create: true, payerId: note.partyId!, refund: true },
                 })
               }
             >

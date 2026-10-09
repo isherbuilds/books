@@ -413,6 +413,7 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
     clientFor(operator).receipt.post({
       ...claim,
       settlementKind: "against",
+      exposureSide: "receivable",
       partyId: rahul.id,
       amount: "2000.00",
       paymentMethodId: paymentMethod.id,
@@ -426,6 +427,7 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
     fixture.api.receipt.post({
       ...claim,
       settlementKind: "against",
+      exposureSide: "receivable",
       partyId: priya.id,
       amount: "2000.00",
       paymentMethodId: paymentMethod.id,
@@ -438,6 +440,7 @@ test("a Rahul journal debit is an open item until a receipt settles it, and bloc
   const receipt = await fixture.api.receipt.post({
     ...claim,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: rahul.id,
     amount: "2000.00",
     paymentMethodId: paymentMethod.id,

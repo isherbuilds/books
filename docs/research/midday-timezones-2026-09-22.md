@@ -1,5 +1,7 @@
 # Midday timezone patterns and our offset seam
 
+> Superseded: the wall-clock conversion (`orgLocalToInstant`), its `tzOffset` call and its tests are deleted. Business dates now live in `packages/api/src/lib/business-date.ts`; this note is history.
+
 ## Question
 
 Which timezone patterns from Midday should we adopt, if any, for organization-local dates and wall-clock conversion?

@@ -34,6 +34,11 @@ Check UI items in the running app on desktop and mobile, in both themes.
   apply-credit ledger and quarter-close screenshots (and the quarter-close
   table) on a re-seeded demo.
 
+- **[Audit edit trail](./specs/audit-edit-trail.md)**: Active. Spec ready;
+  parties, accounts, items, payment methods and settings record who changed
+  what, old and new. Audit stays fire-and-forget. Next: Slice 1 (account
+  trail, end to end).
+
 - **[Product family](./specs/product-family.md)**: Active. One SaaS, one
   database, School and HMS as modules on Finance; supersedes the 2026-09-13
   separate-apps decision. Next: Slice 1 (module switch and document source).
@@ -151,8 +156,8 @@ Check UI items in the running app on desktop and mobile, in both themes.
   address, register Load more after a draft date change, at desktop and 390 px;
   Members Re-invite replacing the expired row; customer-refund Payment cancel
   from its Sheet; supplier-refund Receipt refusal refreshing its credits.
-  Simplification pass (2026-10-09): register totals are one line, posted-only,
-  with unpaid on Invoices/Bills and no Notes totals or polling; lock history
+  Simplification pass (2026-10-09): register totals are one line of posted count and
+  sum (no unpaid figure: it cost 3.7 s at 1 M documents), no Notes totals or polling; lock history
   removed (Audit covers it); exception expiry is 1/7/30 days for posting members
   only; Audit has one search box; "Period not closed" removed; plain-language
   labels. Types, lint and the full suite pass. Not run in a browser: the

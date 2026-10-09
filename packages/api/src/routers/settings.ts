@@ -4,7 +4,7 @@ import { organizationSettings } from "@accly/db/schema/organization-settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { orgSettings } from "../lib/settlements";
@@ -84,7 +84,7 @@ export const settingsRouter = {
         if (numbered) {
           throw badRequest(
             "FINANCIAL_YEAR_FIXED",
-            "The fiscal year start cannot change after a document is numbered.",
+            "The financial year start cannot change after a document is numbered.",
           );
         }
       }

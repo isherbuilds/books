@@ -1,6 +1,7 @@
+import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { keysetPaging, orpc } from "@/lib/orpc";
+import { datedPaging, orpc } from "@/lib/orpc";
 
 type InvoiceListFilters = Omit<
   Parameters<AppRouterClient["invoice"]["list"]>[0],
@@ -15,8 +16,8 @@ export type InvoiceDetail = Awaited<ReturnType<AppRouterClient["invoice"]["get"]
 
 export const invoiceListOptions = (orgSlug: string, filters: InvoiceListFilters) =>
   orpc.invoice.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...keysetPaging,
+    input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
+    ...datedPaging,
   });
 
 export const invoiceDetailOptions = (orgSlug: string, invoiceId: string) =>

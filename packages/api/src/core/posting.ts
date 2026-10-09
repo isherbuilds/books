@@ -9,7 +9,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Scope } from "../lib/procedures/factory";
 import type { AllocationTarget } from "./allocations";
 import type { SystemAccountKey } from "./chart-templates";
-import { creditOf, debitOf, divideHalfUp, sumPaise } from "./money";
+import { creditOf, debitOf, sumPaise } from "./money";
 
 // Keyed by the text `systemKey` column, so reading it needs no cast; `systemAccount`
 // still takes a typed key.
@@ -54,6 +54,14 @@ export type ReceiptPosting = { type: "receipt"; methodAccountId: string } & (
       allocations: readonly AllocationTarget[];
       adjustments: readonly Adjustment[];
       advanceSupply: AdvanceSupply | null;
+    }
+  | {
+      settlementKind: "against";
+      exposureSide: "payable";
+      partyId: string;
+      accountId: null;
+      amountPaise: bigint;
+      sources: readonly AllocationTarget[];
     }
   | {
       settlementKind: "direct";
@@ -138,9 +146,7 @@ export type BillPosting = {
 
 export type CreditNotePosting = Omit<InvoicePosting, "type"> & { type: "creditNote" };
 
-export type DebitNotePosting = Omit<BillPosting, "type" | "tdsPaise"> & {
-  type: "debitNote";
-};
+export type DebitNotePosting = Omit<BillPosting, "type"> & { type: "debitNote" };
 
 type JournalLinePosting = {
   accountId: string;
@@ -193,6 +199,21 @@ export function postReceipt(document: ReceiptPosting, byKey: SystemAccounts): Jo
       credit: 0n,
     },
   ];
+
+  if (document.settlementKind === "against" && document.exposureSide === "payable") {
+    if (sumPaise(document.sources.map((source) => source.amountPaise)) !== document.amountPaise) {
+      throw new Error("Supplier refund amount must equal its allocated credits");
+    }
+
+    lines.push({
+      accountId: systemAccount(byKey, "payables"),
+      partyId: document.partyId,
+      debit: 0n,
+      credit: document.amountPaise,
+    });
+
+    return lines;
+  }
 
   if (document.settlementKind === "against") {
     const allocatedPaise = sumPaise(document.allocations.map((target) => target.amountPaise));
@@ -289,11 +310,6 @@ export function postAllocation(
         ];
 
   return posting.direction === "apply" ? apply : reverseLines(apply);
-}
-
-/** Paise times basis points, rounded half-up to the rupee. */
-export function computeTds(amountPaise: bigint, rateBasisPoints: number): bigint {
-  return divideHalfUp(amountPaise * BigInt(rateBasisPoints), 1_000_000n) * 100n;
 }
 
 export function postPayment(document: PaymentPosting, byKey: SystemAccounts): JournalLineInput[] {
@@ -475,9 +491,10 @@ export function postBill(document: BillPosting, byKey: SystemAccounts): JournalL
     document.cgstPaise < 0n ||
     document.sgstPaise < 0n ||
     document.igstPaise < 0n ||
-    document.tdsPaise < 0n
+    document.tdsPaise < 0n ||
+    document.tdsPaise > document.amountPaise
   ) {
-    throw new Error("Bill taxes and TDS cannot be negative");
+    throw new Error("Bill taxes and TDS cannot be negative, and TDS cannot exceed the total");
   }
 
   const lines: JournalLineInput[] = [];
@@ -520,12 +537,14 @@ export function postBill(document: BillPosting, byKey: SystemAccounts): JournalL
     });
   }
 
-  lines.push({
-    accountId: systemAccount(byKey, "payables"),
-    partyId: document.partyId,
-    debit: 0n,
-    credit: document.amountPaise - document.tdsPaise,
-  });
+  if (document.amountPaise > document.tdsPaise) {
+    lines.push({
+      accountId: systemAccount(byKey, "payables"),
+      partyId: document.partyId,
+      debit: 0n,
+      credit: document.amountPaise - document.tdsPaise,
+    });
+  }
 
   return lines;
 }
@@ -541,7 +560,7 @@ export function postDebitNote(
   document: DebitNotePosting,
   byKey: SystemAccounts,
 ): JournalLineInput[] {
-  return reverseLines(postBill({ ...document, type: "bill", tdsPaise: 0n }, byKey));
+  return reverseLines(postBill({ ...document, type: "bill" }, byKey));
 }
 
 // `recordEntry` asserts the entry balances; this checks each line and the amount.

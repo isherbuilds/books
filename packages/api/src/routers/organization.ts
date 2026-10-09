@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { createOrganization, createOrganizationInput } from "../core/organizations";
 import { isFounder } from "../lib/founder";
 import { sessionProcedure } from "../lib/procedures/factory";

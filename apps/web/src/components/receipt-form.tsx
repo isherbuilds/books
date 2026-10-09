@@ -1,4 +1,5 @@
-import { openingItemLabel } from "@accly/api/lib/opening-item-label";
+import { SUPPLIER_REFUND_GRANT } from "@accly/auth/access";
+import { documentLabel } from "@accly/api/lib/document-labels";
 import {
   ZERO_MONEY,
   enteredPaise,
@@ -30,6 +31,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
+  ALLOCATION_REFUSALS,
   AllocationTable,
   SettlementAllocationTotals,
   checkAllocations,
@@ -48,10 +50,13 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { incomeAccountOptions } from "@/lib/accounts";
 import { invalidateCashState, invalidateSettlementState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
-import { openItemsOptions } from "@/lib/pickers";
+import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
 
 import { applyOrpcFieldError, errorReason, handleWriteError } from "@/lib/orpc-error";
 import { positiveAmount } from "@/lib/form-schema";
+
+import { useCan } from "@/lib/membership";
+import type { PartyOption } from "@/lib/parties";
 
 const receiptSchema = z
   .object({
@@ -60,6 +65,7 @@ const receiptSchema = z
     amount: positiveAmount,
     paymentMethodId: z.string().min(1, "Choose a payment method"),
     settlementKind: z.enum(["advance", "against", "direct"]),
+    exposureSide: z.enum(["receivable", "payable"]),
     advanceSupply: z.enum(["goods", "exempt", "taxableService"]).nullable(),
     // Typed amounts by open item id.
     allocations: z.record(z.string(), z.string()),
@@ -69,6 +75,7 @@ const receiptSchema = z
           kind: z.enum(["fee", "writeOff", "tds"]),
           accountId: z.string().nullable(),
           amount: positiveAmount,
+          tdsSectionId: z.string().nullable(),
         }),
       )
       .max(5),
@@ -99,11 +106,15 @@ const receiptSchema = z
     }
 
     values.adjustments.forEach((adjustment, index) => {
-      if (
-        values.settlementKind === "against" &&
-        adjustment.kind !== "tds" &&
-        !adjustment.accountId
-      ) {
+      if (values.settlementKind !== "against") return;
+
+      if (adjustment.kind === "tds" && !adjustment.tdsSectionId) {
+        context.addIssue({
+          code: "custom",
+          path: ["adjustments", index, "tdsSectionId"],
+          message: "Choose a TDS section",
+        });
+      } else if (adjustment.kind !== "tds" && !adjustment.accountId) {
         context.addIssue({
           code: "custom",
           path: ["adjustments", index, "accountId"],
@@ -123,11 +134,14 @@ const SERVER_FIELDS = {
   TAXABLE_DIRECT_RECEIPT: "incomeAccountId",
   ADVANCE_TAX_UNSUPPORTED: "advanceSupply",
   ADVANCE_SUPPLY_REQUIRED: "advanceSupply",
+  REFUND_AMOUNT_MISMATCH: "allocations",
   ALLOCATION_EXCEEDS_SOURCE: "allocations",
+  ALLOCATION_SOURCE_INVALID: "allocations",
   ALLOCATION_TARGET_INVALID: "allocations",
   ALLOCATION_EXCEEDS_OUTSTANDING: "allocations",
   ADJUSTMENT_UNALLOCATED: "allocations",
   ADJUSTMENT_ACCOUNT_INVALID: "adjustments",
+  TDS_SECTION_INVALID: "adjustments",
 } satisfies Record<string, FieldPath<ReceiptFormValues>>;
 
 /** A posted Invoice the receipt settles, as its record showed it. */
@@ -147,15 +161,18 @@ function defaults(
   today: string,
   paymentMethodId = "",
   invoice?: ReceiptInvoice,
+  initialParty?: PartyOption,
+  initialRefund?: boolean,
 ): ReceiptFormValues {
   const amount = invoice ? formatDecimal(invoice.outstandingPaise) : "";
 
   return {
-    partyId: invoice?.partyId ?? null,
-    partyName: invoice?.partyName ?? "",
+    partyId: invoice?.partyId ?? initialParty?.id ?? null,
+    partyName: invoice?.partyName ?? initialParty?.name ?? "",
     amount,
     paymentMethodId,
-    settlementKind: invoice ? "against" : "advance",
+    settlementKind: invoice || initialRefund ? "against" : "advance",
+    exposureSide: initialRefund ? "payable" : "receivable",
     advanceSupply: null,
     incomeAccountId: null,
     allocations: invoice ? { [invoice.id]: amount } : {},
@@ -171,24 +188,43 @@ export function ReceiptForm({
   today,
   invoice,
   onClose,
+  initialParty,
+  initialRefund,
 }: {
   orgSlug: string;
   today: string;
   invoice?: ReceiptInvoice;
+  initialParty?: PartyOption;
+  initialRefund?: boolean;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const form = useZodForm(receiptSchema, { defaultValues: defaults(today, "", invoice) });
+  const form = useZodForm(receiptSchema, {
+    defaultValues: defaults(today, "", invoice, initialParty, initialRefund),
+  });
+
   const adjustmentFields = useFieldArray({ control: form.control, name: "adjustments" });
 
   const settlementKind = useWatch({ control: form.control, name: "settlementKind" });
+  const exposureSide = useWatch({ control: form.control, name: "exposureSide" });
+  const isRefund = settlementKind === "against" && exposureSide === "payable";
   const partyId = useWatch({ control: form.control, name: "partyId" });
+  const documentDate = useWatch({ control: form.control, name: "documentDate" });
+  const canRefund = useCan(orgSlug, SUPPLIER_REFUND_GRANT);
 
   const openItems = useInfiniteQuery(
     openItemsOptions(
-      settlementKind === "against" && partyId
+      settlementKind === "against" && !isRefund && partyId
         ? { orgSlug, partyId, side: "receivable" }
+        : skipToken,
+    ),
+  );
+
+  const credits = useInfiniteQuery(
+    openCreditsOptions(
+      isRefund && partyId
+        ? { orgSlug, partyId, side: "payable", types: ["debitNote", "payment"] }
         : skipToken,
     ),
   );
@@ -198,14 +234,7 @@ export function ReceiptForm({
       .flatMap((page) => page.rows)
       .map((row) => ({
         ...row,
-        label:
-          row.type === "openingClaim"
-            ? openingItemLabel(row.type, "receivable")
-            : row.type === "invoice"
-              ? "Invoice"
-              : row.type === "journal"
-                ? "Journal"
-                : "Payment",
+        label: documentLabel(row.type, "receivable"),
         openPaise: row.outstandingPaise,
       })) ?? [];
 
@@ -219,20 +248,29 @@ export function ReceiptForm({
     openItems.hasNextPage &&
     !loadedRows.some((row) => row.id === invoice.id);
 
-  const openRows: OpenDocument[] = seedMissing
-    ? [
-        ...loadedRows,
-        {
-          id: invoice.id,
-          label: "Invoice",
-          number: invoice.number,
-          reference: invoice.reference,
-          documentDate: invoice.documentDate,
-          dueDate: invoice.dueDate,
-          openPaise: invoice.outstandingPaise,
-        },
-      ]
-    : loadedRows;
+  const openRows: OpenDocument[] = isRefund
+    ? (credits.data?.pages
+        .flatMap((page) => page.rows)
+        .map((row) => ({
+          ...row,
+          label: row.type === "debitNote" ? "Debit note" : "Advance paid",
+          dueDate: null,
+          openPaise: row.unappliedPaise,
+        })) ?? [])
+    : seedMissing
+      ? [
+          ...loadedRows,
+          {
+            id: invoice.id,
+            label: "Invoice",
+            number: invoice.number,
+            reference: invoice.reference,
+            documentDate: invoice.documentDate,
+            dueDate: invoice.dueDate,
+            openPaise: invoice.outstandingPaise,
+          },
+        ]
+      : loadedRows;
 
   const incomeAccounts = useQuery(incomeAccountOptions(orgSlug));
 
@@ -249,7 +287,7 @@ export function ReceiptForm({
         });
 
         // A receipt against one Invoice is done; a fresh receipt clears for the next one.
-        if (invoice) {
+        if (invoice || initialRefund) {
           onClose();
 
           return;
@@ -271,14 +309,10 @@ export function ReceiptForm({
           refuse: async () => {
             applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the receipt");
 
-            const reason = errorReason(error);
-
-            // The outstanding amounts on screen, and the seeded Invoice's, are stale.
-            if (
-              reason === "ALLOCATION_TARGET_INVALID" ||
-              reason === "ALLOCATION_EXCEEDS_OUTSTANDING"
-            ) {
-              await invalidateSettlementState(queryClient, orgSlug);
+            // Refresh the displayed rows; a seeded Invoice also needs its detail invalidated.
+            if (ALLOCATION_REFUSALS.includes(errorReason(error) ?? "")) {
+              if (isRefund) await credits.refetch();
+              else await invalidateSettlementState(queryClient, orgSlug);
             }
           },
         }),
@@ -311,7 +345,9 @@ export function ReceiptForm({
     if (values.settlementKind === "against") {
       if (!values.partyId) return;
 
-      if (!openItems.isSuccess || openItems.isFetching) {
+      const openQuery = values.exposureSide === "payable" ? credits : openItems;
+
+      if (!openQuery.isSuccess || openQuery.isFetching) {
         form.setError("allocations", { message: "Wait for the open documents to load" });
 
         return;
@@ -326,9 +362,33 @@ export function ReceiptForm({
 
       const receiptPaise = parseMoney(values.amount);
 
+      if (values.exposureSide === "payable") {
+        if (tableError || allocatedPaise !== receiptPaise) {
+          form.setError("allocations", {
+            message: tableError ?? "Amount must match the total you picked below",
+          });
+
+          return;
+        }
+
+        post.mutate({
+          ...common,
+          settlementKind: "against",
+          exposureSide: "payable",
+          partyId: values.partyId,
+          allocations: selected.map(({ id, amount }) => ({ documentId: id, amount })),
+        });
+
+        return;
+      }
+
       const adjustments = values.adjustments.map((adjustment) =>
         adjustment.kind === "tds"
-          ? { kind: "tds" as const, amount: adjustment.amount }
+          ? {
+              kind: "tds" as const,
+              amount: adjustment.amount,
+              tdsSectionId: adjustment.tdsSectionId!,
+            }
           : { kind: adjustment.kind, accountId: adjustment.accountId!, amount: adjustment.amount },
       );
 
@@ -366,6 +426,7 @@ export function ReceiptForm({
       post.mutate({
         ...common,
         settlementKind: "against",
+        exposureSide: "receivable",
         partyId: values.partyId,
         allocations: selected.map(({ id, amount }) => ({ documentId: id, amount })),
         adjustments,
@@ -430,7 +491,7 @@ export function ReceiptForm({
         <DocumentPartyField
           orgSlug={orgSlug}
           label={`Party${settlementKind === "direct" ? " (optional)" : ""}`}
-          role="customer"
+          role={isRefund ? "vendor" : "customer"}
           clearable={settlementKind === "direct"}
           // Allocations belong to the party's open items.
           onPartyChange={() => form.setValue("allocations", {})}
@@ -485,22 +546,38 @@ export function ReceiptForm({
               <FormLabel>Settlement kind</FormLabel>
               <FormControl>
                 <ToggleGroup
-                  value={[field.value]}
+                  value={[field.value === "against" && isRefund ? "against:payable" : field.value]}
                   onValueChange={(next) => {
                     const value = next[0];
 
-                    if (value === "advance" || value === "against" || value === "direct") {
+                    if (
+                      value === "advance" ||
+                      value === "against" ||
+                      value === "direct" ||
+                      value === "against:payable"
+                    ) {
                       if (value !== "against") adjustmentFields.remove();
-                      field.onChange(value);
+                      form.setValue("allocations", {});
+                      form.setValue(
+                        "exposureSide",
+                        value === "against:payable" ? "payable" : "receivable",
+                      );
+                      field.onChange(value === "against:payable" ? "against" : value);
                     }
                   }}
                   spacing={1}
                   variant="outline"
                   aria-label="Settlement kind"
+                  className="flex-wrap"
                 >
                   <ToggleGroupItem value="advance">Advance</ToggleGroupItem>
                   <ToggleGroupItem value="against">Against open items</ToggleGroupItem>
                   <ToggleGroupItem value="direct">Direct</ToggleGroupItem>
+                  {canRefund ? (
+                    <ToggleGroupItem value="against:payable">
+                      Money back from supplier
+                    </ToggleGroupItem>
+                  ) : null}
                 </ToggleGroup>
               </FormControl>
               <FormMessage />
@@ -510,9 +587,13 @@ export function ReceiptForm({
 
         {settlementKind === "advance" ? advanceSupplyField : null}
 
-        {settlementKind === "against" && partyId ? (
+        {settlementKind === "against" && !isRefund && partyId ? (
           <>
-            <ReceiptAdjustments orgSlug={orgSlug} adjustmentFields={adjustmentFields} />
+            <ReceiptAdjustments
+              orgSlug={orgSlug}
+              documentDate={documentDate}
+              adjustmentFields={adjustmentFields}
+            />
 
             <AllocationTable
               title="Open items"
@@ -536,6 +617,26 @@ export function ReceiptForm({
               />
             </AllocationTable>
           </>
+        ) : null}
+
+        {isRefund && partyId ? (
+          <AllocationTable
+            title="What this supplier owes you"
+            openHeading="Owed to you"
+            query={credits}
+            rows={openRows}
+            name="allocations"
+            remainingFor={(documentId) =>
+              settlementRemaining(
+                form.getValues("amount"),
+                form.getValues("allocations"),
+                [],
+                documentId,
+              )
+            }
+          >
+            <SettlementAllocationTotals adjustmentsName={null} advanceRemainder={false} />
+          </AllocationTable>
         ) : null}
 
         {settlementKind === "direct" ? (

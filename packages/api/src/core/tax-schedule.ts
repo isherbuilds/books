@@ -1,6 +1,9 @@
-import type { db, DbTransaction } from "@accly/db";
+import { db, type DbTransaction } from "@accly/db";
 import { taxRates } from "@accly/db/schema/tax-rates";
+import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, eq, gte, inArray, isNull, lte, or, type Column } from "drizzle-orm";
+
+import { badRequest } from "../lib/conflict";
 
 // No GST0: nil and exempt supplies carry no rate, because the income Account's supply
 // class already decides them. GST 2.0 (2025-09-22) ended the 12% slab, added 40%, and
@@ -22,6 +25,36 @@ export function effectiveOn(table: { effectiveFrom: Column; effectiveTo: Column 
     lte(table.effectiveFrom, date),
     or(isNull(table.effectiveTo), gte(table.effectiveTo, date)),
   );
+}
+
+/** The TDS Sections effective on `date`; refuses an id that is not one of them. */
+export async function effectiveTdsSections(
+  executor: typeof db | DbTransaction,
+  orgId: string,
+  ids: readonly string[],
+  date: string,
+) {
+  if (ids.length === 0) return [];
+
+  const sections = await executor
+    .select({
+      id: tdsSections.id,
+      code: tdsSections.code,
+      rateBasisPoints: tdsSections.rateBasisPoints,
+    })
+    .from(tdsSections)
+    .where(
+      and(
+        eq(tdsSections.orgId, orgId),
+        inArray(tdsSections.id, [...ids]),
+        effectiveOn(tdsSections, date),
+      ),
+    );
+
+  if (sections.length !== ids.length)
+    throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
+
+  return sections;
 }
 
 /** The Tax Rates effective on `date` for `codes`, keyed by code; a missing code has none. */

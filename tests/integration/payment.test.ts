@@ -533,6 +533,7 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
     orgSlug: organization.slug,
     partyId: customer.id,
     settlementKind: "against",
+    exposureSide: "receivable",
     amount: "100.00",
     paymentMethodId: bankTransfer.id,
     documentDate: "2026-09-12",
@@ -644,6 +645,23 @@ test("a credit note refund allocates the exact unapplied credit", async () => {
     rows: [expect.objectContaining({ id: laterInvoice.id, type: "invoice" })],
     hasMore: false,
   });
+
+  // The reversal reopened the note; a second refund settles it, and its cancel restores it.
+  const second = await api.payment.post({ ...input, amount: "100.00" });
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
+    0n,
+  );
+  await api.payment.cancel({
+    orgSlug: organization.slug,
+    paymentId: second.id,
+    reason: "Refund withdrawn",
+  });
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
+    10_000n,
+  );
+  const cancelled = await api.payment.get({ orgSlug: organization.slug, paymentId: second.id });
+  expect(cancelled.state).toBe("cancelled");
+  expect(cancelled.allocations).toEqual([expect.objectContaining({ reversed: true })]);
 });
 
 test("posting refuses an archived party", async () => {
@@ -941,7 +959,7 @@ test("TDS register XLSX contains section and gross, TDS, and net amounts", async
   });
 
   expect(file).toBeInstanceOf(Blob);
-  expect(file.name).toBe("tds-register-2026-09-13-2026-09-13.xlsx");
+  expect(file.name).toBe("tds-register-2026-09-13-to-2026-09-13.xlsx");
   expect(file.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   const bytes = new Uint8Array(await file.arrayBuffer());
   expect(new TextDecoder().decode(bytes.subarray(0, 2))).toBe("PK");

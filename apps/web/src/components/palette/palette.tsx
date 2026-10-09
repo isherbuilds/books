@@ -77,6 +77,7 @@ const CREATE_ACTIONS: readonly {
     | "/$orgSlug/invoices/new"
     | "/$orgSlug/bills/new"
     | "/$orgSlug/payments"
+    | "/$orgSlug/journals/new"
     | "/$orgSlug/parties";
   permission: AppPermission;
 }[] = [
@@ -103,6 +104,12 @@ const CREATE_ACTIONS: readonly {
     label: "New payment",
     to: "/$orgSlug/payments",
     permission: { payment: ["post"] },
+  },
+  {
+    id: "journal:new",
+    label: "New journal",
+    to: "/$orgSlug/journals/new",
+    permission: { journal: ["post"] },
   },
   {
     id: "party:new",
@@ -292,7 +299,9 @@ function PaletteBody({
             label: create.label,
             group: "action",
             run: () =>
-              void (create.to === "/$orgSlug/invoices/new" || create.to === "/$orgSlug/bills/new"
+              void (create.to === "/$orgSlug/invoices/new" ||
+              create.to === "/$orgSlug/bills/new" ||
+              create.to === "/$orgSlug/journals/new"
                 ? navigate({ to: create.to, params: { orgSlug } })
                 : navigate({ to: create.to, params: { orgSlug }, search: { create: true } })),
           },

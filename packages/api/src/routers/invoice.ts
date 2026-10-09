@@ -10,15 +10,14 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
 import {
-  documentTotals,
   organizationSnapshot,
   partySnapshot,
+  priorNoteLines,
   postDocument,
   postedNumber,
-  taxTotals,
   writeDraft,
   type DocumentNumbering,
   type PostDocumentInput,
@@ -27,7 +26,7 @@ import {
 import { splitDiscount } from "../core/discount";
 import { formatDecimal, percentOfPaise, sumPaise } from "../core/money";
 import type { InvoicePosting } from "../core/posting";
-import { computeTax } from "../core/tax";
+import { computeTax, documentTotals, taxTotals } from "../core/tax";
 import { ratesByCode } from "../core/tax-schedule";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
@@ -46,6 +45,8 @@ import {
   amendClaim,
   cancelDocument,
   claimListFields,
+  claimFilterFields,
+  claimTotals,
   listClaims,
   discardDraft,
   documentSettlement,
@@ -380,6 +381,7 @@ export const invoiceRouter = {
         const receiptInput = {
           orgSlug: input.orgSlug,
           settlementKind: "against" as const,
+          exposureSide: "receivable" as const,
           documentDate: invoice.documentDate,
           partyId: invoice.posting.partyId,
           paymentMethodId: payment.paymentMethodId,
@@ -440,6 +442,7 @@ export const invoiceRouter = {
                 documentDate: documents.documentDate,
                 dueDate: documents.dueDate,
                 placeOfSupplyStateCode: documents.placeOfSupplyStateCode,
+                intraState: documents.intraState,
                 reference: documents.reference,
                 narration: documents.narration,
                 cancelledAt: documents.cancelledAt,
@@ -496,6 +499,18 @@ export const invoiceRouter = {
               )
               .orderBy(asc(documentLines.position));
 
+            const prior = canReadNotes
+              ? await priorNoteLines(
+                  tx,
+                  orgId,
+                  invoice.id,
+                  "creditNote",
+                  lines.map((line) => line.id),
+                )
+              : [];
+
+            const used = new Map(prior.map((line) => [line.sourceLineId, line]));
+
             const allocations = await allocationsOf(
               tx,
               orgId,
@@ -523,7 +538,16 @@ export const invoiceRouter = {
                   )
               : [];
 
-            return { invoice, lines, allocations, notes };
+            return {
+              invoice,
+              lines: lines.map((line) => ({
+                ...line,
+                remainingPaise: line.amountPaise - (used.get(line.id)?.amountPaise ?? 0n),
+                priorNote: used.get(line.id) ?? null,
+              })),
+              allocations,
+              notes,
+            };
           },
           { isolationLevel: "repeatable read", accessMode: "read only" },
         ),
@@ -552,6 +576,11 @@ export const invoiceRouter = {
     { invoice: ["read"] },
     orgInput.extend(claimListFields).superRefine(orderedPeriod),
   ).handler(({ context, input }) => listClaims(context.scope.orgId, "invoice", input)),
+
+  totals: orgProcedure(
+    { invoice: ["read"] },
+    orgInput.extend(claimFilterFields).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => claimTotals(context.scope.orgId, "invoice", input)),
 
   amend: orgProcedure(
     { invoice: ["cancel", "create"] },

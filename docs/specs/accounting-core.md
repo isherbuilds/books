@@ -424,12 +424,14 @@ Definitions are in [`CONTEXT.md`](../../CONTEXT.md). Contract details:
      Note posts Dr `payables` for the note total less reversed TDS, Dr
      `tdsPayable` for that TDS, Cr each account (including ineligible tax),
      Cr input GST for eligible tax. A Debit Note against a TDS Bill reverses
-     the Bill's TDS in proportion to the note's taxable value (excluding GST),
-     half-up to a rupee; the final note returning all remaining taxable value
-     takes the exact TDS remainder, and cumulative reversal never exceeds the
-     Bill deduction. Its `tds_deductions` row retains the original section,
-     taxable base and positive reversed amount; the TDS register displays it
-     as a negative deduction in the note's period. The party ledger, automatic
+     the Bill's TDS in proportion to taxable value returned (excluding GST):
+     the Bill's TDS on all taxable value returned so far, half-up to a rupee,
+     less what earlier notes reversed. Rounding the running total keeps each
+     note within half a rupee and makes a full return reverse exactly the Bill
+     deduction. A note that reverses TDS keeps a `tds_deductions` row with the
+     original section, taxable base and positive reversed amount; the TDS
+     register displays it as a negative deduction in the note's period. A note
+     that reverses none writes no row. The party ledger, automatic
      source allocation and unapplied credit use the net supplier credit, while
      the note total remains gross for tax reporting. Reversed TDS may equal the
      note total: that final note posts no `payables` line or party credit.
@@ -1532,7 +1534,12 @@ deposit; an IPD deposit. None blocks building; each blocks CA acceptance.
 Open questions for the CA from the walkthrough, not built until answered:
 whether a lock exception opens every locked date or only a named range; whether
 the TDS register "Net" means taxable value less TDS or the amount paid; whether
-GST 3% and 0.25% join the rate schedule for a pilot's goods. Built as owner
-defaults, to confirm: a 30-day maximum exception, required HSN/SAC on taxable
-Items, a Bill warning when the supplier has an open TDS-deducted advance, and
+GST 3% and 0.25% join the rate schedule for a pilot's goods; how a Debit Note
+that reverses TDS already deposited reaches the return (a correction statement
+for the Bill's quarter, or an adjustment against the same deductee's next
+deduction as CBDT Circular 13/2021 ¶4.3.3 says for purchase of goods; the books
+entry is the same either way). Built as owner defaults, to confirm: a 30-day
+maximum exception, required HSN/SAC on taxable Items (Notification 78/2020 makes
+it optional on B2C invoices up to ₹5 crore turnover; Zoho Books requires it on
+every taxable sale, as this does), a Bill warning when the supplier has an open TDS-deducted advance, and
 audited file uploads and deletes.

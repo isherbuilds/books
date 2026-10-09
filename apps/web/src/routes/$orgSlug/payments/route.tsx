@@ -1,5 +1,5 @@
-import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { SETTLEMENT_KINDS } from "@accly/db/schema/settlement-kinds";
+import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
@@ -22,6 +22,7 @@ import {
   OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { RegisterTotals } from "@/components/register-totals";
 import { usePaletteActions } from "@/components/palette/use-palette-actions";
 import { PAYMENT_COLUMNS, PaymentCard } from "@/components/payment-columns";
 import { PaymentForm } from "@/components/payment-form";
@@ -64,6 +65,9 @@ export const Route = createFileRoute("/$orgSlug/payments")({
 
     await Promise.all([
       queryClient.infiniteQuery(paymentListOptions(orgSlug, deps.filters)).catch(() => {}),
+      queryClient.prefetchQuery(
+        orpc.payment.totals.queryOptions({ input: { orgSlug, ...deps.filters } }),
+      ),
       deps.payeeId
         ? queryClient.prefetchQuery(partyDetailOptions(orgSlug, deps.payeeId)).catch(() => {})
         : undefined,
@@ -130,6 +134,8 @@ function PaymentsRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
+  const totals = useQuery(orpc.payment.totals.queryOptions({ input: { orgSlug, ...filters } }));
+
   const activeRowId = useMatch({ from: "/$orgSlug/payments/$paymentId", shouldThrow: false })
     ?.params.paymentId;
 
@@ -140,7 +146,7 @@ function PaymentsRoute() {
 
   const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -249,6 +255,7 @@ function PaymentsRoute() {
           />
           <FilterChips filters={chips} field={field} onClear={clear} />
         </ListToolbar>
+        <RegisterTotals query={totals} noun={filters.state ? "payment" : "posted payment"} />
         <DataTable
           columns={PAYMENT_COLUMNS}
           data={rows}

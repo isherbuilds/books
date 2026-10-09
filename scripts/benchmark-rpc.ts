@@ -549,7 +549,7 @@ const reads: Scenario[] = [
 type RegisterList = (input: {
   orgSlug: string;
   q?: string;
-  cursor?: string;
+  cursor?: { documentDate: string; id: string };
   partyId?: string;
 }) => Promise<{
   rows: { id: string; number: string | null; documentDate: string; partyName: string | null }[];
@@ -595,7 +595,8 @@ for (const { list, ...register } of registers) {
       route: register.route,
       kind: "read",
       prepare: async () => {
-        const cursor = (await list(org)).rows.at(-1)?.id;
+        const last = (await list(org)).rows.at(-1);
+        const cursor = last && { documentDate: last.documentDate, id: last.id };
 
         return async () => page(await list({ ...org, cursor }));
       },

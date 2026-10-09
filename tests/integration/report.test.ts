@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { businessDate } from "@accly/api/lib/business-date";
 import { partyStatement } from "@accly/api/routers/party";
-import { accountLedger } from "@accly/api/routers/report";
+import { accountLedger, dayBook as buildDayBook } from "@accly/api/routers/report";
 import { db } from "@accly/db";
 import { journalEntries } from "@accly/db/schema/journal-entries";
 import { journalLines } from "@accly/db/schema/journal-lines";
@@ -104,6 +104,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   const receipt = await api.receipt.post({
     ...claim,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: priya.id,
     amount: "4000.00",
     paymentMethodId: cashMethod.id,
@@ -302,6 +303,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
       documentId: receipt.id,
       documentType: "receipt",
       kind: "post",
+      contraAccountName: "Accounts Receivable",
       debitPaise: 400_000n,
       creditPaise: 0n,
       balancePaise: 5_400_000n,
@@ -310,6 +312,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
       documentId: journal.id,
       documentType: "journal",
       kind: "post",
+      contraAccountName: "Sibling Discount",
       debitPaise: 0n,
       creditPaise: 50_000n,
       balancePaise: 5_350_000n,
@@ -318,6 +321,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
       entryId: reversal.entry.id,
       documentId: journal.id,
       kind: "reverse",
+      narration: expect.stringContaining("Reversed discount"),
       debitPaise: 50_000n,
       creditPaise: 0n,
       balancePaise: 5_400_000n,
@@ -334,6 +338,8 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
 
   expect(reversalLedger.lines).toEqual([]);
 
+  await expectReason(buildDayBook(organization.id, { from, to }, 1), "REPORT_TOO_LARGE");
+
   const dayBook = await api.report.dayBook({
     ...claim,
     from: reversal.entry.entryDate,
@@ -348,7 +354,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
   expect(reversedJournal).toMatchObject({
     documentId: journal.id,
     kind: "reverse",
-    narration: expect.stringMatching(/^Reversal of /),
+    narration: expect.stringContaining("Reversed discount"),
   });
   expect(reversedJournal.lines).toEqual(
     expect.arrayContaining([
@@ -411,7 +417,7 @@ test("accounting reports reconcile posted lines, cancellation dates, and stateme
     "statement XLSX closing row",
   )[0];
 
-  expect(closingRow).toMatch(/<c\b[^>]*r="G\d+"[^>]*>\s*<v>6000<\/v>/);
+  expect(closingRow).toMatch(/<c\b[^>]*r="I\d+"[^>]*>\s*<v>6000<\/v>/);
 
   const foreign = await createAccountingFixture(founder, "report-foreign-party");
 
@@ -486,6 +492,11 @@ test("ledger and day-book pages match the full reports without splitting entries
     "income",
   );
 
+  const expense = required(
+    accounts.find(({ type, systemKey }) => type === "expense" && systemKey === null),
+    "expense",
+  );
+
   const cashMethod = required(
     methods.find(({ name }) => name === "Cash"),
     "cash method",
@@ -515,6 +526,17 @@ test("ledger and day-book pages match the full reports without splitting entries
     ],
   });
 
+  const splitJournal = await api.journal.post({
+    ...claim,
+    documentDate: from,
+    narration: "Split counterpart",
+    lines: [
+      { accountId: cash.id, side: "debit", amount: "10.00" },
+      { accountId: income.id, side: "credit", amount: "5.00" },
+      { accountId: expense.id, side: "credit", amount: "5.00" },
+    ],
+  });
+
   const invoice = await api.invoice.post({
     ...claim,
     partyId: party.id,
@@ -526,11 +548,29 @@ test("ledger and day-book pages match the full reports without splitting entries
   await api.receipt.post({
     ...claim,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: party.id,
     amount: "40.00",
     paymentMethodId: cashMethod.id,
     documentDate: to,
     allocations: [{ documentId: invoice.id, amount: "40.00" }],
+  });
+
+  const advance = await api.receipt.post({
+    ...claim,
+    settlementKind: "advance",
+    partyId: party.id,
+    amount: "10.00",
+    paymentMethodId: cashMethod.id,
+    documentDate: to,
+    advanceSupply: "exempt",
+  });
+
+  await api.allocation.apply({
+    ...claim,
+    sourceDocumentId: advance.id,
+    targetDocumentId: invoice.id,
+    amount: "10.00",
   });
 
   const accountInput = { ...claim, accountId: cash.id, ...claimDates };
@@ -556,6 +596,12 @@ test("ledger and day-book pages match the full reports without splitting entries
   expect(accountRows.map(({ id, narration }) => [id, narration])).toEqual(
     fullLedger.lines.map(({ id, narration }) => [id, narration]),
   );
+  expect(fullLedger.lines.find((line) => line.documentId === advance.id)).toMatchObject({
+    contraAccountName: "Customer Advances",
+  });
+  expect(fullLedger.lines.find((line) => line.documentId === splitJournal.id)).toMatchObject({
+    contraAccountName: "Multiple",
+  });
   const accountSummary = await api.report.accountLedgerSummary(accountInput);
   expect(accountSummary.openingPaise).toBe(fullLedger.openingPaise);
   expect(accountSummary.closingPaise).toBe(fullLedger.closingPaise);
@@ -613,6 +659,16 @@ test("ledger and day-book pages match the full reports without splitting entries
     entries.flatMap(({ lines }) => lines).reduce((total, line) => total + line.creditPaise, 0n),
   );
   expect(bookSummary.debitPaise).toBe(bookSummary.creditPaise);
+  expect(entries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        documentId: advance.id,
+        documentType: "receipt",
+        number: advance.number,
+        narration: `${advance.number} applied to ${invoice.number}`,
+      }),
+    ]),
+  );
 
   const cancelledInvoice = await api.invoice.post({
     ...claim,

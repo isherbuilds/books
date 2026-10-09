@@ -6,7 +6,7 @@ import { tdsSections } from "@accly/db/schema/tds-sections";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
 import {
   accountLine,
@@ -16,13 +16,12 @@ import {
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
-import { formatDecimal, sumPaise } from "../core/money";
-import { computeTds } from "../core/posting";
+import { computeTds, formatDecimal, sumPaise } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
-import { effectiveOn } from "../core/tax-schedule";
+import { effectiveOn, effectiveTdsSections } from "../core/tax-schedule";
 import { orgInput, orgProcedure, requirePermission } from "../lib/procedures/factory";
 import {
   dateOnly,
@@ -30,6 +29,7 @@ import {
   positiveMoney,
   reason,
   settlementListFields,
+  settlementFilterFields,
   settlementPostFields,
 } from "../lib/schemas";
 import {
@@ -38,6 +38,7 @@ import {
   cancelDocument,
   settlementListRow,
   registerPage,
+  settlementTotals,
   settlementListWhere,
   orgSettings,
   orgTimeZone,
@@ -139,27 +140,15 @@ export const paymentRouter = {
       const expenseAccount =
         settlementKind === "direct" ? byAccountId.get(input.expenseAccountId) : null;
 
-      const [section] = tdsSectionId
-        ? await tx
-            .select()
-            .from(tdsSections)
-            .where(
-              and(
-                eq(tdsSections.orgId, scope.orgId),
-                eq(tdsSections.id, tdsSectionId),
-                effectiveOn(tdsSections, documentDate),
-              ),
-            )
-            .limit(1)
-            .for("share")
-        : [];
+      const [section] = await effectiveTdsSections(
+        tx,
+        scope.orgId,
+        tdsSectionId ? [tdsSectionId] : [],
+        documentDate,
+      );
 
       if (input.partyId && !party) {
         throw badRequest("PARTY_INVALID", "Choose a party in this organization.");
-      }
-
-      if (tdsSectionId && !section) {
-        throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
       }
 
       if (section) {
@@ -398,6 +387,11 @@ export const paymentRouter = {
         .limit(input.limit + 1),
     );
   }),
+
+  totals: orgProcedure(
+    { payment: ["read"] },
+    orgInput.extend(settlementFilterFields).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => settlementTotals(context.scope.orgId, "payment", input)),
 
   cancel: orgProcedure(
     { payment: ["cancel"] },

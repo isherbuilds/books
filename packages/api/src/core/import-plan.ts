@@ -415,6 +415,7 @@ export async function validateImport(
 
     const eligibilityError = itemEligibilityError(
       eligible ? { supplyClass: account.supplyClass ?? null } : undefined,
+      parsed.data.hsnSac,
       parsed.data.taxCode,
       parsed.data.taxCode !== undefined && taxRates.has(parsed.data.taxCode),
     );
@@ -423,7 +424,11 @@ export async function validateImport(
       error(
         "Items",
         row.row,
-        eligibilityError.code === "INCOME_ACCOUNT_INVALID" ? "Income account" : "Tax code",
+        eligibilityError.code === "INCOME_ACCOUNT_INVALID"
+          ? "Income account"
+          : eligibilityError.code === "HSN_SAC_REQUIRED"
+            ? "HSN/SAC"
+            : "Tax code",
         eligibilityError.code,
         eligibilityError.message,
       );
@@ -582,11 +587,13 @@ export async function validateImport(
     });
   }
 
-  // Derived from every item row, so a mismatch shows even beside a bad party name.
+  // Incomplete opening-item rows cannot be reconciled against the trial balance.
+  // Wait for their cell/domain errors to be fixed before comparing either control.
+  const openingItemsHaveErrors = errors.some((entry) => entry.sheet === "Opening items");
   const { receivablesPaise, payablesPaise } = controlNets(workbook.openingItems);
 
   if (hasOpening) {
-    if (receivablesRowPaise !== receivablesPaise)
+    if (!openingItemsHaveErrors && receivablesRowPaise !== receivablesPaise)
       error(
         "Trial balance",
         null,
@@ -595,7 +602,7 @@ export async function validateImport(
         `Accounts receivable is ${formatMoney(receivablesRowPaise)} but the receivable items net to ${formatMoney(receivablesPaise)}.`,
       );
 
-    if (payablesRowPaise !== payablesPaise)
+    if (!openingItemsHaveErrors && payablesRowPaise !== payablesPaise)
       error(
         "Trial balance",
         null,

@@ -5,6 +5,7 @@ import { db } from "@accly/db";
 import { accounts } from "@accly/db/schema/accounts";
 import { auditLog } from "@accly/db/schema/audit";
 import { documentLines } from "@accly/db/schema/document-lines";
+import { journalLines } from "@accly/db/schema/journal-lines";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { and, eq } from "drizzle-orm";
 
@@ -332,6 +333,323 @@ test("receipt post rejects invalid settlements and enforces advance supply polic
   expect(goodsAdvance.advanceSupply).toBe("goods");
 });
 
+test("supplier refund settles debit note and payment advance, and cancel restores both", async () => {
+  const vendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Refund Supplier",
+    roles: ["customer", "vendor"],
+    stateCode: "27",
+  });
+
+  const payables = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ systemKey }) => systemKey === "payables",
+    ),
+    "payables account",
+  );
+
+  const controlBalance = async () => {
+    const lines = await db
+      .select({ debit: journalLines.debit, credit: journalLines.credit })
+      .from(journalLines)
+      .where(
+        and(
+          eq(journalLines.orgId, organization.id),
+          eq(journalLines.accountId, payables.id),
+          eq(journalLines.partyId, vendor.id),
+        ),
+      );
+
+    return lines.reduce((total, line) => total + line.debit - line.credit, 0n);
+  };
+
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: vendor.id,
+    reference: "REFUND-BILL-1",
+    documentDate: "2026-09-12",
+    lines: [
+      {
+        accountId: expenseAccount.id,
+        description: "Returned goods",
+        amount: "100.00",
+        itcEligible: false,
+      },
+    ],
+  });
+
+  await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "100.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ documentId: bill.id, amount: "100.00" }],
+  });
+  const billDetail = await api.bill.get({ orgSlug: organization.slug, billId: bill.id });
+
+  const note = await api.note.post({
+    orgSlug: organization.slug,
+    type: "debitNote",
+    againstDocumentId: bill.id,
+    documentDate: "2026-09-12",
+    narration: "Supplier refunded returned goods",
+    lines: [{ sourceLineId: required(billDetail.lines[0], "bill line").id, amount: "100.00" }],
+  });
+
+  const advance = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "advance",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+  });
+
+  const refund = await api.receipt.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "125.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [
+      { documentId: note.id, amount: "100.00" },
+      { documentId: advance.id, amount: "25.00" },
+    ],
+  });
+
+  const detail = await api.receipt.get({ orgSlug: organization.slug, receiptId: refund.id });
+  expect(detail).toMatchObject({
+    settlementKind: "against",
+    exposureSide: "payable",
+    unappliedPaise: null,
+  });
+  expect(detail.allocations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        otherDocumentId: note.id,
+        otherDocumentDate: "2026-09-12",
+        amountPaise: 10_000n,
+      }),
+      expect.objectContaining({
+        otherDocumentId: advance.id,
+        otherDocumentDate: "2026-09-12",
+        amountPaise: 2_500n,
+      }),
+    ]),
+  );
+
+  // An operator posts receipts but cannot read Debit Notes or Bills.
+  const operator = await createTestUser(`refund-operator-${uniqueSuffix()}`);
+  await joinOrganization(operator, organization.id, "operator");
+  const restricted = clientFor(operator);
+  await expectORPCCode(
+    restricted.receipt.post({
+      orgSlug: organization.slug,
+      settlementKind: "against",
+      exposureSide: "payable",
+      partyId: vendor.id,
+      amount: "1.00",
+      paymentMethodId: bankTransfer.id,
+      allocations: [{ documentId: note.id, amount: "1.00" }],
+    }),
+    "FORBIDDEN",
+  );
+  expect(
+    (await restricted.receipt.get({ orgSlug: organization.slug, receiptId: refund.id }))
+      .allocations,
+  ).toEqual([]);
+  expect((await postingOf(organization.id, refund.id, "post")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: bankAccount.id, debit: 12_500n, credit: 0n }),
+      expect.objectContaining({
+        accountId: payables.id,
+        partyId: vendor.id,
+        debit: 0n,
+        credit: 12_500n,
+      }),
+    ]),
+  );
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
+    0n,
+  );
+  expect(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: advance.id })).unappliedPaise,
+  ).toBe(0n);
+  expect(
+    (
+      await api.party.openCredits({
+        orgSlug: organization.slug,
+        partyId: vendor.id,
+        side: "receivable",
+      })
+    ).rows,
+  ).toEqual([]);
+  expect(
+    (
+      await api.party.ledgerSummary({
+        orgSlug: organization.slug,
+        partyId: vendor.id,
+        to: "2026-09-12",
+      })
+    ).closingPaise,
+  ).toBe(0n);
+  expect(await controlBalance()).toBe(0n);
+
+  await api.receipt.cancel({
+    orgSlug: organization.slug,
+    receiptId: refund.id,
+    reason: "Supplier transfer recalled",
+  });
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: note.id })).unappliedPaise).toBe(
+    10_000n,
+  );
+  expect(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: advance.id })).unappliedPaise,
+  ).toBe(2_500n);
+  expect(
+    (
+      await api.party.ledgerSummary({
+        orgSlug: organization.slug,
+        partyId: vendor.id,
+        to: "2026-09-12",
+      })
+    ).closingPaise,
+  ).toBe(12_500n);
+  expect((await postingOf(organization.id, refund.id, "reverse")).lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: bankAccount.id, credit: 12_500n }),
+      expect.objectContaining({ accountId: payables.id, debit: 12_500n }),
+    ]),
+  );
+});
+
+test("cancelling a supplier refund leaves another payment's released advance alone", async () => {
+  const vendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Released Advance Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  const supplierAdvances = required(
+    (await db.select().from(accounts).where(eq(accounts.orgId, organization.id))).find(
+      ({ systemKey }) => systemKey === "supplierAdvances",
+    ),
+    "supplier advances account",
+  );
+
+  const advance = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "advance",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+  });
+
+  const refund = await api.receipt.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ documentId: advance.id, amount: "25.00" }],
+  });
+
+  const reason = "entered in error";
+
+  const [refundApply] = (
+    await api.receipt.get({ orgSlug: organization.slug, receiptId: refund.id })
+  ).allocations;
+
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: required(refundApply, "refund allocation").id,
+    reason,
+  });
+
+  // The refund is now an open payable claim; a payment settles it at post, then is released.
+  const payment = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "against",
+    exposureSide: "payable",
+    partyId: vendor.id,
+    amount: "25.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+    allocations: [{ documentId: refund.id, amount: "25.00" }],
+  });
+
+  const [paymentApply] = required(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id })).allocations,
+    "payment allocations",
+  );
+
+  await api.allocation.reverse({
+    orgSlug: organization.slug,
+    allocationId: required(paymentApply, "payment allocation").id,
+    reason,
+  });
+
+  await api.receipt.cancel({ orgSlug: organization.slug, receiptId: refund.id, reason });
+
+  const lines = await db
+    .select({ debit: journalLines.debit, credit: journalLines.credit })
+    .from(journalLines)
+    .where(
+      and(
+        eq(journalLines.orgId, organization.id),
+        eq(journalLines.accountId, supplierAdvances.id),
+        eq(journalLines.partyId, vendor.id),
+      ),
+    );
+
+  // Both payments are unapplied advances again, and the GL agrees.
+  expect(
+    (await api.payment.get({ orgSlug: organization.slug, paymentId: payment.id })).unappliedPaise,
+  ).toBe(2_500n);
+  expect(lines.reduce((total, line) => total + line.debit - line.credit, 0n)).toBe(5_000n);
+});
+
+test("supplier refund refuses amounts above the unapplied source", async () => {
+  const vendor = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Over-refund Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+  });
+
+  const advance = await api.payment.post({
+    orgSlug: organization.slug,
+    settlementKind: "advance",
+    partyId: vendor.id,
+    amount: "20.00",
+    paymentMethodId: bankTransfer.id,
+    documentDate: "2026-09-12",
+  });
+
+  await expectReason(
+    api.receipt.post({
+      orgSlug: organization.slug,
+      settlementKind: "against",
+      exposureSide: "payable",
+      partyId: vendor.id,
+      amount: "21.00",
+      paymentMethodId: bankTransfer.id,
+      documentDate: "2026-09-12",
+      allocations: [{ documentId: advance.id, amount: "21.00" }],
+    }),
+    "ALLOCATION_EXCEEDS_SOURCE",
+  );
+});
+
 test("receipt fee and customer TDS settle the invoice with four journal legs", async () => {
   const service = await api.item.create({
     orgSlug: organization.slug,
@@ -348,9 +666,15 @@ test("receipt fee and customer TDS settle the invoice with four journal legs", a
     lines: [{ kind: "item", itemId: service.id, quantity: 1 }],
   });
 
+  const section = required(
+    (await api.payment.tdsSections({ orgSlug: organization.slug, date: "2026-09-12" }))[0],
+    "customer TDS section",
+  );
+
   const against: ReceiptPostInput = {
     orgSlug: organization.slug,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: party.id,
     amount: "95.00",
     paymentMethodId: bankTransfer.id,
@@ -358,15 +682,24 @@ test("receipt fee and customer TDS settle the invoice with four journal legs", a
     allocations: [{ documentId: invoice.id, amount: "100.00" }],
     adjustments: [
       { kind: "fee", accountId: expenseAccount.id, amount: "2.00" },
-      { kind: "tds", amount: "3.00" },
+      { kind: "tds", amount: "3.00", tdsSectionId: section.id },
     ],
   };
+
+  await expectORPCCode(
+    // SAFETY: Deliberately omit the required section to exercise the API's input refusal.
+    api.receipt.post({
+      ...against,
+      adjustments: [{ kind: "tds", amount: "3.00" }],
+    } as ReceiptPostInput),
+    "BAD_REQUEST",
+  );
 
   const receipt = await api.receipt.post(against);
   const detail = await api.receipt.get({ orgSlug: organization.slug, receiptId: receipt.id });
   expect(detail.adjustments).toEqual([
-    { id: expect.any(String), adjustmentKind: "fee", amountPaise: 200n },
-    { id: expect.any(String), adjustmentKind: "tds", amountPaise: 300n },
+    { id: expect.any(String), adjustmentKind: "fee", amountPaise: 200n, sectionCode: null },
+    { id: expect.any(String), adjustmentKind: "tds", amountPaise: 300n, sectionCode: section.code },
   ]);
   expect((await postingOf(organization.id, receipt.id, "post")).lines).toEqual(
     expect.arrayContaining([
@@ -672,7 +1005,7 @@ test("day book XLSX contains the receipt number and numeric rupee amount", async
   });
 
   expect(file).toBeInstanceOf(Blob);
-  expect(file.name).toBe("day-book-2026-09-12-2026-09-12.xlsx");
+  expect(file.name).toBe("day-book-2026-09-12-to-2026-09-12.xlsx");
   expect(file.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -751,11 +1084,15 @@ test("receipt list filters narrow the keyset and party totals count posted recei
   const secondPage = await api.receipt.list({
     orgSlug: organization.slug,
     partyId: buyer.id,
-    cursor: required(firstPage.rows[0], "first receipt page row").id,
+    cursor: required(firstPage.rows[0], "first receipt page row"),
     limit: 2,
   });
 
   expect(secondPage.rows.map(({ id }) => id)).toEqual([cash.id, bank.id]);
+  // Totals count posted receipts only; the cancelled cash receipt drops out.
+  expect(await api.receipt.totals({ orgSlug: organization.slug, partyId: buyer.id })).toMatchObject(
+    { count: 2, totalPaise: 14_000n },
+  );
   expect(secondPage.hasMore).toBe(false);
 
   const ids = async (filters: Partial<Parameters<AppRouterClient["receipt"]["list"]>[0]>) =>
@@ -765,6 +1102,33 @@ test("receipt list filters narrow the keyset and party totals count posted recei
 
   expect(await ids({ state: "cancelled" })).toEqual([cash.id]);
   expect(await ids({ from: "2026-09-02", to: "2026-09-09" })).toEqual([direct.id, cash.id]);
+
+  const period = {
+    orgSlug: organization.slug,
+    partyId: buyer.id,
+    from: "2026-09-02",
+    to: "2026-09-09",
+  };
+
+  const summary = await api.receipt.totals(period);
+  expect(summary).toEqual({
+    count: 1,
+    totalPaise: 4_000n,
+    methods: [{ name: bankTransfer.name, count: 1, amountPaise: 4_000n }],
+  });
+  expect(await api.receipt.totals({ ...period, state: "cancelled" })).toMatchObject({
+    count: 1,
+    totalPaise: 25_000n,
+  });
+  expect(
+    await api.receipt.totals({ ...period, state: "cancelled", paymentMethodIds: [cashMethod.id] }),
+  ).toMatchObject({ count: 1, totalPaise: 25_000n });
+  expect(await api.receipt.totals({ ...period, q: buyer.name })).toEqual(summary);
+  expect(await api.receipt.totals({ ...period, to: "2026-09-03" })).toEqual({
+    count: 0,
+    totalPaise: 0n,
+    methods: [],
+  });
 
   await expectORPCCode(
     api.receipt.list({ orgSlug: organization.slug, from: "2026-09-10", to: "2026-09-01" }),

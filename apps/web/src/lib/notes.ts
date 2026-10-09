@@ -1,6 +1,7 @@
+import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
-import { keysetPaging, orpc } from "@/lib/orpc";
+import { datedPaging, orpc } from "@/lib/orpc";
 
 type NoteListFilters = Omit<
   Parameters<AppRouterClient["note"]["list"]>[0],
@@ -17,8 +18,8 @@ export type NoteSource =
 
 export const noteListOptions = (orgSlug: string, filters: NoteListFilters) =>
   orpc.note.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ orgSlug, ...filters, cursor }),
-    ...keysetPaging,
+    input: (cursor: DocumentCursor | undefined) => ({ orgSlug, ...filters, cursor }),
+    ...datedPaging,
   });
 
 export const noteDetailOptions = (orgSlug: string, noteId: string) =>

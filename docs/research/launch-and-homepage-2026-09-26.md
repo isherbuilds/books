@@ -55,7 +55,7 @@ The shipped FAQ (`apps/web/src/content/faqs.ts`) contradicts these claims:
 | Published prices, first-50 offer, two-year lock, refund | "There is no public price list while the pilot runs."                                                                                                           |
 | "Paid in 12 minutes", UPI chat beside Paid              | No payment collection. A shared message does not prove the receipt was recorded.                                                                                |
 | Five-minute replies                                     | No staffed support promise exists.                                                                                                                              |
-| EN / हिं switch                                         | The app has no Hindi interface.                                                                                                                                 |
+| EN / हिं switch                                          | The app has no Hindi interface.                                                                                                                                 |
 
 Either the product ships the feature first, or the page drops the claim.
 

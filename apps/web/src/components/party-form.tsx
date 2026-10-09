@@ -460,18 +460,20 @@ function PartyForm({
                 </Section>
               </>
             ) : null}
+          </SheetBody>
 
+          <SheetFooter>
             {nameCollision ? (
-              <div role="alert" className="flex items-center justify-between gap-3">
+              <div
+                role="alert"
+                className="flex w-full flex-wrap items-center justify-between gap-2 text-destructive"
+              >
                 <span>A party named {nameCollision} exists</span>
                 <Button type="button" size="xs" variant="outline" onClick={saveAnyway}>
                   {party ? "Save anyway" : "Create anyway"}
                 </Button>
               </div>
             ) : null}
-          </SheetBody>
-
-          <SheetFooter>
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>

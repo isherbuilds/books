@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from "bun:test";
 
 import type { AppRouterClient } from "@accly/api/routers/index";
+import { formatDecimal } from "@accly/api/core/money";
 import { accounts } from "@accly/db/schema/accounts";
 
 import { createAccountingFixture, postingOf } from "../support/accounting";
@@ -27,6 +28,8 @@ let expense: typeof accounts.$inferSelect;
 let receivables: typeof accounts.$inferSelect;
 
 let payables: typeof accounts.$inferSelect;
+
+let tdsPayable: typeof accounts.$inferSelect;
 
 let cgstOutput: typeof accounts.$inferSelect;
 
@@ -60,6 +63,10 @@ beforeAll(async () => {
     fixture.accounts.find((row) => row.systemKey === "payables"),
     "payables",
   );
+  tdsPayable = required(
+    fixture.accounts.find((row) => row.systemKey === "tdsPayable"),
+    "TDS payable",
+  );
   cgstOutput = required(
     fixture.accounts.find((row) => row.systemKey === "cgstOutput"),
     "output CGST",
@@ -80,6 +87,7 @@ beforeAll(async () => {
     name: "Note Supplier",
     roles: ["vendor"],
     stateCode: "27",
+    pan: "ABCDE1234F",
   });
   taxableItem = await api.item.create({
     orgSlug: organization.slug,
@@ -158,13 +166,23 @@ test("credit notes reverse income and GST, settle the invoice, and cap cumulativ
     (await api.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).outstandingPaise,
   ).toBe(708_000n);
 
+  const partlyReturned = await api.invoice.get({
+    orgSlug: organization.slug,
+    invoiceId: invoice.id,
+  });
+
+  expect(partlyReturned.lines[0]).toMatchObject({
+    remainingPaise: 600_000n,
+    priorNote: { amountPaise: 400_000n, cgstPaise: 36_000n, sgstPaise: 36_000n },
+  });
+
   const final = await api.note.post({
     orgSlug: organization.slug,
     type: "creditNote",
     againstDocumentId: invoice.id,
     documentDate: "2026-09-14",
     narration: "Remaining services returned",
-    lines: [{ sourceLineId, amount: "6000.00" }],
+    lines: [{ sourceLineId, amount: formatDecimal(partlyReturned.lines[0]!.remainingPaise) }],
   });
 
   const finalDetail = await api.note.get({ orgSlug: organization.slug, noteId: final.id });
@@ -176,6 +194,10 @@ test("credit notes reverse income and GST, settle the invoice, and cap cumulativ
   expect(finalDetail.totalPaise).toBe(708_000n);
   expect(
     (await api.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).outstandingPaise,
+  ).toBe(0n);
+  expect(
+    (await api.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).lines[0]
+      ?.remainingPaise,
   ).toBe(0n);
   await expectReason(
     api.note.post({
@@ -230,6 +252,10 @@ test("an invoice cannot cancel while its credit note remains posted after alloca
     reason: "Cancel credit note first",
   });
 
+  expect(
+    (await api.invoice.get({ orgSlug: organization.slug, invoiceId: invoice.id })).lines[0],
+  ).toMatchObject({ remainingPaise: 1_000_000n, priorNote: null });
+
   const cancelled = await api.invoice.cancel({
     orgSlug: organization.slug,
     invoiceId: invoice.id,
@@ -264,6 +290,7 @@ test("debit note against a bill reduces its payable outstanding", async () => {
     type: "debitNote",
     againstDocumentId: bill.id,
     documentDate: "2026-09-13",
+    reference: "SUP-CN-72",
     narration: "Supplier returned half",
     lines: [{ sourceLineId, amount: "500.00" }],
   });
@@ -271,6 +298,7 @@ test("debit note against a bill reduces its payable outstanding", async () => {
   const detail = await api.note.get({ orgSlug: organization.slug, noteId: note.id });
   expect(detail).toMatchObject({
     totalPaise: 59_000n,
+    reference: "SUP-CN-72",
     unappliedPaise: 0n,
     against: {
       number: bill.number,
@@ -280,6 +308,11 @@ test("debit note against a bill reduces its payable outstanding", async () => {
     totals: { taxablePaise: 50_000n, cgstPaise: 4500n, sgstPaise: 4500n, igstPaise: 0n },
   });
   expect(detail.lines[0]).toMatchObject({ rateBasisPoints: 1800 });
+  const partlyReturned = await api.bill.get({ orgSlug: organization.slug, billId: bill.id });
+  expect(partlyReturned.lines[0]).toMatchObject({
+    remainingPaise: 50_000n,
+    priorNote: { amountPaise: 50_000n, cgstPaise: 4500n, sgstPaise: 4500n },
+  });
   const listed = await api.note.list({ orgSlug: organization.slug, type: "debitNote" });
   expect(listed.rows).toContainEqual(
     expect.objectContaining({ id: note.id, againstNumber: bill.number, unappliedPaise: 0n }),
@@ -291,6 +324,174 @@ test("debit note against a bill reduces its payable outstanding", async () => {
   expect(posting.lines).toContainEqual(
     expect.objectContaining({ accountId: payables.id, debit: 59_000n, credit: 0n }),
   );
+
+  const final = await api.note.post({
+    orgSlug: organization.slug,
+    type: "debitNote",
+    againstDocumentId: bill.id,
+    documentDate: "2026-09-14",
+    narration: "Remaining short supply",
+    lines: [{ sourceLineId, amount: formatDecimal(partlyReturned.lines[0]!.remainingPaise) }],
+  });
+
+  expect((await api.note.get({ orgSlug: organization.slug, noteId: final.id })).totalPaise).toBe(
+    59_000n,
+  );
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).lines[0]?.remainingPaise,
+  ).toBe(0n);
+});
+
+test("debit notes reverse bill TDS and settle only the net supplier credit", async () => {
+  const section = required(
+    (await api.payment.tdsSections({ orgSlug: organization.slug, date: "2026-09-12" })).find(
+      ({ code }) => code === "1009",
+    ),
+    "10% TDS section",
+  );
+
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    reference: "BILL-NOTE-TDS",
+    documentDate: "2026-09-12",
+    tdsSectionId: section.id,
+    lines: [
+      {
+        accountId: expense.id,
+        description: "Returned rent",
+        amount: "10000.00",
+        taxCode: "GST18",
+        itcEligible: true,
+      },
+    ],
+  });
+
+  const sourceLineId = required(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).lines[0],
+    "TDS bill line",
+  ).id;
+
+  const postNote = (amount: string, date: string) =>
+    api.note.post({
+      orgSlug: organization.slug,
+      type: "debitNote",
+      againstDocumentId: bill.id,
+      documentDate: date,
+      narration: "Supplier return",
+      lines: [{ sourceLineId, amount }],
+    });
+
+  const first = await postNote("4000.00", "2026-09-13");
+  const detail = await api.note.get({ orgSlug: organization.slug, noteId: first.id });
+  expect(detail.totalPaise).toBe(472_000n);
+  expect(detail.tdsReversedPaise).toBe(40_000n);
+  expect(detail.unappliedPaise).toBe(0n);
+  expect(detail.allocations).toContainEqual(
+    expect.objectContaining({ otherDocumentId: bill.id, amountPaise: 432_000n }),
+  );
+  const posted = await postingOf(organization.id, first.id, "post");
+  expect(posted.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: payables.id, debit: 432_000n, credit: 0n }),
+      expect.objectContaining({ accountId: tdsPayable.id, debit: 40_000n, credit: 0n }),
+      expect.objectContaining({ accountId: expense.id, debit: 0n, credit: 400_000n }),
+    ]),
+  );
+  expect(posted.lines.reduce((sum, line) => sum + line.debit - line.credit, 0n)).toBe(0n);
+  expect(posted.ledger).toContainEqual(
+    expect.objectContaining({ side: "payable", amountPaise: 432_000n }),
+  );
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(648_000n);
+
+  const second = await postNote("6000.00", "2026-09-14");
+  expect(
+    (await api.note.get({ orgSlug: organization.slug, noteId: second.id })).tdsReversedPaise,
+  ).toBe(60_000n);
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(0n);
+
+  const register = await api.export.tdsRegisterXlsx({
+    orgSlug: organization.slug,
+    from: "2026-09-13",
+    to: "2026-09-14",
+  });
+
+  const bytes = new Uint8Array(await register.arrayBuffer());
+  expect(readZipText(bytes, "xl/sharedStrings.xml")).toContain(first.number);
+  expect(readZipText(bytes, "xl/worksheets/sheet1.xml")).toMatch(/<v>-400<\/v>/);
+  expect(readZipText(bytes, "xl/worksheets/sheet1.xml")).toMatch(/<v>-600<\/v>/);
+
+  await api.note.cancel({
+    orgSlug: organization.slug,
+    noteId: second.id,
+    reason: "Cancel supplier return",
+  });
+  const reversed = await postingOf(organization.id, second.id, "reverse");
+  expect(reversed.lines).toContainEqual(
+    expect.objectContaining({ accountId: payables.id, debit: 0n, credit: 648_000n }),
+  );
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(648_000n);
+});
+
+test("a debit note may reverse only TDS and post no supplier credit", async () => {
+  const section = required(
+    (await api.payment.tdsSections({ orgSlug: organization.slug, date: "2026-09-12" })).find(
+      ({ code }) => code === "1009",
+    ),
+    "10% TDS section",
+  );
+
+  const bill = await api.bill.post({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    reference: "BILL-NOTE-TDS-ONLY",
+    documentDate: "2026-09-12",
+    tdsSectionId: section.id,
+    lines: [
+      { accountId: expense.id, description: "Small supply", amount: "10.00", itcEligible: false },
+    ],
+  });
+
+  const sourceLineId = required(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).lines[0],
+    "small bill line",
+  ).id;
+
+  const postNote = (amount: string) =>
+    api.note.post({
+      orgSlug: organization.slug,
+      type: "debitNote",
+      againstDocumentId: bill.id,
+      documentDate: "2026-09-13",
+      narration: "Small return",
+      lines: [{ sourceLineId, amount }],
+    });
+
+  // ₹10 at 10% deducts ₹1. ₹4 returned rounds to ₹0 reversed and ₹5 to ₹1, so the
+  // ₹1 note that crosses the half rupee reverses only TDS.
+  await postNote("4.00");
+  const final = await postNote("1.00");
+
+  const detail = await api.note.get({ orgSlug: organization.slug, noteId: final.id });
+  expect(detail).toMatchObject({ totalPaise: 100n, tdsReversedPaise: 100n, unappliedPaise: 0n });
+  const posted = await postingOf(organization.id, final.id, "post");
+  expect(posted.lines).toHaveLength(2);
+  expect(posted.lines).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ accountId: expense.id, debit: 0n, credit: 100n }),
+      expect.objectContaining({ accountId: tdsPayable.id, debit: 100n, credit: 0n }),
+    ]),
+  );
+  expect(posted.ledger).toEqual([]);
+  expect(
+    (await api.bill.get({ orgSlug: organization.slug, billId: bill.id })).outstandingPaise,
+  ).toBe(500n);
 });
 
 test("GST outward workbook records an invoice and its negative registered credit note", async () => {

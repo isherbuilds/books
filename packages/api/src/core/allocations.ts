@@ -26,7 +26,14 @@ type Side = "receivable" | "payable";
 
 type LockedDocument = Pick<
   typeof documents.$inferSelect,
-  "id" | "type" | "state" | "settlementKind" | "exposureSide" | "partyId" | "documentDate"
+  | "id"
+  | "number"
+  | "type"
+  | "state"
+  | "settlementKind"
+  | "exposureSide"
+  | "partyId"
+  | "documentDate"
 >;
 
 const reversal = alias(allocations, "allocation_reversal");
@@ -161,6 +168,7 @@ export async function lockDocuments(
   return tx
     .select({
       id: documents.id,
+      number: documents.number,
       type: documents.type,
       state: documents.state,
       settlementKind: documents.settlementKind,
@@ -185,10 +193,10 @@ function roleOf(document: LockedDocument, position: "source" | "target"): Side |
     case "debitNote":
       return position === "source" ? "payable" : null;
     case "receipt":
-      return position === "source" &&
-        document.exposureSide === "receivable" &&
-        document.settlementKind !== "direct"
-        ? "receivable"
+      if (document.settlementKind === "direct") return null;
+
+      return document.exposureSide === (position === "source" ? "receivable" : "payable")
+        ? document.exposureSide
         : null;
     case "journal":
       return "receivable";
@@ -228,10 +236,12 @@ export async function applyAllocations(
   args: {
     pairs: readonly AllocationPair[];
     draftDocumentId: string | null;
-    requiredSourceType?: "creditNote";
+    allowedSourceTypes?: readonly ("creditNote" | "debitNote" | "payment")[];
     partyId?: string;
   },
-): Promise<{ id: string; amountPaise: bigint }[]> {
+): Promise<
+  { id: string; amountPaise: bigint; sourceNumber: string | null; targetNumber: string | null }[]
+> {
   const keys = args.pairs.map((pair) => `${pair.sourceDocumentId}:${pair.targetDocumentId}`);
 
   if (new Set(keys).size !== keys.length || args.pairs.some((pair) => pair.amountPaise <= 0n)) {
@@ -279,7 +289,7 @@ export async function applyAllocations(
       (source.type !== "journal" && source.partyId !== partyId) ||
       (source.state !== "posted" &&
         !(source.state === "draft" && source.id === args.draftDocumentId)) ||
-      (args.requiredSourceType && source.type !== args.requiredSourceType)
+      (args.allowedSourceTypes && !args.allowedSourceTypes.some((type) => type === source.type))
     ) {
       throw badRequest(
         "ALLOCATION_SOURCE_INVALID",
@@ -407,7 +417,12 @@ export async function applyAllocations(
       });
   }
 
-  return rows.map(({ id, amountPaise }) => ({ id, amountPaise }));
+  return rows.map(({ id, amountPaise, sourceDocumentId, targetDocumentId }) => ({
+    id,
+    amountPaise,
+    sourceNumber: byId.get(sourceDocumentId)!.number,
+    targetNumber: byId.get(targetDocumentId)!.number,
+  }));
 }
 
 /** Append a reverse, then reverse its entry or release a source allocated at post. */
@@ -417,7 +432,12 @@ export async function reverseAllocation(
   settings: typeof organizationSettings.$inferSelect,
   allocationId: string,
   narration: string,
-): Promise<{ id: string; amountPaise: bigint }> {
+): Promise<{
+  id: string;
+  amountPaise: bigint;
+  sourceNumber: string | null;
+  targetNumber: string | null;
+}> {
   const [apply] = await tx
     .select({
       sourceDocumentId: allocations.sourceDocumentId,
@@ -453,6 +473,7 @@ export async function reverseAllocation(
   ]);
 
   const source = locked.find((document) => document.id === apply.sourceDocumentId);
+  const target = locked.find((document) => document.id === apply.targetDocumentId)!;
 
   if (!source) throw impossible(`allocation ${allocationId} has no source`);
 
@@ -506,5 +527,10 @@ export async function reverseAllocation(
     }
   }
 
-  return { id: reversed.id, amountPaise: apply.amountPaise };
+  return {
+    id: reversed.id,
+    amountPaise: apply.amountPaise,
+    sourceNumber: source.number,
+    targetNumber: target.number,
+  };
 }

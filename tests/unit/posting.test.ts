@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 
 import {
   assertBalanced,
-  computeTds,
   postAllocation,
   postBill,
   postCreditNote,
@@ -21,6 +20,7 @@ import {
   type ReceiptPosting,
 } from "@accly/api/core/posting";
 import { receiptTax } from "@accly/api/core/documents";
+import { computeTds } from "@accly/api/core/money";
 import { SYSTEM_ACCOUNT_KEYS } from "@accly/api/core/chart-templates";
 
 const accounts = new Map(SYSTEM_ACCOUNT_KEYS.map((key) => [key, `${key}-account`]));
@@ -598,6 +598,7 @@ test("debit note mirrors bill expense, input tax, and round-off", () => {
     sgstPaise: 450n,
     igstPaise: 0n,
     roundOffPaise: 1n,
+    tdsPaise: 0n,
   };
 
   expect(

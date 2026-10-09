@@ -1,6 +1,6 @@
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
 import { formatBusinessDate, formatBusinessDay } from "@accly/api/lib/business-date";
-import { openingItemLabel } from "@accly/api/lib/opening-item-label";
+import { documentLabel } from "@accly/api/lib/document-labels";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
@@ -193,7 +193,7 @@ const OPENING_ITEM_COLUMNS = [
   col.accessor("type", {
     header: "Type",
     meta: { className: "hidden w-36 xl:table-cell" },
-    cell: ({ row: { original } }) => openingItemLabel(original.type, original.exposureSide),
+    cell: ({ row: { original } }) => documentLabel(original.type, original.exposureSide),
   }),
   col.accessor("reference", {
     header: "Reference",
@@ -263,7 +263,7 @@ function OpeningItemCard({
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
         <span className="min-w-0 truncate">
-          {openingItemLabel(item.type, item.exposureSide)} · {item.reference}
+          {documentLabel(item.type, item.exposureSide)} · {item.reference}
         </span>
         <span className="tabular-nums">{formatBusinessDay(item.documentDate)}</span>
       </div>

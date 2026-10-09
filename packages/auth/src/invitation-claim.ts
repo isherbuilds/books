@@ -69,22 +69,39 @@ export function invitationClaim() {
           const [invited] = await db
             .select({
               email: invitation.email,
+              role: invitation.role,
+              status: invitation.status,
+              expiresAt: invitation.expiresAt,
               organizationName: organization.name,
               organizationSlug: organization.slug,
               accountExists: sql<boolean>`${user.id} is not null`,
+              expired: sql<boolean>`${invitation.expiresAt} <= now()`,
             })
             .from(invitation)
             .innerJoin(organization, eq(organization.id, invitation.organizationId))
             .leftJoin(user, eq(user.email, invitation.email))
-            .where(and(eq(invitation.id, ctx.query.invitationId), live));
+            .where(eq(invitation.id, ctx.query.invitationId));
 
-          if (!invited) {
+          if (invited?.status === "pending" && invited.expired) {
+            throw new APIError("GONE", {
+              code: "INVITATION_EXPIRED",
+              message: "This invitation has expired. Ask the sender for a new link.",
+            });
+          }
+
+          if (!invited || invited.status !== "pending") {
             throw new APIError("NOT_FOUND", {
               message: "This invitation is no longer available. Ask the sender for a new link.",
             });
           }
 
-          return ctx.json(invited);
+          return ctx.json({
+            email: invited.email,
+            role: invited.role,
+            organizationName: invited.organizationName,
+            organizationSlug: invited.organizationSlug,
+            accountExists: invited.accountExists,
+          });
         },
       ),
     },

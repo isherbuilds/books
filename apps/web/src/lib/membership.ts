@@ -7,6 +7,13 @@ import { orpc } from "@/lib/orpc";
 
 export type Membership = Awaited<ReturnType<RouterClient<AppRouter>["member"]["me"]>>;
 
+/** The Join picker and org switcher use the same alphabetical order. */
+export function sortOrganizations<T extends { name: string; id: string }>(organizations: T[]): T[] {
+  return [...organizations].sort(
+    (a: T, b: T) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+  );
+}
+
 // The `/$orgSlug` loader runs on every navigation. Roles change rarely and the server
 // re-checks each call, so five minutes of reuse spares most navigations a blocking
 // round trip; member and settings edits invalidate it at once.

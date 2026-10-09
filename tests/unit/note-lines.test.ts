@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { computeNoteLines } from "@accly/api/core/note-lines";
+import { computeNoteLines, noteTdsReversal } from "@accly/api/core/note-lines";
 
 test("full credit takes exact remaining tax while partial lines round together", () => {
   expect(
@@ -59,4 +59,32 @@ test("taxable and component over-credits return the offending index", () => {
   expect(
     computeNoteLines({ intraState: true, lines: [valid, { source, prior, amountPaise: 50n }] }),
   ).toEqual({ ok: false, index: 1 });
+});
+
+test("TDS reversal rounds the running total, so small notes never strand the remainder", () => {
+  const bill = { billTdsPaise: 100n, billTaxablePaise: 900n };
+
+  const first = noteTdsReversal({
+    ...bill,
+    priorTaxablePaise: 0n,
+    priorReversedPaise: 0n,
+    taxablePaise: 440n,
+  });
+
+  const second = noteTdsReversal({
+    ...bill,
+    priorTaxablePaise: 440n,
+    priorReversedPaise: first,
+    taxablePaise: 440n,
+  });
+
+  expect([first, second]).toEqual([0n, 100n]);
+  expect(
+    noteTdsReversal({
+      ...bill,
+      priorTaxablePaise: 880n,
+      priorReversedPaise: first + second,
+      taxablePaise: 20n,
+    }),
+  ).toBe(0n);
 });

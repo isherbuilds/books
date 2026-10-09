@@ -26,6 +26,7 @@ import { useDesktop, useVirtualRows } from "@/components/data-table/use-virtual-
 import { LinkField } from "@/components/link-field";
 import { ErrorNote, ListFooter, PageBody, PageHeader, ReportBody } from "@/components/page";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
+import { ReportProvenance } from "@/components/report-provenance";
 import { accountListOptions, deriveAccountRows } from "@/lib/accounts";
 import { presetRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
@@ -237,7 +238,8 @@ function AccountLedgerBody({
   });
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
+      <ReportProvenance header={summary.data.header} />
       <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-muted-foreground">
         <span>
           Opening{" "}
@@ -330,6 +332,11 @@ function AccountLedgerBody({
                         title={line.narration}
                       >
                         {line.narration}
+                        {line.contraAccountName ? (
+                          <span className="block text-muted-foreground">
+                            {line.contraAccountName}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell
                         className="max-w-48 truncate whitespace-nowrap"
@@ -411,6 +418,9 @@ function AccountLedgerBody({
                       )}
                     </div>
                     {line.narration ? <p className="break-words">{line.narration}</p> : null}
+                    {line.contraAccountName ? (
+                      <p className="break-words text-muted-foreground">{line.contraAccountName}</p>
+                    ) : null}
                     {line.partyName ? (
                       <p className="break-words text-muted-foreground">{line.partyName}</p>
                     ) : null}
@@ -444,6 +454,6 @@ function AccountLedgerBody({
         ) : null}
         <ListFooter query={report} shown={lines.length} />
       </div>
-    </>
+    </div>
   );
 }

@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audit Edit Trail</title>
+    <style>
+      /* Tokens copied from packages/ui/src/styles/globals.css (:root and .dark). */
+      :root {
+        --paper: #f8f9f9;
+        --surface: #ffffff;
+        --sunken: #eff1f0;
+        --ink: #0e1219;
+        --ink-muted: #565d62;
+        --on-ink: #f9faf9;
+        --line: #e3e5e4;
+        --line-2: #d2d6d6;
+        --line-strong: #7f858c;
+        --stamp: #6c2a9e;
+        --stamp-soft: #f3ecf7;
+        --danger: #b42318;
+        --danger-soft: #fde8e5;
+        --radius: 0.625rem;
+        --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+        --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --paper: #0b0b0a;
+          --surface: #151513;
+          --sunken: #1d1d1b;
+          --ink: #f4f3ee;
+          --ink-muted: #a5a49c;
+          --on-ink: #0b0b0a;
+          --line: #2a2a27;
+          --line-2: #3a3a36;
+          --line-strong: #6e6d66;
+          --stamp: #cba3ee;
+          --stamp-soft: #241a2c;
+          --danger: #ff8b7b;
+          --danger-soft: #2e1512;
+        }
+      }
+      :root[data-theme="dark"] {
+        --paper: #0b0b0a;
+        --surface: #151513;
+        --sunken: #1d1d1b;
+        --ink: #f4f3ee;
+        --ink-muted: #a5a49c;
+        --on-ink: #0b0b0a;
+        --line: #2a2a27;
+        --line-2: #3a3a36;
+        --line-strong: #6e6d66;
+        --stamp: #cba3ee;
+        --stamp-soft: #241a2c;
+        --danger: #ff8b7b;
+        --danger-soft: #2e1512;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 14px/1.5 var(--font-sans);
+      }
+      a {
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      /* Review shell: neutral, product tokens only. */
+      .top {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .top h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .top p {
+        margin: 0;
+        color: var(--ink-muted);
+      }
+      .status {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--stamp);
+        background: var(--stamp-soft);
+        padding: 2px 8px;
+        border-radius: 6px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        min-height: calc(100vh - 50px);
+      }
+      .canvas {
+        padding: 16px;
+        min-width: 0;
+      }
+      .panel {
+        border-left: 1px solid var(--line);
+        background: var(--surface);
+        padding: 16px;
+        overflow: auto;
+        max-height: calc(100vh - 50px);
+        position: sticky;
+        top: 0;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line-2);
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 13px;
+        border: 0;
+        background: none;
+        color: var(--ink-muted);
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed="true"],
+      .seg button[aria-selected="true"] {
+        background: var(--line);
+        color: var(--ink);
+      }
+      .bar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .label {
+        font-size: 12px;
+        color: var(--ink-muted);
+      }
+
+      /* App anatomy, rebuilt from app-shell.tsx, page.tsx and settings/audit.tsx. */
+      .app {
+        display: flex;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        height: 640px;
+      }
+      .rail {
+        width: 220px;
+        flex-shrink: 0;
+        padding: 12px 8px;
+        font-size: 14px;
+      }
+      .org {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px 12px;
+        font-weight: 500;
+      }
+      .mark {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: var(--sunken);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .find {
+        border-radius: 8px;
+        background: var(--sunken);
+        color: var(--ink-muted);
+        padding: 6px 8px;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+      .group {
+        color: var(--ink-muted);
+        font-size: 13px;
+        padding: 10px 8px 2px;
+      }
+      .nav {
+        padding: 5px 8px;
+        border-radius: 8px;
+      }
+      .nav.on {
+        background: var(--line);
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        margin: 8px 8px 8px 0;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .head {
+        height: 48px;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 13px 16px 0 24px;
+        border-bottom: 1px solid var(--line);
+        flex-shrink: 0;
+      }
+      .head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
+      .head p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--ink-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+        min-height: 40px;
+        align-items: stretch;
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+      .tabs span {
+        padding: 9px 8px;
+        color: var(--ink-muted);
+        white-space: nowrap;
+        font-size: 14px;
+      }
+      .tabs span.on {
+        color: var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+      .body {
+        padding: 16px;
+        overflow: auto;
+        flex: 1;
+      }
+      .tools {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      .search {
+        width: 352px;
+        max-width: 100%;
+        height: 32px;
+        border: 1px solid var(--line-2);
+        border-radius: 8px;
+        padding: 6px 10px;
+        color: var(--ink-muted);
+        font-size: 13px;
+      }
+      .period {
+        height: 32px;
+        border: 1px solid var(--line-2);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .box {
+        background: var(--sunken);
+        border-radius: 12px;
+        padding: 4px;
+      }
+      .box > h3 {
+        margin: 0;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--ink-muted);
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 896px;
+        table-layout: fixed;
+        font-size: 13px;
+      }
+      th {
+        text-align: left;
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+        color: var(--ink-muted);
+        overflow-wrap: anywhere;
+      }
+      td.what {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      td .n {
+        color: var(--ink);
+      }
+      td .n,
+      td .e {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      tr.new td {
+        background: color-mix(in srgb, var(--stamp-soft) 55%, transparent);
+      }
+      .chg {
+        color: var(--ink);
+      }
+      .callout {
+        display: inline-grid;
+        place-items: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        margin-left: 6px;
+        border-radius: 10px;
+        background: var(--stamp);
+        color: var(--on-ink);
+        font-size: 11px;
+        font-weight: 600;
+        text-decoration: none;
+        vertical-align: 1px;
+      }
+
+      /* Phone frame: the real page at 390px. The table keeps its 896px minimum and scrolls. */
+      .phone {
+        width: 390px;
+        max-width: 100%;
+        height: 760px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        overflow: hidden;
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+        margin: 0 auto;
+      }
+      .phone .head {
+        padding-left: 16px;
+      }
+      .phone .search {
+        width: 100%;
+      }
+      [data-view="phone"] .desktop-only,
+      [data-view="desktop"] .phone-only {
+        display: none;
+      }
+
+      /* Spec panel */
+      .panel h2 {
+        font-size: 15px;
+        margin: 18px 0 6px;
+      }
+      .panel h3 {
+        font-size: 13px;
+        margin: 14px 0 4px;
+        color: var(--ink-muted);
+        font-weight: 500;
+      }
+      .panel p,
+      .panel li {
+        margin: 4px 0;
+      }
+      .panel ul {
+        padding-left: 18px;
+        margin: 4px 0;
+      }
+      .req {
+        padding: 6px 8px;
+        border-radius: 8px;
+        margin: 4px -8px;
+      }
+      .req:target {
+        background: var(--stamp-soft);
+      }
+      .req b {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--stamp);
+      }
+      [role="tabpanel"][hidden] {
+        display: none;
+      }
+      .note {
+        font-size: 12px;
+        color: var(--ink-muted);
+      }
+
+      /* The mock page needs the app's real content width, so the spec panel moves
+   below it until the window can hold both. */
+      @media (max-width: 1700px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          position: static;
+          max-height: none;
+        }
+      }
+      @media (max-width: 1100px) {
+        .rail {
+          display: none;
+        }
+        .main {
+          margin: 8px;
+        }
+      }
+      @media print {
+        .layout {
+          display: block;
+        }
+        .panel {
+          max-height: none;
+          position: static;
+          border: 0;
+        }
+        [role="tabpanel"][hidden] {
+          display: block;
+        }
+        .phone-only,
+        .desktop-only {
+          display: block !important;
+        }
+        .seg {
+          display: none;
+        }
+        .app {
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <h1>Accly Books · Edit trail</h1>
+      <p>Who changed a party, account, item or setting, and from what.</p>
+      <span class="status">Ready</span>
+    </header>
+
+    <div class="layout">
+      <main class="canvas" id="canvas" data-view="desktop">
+        <div class="bar">
+          <div class="seg" role="group" aria-label="Width">
+            <button type="button" aria-pressed="true" data-view-btn="desktop">Desktop</button>
+            <button type="button" aria-pressed="false" data-view-btn="phone">Phone</button>
+          </div>
+          <div class="seg" role="group" aria-label="Theme">
+            <button type="button" aria-pressed="false" data-theme-btn="light">Light</button>
+            <button type="button" aria-pressed="false" data-theme-btn="dark">Dark</button>
+          </div>
+          <span class="label"
+            >A1 — Settings → Audit. Highlighted rows are new; the rest render as today (R5).</span
+          >
+        </div>
+
+        <!-- Desktop composition -->
+        <div class="app desktop-only" id="a1">
+          <nav class="rail" aria-label="Mock sidebar">
+            <div class="org"><span class="mark">CC</span>Cedar Components</div>
+            <div class="find">Find anything…</div>
+            <div class="nav">Home</div>
+            <div class="group">Sales</div>
+            <div class="nav">Invoices</div>
+            <div class="nav">Receipts</div>
+            <div class="nav">Credit notes</div>
+            <div class="group">Purchases</div>
+            <div class="nav">Bills</div>
+            <div class="nav">Payments</div>
+            <div class="nav">Debit notes</div>
+            <div class="group">Masters</div>
+            <div class="nav">Parties</div>
+            <div class="nav">Items</div>
+            <div class="group">Accounting</div>
+            <div class="nav">Banking</div>
+            <div class="nav">Journals</div>
+            <div class="nav on">Settings</div>
+          </nav>
+          <section class="main">
+            <div class="head">
+              <h2>Audit</h2>
+              <p>
+                Changes to your books, records and settings, and every permission denial<a
+                  class="callout"
+                  href="#r4"
+                  >R4</a
+                >
+              </p>
+            </div>
+            <div class="tabs">
+              <span>Organization</span><span>Members</span><span>Opening balance</span
+              ><span>Import</span><span>Locks</span><span>Files</span><span class="on">Audit</span>
+            </div>
+            <div class="body">
+              <div class="tools">
+                <div class="search">Person or document number</div>
+                <div class="period">All time</div>
+              </div>
+              <div class="box">
+                <h3>Entries</h3>
+                <div class="card">
+                  <table>
+                    <colgroup>
+                      <col style="width: 192px" />
+                      <col style="width: 144px" />
+                      <col style="width: 176px" />
+                      <col style="width: 192px" />
+                      <col />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>What happened</th>
+                        <th>On</th>
+                        <th>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:41 pm</td>
+                        <td>
+                          <div class="n">Ada Lovelace</div>
+                          <div class="e">owner@example.com</div>
+                        </td>
+                        <td class="what">Party changed<a class="callout" href="#r2">R2</a></td>
+                        <td>Meridian Traders<a class="callout" href="#r3">R3</a></td>
+                        <td class="chg">
+                          GSTIN: 27AABCM1234F1Z5 → 27AABCM1234F2Z4 · City: Pune → Mumbai<a
+                            class="callout"
+                            href="#r1"
+                            >R1</a
+                          >
+                        </td>
+                      </tr>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:38 pm</td>
+                        <td>
+                          <div class="n">Ravi Iyer</div>
+                          <div class="e">accountant@example.com</div>
+                        </td>
+                        <td class="what">Item changed</td>
+                        <td>Brass hinge, 4 in</td>
+                        <td class="chg">
+                          Unit price: 1250.00 → 1400.00 · Income account: Sales → Sales — Hardware<a
+                            class="callout"
+                            href="#r10"
+                            >R10</a
+                          >
+                        </td>
+                      </tr>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:35 pm</td>
+                        <td>
+                          <div class="n">Ada Lovelace</div>
+                          <div class="e">owner@example.com</div>
+                        </td>
+                        <td class="what">Settings updated</td>
+                        <td>Cedar Components Pvt Ltd</td>
+                        <td class="chg">
+                          Invoice prefix: INV → SI · Address: — → Plot 14, MIDC Bhosari
+                        </td>
+                      </tr>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:31 pm</td>
+                        <td>
+                          <div class="n">Ravi Iyer</div>
+                          <div class="e">accountant@example.com</div>
+                        </td>
+                        <td class="what">Account changed</td>
+                        <td>Sales — Services</td>
+                        <td class="chg">Name: Sales → Sales — Services</td>
+                      </tr>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:29 pm</td>
+                        <td>
+                          <div class="n">Ravi Iyer</div>
+                          <div class="e">accountant@example.com</div>
+                        </td>
+                        <td class="what">Party created<a class="callout" href="#r6">R6</a></td>
+                        <td>Shreeji Packaging &amp; Allied Industries LLP</td>
+                        <td>—</td>
+                      </tr>
+                      <tr class="new">
+                        <td>9 Oct 2026, 5:28 pm</td>
+                        <td>
+                          <div class="n">Ada Lovelace</div>
+                          <div class="e">owner@example.com</div>
+                        </td>
+                        <td class="what">
+                          Item status changed<a class="callout" href="#r8a">R8a</a>
+                        </td>
+                        <td>Steel bracket (old stock)</td>
+                        <td>Active: No</td>
+                      </tr>
+                      <tr>
+                        <td>9 Oct 2026, 5:27 pm</td>
+                        <td>
+                          <div class="n">Ada Lovelace</div>
+                          <div class="e">owner@example.com</div>
+                        </td>
+                        <td class="what">Debit note posted</td>
+                        <td>DN26-27/2</td>
+                        <td>Number: DN26-27/2</td>
+                      </tr>
+                      <tr>
+                        <td>9 Oct 2026, 9:06 am</td>
+                        <td>
+                          <div class="n">Ada Lovelace</div>
+                          <div class="e">owner@example.com</div>
+                        </td>
+                        <td class="what">Journal posted</td>
+                        <td>JV26-27/1</td>
+                        <td>Lines: 2 · Amount: 3000.00 · Number: JV26-27/1</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Phone composition: same page at 390px; the table scrolls sideways, as today. -->
+        <div class="phone phone-only">
+          <div class="head"><h2>Audit</h2></div>
+          <div class="tabs">
+            <span>Organization</span><span>Members</span><span>Opening balance</span
+            ><span>Import</span><span>Locks</span><span>Files</span><span class="on">Audit</span>
+          </div>
+          <div class="body">
+            <div class="tools">
+              <div class="search">Person or document number</div>
+              <div class="period">All time</div>
+            </div>
+            <div class="box">
+              <h3>Entries</h3>
+              <div class="card">
+                <table>
+                  <colgroup>
+                    <col style="width: 192px" />
+                    <col style="width: 144px" />
+                    <col style="width: 176px" />
+                    <col style="width: 192px" />
+                    <col />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Who</th>
+                      <th>What happened</th>
+                      <th>On</th>
+                      <th>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="new">
+                      <td>9 Oct 2026, 5:41 pm</td>
+                      <td>
+                        <div class="n">Ada Lovelace</div>
+                        <div class="e">owner@example.com</div>
+                      </td>
+                      <td class="what">Party changed</td>
+                      <td>Meridian Traders</td>
+                      <td class="chg">
+                        GSTIN: 27AABCM1234F1Z5 → 27AABCM1234F2Z4 · City: Pune → Mumbai
+                      </td>
+                    </tr>
+                    <tr class="new">
+                      <td>9 Oct 2026, 5:38 pm</td>
+                      <td>
+                        <div class="n">Ravi Iyer</div>
+                        <div class="e">accountant@example.com</div>
+                      </td>
+                      <td class="what">Item changed</td>
+                      <td>Brass hinge, 4 in</td>
+                      <td class="chg">Unit price: 1250.00 → 1400.00</td>
+                    </tr>
+                    <tr>
+                      <td>9 Oct 2026, 5:27 pm</td>
+                      <td>
+                        <div class="n">Ada Lovelace</div>
+                        <div class="e">owner@example.com</div>
+                      </td>
+                      <td class="what">Debit note posted</td>
+                      <td>DN26-27/2</td>
+                      <td>Number: DN26-27/2</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="note">
+              Scroll the table sideways to read Details. This is today's phone layout; the spec does
+              not change it.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      <aside class="panel">
+        <div class="seg" role="tablist" aria-label="Spec sections">
+          <button
+            type="button"
+            role="tab"
+            id="t-product"
+            aria-selected="true"
+            aria-controls="p-product"
+          >
+            Product
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="t-tech"
+            aria-selected="false"
+            aria-controls="p-tech"
+            tabindex="-1"
+          >
+            Tech
+          </button>
+        </div>
+        <p class="note">
+          Source of truth: <a href="./audit-edit-trail.md">audit-edit-trail.md</a>. Status: ready.
+        </p>
+
+        <section role="tabpanel" id="p-product" aria-labelledby="t-product">
+          <h2>Problem</h2>
+          <p>
+            The audit log does not show who created or changed a party, account or item, or what a
+            settings save changed. A CA cannot answer "who changed this GSTIN, and from what?"
+          </p>
+          <h2>Solution</h2>
+          <p>
+            Every create, edit and status change of these records writes a row. An edit stores each
+            changed field with its old and new value. Audit stays fire-and-forget (owner decision,
+            2026-10-09).
+          </p>
+
+          <h3>A1 — Audit page</h3>
+          <div class="req" id="r1">
+            <b>R1</b> Details lists each changed field as <code>Label: old → new</code>, in form
+            order, joined by " · ". Empty shows "—"; true/false show Yes/No; lists join with ", ".
+          </div>
+          <div class="req" id="r2">
+            <b>R2</b> New labels: Party created/changed, Account created/changed, Item
+            created/changed, Item status changed, Payment method created, Payment method status
+            changed.
+          </div>
+          <div class="req" id="r3"><b>R3</b> On shows the record's name; search finds it.</div>
+          <div class="req" id="r4">
+            <b>R4</b> Description: "Changes to your books, records and settings, and every
+            permission denial".
+          </div>
+          <div class="req" id="r5"><b>R5</b> Older rows render as today.</div>
+
+          <h3>F1 — Writing the trail</h3>
+          <div class="req" id="r6">
+            <b>R6</b> party, account, item and paymentMethod <code>create</code> write
+            <code>{ name }</code> after commit.
+          </div>
+          <div class="req" id="r7">
+            <b>R7</b> party, account, item and settings <code>update</code> write
+            <code>{ name, changes }</code>; <code>changes</code> holds only differing fields as
+            <code>[old, new]</code>.
+          </div>
+          <div class="req" id="r8"><b>R8</b> A save with no change writes no row.</div>
+          <div class="req" id="r8a">
+            <b>R8a</b> item and paymentMethod <code>setActive</code> follow
+            <code>account.setActive</code>: <code>{ name, active }</code> on every success; account
+            adds <code>name</code>.
+          </div>
+          <div class="req" id="r9"><b>R9</b> A refused write writes no success row.</div>
+          <div class="req" id="r10">
+            <b>R10</b> Money as <code>formatDecimal</code> under keys without "Paise"; references as
+            names; never ids, <code>normalizedName</code> or <code>updatedAt</code>.
+          </div>
+          <div class="req" id="r11">
+            <b>R11</b> Fire-and-forget: a failed audit write never fails or slows the edit.
+          </div>
+
+          <h3>Out of scope</h3>
+          <ul>
+            <li>Audit writes inside transactions.</li>
+            <li>Editing posted documents in place; Amend stays.</li>
+            <li>Per-row audit for imported records; draft edits.</li>
+            <li>Renaming Amend to Edit.</li>
+          </ul>
+          <h3>Deferred</h3>
+          <ul>
+            <li>Retention and backups: already an Operations go-live gate.</li>
+            <li>CA review of the MCA wording before any compliance claim.</li>
+          </ul>
+          <h3>Open questions</h3>
+          <p>None.</p>
+        </section>
+
+        <section role="tabpanel" id="p-tech" aria-labelledby="t-tech" hidden>
+          <h2>Contracts</h2>
+          <ul>
+            <li>
+              <code>auditChanges(before, after)</code> in
+              <code>packages/db/src/audit.ts</code> returns
+              <code>Record&lt;string, [AuditValue, AuditValue]&gt; | undefined</code>.
+              <code>AuditValue</code> is exported from <code>packages/db/src/schema/audit.ts</code>.
+            </li>
+            <li>
+              Updates read the old row in their transaction under the same edit-token predicate; a
+              missing row is the existing stale refusal.
+            </li>
+            <li><code>setActive</code> takes the name from its update's <code>returning</code>.</li>
+            <li>
+              <code>item.update</code> records income account names read in the same transaction.
+            </li>
+            <li>
+              <code>describeMeta</code> renders <code>meta.changes</code>; labels add PAN, PIN and
+              HSN/SAC.
+            </li>
+            <li>No schema change. <code>docs/architecture.md</code> lists the new events.</li>
+          </ul>
+          <h2>Test seams</h2>
+          <ul>
+            <li>
+              <code>tests/integration/account.test.ts</code>: a rename writes
+              <code>changes: { name }</code> only.
+            </li>
+            <li>Same file: a stale update writes no row.</li>
+            <li>Audit page checked in the running app.</li>
+          </ul>
+          <h2>Slices</h2>
+          <h3>Slice 1 — Account trail, end to end (proof)</h3>
+          <p>
+            Owns <code>db/src/audit.ts</code>, <code>routers/account.ts</code>,
+            <code>settings/audit.tsx</code>, <code>account.test.ts</code>. Verify:
+            <code>bun run test</code>, <code>bun run check-types</code>, <code>bunx oxlint</code>,
+            Audit page at 1440/390 px in both themes.
+          </p>
+          <h3>Slice 2 — Parties, items, payment methods, settings</h3>
+          <p>
+            Depends on Slice 1. Owns <code>routers/party.ts</code>, <code>item.ts</code>,
+            <code>payment-method.ts</code>, <code>settings.ts</code>,
+            <code>account.ts</code> (setActive), labels in <code>audit.tsx</code>,
+            <code>docs/architecture.md</code>. Same checks.
+          </p>
+        </section>
+      </aside>
+    </div>
+
+    <script>
+      (() => {
+        const canvas = document.getElementById("canvas");
+        document.querySelectorAll("[data-view-btn]").forEach((button) => {
+          button.addEventListener("click", () => {
+            canvas.dataset.view = button.dataset.viewBtn;
+            document
+              .querySelectorAll("[data-view-btn]")
+              .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+          });
+        });
+        document.querySelectorAll("[data-theme-btn]").forEach((button) => {
+          button.addEventListener("click", () => {
+            document.documentElement.dataset.theme = button.dataset.themeBtn;
+            document
+              .querySelectorAll("[data-theme-btn]")
+              .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+          });
+        });
+        const tabs = [...document.querySelectorAll('[role="tab"]')];
+        const select = (tab) => {
+          tabs.forEach((t) => {
+            const on = t === tab;
+            t.setAttribute("aria-selected", String(on));
+            t.tabIndex = on ? 0 : -1;
+            document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+          });
+        };
+        tabs.forEach((tab, i) => {
+          tab.addEventListener("click", () => select(tab));
+          tab.addEventListener("keydown", (event) => {
+            if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+            const next =
+              tabs[(i + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+            select(next);
+            next.focus();
+          });
+        });
+        // A callout opens the Product tab so its requirement is visible.
+        document
+          .querySelectorAll(".callout")
+          .forEach((link) => link.addEventListener("click", () => select(tabs[0])));
+      })();
+    </script>
+  </body>
+</html>
