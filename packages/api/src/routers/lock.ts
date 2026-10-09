@@ -8,7 +8,7 @@ import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
 import { dateOnly, reason } from "../lib/schemas";
@@ -131,60 +131,78 @@ export const lockRouter = {
     { lock: ["grantException"] },
     orgInput.extend({
       userId: z.string().min(1),
-      expiresAt: z.iso.datetime({ precision: 3 }),
+      days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
       reason,
     }),
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
-    // A grant only widens what is allowed, so it needs no mutex: a posting refused a
-    // moment earlier was rightly refused. The clock is the database's, as everywhere
-    // an exception is judged.
-    const [membership] = await db
-      .select({
-        expiresAhead: sql<boolean>`${input.expiresAt}::timestamptz > statement_timestamp()`,
-      })
-      .from(member)
-      .where(and(eq(member.organizationId, scope.orgId), eq(member.userId, input.userId)))
-      .limit(1);
+    // Serialize grants with revokes and other grants before testing for an active
+    // exception; a second concurrent grant must not create a second live bypass.
+    const row = await db.transaction(async (tx) => {
+      await orgSettings(scope.orgId, tx, "update");
 
-    if (!membership) {
-      throw badRequest("MEMBER_INVALID", "Choose a member of this organization.");
-    }
+      const [grantee] = await tx
+        .select({ name: user.name, email: user.email })
+        .from(member)
+        .innerJoin(user, eq(user.id, member.userId))
+        .where(and(eq(member.organizationId, scope.orgId), eq(member.userId, input.userId)))
+        .limit(1);
 
-    if (!membership.expiresAhead) {
-      throw badRequest("EXPIRY_PAST", "Choose an expiry in the future.");
-    }
+      if (!grantee) {
+        throw badRequest("MEMBER_INVALID", "Choose a member of this organization.");
+      }
 
-    const id = Bun.randomUUIDv7();
+      const [active] = await tx
+        .select({ id: lockExceptions.id })
+        .from(lockExceptions)
+        .where(
+          and(
+            eq(lockExceptions.orgId, scope.orgId),
+            eq(lockExceptions.userId, input.userId),
+            isNull(lockExceptions.revokedAt),
+            gt(lockExceptions.expiresAt, sql`statement_timestamp()`),
+          ),
+        )
+        .limit(1);
 
-    const [row] = await db
-      .insert(lockExceptions)
-      .values({
-        id,
-        orgId: scope.orgId,
-        userId: input.userId,
-        expiresAt: new Date(input.expiresAt),
-        reason: input.reason,
-        grantedBy: scope.userId,
-      })
-      .returning({ id: lockExceptions.id });
+      if (active) {
+        throw badRequest("EXCEPTION_ACTIVE", "This member already has an active exception.");
+      }
 
-    if (!row) throw impossible("lock exception insert returned no row");
+      const [inserted] = await tx
+        .insert(lockExceptions)
+        .values({
+          id: Bun.randomUUIDv7(),
+          orgId: scope.orgId,
+          userId: input.userId,
+          expiresAt: sql`statement_timestamp() + make_interval(days => ${input.days})`,
+          reason: input.reason,
+          grantedBy: scope.userId,
+          createdAt: sql`statement_timestamp()`,
+        })
+        .returning({ id: lockExceptions.id });
+
+      if (!inserted) throw impossible("lock exception insert returned no row");
+
+      return { ...inserted, grantee };
+    });
 
     audit({
       action: "lock.grantException",
       actorId: scope.userId,
       orgId: scope.orgId,
-      target: `lockException:${id}`,
+      target: `lockException:${row.id}`,
       meta: {
         userId: input.userId,
-        expiresAt: input.expiresAt,
+        name: row.grantee.name,
+        email: row.grantee.email,
+        days: input.days,
         reason: input.reason,
       },
     });
 
-    return row;
+    return { id: row.id };
   }),
 
   revokeException: orgProcedure(
@@ -193,7 +211,7 @@ export const lockRouter = {
   ).handler(async ({ context, input }) => {
     const { scope } = context;
 
-    const row = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       await orgSettings(scope.orgId, tx, "update");
 
       const [revoked] = await tx
@@ -215,18 +233,12 @@ export const lockRouter = {
       if (!revoked) {
         throw new ORPCError("CONFLICT", { message: "This exception is not active." });
       }
-
-      return revoked;
     });
-
     audit({
       action: "lock.revokeException",
       actorId: scope.userId,
       orgId: scope.orgId,
       target: `lockException:${input.exceptionId}`,
-      meta: { exceptionId: input.exceptionId },
     });
-
-    return row;
   }),
 };

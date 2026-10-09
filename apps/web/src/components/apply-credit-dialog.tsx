@@ -1,5 +1,5 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
-import { openingItemLabel } from "@accly/api/lib/opening-item-label";
+import { DOCUMENT_TYPE_LABELS } from "@accly/api/lib/document-labels";
 import { AmountInput } from "@/components/amount-input";
 import {
   enteredPaise,
@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useTabCommit } from "@/hooks/use-tab-commit";
 import { WaveLoader } from "@/components/wave-loader";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
@@ -62,19 +63,6 @@ type LoadMoreRow = { loadMore: true };
 const LOAD_MORE: LoadMoreRow = { loadMore: true };
 
 const isLoadMore = (option: Credit | LoadMoreRow): option is LoadMoreRow => "loadMore" in option;
-
-const creditLabel = (type: Credit["type"]) =>
-  type === "creditNote"
-    ? "Credit Note"
-    : type === "debitNote"
-      ? "Debit Note"
-      : type === "payment"
-        ? "Payment"
-        : type === "openingCredit"
-          ? openingItemLabel(type, null)
-          : type === "journal"
-            ? "Journal"
-            : "Receipt";
 
 const applyCreditSchema = z.object({
   amount: positiveAmount,
@@ -98,6 +86,7 @@ export function ApplyCreditDialog({
   const creditInputId = useId();
   const [chosen, setChosen] = useState<Credit | null>(null);
   const [text, setText] = useState("");
+  const [creditOpen, setCreditOpen] = useState(false);
   const form = useZodForm(applyCreditSchema, { defaultValues: { amount: "" } });
   const amount = useWatch({ control: form.control, name: "amount" });
 
@@ -172,6 +161,13 @@ export function ApplyCreditDialog({
     requestAnimationFrame(() => form.setFocus("amount", { shouldSelect: true }));
   };
 
+  const tabCommit = useTabCommit<Credit | LoadMoreRow>({
+    open: creditOpen,
+    needle,
+    isCommittable: (option) => !isLoadMore(option),
+    commit: pick,
+  });
+
   const submit = form.handleSubmit(({ amount: entered }) => {
     if (!selected) return;
 
@@ -242,6 +238,13 @@ export function ApplyCreditDialog({
                         autoHighlight
                         loopFocus
                         value={selected}
+                        open={creditOpen}
+                        onOpenChange={(next) => {
+                          setCreditOpen(next);
+
+                          if (!next) tabCommit.clearHighlight();
+                        }}
+                        onItemHighlighted={tabCommit.onItemHighlighted}
                         inputValue={text}
                         onInputValueChange={(next, details) => {
                           if (details.reason === "escape-key" && chosen) {
@@ -262,6 +265,7 @@ export function ApplyCreditDialog({
                           autoComplete="off"
                           maxLength={100}
                           onBlur={() => setText(selected?.number ?? "")}
+                          onKeyDown={tabCommit.onKeyDown}
                         />
                         <ComboboxContent>
                           <ComboboxEmpty>
@@ -298,7 +302,7 @@ export function ApplyCreditDialog({
                                     <CheckIcon className="invisible size-3.5 shrink-0 group-data-[selected]/combobox-item:visible" />
                                     <span className="min-w-0 truncate">
                                       <span className="text-muted-foreground">
-                                        {creditLabel(option.type)} ·{" "}
+                                        {DOCUMENT_TYPE_LABELS[option.type]} ·{" "}
                                       </span>
                                       <span className="font-mono">{option.number}</span>
                                       {option.reference ? (

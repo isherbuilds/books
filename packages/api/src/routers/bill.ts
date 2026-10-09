@@ -6,26 +6,25 @@ import { taxRates } from "@accly/db/schema/tax-rates";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { tdsSections } from "@accly/db/schema/tds-sections";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
 import {
-  documentTotals,
   organizationSnapshot,
   partySnapshot,
   postDocument,
+  priorNoteLines,
   purchaseLegs,
-  taxTotals,
   writeDraft,
   type PostDocumentInput,
   type PostDocumentLine,
 } from "../core/documents";
-import { formatDecimal } from "../core/money";
-import { computeTds, type BillPosting } from "../core/posting";
-import { computeTax } from "../core/tax";
-import { effectiveOn, ratesByCode } from "../core/tax-schedule";
+import { computeTds, formatDecimal } from "../core/money";
+import type { BillPosting } from "../core/posting";
+import { computeTax, documentTotals, taxTotals } from "../core/tax";
+import { effectiveTdsSections, ratesByCode } from "../core/tax-schedule";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest } from "../lib/conflict";
@@ -48,6 +47,8 @@ import {
   amendClaim,
   cancelDocument,
   claimListFields,
+  claimFilterFields,
+  claimTotals,
   discardDraft,
   documentSettlement,
   listClaims,
@@ -117,28 +118,12 @@ async function resolveBill(
     throw badRequest("TAX_CODE_INVALID", "Choose a GST rate effective on the bill date.");
   }
 
-  const sectionQuery = input.tdsSectionId
-    ? executor
-        .select({ id: tdsSections.id, rateBasisPoints: tdsSections.rateBasisPoints })
-        .from(tdsSections)
-        .where(
-          and(
-            eq(tdsSections.orgId, scope.orgId),
-            eq(tdsSections.id, input.tdsSectionId),
-            effectiveOn(tdsSections, documentDate),
-          ),
-        )
-        .limit(1)
-    : null;
-
-  // Posting holds the section's dates and rate stable until `tds_deductions` commits.
-  const [section] = sectionQuery
-    ? await (executor === db ? sectionQuery : sectionQuery.for("share"))
-    : [];
-
-  if (input.tdsSectionId && !section) {
-    throw badRequest("TDS_SECTION_INVALID", "Choose a TDS section effective on this date.");
-  }
+  const [section] = await effectiveTdsSections(
+    executor,
+    scope.orgId,
+    input.tdsSectionId ? [input.tdsSectionId] : [],
+    documentDate,
+  );
 
   if (section && !party.pan) {
     throw badRequest("TDS_PAN_REQUIRED", "Record the party's PAN before deducting TDS.");
@@ -301,6 +286,7 @@ export const billRouter = {
                 documentDate: documents.documentDate,
                 dueDate: documents.dueDate,
                 placeOfSupplyStateCode: documents.placeOfSupplyStateCode,
+                intraState: documents.intraState,
                 reference: documents.reference,
                 narration: documents.narration,
                 amendedFromId: documents.amendedFromId,
@@ -349,6 +335,16 @@ export const billRouter = {
               )
               .orderBy(asc(documentLines.position));
 
+            const priorLines = await priorNoteLines(
+              tx,
+              orgId,
+              bill.id,
+              "debitNote",
+              lines.map((line) => line.id),
+            );
+
+            const used = new Map(priorLines.map((line) => [line.sourceLineId, line]));
+
             const allocations = await allocationsOf(tx, orgId, input.billId, "target");
 
             const [tds] = await tx
@@ -368,7 +364,45 @@ export const billRouter = {
               )
               .limit(1);
 
-            return { bill, lines, allocations, tds: tds ?? null };
+            const [reversed] = tds
+              ? await tx
+                  .select({
+                    amountPaise:
+                      sql<bigint>`coalesce(sum(${tdsDeductions.amountPaise}), 0)::bigint`.mapWith(
+                        BigInt,
+                      ),
+                  })
+                  .from(tdsDeductions)
+                  .innerJoin(
+                    documents,
+                    and(eq(documents.orgId, orgId), eq(documents.id, tdsDeductions.documentId)),
+                  )
+                  .where(
+                    and(
+                      eq(tdsDeductions.orgId, orgId),
+                      eq(documents.againstDocumentId, bill.id),
+                      eq(documents.type, "debitNote"),
+                      eq(documents.state, "posted"),
+                    ),
+                  )
+              : [];
+
+            return {
+              bill,
+              lines: lines.map((line) => ({
+                ...line,
+                remainingPaise: line.amountPaise - (used.get(line.id)?.amountPaise ?? 0n),
+                priorNote: used.get(line.id) ?? null,
+              })),
+              allocations,
+              tds: tds
+                ? {
+                    ...tds,
+                    priorTaxablePaise: priorLines.reduce((sum, line) => sum + line.amountPaise, 0n),
+                    priorReversedPaise: reversed!.amountPaise,
+                  }
+                : null,
+            };
           },
           { isolationLevel: "repeatable read", accessMode: "read only" },
         ),
@@ -393,6 +427,11 @@ export const billRouter = {
     { bill: ["read"] },
     orgInput.extend(claimListFields).superRefine(orderedPeriod),
   ).handler(({ context, input }) => listClaims(context.scope.orgId, "bill", input)),
+
+  totals: orgProcedure(
+    { bill: ["read"] },
+    orgInput.extend(claimFilterFields).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => claimTotals(context.scope.orgId, "bill", input)),
 
   cancel: orgProcedure({ bill: ["cancel"] }, orgInput.extend({ billId: z.uuid(), reason })).handler(
     ({ context, input }) => cancelDocument(context.scope, ["bill"], input.billId, input.reason),

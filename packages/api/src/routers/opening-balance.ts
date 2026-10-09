@@ -4,7 +4,7 @@ import { parties } from "@accly/db/schema/parties";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
 import { postedNumber } from "../core/documents";
 import { entryLinesOf, postEntryLines } from "../core/entry-lines";
@@ -14,7 +14,14 @@ import { assertNoOpeningBalance, reverseOpening } from "../core/opening-items";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
-import { balancedEntryLines, dateOnly, entryLineFields, pageLimit, reason } from "../lib/schemas";
+import {
+  balancedEntryLines,
+  dateOnly,
+  documentCursor,
+  entryLineFields,
+  pageLimit,
+  reason,
+} from "../lib/schemas";
 import { dateCursor, cancelDocument, orgSettings, pageOf } from "../lib/settlements";
 
 const lineSchema = z.strictObject(entryLineFields);
@@ -115,7 +122,7 @@ export const openingBalanceRouter = {
   // each with what remains open.
   items: orgProcedure(
     { openingBalance: ["read"] },
-    orgInput.extend({ cursor: z.uuid().optional(), limit: pageLimit }),
+    orgInput.extend({ cursor: documentCursor.optional(), limit: pageLimit }),
   ).handler(async ({ context, input }) => {
     const { orgId } = context.scope;
     const claim = settlementPaise(orgId, "target", null).balancePaise;
@@ -146,7 +153,7 @@ export const openingBalanceRouter = {
           eq(documents.orgId, orgId),
           inArray(documents.type, ["openingClaim", "openingCredit"]),
           eq(documents.state, "posted"),
-          dateCursor(orgId, input.cursor, "after"),
+          dateCursor(input.cursor, "after"),
         ),
       )
       .orderBy(asc(documents.documentDate), asc(documents.id))

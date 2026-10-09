@@ -1,3 +1,5 @@
+import { computeNoteLines, noteTdsReversal } from "@accly/api/core/note-lines";
+import { documentTotals } from "@accly/api/core/tax";
 import {
   enteredPaise,
   formatDecimal,
@@ -25,6 +27,7 @@ import { z } from "zod";
 
 import { AmountInput } from "@/components/amount-input";
 import { DocumentForm, FieldArrayError, LineGrid, PostBar } from "@/components/document-form";
+import { DocumentTotals } from "@/components/invoice-summary";
 import { NoteSourceLink } from "@/components/note-columns";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
@@ -57,6 +60,10 @@ export function NoteForm({
         .date()
         .refine((date) => date >= source.documentDate, "Date must be on or after the source date"),
       narration: reason,
+      reference: z
+        .string()
+        .trim()
+        .max(40, "Supplier credit note number must be 40 characters or fewer"),
       amounts: z.array(z.object({ amount: z.string() })).length(source.lines.length),
     })
     .superRefine((values, context) => {
@@ -65,11 +72,11 @@ export function NoteForm({
         if (!amount) return;
         const paise = enteredPaise(amount);
 
-        if (!isPositiveMoney(paise) || paise > source.lines[index]!.amountPaise) {
+        if (!isPositiveMoney(paise) || paise > source.lines[index]!.remainingPaise) {
           context.addIssue({
             code: "custom",
             path: ["amounts", index, "amount"],
-            message: "Enter an amount within this line's taxable value",
+            message: "Enter an amount up to what is left to return on this line",
           });
         } else selected = true;
       });
@@ -85,12 +92,70 @@ export function NoteForm({
   const form = useZodForm(schema, {
     defaultValues: {
       documentDate: today < source.documentDate ? source.documentDate : today,
+      reference: "",
       narration: "",
       amounts: source.lines.map(() => ({ amount: "" })),
     },
   });
 
   const amounts = useWatch({ control: form.control, name: "amounts" });
+
+  const selected =
+    amounts?.flatMap((row, index) => {
+      const amountPaise = enteredPaise(row.amount);
+
+      if (!isPositiveMoney(amountPaise)) return [];
+      const line = source.lines[index]!;
+      const prior = line.priorNote;
+
+      return [
+        {
+          source: {
+            taxablePaise: line.amountPaise,
+            cgstPaise: line.cgstPaise,
+            sgstPaise: line.sgstPaise,
+            igstPaise: line.igstPaise,
+            rateBasisPoints: line.rateBasisPoints,
+          },
+          prior: {
+            taxablePaise: prior?.amountPaise ?? ZERO_MONEY,
+            cgstPaise: prior?.cgstPaise ?? ZERO_MONEY,
+            sgstPaise: prior?.sgstPaise ?? ZERO_MONEY,
+            igstPaise: prior?.igstPaise ?? ZERO_MONEY,
+          },
+          amountPaise,
+        },
+      ];
+    }) ?? [];
+
+  const calculated =
+    source.intraState === null
+      ? null
+      : computeNoteLines({ intraState: source.intraState, lines: selected });
+
+  const preview =
+    calculated?.ok && selected.length
+      ? documentTotals(
+          calculated.lines.map((line) => ({ ...line, amountPaise: line.taxablePaise })),
+        )
+      : null;
+
+  const billTds = "tds" in source ? source.tds : null;
+
+  const tdsPreview =
+    type === "debitNote" &&
+    billTds &&
+    preview &&
+    billTds.priorTaxablePaise + preview.taxablePaise <= billTds.basePaise
+      ? noteTdsReversal({
+          billTdsPaise: billTds.amountPaise,
+          billTaxablePaise: billTds.basePaise,
+          priorTaxablePaise: billTds.priorTaxablePaise,
+          priorReversedPaise: billTds.priorReversedPaise,
+          taxablePaise: preview.taxablePaise,
+        })
+      : null;
+
   const invalidate = () => invalidateSettlementState(queryClient, orgSlug);
 
   const post = useMutation(
@@ -129,12 +194,15 @@ export function NoteForm({
     );
 
     if (lines.length === 0) return;
+
+    // The server keeps a reference only on a debit note: the supplier's credit note number.
     post.mutate({
       orgSlug,
       type,
       againstDocumentId: source.id,
       documentDate: values.documentDate,
       narration: values.narration,
+      reference: values.reference,
       lines,
     });
   });
@@ -175,11 +243,25 @@ export function NoteForm({
             </FormItem>
           )}
         />
+        {type === "debitNote" ? (
+          <RegisteredFormField
+            name="reference"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Supplier credit note number (optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} maxLength={40} autoComplete="off" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : null}
         <LineGrid title="Source lines">
           <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_repeat(3,minmax(0,0.8fr))_minmax(0,1fr)] gap-2 border-b border-border pb-2 text-muted-foreground md:grid">
             <span>Description</span>
             <span>HSN/SAC</span>
-            <span className="text-right">Taxable</span>
+            <span className="text-right">Left to return</span>
             <span className="text-right">Rate</span>
             <span className="text-right">Tax</span>
             <span className="text-right">Amount</span>
@@ -192,8 +274,8 @@ export function NoteForm({
               <span className="break-words">{line.description}</span>
               <span className="font-mono text-muted-foreground">{line.hsnSac ?? "—"}</span>
               <span className="tabular-nums md:text-right">
-                <span className="text-muted-foreground md:hidden">Taxable </span>
-                {formatMoney(line.amountPaise)}
+                <span className="text-muted-foreground md:hidden">Left to return </span>
+                {formatMoney(line.remainingPaise)}
               </span>
               <span className="tabular-nums md:text-right">
                 <span className="text-muted-foreground md:hidden">Rate </span>
@@ -216,10 +298,11 @@ export function NoteForm({
                         type="button"
                         size="xs"
                         variant="outline"
+                        disabled={!isPositiveMoney(line.remainingPaise)}
                         onClick={() =>
                           form.setValue(
                             `amounts.${index}.amount`,
-                            formatDecimal(line.amountPaise),
+                            formatDecimal(line.remainingPaise),
                             { shouldDirty: true, shouldValidate: true },
                           )
                         }
@@ -235,15 +318,22 @@ export function NoteForm({
           ))}
           <FieldArrayError control={form.control} name="amounts" />
         </LineGrid>
-        <p className="text-muted-foreground">
-          Tax and round-off are calculated on posting. Selected taxable:{" "}
-          <span className="tabular-nums text-foreground">
-            {formatMoney(
-              amounts?.reduce((sum, row) => sum + enteredPaise(row.amount), ZERO_MONEY) ??
-                ZERO_MONEY,
-            )}
-          </span>
-        </p>
+        {preview ? (
+          <section aria-label="Estimated note totals" className="grid gap-2">
+            <h3 className="text-muted-foreground">Estimated totals</h3>
+            <DocumentTotals document={{ ...preview, totals: preview, discountPaise: ZERO_MONEY }} />
+          </section>
+        ) : null}
+        {tdsPreview !== null && preview ? (
+          <p className="text-muted-foreground">
+            Lowers what you owe this supplier by{" "}
+            <span className="tabular-nums text-foreground">
+              {formatMoney(preview.totalPaise - tdsPreview)}
+            </span>
+            : the note&apos;s {formatMoney(preview.totalPaise)} less {formatMoney(tdsPreview)} TDS
+            you had kept back.
+          </p>
+        ) : null}
         <RegisteredFormField
           name="narration"
           render={({ field }) => (

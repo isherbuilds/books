@@ -1,6 +1,6 @@
 import pg from "pg";
 
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import { runMigrations } from "@accly/db/migrate";
 
 export async function resetTestDatabase(): Promise<void> {

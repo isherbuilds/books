@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { ErrorNote, ListEmpty, PageBody, PageHeader, ReportBody } from "@/components/page";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
+import { ReportProvenance } from "@/components/report-provenance";
 import { presetRange } from "@/lib/date-presets";
 import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
@@ -103,7 +104,7 @@ function TrialBalanceRoute() {
           </div>
         </div>
         {!valid ? <ErrorNote title="The end date must not be before the start date." /> : null}
-        <div className="min-h-24 shrink-0 overflow-hidden rounded-lg border border-border bg-card">
+        <div className="min-h-24 shrink-0">
           {valid ? (
             <ReportBody
               resetKey={JSON.stringify([orgSlug, shownPeriod.from, shownPeriod.to])}
@@ -133,125 +134,132 @@ function TrialBalanceBody({
   const rows = report.data.rows;
   const totals = report.data.totals;
 
-  return rows.length === 0 ? (
-    <ListEmpty>No account activity in this period.</ListEmpty>
-  ) : (
-    <>
-      <div className="hidden md:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Opening</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
-              <TableHead className="text-right">Closing</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+  return (
+    <div className="flex flex-col gap-4">
+      <ReportProvenance header={report.data.header} />
+      {rows.length === 0 ? (
+        <ListEmpty>No account activity in this period.</ListEmpty>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-lg border border-border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead className="text-right">Opening</TableHead>
+                  <TableHead className="text-right">Debit</TableHead>
+                  <TableHead className="text-right">Credit</TableHead>
+                  <TableHead className="text-right">Closing</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.accountId}>
+                    <TableCell className="font-mono">{row.code}</TableCell>
+                    <TableCell className="min-w-48">
+                      <Link
+                        to="/$orgSlug/reports/account-ledger"
+                        params={{ orgSlug }}
+                        search={{ accountId: row.accountId, ...period }}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        {row.name}
+                      </Link>
+                      {!row.active ? (
+                        <span className="text-muted-foreground"> · Inactive</span>
+                      ) : null}
+                      {row.parentName ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {row.parentName}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="w-balance text-right whitespace-nowrap">
+                      {formatSideBalance(row.openingDebitPaise, row.openingCreditPaise)}
+                    </TableCell>
+                    <TableCell className="w-money text-right whitespace-nowrap">
+                      {formatMoney(row.debitPaise)}
+                    </TableCell>
+                    <TableCell className="w-money text-right whitespace-nowrap">
+                      {formatMoney(row.creditPaise)}
+                    </TableCell>
+                    <TableCell className="w-balance text-right whitespace-nowrap">
+                      {formatSideBalance(row.closingDebitPaise, row.closingCreditPaise)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {totals ? (
+                  <TableRow className="border-t-2 border-foreground font-medium">
+                    <TableCell />
+                    <TableCell>Total</TableCell>
+                    <TableCell className="w-balance text-right whitespace-nowrap tabular-nums">
+                      <span className="block">{formatMoney(totals.openingDebitPaise)} Dr</span>
+                      <span className="block">{formatMoney(totals.openingCreditPaise)} Cr</span>
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {formatMoney(totals.debitPaise)}
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {formatMoney(totals.creditPaise)}
+                    </TableCell>
+                    <TableCell className="w-balance text-right whitespace-nowrap tabular-nums">
+                      <span className="block">{formatMoney(totals.closingDebitPaise)} Dr</span>
+                      <span className="block">{formatMoney(totals.closingCreditPaise)} Cr</span>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="divide-y overflow-hidden rounded-lg border border-border bg-card md:hidden">
             {rows.map((row) => (
-              <TableRow key={row.accountId}>
-                <TableCell className="font-mono">{row.code}</TableCell>
-                <TableCell className="min-w-48">
+              <div key={row.accountId} className="flex flex-col gap-1 px-3 py-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-muted-foreground">{row.code}</span>
                   <Link
                     to="/$orgSlug/reports/account-ledger"
                     params={{ orgSlug }}
                     search={{ accountId: row.accountId, ...period }}
-                    className="capitalize underline-offset-4 hover:underline"
+                    className="font-medium underline-offset-4 hover:underline"
                   >
                     {row.name}
                   </Link>
-                  {!row.active ? <span className="text-muted-foreground"> · Inactive</span> : null}
-                  {row.parentName ? (
-                    <span className="block text-xs text-muted-foreground capitalize">
-                      {row.parentName}
-                    </span>
-                  ) : null}
-                </TableCell>
-                <TableCell className="w-balance text-right whitespace-nowrap">
-                  {formatSideBalance(row.openingDebitPaise, row.openingCreditPaise)}
-                </TableCell>
-                <TableCell className="w-money text-right whitespace-nowrap">
-                  {formatMoney(row.debitPaise)}
-                </TableCell>
-                <TableCell className="w-money text-right whitespace-nowrap">
-                  {formatMoney(row.creditPaise)}
-                </TableCell>
-                <TableCell className="w-balance text-right whitespace-nowrap">
-                  {formatSideBalance(row.closingDebitPaise, row.closingCreditPaise)}
-                </TableCell>
-              </TableRow>
+                  {!row.active ? <span className="text-muted-foreground">Inactive</span> : null}
+                </div>
+                {row.parentName ? (
+                  <span className="text-muted-foreground">{row.parentName}</span>
+                ) : null}
+                <div className="flex justify-between gap-3 tabular-nums">
+                  <span className="text-muted-foreground">
+                    Opening {formatSideBalance(row.openingDebitPaise, row.openingCreditPaise)}
+                  </span>
+                  <span>
+                    Closing {formatSideBalance(row.closingDebitPaise, row.closingCreditPaise)}
+                  </span>
+                </div>
+              </div>
             ))}
             {totals ? (
-              <TableRow className="border-t-2 border-foreground font-medium">
-                <TableCell />
-                <TableCell>Total</TableCell>
-                <TableCell className="w-balance text-right whitespace-nowrap tabular-nums">
-                  <span className="block">{formatMoney(totals.openingDebitPaise)} Dr</span>
-                  <span className="block">{formatMoney(totals.openingCreditPaise)} Cr</span>
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  {formatMoney(totals.debitPaise)}
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  {formatMoney(totals.creditPaise)}
-                </TableCell>
-                <TableCell className="w-balance text-right whitespace-nowrap tabular-nums">
-                  <span className="block">{formatMoney(totals.closingDebitPaise)} Dr</span>
-                  <span className="block">{formatMoney(totals.closingCreditPaise)} Cr</span>
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="divide-y md:hidden">
-        {rows.map((row) => (
-          <div key={row.accountId} className="flex flex-col gap-1 px-3 py-2">
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono text-muted-foreground">{row.code}</span>
-              <Link
-                to="/$orgSlug/reports/account-ledger"
-                params={{ orgSlug }}
-                search={{ accountId: row.accountId, ...period }}
-                className="font-medium capitalize underline-offset-4 hover:underline"
-              >
-                {row.name}
-              </Link>
-              {!row.active ? <span className="text-muted-foreground">Inactive</span> : null}
-            </div>
-            {row.parentName ? (
-              <span className="text-muted-foreground capitalize">{row.parentName}</span>
-            ) : null}
-            <div className="flex justify-between gap-3 tabular-nums">
-              <span className="text-muted-foreground">
-                Opening {formatSideBalance(row.openingDebitPaise, row.openingCreditPaise)}
-              </span>
-              <span>
-                Closing {formatSideBalance(row.closingDebitPaise, row.closingCreditPaise)}
-              </span>
-            </div>
-          </div>
-        ))}
-        {totals ? (
-          <div className="flex flex-col gap-1 border-t-2 border-foreground px-3 py-2 font-medium tabular-nums">
-            <span>Total</span>
-            <div className="flex flex-wrap justify-between gap-3">
-              <div className="text-right whitespace-nowrap">
-                <span className="block">Opening</span>
-                <span className="block">{formatMoney(totals.openingDebitPaise)} Dr</span>
-                <span className="block">{formatMoney(totals.openingCreditPaise)} Cr</span>
+              <div className="flex flex-col gap-1 border-t-2 border-foreground px-3 py-2 font-medium tabular-nums">
+                <span>Total</span>
+                <div className="flex flex-wrap justify-between gap-3">
+                  <div className="text-right whitespace-nowrap">
+                    <span className="block">Opening</span>
+                    <span className="block">{formatMoney(totals.openingDebitPaise)} Dr</span>
+                    <span className="block">{formatMoney(totals.openingCreditPaise)} Cr</span>
+                  </div>
+                  <div className="text-right whitespace-nowrap">
+                    <span className="block">Closing</span>
+                    <span className="block">{formatMoney(totals.closingDebitPaise)} Dr</span>
+                    <span className="block">{formatMoney(totals.closingCreditPaise)} Cr</span>
+                  </div>
+                </div>
               </div>
-              <div className="text-right whitespace-nowrap">
-                <span className="block">Closing</span>
-                <span className="block">{formatMoney(totals.closingDebitPaise)} Dr</span>
-                <span className="block">{formatMoney(totals.closingCreditPaise)} Cr</span>
-              </div>
-            </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
-    </>
+        </>
+      )}
+    </div>
   );
 }

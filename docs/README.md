@@ -151,8 +151,8 @@ Check UI items in the running app on desktop and mobile, in both themes.
   address, register Load more after a draft date change, at desktop and 390 px;
   Members Re-invite replacing the expired row; customer-refund Payment cancel
   from its Sheet; supplier-refund Receipt refusal refreshing its credits.
-  Simplification pass (2026-10-09): register totals are one line, posted-only,
-  with unpaid on Invoices/Bills and no Notes totals or polling; lock history
+  Simplification pass (2026-10-09): register totals are one line of posted count and
+  sum (no unpaid figure: it cost 3.7 s at 1 M documents), no Notes totals or polling; lock history
   removed (Audit covers it); exception expiry is 1/7/30 days for posting members
   only; Audit has one search box; "Period not closed" removed; plain-language
   labels. Types, lint and the full suite pass. Not run in a browser: the

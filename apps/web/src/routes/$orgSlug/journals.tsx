@@ -67,7 +67,7 @@ function JournalsRoute() {
   const setFilters = (patch: Partial<JournalFilters>) =>
     navigate({ replace: true, search: (previous) => ({ ...previous, ...patch }) });
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   const clear = () => {
     focusSearch(field, { empty: true });

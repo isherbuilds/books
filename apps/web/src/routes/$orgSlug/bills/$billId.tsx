@@ -1,5 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
@@ -26,7 +27,7 @@ import { toast } from "sonner";
 import { AllocationsSection } from "@/components/allocations-section";
 import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
 import { BillTdsRows } from "@/components/bill-form";
-import { ReasonDialog } from "@/components/confirm-dialog";
+import { ReasonDialog, useConfirm } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { ClaimStatus, struck } from "@/components/document-columns";
 import { DocumentTotals } from "@/components/invoice-summary";
@@ -56,6 +57,7 @@ function BillSheetRoute() {
   const bill = useSuspenseQuery(billDetailOptions(orgSlug, billId)).data;
 
   const [activeOverlay, setActiveOverlay] = useState<"cancel" | "amend" | "apply" | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const canEdit = useCan(orgSlug, { bill: ["create"] }) && bill.state === "draft";
 
@@ -85,7 +87,7 @@ function BillSheetRoute() {
   const canNote = useCan(orgSlug, { note: ["post"] }) && bill.state === "posted";
 
   const close = () =>
-    void navigate({
+    navigate({
       to: "/$orgSlug/bills",
       params: { orgSlug },
       search: (previous) => previous,
@@ -125,9 +127,10 @@ function BillSheetRoute() {
   const discard = useMutation(
     orpc.bill.discardDraft.mutationOptions({
       onSuccess: async () => {
+        await close();
+        queryClient.removeQueries({ queryKey: billDetailOptions(orgSlug, billId).queryKey });
         await invalidateDrafts();
         toast.success("Draft discarded");
-        close();
       },
       onError: refused("Could not discard the draft", close, invalidateDrafts),
     }),
@@ -158,7 +161,7 @@ function BillSheetRoute() {
       title={bill.number ?? "Draft"}
       status={<ClaimStatus claim={bill} />}
       description={bill.partyName ?? "No party"}
-      onClose={close}
+      onClose={() => void close()}
       onStep={(next) =>
         void navigate({
           to: "/$orgSlug/bills/$billId",
@@ -193,8 +196,10 @@ function BillSheetRoute() {
           <DetailRow label="Due date">
             {bill.dueDate ? formatBusinessDate(bill.dueDate) : null}
           </DetailRow>
-          <DetailRow label="Place of supply" mono>
-            {bill.placeOfSupplyStateCode}
+          <DetailRow label="Place of supply">
+            {bill.placeOfSupplyStateCode
+              ? `${INDIAN_STATES[bill.placeOfSupplyStateCode]} (${bill.placeOfSupplyStateCode})`
+              : null}
           </DetailRow>
           {bill.amendedFromId ? (
             <DetailRow label="Amended from">
@@ -224,8 +229,8 @@ function BillSheetRoute() {
         <Separator />
         <section className="grid grid-cols-1 gap-2">
           <h3 className="text-muted-foreground">Lines</h3>
-          <div className="hidden md:block">
-            <Table>
+          <div className="hidden min-w-0 md:block">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   <TableHead>Description</TableHead>
@@ -315,7 +320,13 @@ function BillSheetRoute() {
                 variant="destructive"
                 disabled={discard.isPending}
                 onClick={() =>
-                  discard.mutate({ orgSlug, draft: { id: bill.id, version: bill.version } })
+                  confirm({
+                    title: "Discard bill draft?",
+                    description: "This draft will be deleted and cannot be recovered.",
+                    confirmLabel: "Discard draft",
+                    run: () =>
+                      discard.mutate({ orgSlug, draft: { id: bill.id, version: bill.version } }),
+                  })
                 }
               >
                 {discard.isPending ? "Discarding…" : "Discard draft"}
@@ -378,6 +389,7 @@ function BillSheetRoute() {
           ) : null}
         </SheetFooter>
       ) : null}
+      {confirmDialog}
       <ReasonDialog
         open={activeOverlay === "cancel"}
         pending={cancel.isPending}

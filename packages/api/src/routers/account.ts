@@ -8,7 +8,7 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import {
   accountCreateFields,
   accountNameTaken,

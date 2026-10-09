@@ -40,3 +40,28 @@ export function computeTax(args: { intraState: boolean; lines: readonly TaxLineI
 export function roundOff(grossPaise: bigint): bigint {
   return divideHalfUp(grossPaise, 100n) * 100n - grossPaise;
 }
+
+type TaxedLine = { amountPaise: bigint; cgstPaise: bigint; sgstPaise: bigint; igstPaise: bigint };
+
+/** A document's taxable value and GST components, from its lines. */
+export function taxTotals(lines: readonly TaxedLine[]) {
+  const totals = { taxablePaise: 0n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n };
+
+  for (const line of lines) {
+    totals.taxablePaise += line.amountPaise;
+    totals.cgstPaise += line.cgstPaise;
+    totals.sgstPaise += line.sgstPaise;
+    totals.igstPaise += line.igstPaise;
+  }
+
+  return totals;
+}
+
+/** A document's taxable value, taxes, round-off and total, from its lines. */
+export function documentTotals(lines: readonly TaxedLine[]) {
+  const taxes = taxTotals(lines);
+  const grossPaise = taxes.taxablePaise + taxes.cgstPaise + taxes.sgstPaise + taxes.igstPaise;
+  const roundOffPaise = roundOff(grossPaise);
+
+  return { ...taxes, roundOffPaise, totalPaise: grossPaise + roundOffPaise };
+}

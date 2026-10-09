@@ -1,7 +1,7 @@
 import { db } from "@accly/db";
+import { audit } from "@accly/db/audit";
 import { z } from "zod";
 
-import { audit } from "../audit";
 import { applyAllocations, reverseAllocation } from "../core/allocations";
 import { formatDecimal } from "../core/money";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -42,6 +42,8 @@ export const allocationRouter = {
       meta: {
         allocationIds: rows.map((row) => row.id),
         targetDocumentId: input.targetDocumentId,
+        sourceNumber: rows[0]!.sourceNumber,
+        targetNumber: rows[0]!.targetNumber,
         amount: formatDecimal(input.amount),
       },
     });
@@ -70,6 +72,8 @@ export const allocationRouter = {
         reversalId: reversed.id,
         amount: formatDecimal(reversed.amountPaise),
         reason: input.reason,
+        sourceNumber: reversed.sourceNumber,
+        targetNumber: reversed.targetNumber,
       },
     });
 

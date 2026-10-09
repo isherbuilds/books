@@ -28,7 +28,11 @@ import type { PaletteItem } from "@/lib/palette";
 import { focusRowLink } from "@/lib/row-focus";
 import { receiptDetailOptions } from "@/lib/receipts";
 
-const ADJUSTMENT_LABELS = { fee: "Fee", writeOff: "Write-off", tds: "Customer TDS" } as const;
+const ADJUSTMENT_LABELS = {
+  fee: "Fee",
+  writeOff: "Write-off",
+  tds: "TDS deducted by customer",
+} as const;
 
 export const Route = createFileRoute("/$orgSlug/receipts/$receiptId")({
   remountDeps: ({ params }) => ({ receiptId: params.receiptId }),
@@ -65,8 +69,8 @@ function ReceiptSheetRoute() {
 
   const paletteActions: PaletteItem[] = [
     {
-      id: `receipt:${receipt.id}:print`,
-      label: "Print receipt",
+      id: `receipt:${receipt.id}:pdf`,
+      label: "PDF",
       group: "action",
       run: () => window.open(pdfHref, "_blank", "noopener,noreferrer"),
     },
@@ -148,7 +152,9 @@ function ReceiptSheetRoute() {
           <DetailRow label="Date">{formatBusinessDate(receipt.documentDate)}</DetailRow>
           <DetailRow label="Payment method">{receipt.printSnapshot?.paymentMethod}</DetailRow>
           <DetailRow label="Settlement">
-            {receipt.settlementKind && SETTLEMENT_KIND_LABELS[receipt.settlementKind]}
+            {receipt.exposureSide === "payable"
+              ? "Supplier refund"
+              : receipt.settlementKind && SETTLEMENT_KIND_LABELS[receipt.settlementKind]}
           </DetailRow>
           <DetailRow label="Reference" mono>
             {receipt.reference}
@@ -197,7 +203,7 @@ function ReceiptSheetRoute() {
           rel="noreferrer"
           className={buttonVariants({ variant: "outline" })}
         >
-          Print
+          PDF
         </a>
         {canCancel ? (
           <Button type="button" variant="destructive" onClick={() => setCancelOpen(true)}>

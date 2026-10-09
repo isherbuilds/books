@@ -133,6 +133,7 @@ export type AccountLedgerLine = {
   number: string | null;
   narration: string;
   partyName: string | null;
+  contraAccountName: string | null;
   debitPaise: bigint;
   creditPaise: bigint;
   balancePaise: bigint;

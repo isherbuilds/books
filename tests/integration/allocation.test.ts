@@ -3,6 +3,8 @@ import { beforeAll, expect, test } from "bun:test";
 import { businessDate } from "@accly/api/lib/business-date";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { db } from "@accly/db";
+import { drainAuditWrites } from "@accly/db/audit";
+import { auditLog } from "@accly/db/schema/audit";
 import { accounts } from "@accly/db/schema/accounts";
 import { allocations } from "@accly/db/schema/allocations";
 import { items } from "@accly/db/schema/items";
@@ -136,6 +138,7 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   const receipt = await api.receipt.post({
     orgSlug: organization.slug,
     settlementKind: "against",
+    exposureSide: "receivable",
     partyId: party.id,
     amount: "10000.00",
     paymentMethodId: bankTransfer.id,
@@ -281,6 +284,32 @@ test("an against receipt settles invoices, applies and reverses its advance, the
   });
 
   expect(reversed).toMatchObject({ amountPaise: 100_000n });
+
+  await drainAuditWrites();
+
+  const auditRows = await db
+    .select({ action: auditLog.action, meta: auditLog.meta })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.orgId, organization.id),
+        inArray(auditLog.target, [`document:${receipt.id}`, `allocation:${appliedAllocation.id}`]),
+      ),
+    );
+
+  // M17: a removed document still reads by number in the audit log.
+  expect(auditRows.map(({ action }) => action).sort()).toEqual([
+    "allocation.apply",
+    "allocation.reverse",
+  ]);
+
+  for (const { meta } of auditRows) {
+    expect(meta).toMatchObject({
+      sourceNumber: receipt.number,
+      targetNumber: secondInvoice.number,
+    });
+  }
+
   expect(
     (await postingOf(organization.id, appliedAllocation.id, "reverse")).entry.reversesEntryId,
   ).toBe(appliedPost.entry.id);
@@ -570,13 +599,14 @@ test("the credit picker reaches every credit by page and by number", async () =>
   const middle = await postOn("2026-09-02");
   const picker = { orgSlug: organization.slug, partyId: customer.id, side: "receivable" as const };
   const paged: string[] = [];
-  let cursor: string | undefined;
+  let cursor: { documentDate: string; id: string } | undefined;
 
   do {
     const page = await api.party.openCredits({ ...picker, limit: 1, cursor });
 
     paged.push(...page.rows.map(({ id }) => id));
-    cursor = page.hasMore ? page.rows.at(-1)?.id : undefined;
+    const last = page.rows.at(-1);
+    cursor = page.hasMore && last ? { documentDate: last.documentDate, id: last.id } : undefined;
   } while (cursor);
 
   expect(paged).toEqual([oldest.id, middle.id, newest.id]);
@@ -679,6 +709,7 @@ test("an against receipt names what its unallocated remainder is received for", 
   const receipt = {
     orgSlug: organization.slug,
     settlementKind: "against" as const,
+    exposureSide: "receivable" as const,
     partyId: party.id,
     amount: "1000.00",
     paymentMethodId: bankTransfer.id,
@@ -873,7 +904,7 @@ test("an unapplied credit note settles another invoice without an allocation jou
     orgSlug: organization.slug,
     partyId: party.id,
     side: "receivable",
-    type: "creditNote",
+    types: ["creditNote"],
   });
 
   expect(noteCredits.rows).toContainEqual(expect.objectContaining({ id: note.id }));
@@ -980,7 +1011,7 @@ test("an unapplied receivables Journal credit settles an invoice without an allo
         ...claim,
         partyId: party.id,
         side: "receivable",
-        type: "journal",
+        types: ["journal"],
       })
     ).rows,
   ).toContainEqual(
@@ -1007,7 +1038,7 @@ test("an unapplied receivables Journal credit settles an invoice without an allo
         ...claim,
         partyId: party.id,
         side: "receivable",
-        type: "journal",
+        types: ["journal"],
       })
     ).rows.some(({ id }) => id === journal.id),
   ).toBe(false);
@@ -1026,7 +1057,7 @@ test("an unapplied receivables Journal credit settles an invoice without an allo
         ...claim,
         partyId: party.id,
         side: "receivable",
-        type: "journal",
+        types: ["journal"],
       })
     ).rows,
   ).toContainEqual(expect.objectContaining({ id: journal.id, unappliedPaise: 50_000n }));

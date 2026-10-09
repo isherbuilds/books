@@ -8,6 +8,7 @@ import { createIsomorphicFn } from "@tanstack/react-start";
 import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 
 import { createRequestContext, type ORPCContext } from "@accly/api/lib/context";
+import type { DocumentCursor } from "@accly/api/lib/schemas";
 import { appRouter, type AppRouter } from "@accly/api/routers/index";
 
 // Keyed on the request object, which bounds the cache to exactly one request:
@@ -59,10 +60,23 @@ const client = getORPCClient();
 
 export const orpc = createTanstackQueryUtils(client);
 
-// Keyset paging for every list and picker: the next cursor is the last row's id while
-// the server reports more.
+// Keyset paging for id-ordered lists: the next cursor is the last row's id while the
+// server reports more.
 export const keysetPaging = {
   initialPageParam: undefined,
   getNextPageParam: (last: { hasMore: boolean; rows: { id: string }[] }) =>
     last.hasMore ? last.rows.at(-1)?.id : undefined,
+};
+
+// Keyset paging for document registers and pickers, ordered by (document date, id).
+export const datedPaging = {
+  initialPageParam: undefined,
+  getNextPageParam: (last: {
+    hasMore: boolean;
+    rows: { id: string; documentDate: string }[];
+  }): DocumentCursor | undefined => {
+    const row = last.rows.at(-1);
+
+    return last.hasMore && row ? { documentDate: row.documentDate, id: row.id } : undefined;
+  },
 };

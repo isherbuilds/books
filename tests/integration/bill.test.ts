@@ -276,6 +276,47 @@ test("amend copies the bill to a linked draft and releases its supplier number f
   );
 });
 
+test("a register page keeps its place when the cursor draft changes date", async () => {
+  const supplier = await api.party.create({
+    orgSlug: organization.slug,
+    name: "Paging Supplier",
+    roles: ["vendor"],
+    stateCode: "27",
+    pan: "ABCDE1234F",
+  });
+
+  const lines = [
+    { accountId: expense.id, description: "Services", amount: "100.00", itcEligible: false },
+  ];
+
+  const draftOn = (documentDate: string) =>
+    api.bill.saveDraft({ orgSlug: organization.slug, partyId: supplier.id, documentDate, lines });
+
+  const older = await draftOn("2026-09-01");
+  const middle = await draftOn("2026-09-10");
+  const newest = await draftOn("2026-09-20");
+  const register = { orgSlug: organization.slug, partyId: supplier.id };
+
+  const first = await api.bill.list({ ...register, limit: 1 });
+  expect(first.rows.map(({ id }) => id)).toEqual([newest.id]);
+
+  await api.bill.saveDraft({
+    orgSlug: organization.slug,
+    partyId: supplier.id,
+    documentDate: "2026-08-25",
+    draft: newest,
+    lines,
+  });
+
+  const second = await api.bill.list({
+    ...register,
+    limit: 2,
+    cursor: required(first.rows[0], "first page row"),
+  });
+
+  expect(second.rows.map(({ id }) => id)).toEqual([middle.id, older.id]);
+});
+
 test("concurrent bills refuse a repeated supplier number and leave the refused draft editable", async () => {
   const input = {
     orgSlug: organization.slug,

@@ -162,13 +162,31 @@ export function BillForm({
     defaultValues: defaults(today, settings.stateCode, draft),
   });
 
+  const watchedPartyId = useWatch({ control: form.control, name: "partyId" });
   const watchedDate = useWatch({ control: form.control, name: "documentDate" });
+  const tdsSectionId = useWatch({ control: form.control, name: "tdsSectionId" });
   // Date-scoped pickers wait for a complete date rather than query a half-typed one.
   const documentDate = z.iso.date().safeParse(watchedDate).success ? watchedDate : undefined;
 
   const sections = useQuery(
     orpc.payment.tdsSections.queryOptions({
       input: canReadPayment && documentDate ? { orgSlug, date: documentDate } : skipToken,
+    }),
+  );
+
+  const tdsAdvances = useQuery(
+    orpc.party.openCredits.queryOptions({
+      input:
+        canReadPayment && watchedPartyId && tdsSectionId
+          ? {
+              orgSlug,
+              partyId: watchedPartyId,
+              side: "payable",
+              types: ["payment"],
+              tdsOnly: true,
+              limit: 1,
+            }
+          : skipToken,
     }),
   );
 
@@ -387,6 +405,12 @@ export function BillForm({
               </FormItem>
             )}
           />
+        ) : null}
+        {tdsSectionId && tdsAdvances.data?.rows.length ? (
+          <p role="status" className="text-muted-foreground">
+            You already deducted TDS when you paid this supplier an advance. Make sure you
+            don&apos;t deduct it twice.
+          </p>
         ) : null}
         <RegisteredFormField
           name="narration"

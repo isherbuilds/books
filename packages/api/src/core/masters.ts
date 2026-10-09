@@ -170,7 +170,8 @@ export function accountSupplyError(
 }
 
 export function accountCodeAllocator(existing: readonly { type: AccountType; code: string }[]) {
-  const nextByRange = new Map<string, number>();
+  // Codes are unique per organization, across types.
+  const used = new Set(existing.map((row) => row.code));
 
   return (
     type: AccountType,
@@ -181,22 +182,26 @@ export function accountCodeAllocator(existing: readonly { type: AccountType; cod
         ? [Number(parent.code) + 1, Number(parent.code) + 99]
         : ACCOUNT_CODE_RANGES[type];
 
-    const key = `${type}:${start}:${end}`;
-    let next = nextByRange.get(key);
-
-    if (next === undefined) {
-      next =
-        existing.reduce((last, row) => {
+    // A group fills its own range from the first available slot; seeded/system
+    // accounts elsewhere in the type must not push a child out of that range.
+    const first = parent
+      ? start
+      : existing.reduce((last, row) => {
           const code = Number(row.code);
 
           return row.type === type && code >= start && code <= end ? Math.max(last, code) : last;
         }, start - 1) + 1;
+
+    for (let code = first; code <= end; code++) {
+      const text = String(code);
+
+      if (used.has(text)) continue;
+      used.add(text);
+
+      return text;
     }
 
-    if (next > end) return null;
-    nextByRange.set(key, next + 1);
-
-    return String(next);
+    return null;
   };
 }
 
@@ -313,6 +318,7 @@ export type ItemFields = z.output<z.ZodObject<typeof itemFields>>;
 
 export function itemEligibilityError(
   account: { supplyClass: string | null } | undefined,
+  hsnSac: string | undefined,
   taxCode: string | undefined,
   hasRate: boolean,
 ) {
@@ -321,6 +327,9 @@ export function itemEligibilityError(
       code: "INCOME_ACCOUNT_INVALID",
       message: "Choose an active income account that is not a group or system account.",
     };
+
+  if (account.supplyClass === "taxable" && !hsnSac)
+    return { code: "HSN_SAC_REQUIRED", message: "Enter an HSN/SAC code for a taxable item." };
 
   if (account.supplyClass === "taxable" && !taxCode)
     return { code: "TAX_CODE_REQUIRED", message: "Choose a GST rate for a taxable item." };
@@ -356,6 +365,7 @@ export async function itemValues(
 
     const error = itemEligibilityError(
       account,
+      row.hsnSac,
       row.taxCode,
       row.taxCode !== undefined && rates.has(row.taxCode),
     );

@@ -1,6 +1,5 @@
-import type { ReceiptDetail } from "@accly/api/routers/receipt";
-
 import { ReceiptVoucher } from "@/components/pdf/receipt-voucher";
+import type { ReceiptDetail } from "@/lib/receipts";
 import { renderPdf } from "@/lib/pdf-render";
 
 export async function renderReceiptPdf(

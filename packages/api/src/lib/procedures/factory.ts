@@ -6,7 +6,7 @@ import { ORPCError, os } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../../audit";
+import { audit } from "@accly/db/audit";
 import type { OrgMembership, ORPCContext } from "../context";
 
 export type Scope = {

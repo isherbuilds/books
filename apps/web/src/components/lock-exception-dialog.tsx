@@ -1,4 +1,5 @@
 import { reason } from "@accly/api/lib/schemas";
+import { POSTING_GRANTS, authorize, parseRoles } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import {
   Dialog,
@@ -11,16 +12,15 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
   RegisteredFormField,
 } from "@accly/ui/components/form";
-import { Input } from "@accly/ui/components/input";
 import { SubmitButton } from "@accly/ui/components/submit-button";
 import { Textarea } from "@accly/ui/components/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@accly/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientOnly } from "@tanstack/react-router";
 import { useWatch, type FieldPath } from "react-hook-form";
@@ -32,19 +32,18 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateLockState } from "@/lib/domain-invalidation";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, handleWriteError } from "@/lib/orpc-error";
-import { orgLocalToInstant, useOrgDateTime } from "@/lib/org-datetime";
 
-// Expiry is a wall-clock time in the Organization's zone; the server judges
-// "in the future" on its own clock and refuses `EXPIRY_PAST` onto the field.
+const DURATIONS = [1, 7, 30] as const;
+
 type ExceptionFormValues = {
   userId: string;
-  expiresAt: string;
+  days: (typeof DURATIONS)[number];
   reason: string;
 };
 
 const SERVER_FIELDS = {
   MEMBER_INVALID: "userId",
-  EXPIRY_PAST: "expiresAt",
+  EXCEPTION_ACTIVE: "userId",
 } satisfies Record<string, FieldPath<ExceptionFormValues>>;
 
 export function LockExceptionDialog({
@@ -55,34 +54,31 @@ export function LockExceptionDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { timeZone } = useOrgDateTime();
 
   const form = useZodForm(
     z.object({
       userId: z.string().min(1, "Choose a member"),
-      expiresAt: z
-        .string()
-        .min(1, "Choose when the exception expires")
-        .refine((value) => {
-          if (!value) return true;
-
-          try {
-            orgLocalToInstant(value, timeZone);
-
-            return true;
-          } catch (error) {
-            if (error instanceof RangeError) return false;
-
-            throw error;
-          }
-        }, `Choose a local time that exists in ${timeZone}`),
+      days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
       reason,
     }),
-    { defaultValues: { userId: "", expiresAt: "", reason: "" } },
+    { defaultValues: { userId: "", days: 7, reason: "" } },
   );
 
   const userId = useWatch({ control: form.control, name: "userId" });
-  const members = useQuery(orpc.member.options.queryOptions({ input: { orgSlug } }));
+
+  // Only members who can post anything need an exception.
+  const members = useQuery(
+    orpc.member.options.queryOptions({
+      input: { orgSlug },
+      select: (rows) =>
+        rows.filter((member) => {
+          const roles = parseRoles(member.role);
+
+          return POSTING_GRANTS.some((permission) => authorize(roles, permission));
+        }),
+    }),
+  );
+
   const selectedMember = members.data?.find((member) => member.userId === userId) ?? null;
 
   const grant = useMutation(
@@ -92,8 +88,7 @@ export function LockExceptionDialog({
         toast.success("Exception granted");
         onClose();
       },
-      // Retrying could grant a second active exception, and revoking one leaves the
-      // other in force; the list shows whether it went through.
+      // An uncertain result must be checked against the refreshed active list.
       onError: (error) =>
         handleWriteError(error, {
           settle: () => {
@@ -109,13 +104,7 @@ export function LockExceptionDialog({
     }),
   );
 
-  const onSubmit = form.handleSubmit(({ expiresAt, ...values }) =>
-    grant.mutate({
-      orgSlug,
-      ...values,
-      expiresAt: orgLocalToInstant(expiresAt, timeZone).toISOString(),
-    }),
-  );
+  const onSubmit = form.handleSubmit((values) => grant.mutate({ orgSlug, ...values }));
 
   return (
     <ClientOnly fallback={null}>
@@ -124,8 +113,8 @@ export function LockExceptionDialog({
           <DialogHeader>
             <DialogTitle>Grant exception</DialogTitle>
             <DialogDescription>
-              Lets one member post on or before the books lock until the exception expires. The tax
-              lock has no exceptions.
+              For a short time, this member can post or cancel documents dated on or before the
+              books lock. The tax lock always stays closed.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -156,15 +145,31 @@ export function LockExceptionDialog({
                       </FormItem>
                     )}
                   />
-                  <RegisteredFormField
-                    name="expiresAt"
+                  <FormField
+                    control={form.control}
+                    name="days"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Expires</FormLabel>
+                        <FormLabel>For how long</FormLabel>
                         <FormControl>
-                          <Input {...field} type="datetime-local" step={60} required />
+                          <ToggleGroup
+                            value={[String(field.value)]}
+                            onValueChange={(next) => {
+                              const days = DURATIONS.find((option) => String(option) === next[0]);
+
+                              if (days) field.onChange(days);
+                            }}
+                            spacing={1}
+                            variant="outline"
+                            aria-label="For how long"
+                          >
+                            {DURATIONS.map((days) => (
+                              <ToggleGroupItem key={days} value={String(days)}>
+                                {days === 1 ? "1 day" : `${days} days`}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
                         </FormControl>
-                        <FormDescription>Local time in {timeZone}.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

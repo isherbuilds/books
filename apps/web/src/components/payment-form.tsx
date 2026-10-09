@@ -1,5 +1,12 @@
-import { ZERO_MONEY, enteredPaise, isPositiveMoney, parseMoney } from "@accly/api/core/money";
-import { openingItemLabel } from "@accly/api/lib/opening-item-label";
+import {
+  ZERO_MONEY,
+  computeTds,
+  enteredPaise,
+  formatMoney,
+  isPositiveMoney,
+  parseMoney,
+} from "@accly/api/core/money";
+import { documentLabel } from "@accly/api/lib/document-labels";
 import {
   Form,
   FormControl,
@@ -23,6 +30,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
+  ALLOCATION_REFUSALS,
   AllocationTable,
   SettlementAllocationTotals,
   checkAllocations,
@@ -173,6 +181,7 @@ export function PaymentForm({
   const partyId = useWatch({ control: form.control, name: "partyId" });
   const date = useWatch({ control: form.control, name: "documentDate" });
   const tdsSectionId = useWatch({ control: form.control, name: "tdsSectionId" });
+  const amount = useWatch({ control: form.control, name: "amount" });
   const writeOffFields = useFieldArray({ control: form.control, name: "writeOffs" });
 
   // Write-offs and the fee belong to settling bills; leaving that mode drops them.
@@ -199,7 +208,7 @@ export function PaymentForm({
   const credits = useInfiniteQuery(
     openCreditsOptions(
       settlementKind === "against" && exposureSide === "receivable" && partyId
-        ? { orgSlug, partyId, side: "receivable", type: "creditNote" }
+        ? { orgSlug, partyId, side: "receivable", types: ["creditNote"] }
         : skipToken,
     ),
   );
@@ -212,7 +221,7 @@ export function PaymentForm({
           .flatMap((page) => page.rows)
           .map((row) => ({
             ...row,
-            label: row.type === "openingClaim" ? openingItemLabel(row.type, "payable") : "Bill",
+            label: row.type === "receipt" ? "Supplier refund" : documentLabel(row.type, "payable"),
             openPaise: row.outstandingPaise,
           })) ?? [])
       : (credits.data?.pages
@@ -258,15 +267,7 @@ export function PaymentForm({
           refuse: async () => {
             applyOrpcFieldError(form, error, SERVER_FIELDS, "Could not post the payment");
 
-            if (
-              [
-                "ALLOCATION_TARGET_INVALID",
-                "ALLOCATION_SOURCE_INVALID",
-                "ALLOCATION_EXCEEDS_OUTSTANDING",
-                "ALLOCATION_EXCEEDS_SOURCE",
-              ].includes(errorReason(error) ?? "")
-            )
-              await openQuery.refetch();
+            if (ALLOCATION_REFUSALS.includes(errorReason(error) ?? "")) await openQuery.refetch();
           },
         }),
     }),
@@ -570,6 +571,15 @@ export function PaymentForm({
                 {section ? (
                   <p className="text-muted-foreground">
                     Section rate: {(section.rateBasisPoints / 100).toFixed(2)}% · Party PAN required
+                  </p>
+                ) : null}
+                {section && isPositiveMoney(enteredPaise(amount)) ? (
+                  <p className="tabular-nums">
+                    Net paid:{" "}
+                    {formatMoney(
+                      enteredPaise(amount) -
+                        computeTds(enteredPaise(amount), section.rateBasisPoints),
+                    )}
                   </p>
                 ) : null}
               </FormItem>

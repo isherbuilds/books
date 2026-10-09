@@ -94,6 +94,9 @@ export function InvoiceDocument({ data }: { data: PrintableInvoice }) {
             {note.type === "debitNote" && note.against.reference ? (
               <DetailRow label="Supplier invoice">{note.against.reference}</DetailRow>
             ) : null}
+            {note.type === "debitNote" && note.reference ? (
+              <DetailRow label="Supplier credit note">{note.reference}</DetailRow>
+            ) : null}
             <DetailRow label="Reason">{note.narration}</DetailRow>
           </>
         ) : null}

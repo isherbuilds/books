@@ -41,7 +41,8 @@ export function SignInForm({ email, onSuccess }: { email?: string; onSuccess?: (
           <AuthFormFooter>Sign in</AuthFormFooter>
         </FormFieldset>
         <p className="text-center text-sm text-muted-foreground">
-          Locked out? Ask your administrator to reset your password.
+          Locked out? Contact the person who runs your Accly Books installation. Password reset is
+          not available yet.
         </p>
       </form>
     </Form>

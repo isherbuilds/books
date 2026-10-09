@@ -31,7 +31,6 @@ const noteSearch = z.object({
 type NoteFilters = z.infer<typeof noteSearch>;
 
 export const Route = createFileRoute("/$orgSlug/notes")({
-  head: () => ({ meta: [{ title: "Notes · Accly Books" }] }),
   validateSearch: noteSearch,
   beforeLoad: ({ context: { queryClient }, location, params: { orgSlug }, search }) =>
     requirePeriod(queryClient, orgSlug, location, search, "this-year"),
@@ -40,6 +39,13 @@ export const Route = createFileRoute("/$orgSlug/notes")({
     await requireOrgPermission(queryClient, orgSlug, { note: ["read"] });
     await queryClient.infiniteQuery(noteListOptions(orgSlug, deps)).catch(() => {});
   },
+  head: ({ match }) => ({
+    meta: [
+      {
+        title: `${match.search.type ? `${NOTE_TYPE_LABELS[match.search.type]}s` : "Notes"} · Accly Books`,
+      },
+    ],
+  }),
   component: NotesRoute,
 });
 
@@ -65,7 +71,7 @@ function NotesRoute() {
 
   const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -88,7 +94,7 @@ function NotesRoute() {
 
   return (
     <>
-      <PageHeader title="Notes" />
+      <PageHeader title={type ? `${NOTE_TYPE_LABELS[type]}s` : "Notes"} />
       <PageBody>
         <ListToolbar>
           <SearchInput

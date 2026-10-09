@@ -107,6 +107,10 @@ function JournalPage() {
       />
 
       <PageBody>
+        <p className="text-muted-foreground sm:hidden">
+          <span className="font-mono">{journal.number}</span> ·{" "}
+          <span className="tabular-nums">{formatBusinessDate(journal.documentDate)}</span>
+        </p>
         <div className="flex items-center justify-between gap-2">
           <p className={cn("text-2xl font-medium tabular-nums", struck(journal.state))}>
             {formatMoney(journal.totalPaise)}

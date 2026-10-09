@@ -26,6 +26,11 @@ export const dateOnly = z.iso.date();
 
 export const ledgerCursor = z.object({ entryDate: dateOnly, id: z.uuid() });
 
+/** A document keyset position. It carries the date, so a draft that moves does not move the cursor. */
+export const documentCursor = z.object({ documentDate: dateOnly, id: z.uuid() });
+
+export type DocumentCursor = z.infer<typeof documentCursor>;
+
 export const entryLineFields = {
   accountId: z.uuid(),
   side: z.enum(ENTRY_SIDES),
@@ -61,6 +66,7 @@ export function balancedEntryLines(
 
 export const indianStateCode = z
   .string()
+  .min(1, "Choose the place of supply")
   .refine((code) => Object.hasOwn(INDIAN_STATES, code), "Use a valid Indian state code");
 
 // Blank means absent: `deriveFromGstin` requires it only when there is no GSTIN.
@@ -253,26 +259,28 @@ export const optionalHsnSac = z
 // document.
 export const draftToken = z.object({ id: z.uuid(), version: z.number().int().min(1) });
 
+const pageFields = { cursor: documentCursor.optional(), limit: pageLimit };
+
 /** The keyset, period and search fields every document register takes. */
-export const documentPageFields = {
+export const documentPageFields = { q: documentSearchQuery, ...period, ...pageFields };
+
+/** A register's filters with the header party; its totals take exactly these. */
+export const documentFilterFields = {
   q: documentSearchQuery,
   ...period,
-  cursor: z.uuid().optional(),
-  limit: pageLimit,
-};
-
-/** `documentPageFields` plus the header party filter, for registers whose document names a party. */
-export const documentListFields = {
-  ...documentPageFields,
   partyId: z.uuid().optional(),
 };
 
-export const settlementListFields = {
-  ...documentListFields,
+export const documentListFields = { ...documentFilterFields, ...pageFields };
+
+export const settlementFilterFields = {
+  ...documentFilterFields,
   paymentMethodIds: z.array(z.uuid()).min(1).max(20).optional(),
   state: z.enum(["posted", "cancelled"]).optional(),
   settlementKind: z.enum(SETTLEMENT_KINDS).optional(),
 };
+
+export const settlementListFields = { ...settlementFilterFields, ...pageFields };
 
 // Escapes LIKE wildcards so a typed `%` matches a literal percent sign.
 export function likePattern(query: string): string {

@@ -1,6 +1,6 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
 import { formatBalance, formatMoney } from "@accly/api/core/money";
-import { openingItemLabel } from "@accly/api/lib/opening-item-label";
+import { documentLabel } from "@accly/api/lib/document-labels";
 import { authorize } from "@accly/auth/access";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { Badge } from "@accly/ui/components/badge";
@@ -23,24 +23,6 @@ import { partyDocumentLink, partyLedgerSummaryOptions } from "@/lib/parties";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 
 type TransactionRow = Awaited<ReturnType<AppRouterClient["party"]["transactions"]>>["rows"][number];
-
-const TYPE_LABELS: Record<
-  Exclude<TransactionRow["type"], "openingClaim" | "openingCredit">,
-  string
-> = {
-  invoice: "Invoice",
-  bill: "Bill",
-  creditNote: "Credit note",
-  debitNote: "Debit note",
-  receipt: "Receipt",
-  payment: "Payment",
-};
-
-function transactionLabel(row: TransactionRow) {
-  return row.type === "openingClaim" || row.type === "openingCredit"
-    ? openingItemLabel(row.type, row.exposureSide)
-    : TYPE_LABELS[row.type];
-}
 
 const transactionListOptions = (orgSlug: string, partyId: string, range: DateBounds) =>
   orpc.party.transactions.infiniteOptions({
@@ -98,7 +80,7 @@ const TRANSACTION_COLUMNS = [
   col.accessor("type", {
     header: "Type",
     meta: { className: "w-36" },
-    cell: ({ row }) => transactionLabel(row.original),
+    cell: ({ row }) => documentLabel(row.original.type, row.original.exposureSide),
   }),
   col.accessor("reference", {
     header: "Reference",
@@ -126,7 +108,7 @@ function TransactionCard({ row }: { row: TransactionRow }) {
         <span className={cn("tabular-nums", struck(row.state))}>{formatMoney(row.totalPaise)}</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-muted-foreground">
-        <span>{transactionLabel(row)}</span>
+        <span>{documentLabel(row.type, row.exposureSide)}</span>
         <span className="tabular-nums">{formatBusinessDay(row.documentDate)}</span>
       </div>
     </>

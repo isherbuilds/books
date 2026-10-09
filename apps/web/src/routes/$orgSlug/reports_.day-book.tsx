@@ -29,6 +29,7 @@ import {
   ReportBody,
 } from "@/components/page";
 import { ReportPeriod, requireReportPeriod } from "@/components/report-period";
+import { ReportProvenance } from "@/components/report-provenance";
 import { useCan } from "@/lib/membership";
 import { useOrgDateTime } from "@/lib/org-datetime";
 import { orpc } from "@/lib/orpc";
@@ -233,7 +234,8 @@ function DayBookBody({
   });
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
+      <ReportProvenance header={summary.data.header} />
       <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-muted-foreground">
         <span>
           Entries <span className="text-foreground tabular-nums">{summary.data.entryCount}</span>
@@ -449,6 +451,6 @@ function DayBookBody({
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }

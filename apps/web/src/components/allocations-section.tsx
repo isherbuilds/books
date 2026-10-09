@@ -133,51 +133,82 @@ export function AllocationsSection({
       <Separator />
       <section className="grid grid-cols-1 gap-2">
         <h3 className="text-muted-foreground">{title}</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Status</TableHead>
-              {canReverse ? <TableHead className="w-20" /> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {allocations.map((allocation) => (
-              <TableRow key={allocation.id}>
-                <TableCell>
-                  <DocumentLink orgSlug={orgSlug} allocation={allocation} />
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {formatBusinessDay(allocation.entryDate)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatMoney(allocation.amountPaise)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={allocation.reversed ? "neutral" : "settled"}>
-                    {allocation.reversed ? "Reversed" : "Active"}
-                  </Badge>
-                </TableCell>
-                {canReverse ? (
-                  <TableCell className="text-right">
-                    {allocation.reversed ? null : (
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => setReversing(allocation)}
-                      >
-                        Reverse
-                      </Button>
-                    )}
-                  </TableCell>
-                ) : null}
+        <div className="hidden md:block">
+          <Table className="min-w-max">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                {canReverse ? <TableHead className="w-20" /> : null}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {allocations.map((allocation) => (
+                <TableRow key={allocation.id}>
+                  <TableCell>
+                    <DocumentLink orgSlug={orgSlug} allocation={allocation} />
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatBusinessDay(allocation.entryDate)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatMoney(allocation.amountPaise)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={allocation.reversed ? "neutral" : "settled"}>
+                      {allocation.reversed ? "Reversed" : "Active"}
+                    </Badge>
+                  </TableCell>
+                  {canReverse ? (
+                    <TableCell className="text-right">
+                      {allocation.reversed ? null : (
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => setReversing(allocation)}
+                        >
+                          Reverse
+                        </Button>
+                      )}
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="md:hidden">
+          {allocations.map((allocation) => (
+            <div key={allocation.id} className="grid gap-1 border-b px-3 py-2 last:border-b-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <DocumentLink orgSlug={orgSlug} allocation={allocation} />
+                <Badge variant={allocation.reversed ? "neutral" : "settled"}>
+                  {allocation.reversed ? "Reversed" : "Active"}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 tabular-nums">
+                <span className="text-muted-foreground">
+                  {formatBusinessDay(allocation.entryDate)}
+                </span>
+                <span>{formatMoney(allocation.amountPaise)}</span>
+              </div>
+              {canReverse && !allocation.reversed ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="justify-self-end"
+                  onClick={() => setReversing(allocation)}
+                >
+                  Reverse
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Mounted per allocation, so its number never blanks during a close. */}

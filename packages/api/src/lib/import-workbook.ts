@@ -71,7 +71,7 @@ export async function importTemplate(): Promise<File> {
       rows:
         name === "Read me"
           ? [
-              ["Instructions", TEMPLATE_VERSION],
+              ["Template version", TEMPLATE_VERSION],
               ["Create masters and, optionally, import the trial balance and party opening items."],
               [
                 "Use the headers on row 1. Paste values only; amounts are rupees and dates are YYYY-MM-DD.",
@@ -81,6 +81,9 @@ export async function importTemplate(): Promise<File> {
               ],
               ["Roles: comma-separated customer, vendor, tenant, donor, employee, government."],
               ["GST supply class: taxable, exempt, nil, nonGst, notASupply."],
+              [
+                "Tax code: taxable items use your organization's GST rate codes (GST5, GST12, GST18, GST28, GST40); check which rates are effective in Items.",
+              ],
             ]
           : [SHEETS[name].map((column) => column.header)],
     })),

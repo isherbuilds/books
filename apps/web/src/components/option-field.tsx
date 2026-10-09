@@ -66,7 +66,7 @@ export const STATE_OPTIONS: Option[] = Object.entries(INDIAN_STATES).map(([code,
   name,
 }));
 
-/** Calendar months by number, for the fiscal year start. */
+/** Calendar months by number, for the financial year start. */
 export const MONTH_OPTIONS: Option[] = [
   "January",
   "February",

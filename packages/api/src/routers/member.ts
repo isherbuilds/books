@@ -1,12 +1,12 @@
-import { auth, invitationUrl } from "@accly/auth";
+import { auth, hasAuthErrorCode, invitationUrl } from "@accly/auth";
 import { ORG_ROLES, authorize } from "@accly/auth/access";
 import { db } from "@accly/db";
 import { invitation, member, organization, user } from "@accly/db/schema/auth";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, gt, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { isFounder } from "../lib/founder";
 import { capMasterList, MASTER_LIST_LIMIT } from "../lib/master-list";
 import { orgInput, orgProcedure } from "../lib/procedures/factory";
@@ -16,16 +16,19 @@ import { orgSettings, pageOf } from "../lib/settlements";
 const roleInput = z.enum(ORG_ROLES);
 
 // A member id from another tenant must not reach Better Auth's own endpoints.
-async function assertMemberIdInScope(memberId: string, orgId: string): Promise<void> {
+async function memberInScope(memberId: string, orgId: string) {
   const [row] = await db
-    .select({ id: member.id })
+    .select({ id: member.id, name: user.name, email: user.email })
     .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
     .where(and(eq(member.id, memberId), eq(member.organizationId, orgId)))
     .limit(1);
 
   if (!row) {
     throw new ORPCError("NOT_FOUND", { message: "Member not found" });
   }
+
+  return row;
 }
 
 // Writes delegate to Better Auth as the caller so its invariants hold, always with
@@ -112,11 +115,10 @@ export const memberRouter = {
               and(
                 eq(invitation.organizationId, orgId),
                 eq(invitation.status, "pending"),
-                gt(invitation.expiresAt, new Date()),
                 search ? ilike(invitation.email, search) : undefined,
               ),
             )
-            .orderBy(asc(invitation.expiresAt), asc(invitation.id))
+            .orderBy(desc(invitation.expiresAt), desc(invitation.id))
             .limit(MASTER_LIST_LIMIT + 1)
             .then(capMasterList)
         : [],
@@ -134,7 +136,7 @@ export const memberRouter = {
   // The complete roster for a Link Field: complete or refused, never a page (client-patterns.md).
   options: orgProcedure({ member: ["read"] }, orgInput).handler(async ({ context }) => {
     const rows = await db
-      .select({ userId: member.userId, name: user.name, email: user.email })
+      .select({ userId: member.userId, name: user.name, email: user.email, role: member.role })
       .from(member)
       .innerJoin(user, eq(member.userId, user.id))
       .where(eq(member.organizationId, context.scope.orgId))
@@ -148,14 +150,40 @@ export const memberRouter = {
     { invitation: ["create"] },
     orgInput.extend({ email: z.email(), role: roleInput }),
   ).handler(async ({ context, input }) => {
-    const created = await auth.api.createInvitation({
-      body: {
-        email: input.email,
-        role: input.role,
-        organizationId: context.scope.orgId,
-      },
-      headers: context.headers,
-    });
+    // Better Auth already ignores expired invitations when it checks for duplicates.
+    // Retiring them here keeps the roster to one row per email after a re-invite.
+    await db
+      .update(invitation)
+      .set({ status: "canceled" })
+      .where(
+        and(
+          eq(invitation.organizationId, context.scope.orgId),
+          eq(invitation.email, input.email.toLowerCase()),
+          eq(invitation.status, "pending"),
+          lte(invitation.expiresAt, sql`now()`),
+        ),
+      );
+
+    let created;
+
+    try {
+      created = await auth.api.createInvitation({
+        body: {
+          email: input.email,
+          role: input.role,
+          organizationId: context.scope.orgId,
+        },
+        headers: context.headers,
+      });
+    } catch (error) {
+      if (hasAuthErrorCode(error, "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION")) {
+        throw new ORPCError("CONFLICT", {
+          message: `${input.email} already has a pending invitation`,
+        });
+      }
+
+      throw error;
+    }
 
     audit({
       action: "member.invite",
@@ -210,23 +238,31 @@ export const memberRouter = {
     { member: ["update"] },
     orgInput.extend({ memberId: z.string().min(1), role: roleInput }),
   ).handler(async ({ context, input }) => {
-    await assertMemberIdInScope(input.memberId, context.scope.orgId);
+    const changedMember = await memberInScope(input.memberId, context.scope.orgId);
 
-    await auth.api.updateMemberRole({
-      body: {
-        memberId: input.memberId,
-        role: input.role,
-        organizationId: context.scope.orgId,
-      },
-      headers: context.headers,
-    });
+    try {
+      await auth.api.updateMemberRole({
+        body: {
+          memberId: input.memberId,
+          role: input.role,
+          organizationId: context.scope.orgId,
+        },
+        headers: context.headers,
+      });
+    } catch (error) {
+      if (hasAuthErrorCode(error, "YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER")) {
+        throw new ORPCError("CONFLICT", { message: "Add another owner before you leave" });
+      }
+
+      throw error;
+    }
 
     audit({
       action: "member.role.update",
       actorId: context.scope.userId,
       orgId: context.scope.orgId,
       target: `member:${input.memberId}`,
-      meta: { role: input.role },
+      meta: { name: changedMember.name, email: changedMember.email, role: input.role },
     });
   }),
 
@@ -234,21 +270,30 @@ export const memberRouter = {
     { member: ["delete"] },
     orgInput.extend({ memberId: z.string().min(1) }),
   ).handler(async ({ context, input }) => {
-    await assertMemberIdInScope(input.memberId, context.scope.orgId);
+    const removedMember = await memberInScope(input.memberId, context.scope.orgId);
 
-    await auth.api.removeMember({
-      body: {
-        memberIdOrEmail: input.memberId,
-        organizationId: context.scope.orgId,
-      },
-      headers: context.headers,
-    });
+    try {
+      await auth.api.removeMember({
+        body: {
+          memberIdOrEmail: input.memberId,
+          organizationId: context.scope.orgId,
+        },
+        headers: context.headers,
+      });
+    } catch (error) {
+      if (hasAuthErrorCode(error, "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER")) {
+        throw new ORPCError("CONFLICT", { message: "Add another owner before you leave" });
+      }
+
+      throw error;
+    }
 
     audit({
       action: "member.remove",
       actorId: context.scope.userId,
       orgId: context.scope.orgId,
       target: `member:${input.memberId}`,
+      meta: { name: removedMember.name, email: removedMember.email },
     });
   }),
 };

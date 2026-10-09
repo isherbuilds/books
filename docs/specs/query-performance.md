@@ -89,6 +89,15 @@ At 2.2 M Meridian lines, that benchmark measures TB/P&L/BS p50
 306.4/302.5/317.3 ms and p95 416.2/319/321.3 ms. This larger fixture is distinct
 from the 210,124-line native-PostgreSQL production-API measurement below.
 
+**Register totals:** API through the dev server, Meridian at 1 M documents
+(`db:seed:mega`), warm, 2026-10-09. Totals are count and sum over posted
+documents; `documents_org_type_date_id_idx` carries `state`, `total_paise`,
+`party_id` and `payment_method_id` after its unique `id`, so they are index-only.
+Invoices all time (349 k) 68–134 ms, one month (54 k) 53–59 ms; Receipts all time
+61 ms. Before, an unpaid sum per document took 3.7–5.4 s and 0.8–1.2 s; it was
+removed. An Open or Overdue filter still computes each row's balance: Bills open
+in one month (31 k) take 0.54 s, against the 300 ms gate.
+
 **Balance sums:** `benchmark:rpc`, 20 requests after 20 warm-up, dev database,
 with probe indexes of the final shape. Ridgeview p50 in ms: money balances 161,
 cash account-ledger summary 59, party balances 59, party-ledger summary 8.

@@ -172,6 +172,7 @@ function FilesRoute() {
                         their content; `max-w-0` on the cell below is what lets
                         it truncate instead of widening the table. */}
                   <TableHead className="w-full">Name</TableHead>
+                  <TableHead className="w-40">Uploaded by</TableHead>
                   <TableHead className="text-right">Size</TableHead>
                   <TableHead>Added</TableHead>
                   <TableHead className="w-16" />
@@ -180,7 +181,7 @@ function FilesRoute() {
               <TableBody ref={virtual.listRef}>
                 {virtual.paddingTop > 0 ? (
                   <TableRow aria-hidden style={{ height: virtual.paddingTop }}>
-                    <TableCell colSpan={4} className="p-0" />
+                    <TableCell colSpan={5} className="p-0" />
                   </TableRow>
                 ) : null}
                 {virtual.virtualRows.map((item) => {
@@ -198,6 +199,12 @@ function FilesRoute() {
                         >
                           {file.mimeType ?? "unknown type"}
                         </div>
+                      </TableCell>
+                      <TableCell
+                        className="max-w-40 truncate text-muted-foreground"
+                        title={file.uploaderName ?? undefined}
+                      >
+                        {file.uploaderName ?? "Former member"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums">
                         {formatFileSize(file.size)}
@@ -240,7 +247,7 @@ function FilesRoute() {
                 })}
                 {virtual.paddingBottom > 0 ? (
                   <TableRow aria-hidden style={{ height: virtual.paddingBottom }}>
-                    <TableCell colSpan={4} className="p-0" />
+                    <TableCell colSpan={5} className="p-0" />
                   </TableRow>
                 ) : null}
               </TableBody>

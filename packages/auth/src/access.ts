@@ -160,6 +160,23 @@ export const APPLY_CREDIT_GRANT = {
   note: ["read"],
 } as const satisfies AppPermission;
 
+/** What a supplier refund needs: the payable credit picker (`bill.read`) and its Debit Notes. */
+export const SUPPLIER_REFUND_GRANT = {
+  note: ["read"],
+  bill: ["read"],
+} as const satisfies AppPermission;
+
+/** Members who post at least one document type; only they are offered a lock exception. */
+export const POSTING_GRANTS = [
+  { receipt: ["post"] },
+  { payment: ["post"] },
+  { invoice: ["post"] },
+  { bill: ["post"] },
+  { note: ["post"] },
+  { journal: ["post"] },
+  { openingBalance: ["post"] },
+] as const satisfies readonly AppPermission[];
+
 // Better Auth stores roles comma-joined and authorizes them as a union, so mirror
 // that rather than reading the first entry, and reject an undefined role instead of
 // silently downgrading it.

@@ -39,6 +39,11 @@ export function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator / 2n) / denominator;
 }
 
+/** TDS on paise, rounded half-up to a whole rupee (D14). */
+export function computeTds(amountPaise: bigint, rateBasisPoints: number): bigint {
+  return divideHalfUp(amountPaise * BigInt(rateBasisPoints), 1_000_000n) * 100n;
+}
+
 /** Plain decimal text such as "-12.50", for form values, audit metadata and messages. */
 export function formatDecimal(paise: bigint): string {
   const negative = paise < 0n;

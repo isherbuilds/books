@@ -4,6 +4,14 @@ import { appRouter } from "@accly/api/routers/index";
 import { contentDisposition } from "@accly/storage/content-disposition";
 import { ORPCError, createRouterClient } from "@orpc/server";
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
 /**
  * Serves a document PDF. The guarded procedure `render` calls is the route's sole
  * source of tenant data; `render` imports its renderer lazily, so the WASM and fonts
@@ -31,13 +39,23 @@ export async function pdfResponse(
 
     return new Response(new Uint8Array(bytes).buffer, { headers });
   } catch (error) {
-    // A 4xx message is written for the user; a 5xx one names internal state.
-    if (error instanceof ORPCError && error.status < 500) {
-      return new Response(error.message, { status: error.status });
-    }
+    // The PDF opens in a new tab, so an error needs a readable page, not raw text.
+    const clientError = error instanceof ORPCError && error.status < 500;
 
-    console.error(error);
+    if (!clientError) console.error(error);
 
-    return new Response(`Could not render the ${noun}`, { status: 500 });
+    const message = clientError ? error.message : `Could not render the ${noun}`;
+    const safeMessage = message.replace(/[&<>"']/g, (character) => HTML_ENTITIES[character]!);
+
+    return new Response(
+      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF unavailable</title><main style="font:16px system-ui,sans-serif;max-width:40rem;margin:10vh auto;padding:1rem"><h1>PDF unavailable</h1><p>${safeMessage}</p></main></html>`,
+      {
+        status: clientError ? error.status : 500,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "private, no-store",
+        },
+      },
+    );
   }
 }

@@ -13,9 +13,10 @@ import {
 import { Input } from "@accly/ui/components/input";
 import { ClientOnly } from "@tanstack/react-router";
 import { CheckIcon, PlusIcon } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useState, type KeyboardEvent, type Ref } from "react";
 
 import { isCreateItem, linkRows, type CreateItem } from "@/lib/link-rows";
+import { useTabCommit } from "@/hooks/use-tab-commit";
 import { errorReason } from "@/lib/orpc-error";
 import { WaveLoader } from "@/components/wave-loader";
 
@@ -104,7 +105,6 @@ export function LinkField<T>({
   const [typed, setTyped] = useState<string | null>(null);
   const query = typed ?? selectedLabel;
   const [open, setOpen] = useState(false);
-  const highlighted = useRef<T | CreateItem | undefined>(undefined);
   const canCreate = onCreate !== undefined && status === "ready" && complete;
   const needle = query === selectedLabel ? "" : query.trim();
 
@@ -142,20 +142,19 @@ export function LinkField<T>({
     setOpen(false);
   };
 
+  const tabCommit = useTabCommit<T | CreateItem>({
+    open,
+    needle,
+    isCommittable: (item) => !isCreateItem(item),
+    commit: choose,
+  });
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Tab" && event.key !== "Enter") return;
 
-    const item = open ? highlighted.current : undefined;
+    const hasHighlighted = tabCommit.onKeyDown(event);
 
-    // Tab commits a match only for a typed search, never Create, so it cannot open a
-    // panel. Untyped, the automatic highlight would silently replace the saved value.
-    if (event.key === "Tab" && needle !== "" && item !== undefined && !isCreateItem(item)) {
-      choose(item);
-
-      return;
-    }
-
-    if (clearable && value && item === undefined && event.currentTarget.value.trim() === "") {
+    if (clearable && value && !hasHighlighted && event.currentTarget.value.trim() === "") {
       onSelect(null);
     }
   };
@@ -198,9 +197,7 @@ export function LinkField<T>({
         }}
         open={open}
         onOpenChange={setOpen}
-        onItemHighlighted={(item) => {
-          highlighted.current = item;
-        }}
+        onItemHighlighted={tabCommit.onItemHighlighted}
       >
         <ComboboxInput
           ref={inputRef}

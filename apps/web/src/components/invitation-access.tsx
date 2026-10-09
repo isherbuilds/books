@@ -1,4 +1,5 @@
 import { shortName } from "@accly/api/lib/schemas";
+import { ROLE_LABELS, parseRoles } from "@accly/auth/access";
 import { Button } from "@accly/ui/components/button";
 import { Form, FormFieldset } from "@accly/ui/components/form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,7 +69,13 @@ export function InvitationAccess({
           <div className="flex flex-col gap-1">
             <h2 className="text-base font-medium">Join {invitation.data.organizationName}</h2>
             <p className="break-all text-sm text-muted-foreground">
-              Invited as {invitation.data.email}.
+              Invited as{" "}
+              {invitation.data.role
+                ? parseRoles(invitation.data.role)
+                    .map((role) => ROLE_LABELS[role])
+                    .join(", ")
+                : "Unassigned"}{" "}
+              · {invitation.data.email}.
             </p>
           </div>
           {accountEmail === undefined ? (
@@ -98,7 +105,7 @@ export function InvitationAccess({
         </>
       )}
       <Link to="/join" search={{}} className="text-sm underline underline-offset-4">
-        View all invitations and organizations
+        View your organizations
       </Link>
     </div>
   );

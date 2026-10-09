@@ -4,7 +4,7 @@
 // Must precede the routers, whose schemas are built at module evaluation.
 import "zod/compile";
 
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import { createRequestContext, type ORPCContext } from "@accly/api/lib/context";
 import { appRouter } from "@accly/api/routers/index";
 import { MAX_IMPORT_FILE_BYTES } from "@accly/api/lib/import-limits";

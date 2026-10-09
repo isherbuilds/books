@@ -1,5 +1,12 @@
 import { formatBusinessDay } from "@accly/api/lib/business-date";
-import { creditOf, debitOf, formatBalance, formatMoney, isZeroMoney } from "@accly/api/core/money";
+import {
+  absMoney,
+  creditOf,
+  debitOf,
+  formatBalance,
+  formatMoney,
+  isZeroMoney,
+} from "@accly/api/core/money";
 import type { AppRouterClient } from "@accly/api/routers/index";
 import { createColumnHelper } from "@tanstack/react-table";
 
@@ -16,7 +23,24 @@ function particulars(line: StatementLine): string {
     return "Advance received";
   }
 
+  if (line.documentType === "receipt" && line.side === "payable") {
+    return "Supplier refund";
+  }
+
   return line.typeLabel;
+}
+
+function TdsDetail({ line }: { line: StatementLine }) {
+  if (line.tdsPaise === null) return null;
+
+  const net = absMoney(line.amountPaise);
+
+  return (
+    <span className="block text-muted-foreground">
+      {line.typeLabel} {formatMoney(net + line.tdsPaise)} − TDS {formatMoney(line.tdsPaise)} ={" "}
+      {formatMoney(net)}
+    </span>
+  );
 }
 
 function Amount({ paise }: { paise: bigint }) {
@@ -42,9 +66,14 @@ export const LEDGER_COLUMNS = [
     id: "particulars",
     header: "Particulars",
     cell: ({ row: { original: line } }) => (
-      <span className="block truncate">
-        {particulars(line)}
-        {line.reference ? <span className="text-muted-foreground"> · {line.reference}</span> : null}
+      <span className="block">
+        <span className="block truncate">
+          {particulars(line)}
+          {line.reference ? (
+            <span className="text-muted-foreground"> · {line.reference}</span>
+          ) : null}
+        </span>
+        <TdsDetail line={line} />
       </span>
     ),
   }),
@@ -80,6 +109,7 @@ export function LedgerCard({ line }: { line: StatementLine }) {
         </span>
         <span className="shrink-0 tabular-nums">{formatBalance(line.balancePaise)}</span>
       </p>
+      <TdsDetail line={line} />
     </>
   );
 }

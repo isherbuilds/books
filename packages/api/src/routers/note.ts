@@ -2,26 +2,26 @@ import { db } from "@accly/db";
 import { documentLines } from "@accly/db/schema/document-lines";
 import { documents } from "@accly/db/schema/documents";
 import { parties } from "@accly/db/schema/parties";
+import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { settlementPaise } from "../core/allocations";
 import {
   accountLine,
-  documentTotals,
   noteSource,
   organizationSnapshot,
   partySnapshot,
   postDocument,
   purchaseLegs,
-  taxTotals,
   type PostDocumentLine,
 } from "../core/documents";
-import { computeNoteLines } from "../core/note-lines";
+import { computeNoteLines, noteTdsReversal } from "../core/note-lines";
+import { documentTotals, taxTotals } from "../core/tax";
 import type { CreditNotePosting, DebitNotePosting } from "../core/posting";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
@@ -47,6 +47,7 @@ const postInput = orgInput
     type: noteType,
     againstDocumentId: z.uuid(),
     documentDate: dateOnly.optional(),
+    reference: z.string().trim().max(40).optional(),
     narration: reason,
     lines: z
       .array(z.object({ sourceLineId: z.uuid(), amount: positiveMoney }))
@@ -156,6 +157,20 @@ export const noteRouter = {
         throw badRequest("NOTE_EXCEEDS_SOURCE", "Note total exceeds the source document total.");
       }
 
+      const tdsPaise =
+        input.type === "debitNote" && source.tds
+          ? noteTdsReversal({
+              billTdsPaise: source.tds.amountPaise,
+              billTaxablePaise: source.tds.basePaise,
+              priorTaxablePaise: source.prior.reduce((sum, line) => sum + line.amountPaise, 0n),
+              priorReversedPaise: source.priorReversedTdsPaise,
+              taxablePaise: totals.taxablePaise,
+            })
+          : 0n;
+
+      if (tdsPaise > amountPaise)
+        throw badRequest("NOTE_TDS_EXCEEDS_TOTAL", "TDS reversal cannot exceed the note total.");
+
       const posting: CreditNotePosting | DebitNotePosting =
         input.type === "creditNote"
           ? {
@@ -181,6 +196,7 @@ export const noteRouter = {
               amountPaise,
               ...purchaseLegs(lines),
               roundOffPaise: totals.roundOffPaise,
+              tdsPaise,
             };
 
       const [party] = await tx
@@ -200,10 +216,11 @@ export const noteRouter = {
           dueDate: null,
           placeOfSupplyStateCode: source.placeOfSupplyStateCode,
           intraState: source.intraState,
-          reference: null,
+          reference: input.type === "debitNote" ? input.reference || null : null,
           narration: input.narration,
           discountPaise: 0n,
           againstDocumentId: source.id,
+          tdsSectionId: input.type === "debitNote" ? source.tds?.tdsSectionId : null,
           affectsTax: source.affectsTax,
           printSnapshot: {
             organization: organizationSnapshot(settings),
@@ -250,7 +267,7 @@ export const noteRouter = {
 
       if (!note) throw new ORPCError("NOT_FOUND", { message: "Note not found." });
 
-      const [lines, [source], allocations] = await Promise.all([
+      const [lines, [source], allocations, [tds]] = await Promise.all([
         db
           .select({ ...getTableColumns(documentLines), rateBasisPoints: taxRates.rateBasisPoints })
           .from(documentLines)
@@ -273,6 +290,11 @@ export const noteRouter = {
           .where(and(eq(against.orgId, orgId), eq(against.id, note.againstDocumentId!)))
           .limit(1),
         allocationsOf(db, orgId, note.id, "source"),
+        db
+          .select({ amountPaise: tdsDeductions.amountPaise })
+          .from(tdsDeductions)
+          .where(and(eq(tdsDeductions.orgId, orgId), eq(tdsDeductions.documentId, note.id)))
+          .limit(1),
       ]);
 
       return {
@@ -281,6 +303,7 @@ export const noteRouter = {
         totals: taxTotals(lines),
         against: source ?? null,
         allocations,
+        tdsReversedPaise: tds?.amountPaise ?? 0n,
         // A cancelled note keeps its capacity row but settles nothing.
         unappliedPaise: note.state === "posted" ? note.unappliedPaise : 0n,
       };

@@ -1,12 +1,13 @@
 import { db } from "@accly/db";
 import { file as fileTable } from "@accly/db/schema/file";
+import { user } from "@accly/db/schema/auth";
 import { createReadUrl, createUploadUrl, deleteObject, maxUploadBytes } from "@accly/storage";
 import { ORPCError } from "@orpc/server";
 import { createHash } from "node:crypto";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
 import { likePattern, pageLimit, searchQuery } from "../lib/schemas";
 
@@ -87,8 +88,10 @@ export const fileRouter = {
         size: fileTable.size,
         createdAt: fileTable.createdAt,
         createdAtCursor: sql<string>`${fileTable.createdAt}::text`,
+        uploaderName: user.name,
       })
       .from(fileTable)
+      .leftJoin(user, eq(fileTable.userId, user.id))
       .where(
         and(
           scoped,
@@ -179,6 +182,14 @@ export const fileRouter = {
         });
       }
 
+      audit({
+        action: "file.upload",
+        actorId: context.scope.userId,
+        orgId: context.scope.orgId,
+        target: `file:${row.id}`,
+        meta: { name: row.name },
+      });
+
       return row;
     },
   ),
@@ -208,7 +219,7 @@ export const fileRouter = {
     const [deleted] = await db
       .delete(fileTable)
       .where(and(eq(fileTable.id, input.key), eq(fileTable.orgId, context.scope.orgId)))
-      .returning({ id: fileTable.id });
+      .returning({ id: fileTable.id, name: fileTable.name });
 
     if (!deleted) {
       throw new ORPCError("NOT_FOUND", { message: "File not found" });
@@ -221,6 +232,7 @@ export const fileRouter = {
       actorId: context.scope.userId,
       orgId: context.scope.orgId,
       target: `file:${input.key}`,
+      meta: { name: deleted.name },
     });
 
     try {

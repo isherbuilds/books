@@ -1,7 +1,7 @@
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowRightIcon, Building2Icon, MailIcon } from "lucide-react";
+import { ArrowRightIcon, Building2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { InvitationAccess } from "@/components/invitation-access";
@@ -10,6 +10,7 @@ import { ErrorNote } from "@/components/page";
 import { SignInForm } from "@/components/sign-in-form";
 import { WaveLoader } from "@/components/wave-loader";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { sortOrganizations } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/join")({
@@ -68,22 +69,12 @@ function OrganizationPicker({ userId }: { userId: string }) {
   const destinations = useQuery({
     queryKey: ["auth", "join", userId],
     queryFn: async () => {
-      const [organizations, invitations] = await Promise.all([
-        authClient.organization.list(),
-        authClient.organization.listUserInvitations(),
-      ]);
+      const { data, error } = await authClient.organization.list();
 
-      if (organizations.error)
-        throw new Error(
-          authErrorMessage(organizations.error, "Could not load organizations. Try again."),
-        );
+      if (error)
+        throw new Error(authErrorMessage(error, "Could not load organizations. Try again."));
 
-      if (invitations.error)
-        throw new Error(
-          authErrorMessage(invitations.error, "Could not load invitations. Try again."),
-        );
-
-      return { organizations: organizations.data, invitations: invitations.data };
+      return sortOrganizations(data);
     },
   });
 
@@ -93,52 +84,18 @@ function OrganizationPicker({ userId }: { userId: string }) {
   if (destinations.isPending) return <WaveLoader label="Loading organizations" />;
 
   if (destinations.error)
-    return (
-      <ErrorNote title="Could not load organizations and invitations" error={destinations.error} />
-    );
-  const { organizations, invitations } = destinations.data;
-
-  const pending = invitations.filter(
-    (invitation) => new Date(invitation.expiresAt).getTime() > Date.now(),
-  );
+    return <ErrorNote title="Could not load organizations" error={destinations.error} />;
+  const organizations = destinations.data;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-medium">Choose where to continue</h2>
         <p className="text-sm text-muted-foreground">
-          Review an invitation or open an existing organization.
+          Open an organization you belong to, or ask its owner for an invitation link to join
+          another.
         </p>
       </div>
-      {pending.length > 0 && (
-        <section aria-labelledby="pending-invitations" className="flex flex-col gap-2">
-          <h3
-            id="pending-invitations"
-            className="font-mono text-sm tracking-widest text-muted-foreground"
-          >
-            INVITATIONS
-          </h3>
-          <div className="divide-y divide-border border-y border-border">
-            {pending.map((invitation) => (
-              <div key={invitation.id} className="flex items-center gap-3 py-3">
-                <MailIcon className="size-4 shrink-0 text-muted-foreground" />
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <p className="truncate text-sm font-medium">{invitation.organizationName}</p>
-                  <p className="text-sm text-muted-foreground">Invited as {invitation.role}</p>
-                </div>
-                <Link
-                  to="/join"
-                  search={{ invitation: invitation.id }}
-                  className={buttonVariants({ size: "sm" })}
-                >
-                  <ArrowRightIcon />
-                  Review invitation
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
       {organizations.length > 0 && (
         <section aria-labelledby="your-organizations" className="flex flex-col gap-2">
           <h3
@@ -168,14 +125,13 @@ function OrganizationPicker({ userId }: { userId: string }) {
           </div>
         </section>
       )}
-      {pending.length === 0 && organizations.length === 0 && (
-        <div className="flex flex-col gap-1 border-l-2 border-border pl-3">
-          <p className="text-sm font-medium">No organization access yet</p>
-          <p className="text-sm leading-5 text-muted-foreground">
-            Ask an administrator to invite this account, then return using the invitation link.
-          </p>
-        </div>
-      )}
+      <div className="flex flex-col gap-1 border-l-2 border-border pl-3">
+        <p className="text-sm font-medium">Joining another organization?</p>
+        <p className="text-sm leading-5 text-muted-foreground">
+          Ask its owner for an invitation link. They can copy a pending link again from Settings →
+          Members.
+        </p>
+      </div>
       {canCreate.data ? (
         <p className="border-t border-border pt-4 text-sm text-muted-foreground">
           Founding operator?{" "}

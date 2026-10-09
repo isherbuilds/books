@@ -1,12 +1,12 @@
 import { db, type DbTransaction } from "@accly/db";
-import { authorize } from "@accly/auth/access";
+import { authorize, SUPPLIER_REFUND_GRANT } from "@accly/auth/access";
 import { ADVANCE_SUPPLY_KINDS, documents } from "@accly/db/schema/documents";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import type { organizationSettings } from "@accly/db/schema/organization-settings";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { audit } from "../audit";
+import { audit } from "@accly/db/audit";
 import {
   accountLine,
   organizationSnapshot,
@@ -17,17 +17,19 @@ import {
   type PostDocumentInput,
 } from "../core/documents";
 import { settlementPaise } from "../core/allocations";
+import { effectiveTdsSections } from "../core/tax-schedule";
 import { formatDecimal, sumPaise } from "../core/money";
 import { postableAccounts } from "../lib/accounts";
 import { businessDate } from "../lib/business-date";
 import { badRequest, impossible } from "../lib/conflict";
 import { activeParty } from "../lib/parties";
-import { orgInput, orgProcedure, type Scope } from "../lib/procedures/factory";
+import { orgInput, orgProcedure, requirePermission, type Scope } from "../lib/procedures/factory";
 import {
   orderedPeriod,
   positiveMoney,
   reason,
   settlementListFields,
+  settlementFilterFields,
   settlementPostFields,
 } from "../lib/schemas";
 import {
@@ -36,6 +38,7 @@ import {
   cancelDocument,
   settlementListRow,
   registerPage,
+  settlementTotals,
   settlementListWhere,
   orgSettings,
   settlementDetail,
@@ -52,31 +55,49 @@ const postInput = z.discriminatedUnion("settlementKind", [
     partyId: z.uuid(),
     advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS),
   }),
-  z.strictObject({
-    ...orgInput.shape,
-    ...settlementPostFields,
-    settlementKind: z.literal("against"),
-    partyId: z.uuid(),
-    allocations: z
-      .array(z.strictObject({ documentId: z.uuid(), amount: positiveMoney }))
-      .min(1)
-      .max(50),
-    advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
-    adjustments: z
-      .array(
-        z.discriminatedUnion("kind", [
-          z.strictObject({ kind: z.literal("fee"), accountId: z.uuid(), amount: positiveMoney }),
-          z.strictObject({
-            kind: z.literal("writeOff"),
-            accountId: z.uuid(),
-            amount: positiveMoney,
-          }),
-          z.strictObject({ kind: z.literal("tds"), amount: positiveMoney }),
-        ]),
-      )
-      .max(5)
-      .optional(),
-  }),
+  z.discriminatedUnion("exposureSide", [
+    z.strictObject({
+      ...orgInput.shape,
+      ...settlementPostFields,
+      settlementKind: z.literal("against"),
+      exposureSide: z.literal("receivable"),
+      partyId: z.uuid(),
+      allocations: z
+        .array(z.strictObject({ documentId: z.uuid(), amount: positiveMoney }))
+        .min(1)
+        .max(50),
+      advanceSupply: z.enum(ADVANCE_SUPPLY_KINDS).optional(),
+      adjustments: z
+        .array(
+          z.discriminatedUnion("kind", [
+            z.strictObject({ kind: z.literal("fee"), accountId: z.uuid(), amount: positiveMoney }),
+            z.strictObject({
+              kind: z.literal("writeOff"),
+              accountId: z.uuid(),
+              amount: positiveMoney,
+            }),
+            z.strictObject({
+              kind: z.literal("tds"),
+              amount: positiveMoney,
+              tdsSectionId: z.uuid(),
+            }),
+          ]),
+        )
+        .max(5)
+        .optional(),
+    }),
+    z.strictObject({
+      ...orgInput.shape,
+      ...settlementPostFields,
+      settlementKind: z.literal("against"),
+      exposureSide: z.literal("payable"),
+      partyId: z.uuid(),
+      allocations: z
+        .array(z.strictObject({ documentId: z.uuid(), amount: positiveMoney }))
+        .min(1)
+        .max(50),
+    }),
+  ]),
   z.strictObject({
     ...orgInput.shape,
     ...settlementPostFields,
@@ -96,17 +117,27 @@ export async function postReceipt(
   input: ReceiptInput,
 ) {
   const { settlementKind } = input;
+  const isRefund = settlementKind === "against" && input.exposureSide === "payable";
+  const isCustomerAgainst = settlementKind === "against" && input.exposureSide === "receivable";
 
   const allocatedPaise =
     settlementKind === "against"
       ? sumPaise(input.allocations.map((allocation) => allocation.amount))
       : 0n;
 
-  const adjustments = settlementKind === "against" ? (input.adjustments ?? []) : [];
+  if (isRefund && allocatedPaise !== input.amount) {
+    throw badRequest(
+      "REFUND_AMOUNT_MISMATCH",
+      "Amount must match the total of the debit notes and advances you picked.",
+    );
+  }
+
+  const adjustments = isCustomerAgainst ? (input.adjustments ?? []) : [];
+
   const adjustmentPaise = sumPaise(adjustments.map((adjustment) => adjustment.amount));
 
   const remainderSupply =
-    settlementKind === "against" && allocatedPaise < input.amount + adjustmentPaise
+    isCustomerAgainst && allocatedPaise < input.amount + adjustmentPaise
       ? input.advanceSupply
       : null;
 
@@ -144,6 +175,17 @@ export async function postReceipt(
   }
 
   const documentDate = input.documentDate ?? businessDate(new Date(), settings.timeZone);
+
+  const sectionIds = [
+    ...new Set(
+      adjustments.flatMap((adjustment) =>
+        adjustment.kind === "tds" ? [adjustment.tdsSectionId] : [],
+      ),
+    ),
+  ];
+
+  await effectiveTdsSections(tx, scope.orgId, sectionIds, documentDate);
+
   let lineDescription: string;
   let affectsTax: boolean;
   let posting: PostDocumentInput["posting"];
@@ -165,26 +207,47 @@ export async function postReceipt(
       amountPaise: input.amount,
     };
   } else if (settlementKind === "against") {
-    lineDescription = "Receipt against open items";
     affectsTax = false;
-    posting = {
-      paymentMethodId: input.paymentMethodId,
-      type: "receipt",
-      settlementKind,
-      exposureSide: "receivable",
-      partyId: input.partyId,
-      accountId: null,
-      amountPaise: input.amount,
-      allocations: input.allocations.map((allocation) => ({
-        documentId: allocation.documentId,
-        amountPaise: allocation.amount,
-      })),
-      adjustments: adjustments.map(({ amount, ...adjustment }) => ({
-        ...adjustment,
-        amountPaise: amount,
-      })),
-      advanceSupply,
-    };
+    lineDescription = isRefund
+      ? (input.narration ?? "Supplier refund")
+      : "Receipt against open items";
+
+    const allocations = input.allocations.map(({ documentId, amount }) => ({
+      documentId,
+      amountPaise: amount,
+    }));
+
+    posting = isRefund
+      ? {
+          paymentMethodId: input.paymentMethodId,
+          type: "receipt",
+          settlementKind,
+          exposureSide: "payable",
+          partyId: input.partyId,
+          accountId: null,
+          amountPaise: input.amount,
+          sources: allocations,
+        }
+      : {
+          paymentMethodId: input.paymentMethodId,
+          type: "receipt",
+          settlementKind,
+          exposureSide: "receivable",
+          partyId: input.partyId,
+          accountId: null,
+          amountPaise: input.amount,
+          allocations,
+          adjustments: adjustments.map((adjustment) =>
+            adjustment.kind === "tds"
+              ? { kind: "tds" as const, amountPaise: adjustment.amount }
+              : {
+                  kind: adjustment.kind,
+                  accountId: adjustment.accountId,
+                  amountPaise: adjustment.amount,
+                },
+          ),
+          advanceSupply,
+        };
   } else {
     if (!incomeAccount) {
       throw badRequest(
@@ -228,13 +291,14 @@ export async function postReceipt(
       ...accountLine(
         adjustment.kind === "tds" ? null : adjustment.accountId,
         adjustment.kind === "tds"
-          ? "Customer TDS"
+          ? "TDS deducted by customer"
           : adjustment.kind === "fee"
             ? "Fee"
             : "Write-off",
         adjustment.amount,
       ),
       adjustmentKind: adjustment.kind,
+      tdsSectionId: adjustment.kind === "tds" ? adjustment.tdsSectionId : null,
     })),
   ];
 
@@ -281,6 +345,10 @@ export function auditReceiptPost(
 
 export const receiptRouter = {
   post: orgProcedure({ receipt: ["post"] }, postInput).handler(async ({ context, input }) => {
+    if (input.settlementKind === "against" && input.exposureSide === "payable") {
+      requirePermission(context.scope, SUPPLIER_REFUND_GRANT);
+    }
+
     const result = await db.transaction(async (tx) => {
       const settings = await orgSettings(context.scope.orgId, tx);
 
@@ -302,34 +370,45 @@ export const receiptRouter = {
     async ({ context, input }) => {
       const { orgId } = context.scope;
 
-      const [detail, allocations, adjustments, [credit]] = await Promise.all([
-        settlementDetail(orgId, "receipt", input.receiptId),
-        allocationsOf(
-          db,
-          orgId,
-          input.receiptId,
-          "source",
-          authorize(context.scope.roles, { journal: ["read"] })
-            ? undefined
-            : ["invoice", "payment"],
-        ),
+      const detail = await settlementDetail(orgId, "receipt", input.receiptId);
+      const isRefund = detail.exposureSide === "payable";
+
+      const canReadRelated = !isRefund || authorize(context.scope.roles, SUPPLIER_REFUND_GRANT);
+
+      const [allocations, adjustments, [credit]] = await Promise.all([
+        canReadRelated
+          ? allocationsOf(
+              db,
+              orgId,
+              input.receiptId,
+              isRefund ? "target" : "source",
+              isRefund || authorize(context.scope.roles, { journal: ["read"] })
+                ? undefined
+                : ["invoice", "payment"],
+            )
+          : Promise.resolve([]),
         adjustmentLinesOf(orgId, input.receiptId),
-        db
-          .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
-          .from(documents)
-          .where(and(eq(documents.orgId, orgId), eq(documents.id, input.receiptId))),
+        !isRefund
+          ? db
+              .select({ unappliedPaise: settlementPaise(orgId, "source", null).balancePaise })
+              .from(documents)
+              .where(and(eq(documents.orgId, orgId), eq(documents.id, input.receiptId)))
+          : Promise.resolve([]),
       ]);
 
-      // A direct receipt holds no credit; a cancelled one keeps its capacity row but
-      // settles nothing more. `settlementDetail` has already proved the row exists.
       const unappliedPaise =
-        detail.settlementKind === "direct"
+        detail.settlementKind === "direct" || isRefund
           ? null
           : detail.state === "posted"
             ? credit!.unappliedPaise
             : 0n;
 
-      return { ...detail, adjustments, allocations, unappliedPaise };
+      return {
+        ...detail,
+        adjustments,
+        allocations,
+        unappliedPaise,
+      };
     },
   ),
 
@@ -352,6 +431,11 @@ export const receiptRouter = {
         .limit(input.limit + 1),
     );
   }),
+
+  totals: orgProcedure(
+    { receipt: ["read"] },
+    orgInput.extend(settlementFilterFields).superRefine(orderedPeriod),
+  ).handler(({ context, input }) => settlementTotals(context.scope.orgId, "receipt", input)),
 
   // Received per party. A grouped read of its own, not a column on the cached party
   // master, so posting a receipt never refetches up to 5,000 parties. `partyId`

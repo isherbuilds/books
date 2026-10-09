@@ -1,4 +1,11 @@
-import { creditOf, debitOf, formatBalance, formatMoney, isZeroMoney } from "@accly/api/core/money";
+import {
+  absMoney,
+  creditOf,
+  debitOf,
+  formatBalance,
+  formatMoney,
+  isZeroMoney,
+} from "@accly/api/core/money";
 import type {
   AccountLedgerReport,
   BalanceSheetReport,
@@ -46,7 +53,7 @@ function reportHeading({ header, title, columns, detail }: ReportPdfProps) {
         <div style={{ fontSize: 12, fontWeight: 700, marginTop: 8 }}>{title}</div>
         <div style={{ fontSize: 9, marginTop: 3 }}>{range}</div>
         <div style={{ color: colors.muted, fontSize: 8, marginTop: 3 }}>
-          Generated {formatDateTime(header.generatedAt, header.timeZone)} · period not closed
+          Generated {formatDateTime(header.generatedAt, header.timeZone)}
         </div>
         {detail?.length ? (
           <div style={{ fontSize: 8, marginTop: 8 }}>
@@ -256,7 +263,7 @@ export function renderAccountLedgerPdf(data: AccountLedgerReport) {
         cells: [
           formatBusinessDate(line.entryDate),
           line.number ?? "Allocation",
-          `${line.narration}${line.partyName ? ` · ${line.partyName}` : ""}`,
+          [line.narration, line.contraAccountName, line.partyName].filter(Boolean).join(" · "),
           line.debitPaise ? formatMoney(line.debitPaise) : "",
           line.creditPaise ? formatMoney(line.creditPaise) : "",
           formatBalance(line.balancePaise),
@@ -335,12 +342,18 @@ export function renderPartyStatementPdf(data: PartyStatementReport) {
       ...data.lines.map((line) => {
         const debit = debitOf(line.amountPaise);
         const credit = creditOf(line.amountPaise);
+        const net = absMoney(line.amountPaise);
+
+        const tdsDetail =
+          line.tdsPaise === null
+            ? ""
+            : ` · Gross ${formatMoney(net + line.tdsPaise)} · TDS ${formatMoney(line.tdsPaise)} · Net ${formatMoney(net)}`;
 
         return {
           cells: [
             formatBusinessDate(line.entryDate),
             line.number ?? "—",
-            `${line.kind === "reverse" ? "Cancellation" : line.typeLabel}${line.reference ? ` · ${line.reference}` : ""}`,
+            `${line.kind === "reverse" ? "Cancellation" : line.typeLabel}${line.reference ? ` · ${line.reference}` : ""}${tdsDetail}`,
             isZeroMoney(debit) ? "" : formatMoney(debit),
             isZeroMoney(credit) ? "" : formatMoney(credit),
             formatBalance(line.balancePaise),

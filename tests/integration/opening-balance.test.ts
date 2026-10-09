@@ -178,7 +178,7 @@ test("opening correction enforces the cutover lock and corrects historical balan
   await ownerApi.lock.grantException({
     ...claim,
     userId: fixture.accountant.user.id,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    days: 1,
     reason: "Approve historical opening correction",
   });
 

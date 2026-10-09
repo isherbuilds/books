@@ -12,7 +12,7 @@ import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { taxRates } from "@accly/db/schema/tax-rates";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
@@ -28,7 +28,6 @@ import {
 } from "./allocations";
 import { assertPeriodOpen } from "./locks";
 import { sumPaise } from "./money";
-import { roundOff } from "./tax";
 import { financialYearOf, postNumbered } from "./numbering";
 import { reversePartyLedgerLines, writePartyLedgerLine } from "./party-ledger";
 import { recordEntry, reverseEntries, type DocumentPosting } from "./posting";
@@ -63,6 +62,7 @@ export type PostDocumentLine = {
   itcEligible: boolean | null;
   sourceLineId: string | null;
   adjustmentKind: AdjustmentKind | null;
+  tdsSectionId?: string | null;
   cgstPaise: bigint;
   sgstPaise: bigint;
   igstPaise: bigint;
@@ -84,15 +84,6 @@ export type PostDocumentInput = {
   posting: Draftable<DocumentPosting>;
   draft: { id: string; version: number } | null;
 };
-
-/** A claim's taxable value, taxes, round-off and total, from its lines. */
-export function documentTotals(lines: readonly PostDocumentLine[]) {
-  const taxes = taxTotals(lines);
-  const grossPaise = taxes.taxablePaise + taxes.cgstPaise + taxes.sgstPaise + taxes.igstPaise;
-  const roundOffPaise = roundOff(grossPaise);
-
-  return { ...taxes, roundOffPaise, totalPaise: grossPaise + roundOffPaise };
-}
 
 /**
  * A purchase's posting legs: eligible GST goes to input tax, and ineligible GST is
@@ -144,27 +135,6 @@ export function accountLine(
     sgstPaise: 0n,
     igstPaise: 0n,
   };
-}
-
-/** A saved Invoice's or Bill's taxable value and GST components, from its stored lines. */
-export function taxTotals(
-  lines: readonly {
-    amountPaise: bigint;
-    cgstPaise: bigint;
-    sgstPaise: bigint;
-    igstPaise: bigint;
-  }[],
-) {
-  const totals = { taxablePaise: 0n, cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n };
-
-  for (const line of lines) {
-    totals.taxablePaise += line.amountPaise;
-    totals.cgstPaise += line.cgstPaise;
-    totals.sgstPaise += line.sgstPaise;
-    totals.igstPaise += line.igstPaise;
-  }
-
-  return totals;
 }
 
 /** A posted document's number; posting assigns it, so a missing one breaks an invariant. */
@@ -254,7 +224,9 @@ export async function writeDraft(
 ): Promise<WrittenDraft> {
   // The router stores a supply only for money held as an advance.
   const advanceSupply =
-    input.posting.type === "receipt" && input.posting.settlementKind !== "direct"
+    input.posting.type === "receipt" &&
+    (input.posting.settlementKind === "advance" ||
+      (input.posting.settlementKind === "against" && input.posting.exposureSide === "receivable"))
       ? input.posting.advanceSupply
       : null;
 
@@ -434,12 +406,13 @@ export async function writeDraft(
 
   for (const chunk of insertChunks(lines)) await tx.insert(documentLines).values(chunk);
 
-  if (posting.type === "bill") {
+  if (posting.type === "bill" || posting.type === "debitNote") {
     if (posting.tdsPaise > 0n && !input.tdsSectionId) {
-      throw impossible(`bill ${draft.id} with TDS has no section`);
+      throw impossible(`${posting.type} ${draft.id} with TDS has no section`);
     }
 
-    if (input.tdsSectionId) {
+    // A note that reverses no TDS records no deduction, so registers skip it.
+    if (input.tdsSectionId && (posting.type === "bill" || posting.tdsPaise > 0n)) {
       const deduction = {
         tdsSectionId: input.tdsSectionId,
         basePaise: sumPaise(input.lines.map((line) => line.amountPaise)),
@@ -539,12 +512,20 @@ export async function postDocument(
 
   let pairs: AllocationPair[] = [];
   let journalPairs: Map<string, Map<string, bigint>> | null = null;
-  let requiredSourceType: "creditNote" | undefined;
+  let allowedSourceTypes: readonly ("creditNote" | "debitNote" | "payment")[] | undefined;
 
   const settles = (targets: readonly AllocationTarget[]) =>
     targets.map(({ documentId, amountPaise }) => ({
       sourceDocumentId: id,
       targetDocumentId: documentId,
+      amountPaise,
+    }));
+
+  // A refund is the target: it pays out each credit it names.
+  const refunds = (sources: readonly AllocationTarget[]) =>
+    sources.map(({ documentId, amountPaise }) => ({
+      sourceDocumentId: documentId,
+      targetDocumentId: id,
       amountPaise,
     }));
 
@@ -579,11 +560,16 @@ export async function postDocument(
       break;
     case "creditNote":
     case "debitNote": {
-      ledgers.push(
-        posting.type === "creditNote"
-          ? { partyId: posting.partyId, side: "receivable", amountPaise: -posting.amountPaise }
-          : { partyId: posting.partyId, side: "payable", amountPaise: posting.amountPaise },
-      );
+      const settledPaise =
+        posting.type === "debitNote" ? posting.amountPaise - posting.tdsPaise : posting.amountPaise;
+
+      // A debit note that reverses only TDS leaves no supplier credit.
+      if (settledPaise > 0n)
+        ledgers.push(
+          posting.type === "creditNote"
+            ? { partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise }
+            : { partyId: posting.partyId, side: "payable", amountPaise: settledPaise },
+        );
 
       // `note.post` locked the source; the note settles what remains of it.
       if (!input.againstDocumentId) throw impossible(`${posting.type} ${id} has no source`);
@@ -596,9 +582,7 @@ export async function postDocument(
       if (!source) throw impossible(`${posting.type} ${id} source vanished`);
 
       const amountPaise =
-        source.outstandingPaise < posting.amountPaise
-          ? source.outstandingPaise
-          : posting.amountPaise;
+        source.outstandingPaise < settledPaise ? source.outstandingPaise : settledPaise;
 
       if (amountPaise > 0n)
         pairs = [{ sourceDocumentId: id, targetDocumentId: input.againstDocumentId, amountPaise }];
@@ -613,13 +597,21 @@ export async function postDocument(
           side: "receivable",
           amountPaise: -posting.amountPaise,
         });
-      } else if (posting.settlementKind === "against") {
+      } else if (posting.exposureSide === "receivable") {
         const settledPaise =
           posting.amountPaise + sumPaise(posting.adjustments.map((row) => row.amountPaise));
 
         ledgers.push({ partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise });
         pairs = settles(posting.allocations);
         assertFullyAllocated(pairs, posting.adjustments.length > 0, settledPaise);
+      } else if (posting.exposureSide === "payable") {
+        ledgers.push({
+          partyId: posting.partyId,
+          side: "payable",
+          amountPaise: -posting.amountPaise,
+        });
+        pairs = refunds(posting.sources);
+        allowedSourceTypes = ["debitNote", "payment"];
       }
 
       break;
@@ -644,12 +636,8 @@ export async function postDocument(
           side: "receivable",
           amountPaise: posting.amountPaise,
         });
-        pairs = posting.sources.map(({ documentId, amountPaise }) => ({
-          sourceDocumentId: documentId,
-          targetDocumentId: id,
-          amountPaise,
-        }));
-        requiredSourceType = "creditNote";
+        pairs = refunds(posting.sources);
+        allowedSourceTypes = ["creditNote"];
       } else if (posting.settlementKind === "against") {
         const settledPaise =
           posting.amountPaise + sumPaise(posting.writeOffs.map((row) => row.amountPaise));
@@ -730,7 +718,7 @@ export async function postDocument(
     await applyAllocations(tx, scope, settings, {
       pairs,
       draftDocumentId: id,
-      requiredSourceType,
+      allowedSourceTypes,
     });
   }
 
@@ -806,9 +794,15 @@ export async function reverseDocument(
   await assertPeriodOpen(tx, scope, settings, { entryDate, affectsTax: cancelled.affectsTax });
 
   const active = await activeAllocationsOf(tx, scope.orgId, [documentId]);
+
+  const isRefund =
+    cancelled.settlementKind === "against" &&
+    ((cancelled.type === "payment" && cancelled.exposureSide === "receivable") ||
+      (cancelled.type === "receipt" && cancelled.exposureSide === "payable"));
+
   const asTarget = active.filter((row) => row.targetDocumentId === documentId);
 
-  if (asTarget.length > 0) {
+  if (asTarget.length > 0 && !isRefund) {
     const sources = await tx
       .select({ id: documents.id, number: documents.number })
       .from(documents)
@@ -827,7 +821,7 @@ export async function reverseDocument(
     });
   }
 
-  // Every remaining row allocates from this document. Drizzle refuses an empty insert.
+  // Refunds reverse allocations targeting them, restoring each source's credit.
   if (active.length > 0) {
     await tx.insert(allocations).values(
       active.map((row) => ({
@@ -854,7 +848,17 @@ export async function reverseDocument(
       and(
         eq(allocations.orgId, scope.orgId),
         eq(allocations.id, journalEntries.documentId),
-        eq(allocations.sourceDocumentId, documentId),
+        // A refund reverses only its own applies; a release entry written when another
+        // source's apply to it was reversed belongs to that source.
+        or(
+          eq(allocations.sourceDocumentId, documentId),
+          asTarget.length > 0
+            ? inArray(
+                allocations.id,
+                asTarget.map((row) => row.id),
+              )
+            : undefined,
+        ),
       ),
     )
     .leftJoin(
@@ -903,6 +907,39 @@ export async function reverseDocument(
   return cancelled;
 }
 
+/** Posted notes only: cancelled notes release their source-line capacity. */
+export async function priorNoteLines(
+  tx: DbTransaction,
+  orgId: string,
+  sourceDocumentId: string,
+  type: "creditNote" | "debitNote",
+  lineIds: string[],
+) {
+  if (!lineIds.length) return [];
+
+  return tx
+    .select({
+      sourceLineId: documentLines.sourceLineId,
+      amountPaise: sql<bigint>`sum(${documentLines.amountPaise})::bigint`.mapWith(BigInt),
+      cgstPaise: sql<bigint>`sum(${documentLines.cgstPaise})::bigint`.mapWith(BigInt),
+      sgstPaise: sql<bigint>`sum(${documentLines.sgstPaise})::bigint`.mapWith(BigInt),
+      igstPaise: sql<bigint>`sum(${documentLines.igstPaise})::bigint`.mapWith(BigInt),
+    })
+    .from(documentLines)
+    .innerJoin(
+      documents,
+      and(
+        eq(documents.orgId, orgId),
+        eq(documents.id, documentLines.documentId),
+        eq(documents.type, type),
+        eq(documents.state, "posted"),
+        eq(documents.againstDocumentId, sourceDocumentId),
+      ),
+    )
+    .where(and(eq(documentLines.orgId, orgId), inArray(documentLines.sourceLineId, lineIds)))
+    .groupBy(documentLines.sourceLineId);
+}
+
 /** Lock a posted claim while resolving its note, and summarize all earlier posted notes. */
 export async function noteSource(
   tx: DbTransaction,
@@ -936,6 +973,24 @@ export async function noteSource(
   if (!source || !source.partyId || source.intraState === null)
     throw badRequest("NOTE_SOURCE_INVALID", "Choose a posted source document.");
 
+  const [tds] =
+    type === "debitNote"
+      ? await tx
+          .select({
+            tdsSectionId: tdsDeductions.tdsSectionId,
+            basePaise: tdsDeductions.basePaise,
+            amountPaise: tdsDeductions.amountPaise,
+          })
+          .from(tdsDeductions)
+          .where(
+            and(
+              eq(tdsDeductions.orgId, scope.orgId),
+              eq(tdsDeductions.documentId, sourceDocumentId),
+            ),
+          )
+          .limit(1)
+      : [];
+
   const lines = await tx
     .select({
       id: documentLines.id,
@@ -959,41 +1014,26 @@ export async function noteSource(
       and(eq(documentLines.orgId, scope.orgId), eq(documentLines.documentId, sourceDocumentId)),
     );
 
-  const prior = await tx
-    .select({
-      sourceLineId: documentLines.sourceLineId,
-      amountPaise: sql<bigint>`sum(${documentLines.amountPaise})::bigint`.mapWith(BigInt),
-      cgstPaise: sql<bigint>`sum(${documentLines.cgstPaise})::bigint`.mapWith(BigInt),
-      sgstPaise: sql<bigint>`sum(${documentLines.sgstPaise})::bigint`.mapWith(BigInt),
-      igstPaise: sql<bigint>`sum(${documentLines.igstPaise})::bigint`.mapWith(BigInt),
-    })
-    .from(documentLines)
-    .innerJoin(
-      documents,
-      and(
-        eq(documents.orgId, scope.orgId),
-        eq(documents.id, documentLines.documentId),
-        eq(documents.type, type),
-        eq(documents.state, "posted"),
-        eq(documents.againstDocumentId, sourceDocumentId),
-      ),
-    )
-    .where(
-      and(
-        eq(documentLines.orgId, scope.orgId),
-        inArray(
-          documentLines.sourceLineId,
-          lines.map((line) => line.id),
-        ),
-      ),
-    )
-    .groupBy(documentLines.sourceLineId);
+  const prior = await priorNoteLines(
+    tx,
+    scope.orgId,
+    sourceDocumentId,
+    type,
+    lines.map((line) => line.id),
+  );
 
   const [total] = await tx
     .select({
       amountPaise: sql<bigint>`coalesce(sum(${documents.totalPaise}), 0)::bigint`.mapWith(BigInt),
+      reversedTdsPaise: sql<bigint>`coalesce(sum(${tdsDeductions.amountPaise}), 0)::bigint`.mapWith(
+        BigInt,
+      ),
     })
     .from(documents)
+    .leftJoin(
+      tdsDeductions,
+      and(eq(tdsDeductions.orgId, scope.orgId), eq(tdsDeductions.documentId, documents.id)),
+    )
     .where(
       and(
         eq(documents.orgId, scope.orgId),
@@ -1010,6 +1050,8 @@ export async function noteSource(
     lines,
     prior,
     priorTotalPaise: total!.amountPaise,
+    tds: tds ?? null,
+    priorReversedTdsPaise: total!.reversedTdsPaise,
   };
 }
 
@@ -1068,6 +1110,7 @@ export async function amendDocument(
         accountId: line.accountId,
         entrySide: line.entrySide,
         adjustmentKind: line.adjustmentKind,
+        tdsSectionId: line.tdsSectionId,
         itemId: line.itemId,
         partyId: line.partyId,
         description: line.description,

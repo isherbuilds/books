@@ -1,5 +1,6 @@
 import { formatBusinessDate } from "@accly/api/lib/business-date";
 import { formatMoney, isPositiveMoney } from "@accly/api/core/money";
+import { INDIAN_STATES } from "@accly/api/lib/indian-states";
 import { APPLY_CREDIT_GRANT } from "@accly/auth/access";
 import { Button, buttonVariants } from "@accly/ui/components/button";
 import {
@@ -26,7 +27,7 @@ import { toast } from "sonner";
 import { AllocationsSection } from "@/components/allocations-section";
 import { ClaimStatus, struck } from "@/components/document-columns";
 import { ApplyCreditDialog } from "@/components/apply-credit-dialog";
-import { ReasonDialog } from "@/components/confirm-dialog";
+import { ReasonDialog, useConfirm } from "@/components/confirm-dialog";
 import { DetailRow } from "@/components/detail-row";
 import { DocumentTotals } from "@/components/invoice-summary";
 import { ReceiptOverlay } from "@/components/receipt-overlay";
@@ -58,6 +59,8 @@ function InvoiceSheetRoute() {
   const [activeOverlay, setActiveOverlay] = useState<
     "cancel" | "amend" | "apply" | "receipt" | null
   >(null);
+
+  const [confirm, confirmDialog] = useConfirm();
 
   const isDraft = invoice.state === "draft";
   const canEdit = useCan(orgSlug, { invoice: ["create"] }) && isDraft;
@@ -91,7 +94,7 @@ function InvoiceSheetRoute() {
   const { partyName } = invoice;
 
   const close = () =>
-    void navigate({
+    navigate({
       to: "/$orgSlug/invoices",
       params: { orgSlug },
       search: (previous) => previous,
@@ -155,9 +158,10 @@ function InvoiceSheetRoute() {
   const discard = useMutation(
     orpc.invoice.discardDraft.mutationOptions({
       onSuccess: async () => {
+        await close();
+        queryClient.removeQueries({ queryKey: invoiceDetailOptions(orgSlug, invoiceId).queryKey });
         await invalidateDrafts();
         toast.success("Draft discarded");
-        close();
       },
       onError: refused("Could not discard the draft", close, invalidateDrafts),
     }),
@@ -169,7 +173,7 @@ function InvoiceSheetRoute() {
       title={invoice.number ?? "Draft"}
       status={<ClaimStatus claim={invoice} />}
       description={partyName ?? "No party"}
-      onClose={close}
+      onClose={() => void close()}
       onStep={(next) =>
         void navigate({
           to: "/$orgSlug/invoices/$invoiceId",
@@ -204,8 +208,10 @@ function InvoiceSheetRoute() {
           <DetailRow label="Due date">
             {invoice.dueDate ? formatBusinessDate(invoice.dueDate) : null}
           </DetailRow>
-          <DetailRow label="Place of supply" mono>
-            {invoice.placeOfSupplyStateCode}
+          <DetailRow label="Place of supply">
+            {invoice.placeOfSupplyStateCode
+              ? `${INDIAN_STATES[invoice.placeOfSupplyStateCode]} (${invoice.placeOfSupplyStateCode})`
+              : null}
           </DetailRow>
           {invoice.printSnapshot?.shipTo ? (
             <DetailRow label="Ship to">
@@ -358,7 +364,7 @@ function InvoiceSheetRoute() {
       canCancel ||
       canAmend ||
       canPostNote ||
-      invoice.state === "posted" ? (
+      invoice.number !== null ? (
         <SheetFooter>
           {canEdit ? (
             <>
@@ -379,9 +385,15 @@ function InvoiceSheetRoute() {
                 variant="destructive"
                 disabled={discard.isPending}
                 onClick={() =>
-                  discard.mutate({
-                    orgSlug,
-                    draft: { id: invoice.id, version: invoice.version },
+                  confirm({
+                    title: "Discard invoice draft?",
+                    description: "This draft will be deleted and cannot be recovered.",
+                    confirmLabel: "Discard draft",
+                    run: () =>
+                      discard.mutate({
+                        orgSlug,
+                        draft: { id: invoice.id, version: invoice.version },
+                      }),
                   })
                 }
               >
@@ -429,7 +441,7 @@ function InvoiceSheetRoute() {
               ) : null}
             </SheetActionsMenu>
           ) : null}
-          {invoice.state === "posted" ? (
+          {invoice.number !== null ? (
             // The browser's PDF viewer prints and saves, so one link covers both.
             <a
               href={`/api/${orgSlug}/invoices/${invoice.id}/pdf`}
@@ -448,6 +460,7 @@ function InvoiceSheetRoute() {
         </SheetFooter>
       ) : null}
 
+      {confirmDialog}
       {/* Inside the Sheet, so Base UI treats each as nested: Esc closes it alone. */}
       <ReasonDialog
         open={activeOverlay === "cancel"}

@@ -1,6 +1,6 @@
 import { DOCUMENT_SEARCH_PATTERN, documentSearchQuery } from "@accly/api/lib/schemas";
 import { Button } from "@accly/ui/components/button";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, useMatch, useNavigate } from "@tanstack/react-router";
 import { CircleDotIcon } from "lucide-react";
 import { useRef } from "react";
@@ -20,9 +20,11 @@ import {
   OptionFilter,
 } from "@/components/list-filter";
 import { ListToolbar, PageBody, PageHeader, SearchInput } from "@/components/page";
+import { RegisterTotals } from "@/components/register-totals";
 import { invoiceListOptions } from "@/lib/invoices";
 import { useCan } from "@/lib/membership";
 import { OPERATIONAL_INFINITE_REFETCH } from "@/lib/operational-query";
+import { orpc } from "@/lib/orpc";
 import { periodSearch, requirePeriod } from "@/lib/require-period";
 import { requireOrgPermission } from "@/lib/route-permission";
 
@@ -47,7 +49,10 @@ export const Route = createFileRoute("/$orgSlug/invoices")({
   loaderDeps: ({ search: { all: _all, ...filters } }) => filters,
   loader: async ({ context: { queryClient }, deps, params: { orgSlug } }) => {
     await requireOrgPermission(queryClient, orgSlug, { invoice: ["read"] });
-    await queryClient.infiniteQuery(invoiceListOptions(orgSlug, deps)).catch(() => {});
+    await Promise.all([
+      queryClient.infiniteQuery(invoiceListOptions(orgSlug, deps)).catch(() => {}),
+      queryClient.prefetchQuery(orpc.invoice.totals.queryOptions({ input: { orgSlug, ...deps } })),
+    ]);
   },
   component: InvoicesRoute,
 });
@@ -65,6 +70,8 @@ function InvoicesRoute() {
     ...OPERATIONAL_INFINITE_REFETCH,
   });
 
+  const totals = useQuery(orpc.invoice.totals.queryOptions({ input: { orgSlug, ...filters } }));
+
   const activeRowId = useMatch({ from: "/$orgSlug/invoices/$invoiceId", shouldThrow: false })
     ?.params.invoiceId;
 
@@ -75,7 +82,7 @@ function InvoicesRoute() {
 
   const partyChip = usePartyChip(orgSlug, partyId, () => setFilters({ partyId: undefined }));
 
-  const date = useDateRangeFilter({ from, to }, field, (range) => setFilters(range));
+  const date = useDateRangeFilter({ from, to }, field, setFilters);
 
   const clear = () => {
     focusSearch(field, { empty: true });
@@ -138,7 +145,7 @@ function InvoicesRoute() {
           />
           <FilterChips filters={chips} field={field} onClear={clear} />
         </ListToolbar>
-
+        <RegisterTotals query={totals} noun={filters.status ? "invoice" : "posted invoice"} />
         <DataTable
           columns={INVOICE_COLUMNS}
           data={rows}

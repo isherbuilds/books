@@ -1,4 +1,4 @@
-import { drainAuditWrites } from "@accly/api/audit";
+import { drainAuditWrites } from "@accly/db/audit";
 import {
   organizationSnapshot,
   accountLine,

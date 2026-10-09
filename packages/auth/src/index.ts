@@ -1,4 +1,5 @@
 import { db } from "@accly/db";
+import { audit } from "@accly/db/audit";
 import * as schema from "@accly/db/schema/auth";
 import { env } from "@accly/env/server";
 import { organization } from "better-auth/plugins/organization";
@@ -13,13 +14,17 @@ export function invitationUrl(invitationId: string): string {
   return new URL(`/join?invitation=${invitationId}`, env.CORS_ORIGIN).toString();
 }
 
+/** Translate Better Auth's stable error codes without exposing its dependency to API routers. */
+export function hasAuthErrorCode(error: unknown, code: string): boolean {
+  return error instanceof APIError && error.body?.code === code;
+}
+
 // The browser needs only these. Every other organization endpoint answers 404 over
 // HTTP: several list pending invitation ids to any member, and an id plus its email
 // is the sign-up proof. Server code reaches them through `auth.api`, which
 // `disabledPaths` does not gate, behind the oRPC permission guard.
 const BROWSER_ORGANIZATION_PATHS = new Set([
   "/organization/list",
-  "/organization/list-user-invitations",
   "/organization/accept-invitation",
 ]);
 
@@ -35,6 +40,15 @@ function createAuth() {
     // has an explicit object-cleanup flow.
     disableOrganizationDeletion: true,
     organizationHooks: {
+      afterAcceptInvitation: async ({ invitation, member: joined, user: invitee }) => {
+        audit({
+          action: "member.join",
+          actorId: invitee.id,
+          orgId: invitation.organizationId,
+          target: `member:${joined.id}`,
+          meta: { name: invitee.name, email: invitee.email, role: joined.role },
+        });
+      },
       beforeCreateOrganization: async () => {
         throw new APIError("FORBIDDEN", {
           message: "Create organizations through the accounting bootstrap.",
