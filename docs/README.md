@@ -111,6 +111,13 @@ Check UI items in the running app on desktop and mobile, in both themes.
   invoice, auth-integrity and settings integration tests when Docker is available;
   Product menu/group-hover links with mouse/touch; failed Load more showing one
   retry; failed background refresh retaining rows.
+- **Post-merge review fixes #55–#59**: Verification. Types, lint and the full
+  test suite passed; the refund-cancel release has a failing-before test. The
+  headless browser lost its page frame on every load, so no screen check ran.
+  Next: register totals refresh within 10 s of another session's post; palette
+  search, invoice quote and lock-exception member picker; invite conflict
+  refreshes the roster; account rename to a taken name keeps the Sheet open with
+  a field error.
 - **[Stale allocation recovery](./specs/client-patterns.md)**: Verification.
   Next: in two Cedar sessions, select open Invoice/Bill in Receipt/Payment,
   settle from the other session and refresh open rows. Confirm Clear unavailable
