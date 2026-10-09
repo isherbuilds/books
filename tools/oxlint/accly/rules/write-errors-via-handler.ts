@@ -4,25 +4,39 @@ import type { ESTree } from "@oxlint/plugins";
 
 /**
  * A write that fails with CONFLICT or an uncertain 5xx must refetch what it would have
- * moved; a bare toast leaves the screen stale. handleWriteError owns those outcomes.
+ * moved; a bare toast leaves the screen stale. handleWriteError owns those outcomes, so an
+ * onError in `.mutationOptions({...})` or `useMutation({...})` that calls `toast.error`
+ * must also call handleWriteError.
  */
-function isToastError(node: ESTree.Node | null | undefined): boolean {
-  if (node?.type === "ExpressionStatement") return isToastError(node.expression);
+function isCallTo(node: ESTree.Node, object: string | null, name: string): boolean {
+  if (node.type !== "CallExpression") return false;
+  const { callee } = node;
+  if (object === null) return callee.type === "Identifier" && callee.name === name;
   return (
-    node?.type === "CallExpression" &&
-    node.callee.type === "MemberExpression" &&
-    node.callee.object.type === "Identifier" &&
-    node.callee.object.name === "toast" &&
-    node.callee.property.type === "Identifier" &&
-    node.callee.property.name === "error"
+    callee.type === "MemberExpression" &&
+    callee.object.type === "Identifier" &&
+    callee.object.name === object &&
+    callee.property.type === "Identifier" &&
+    callee.property.name === name
   );
 }
 
-function onlyToasts(fn: ESTree.Node): boolean {
+/** Whether any node under `root` satisfies `test`. Walks plain AST children. */
+function contains(root: unknown, test: (node: ESTree.Node) => boolean): boolean {
+  if (root === null || typeof root !== "object") return false;
+  if (Array.isArray(root)) return root.some((child) => contains(child, test));
+  const node = root as ESTree.Node & Record<string, unknown>;
+  if (typeof node.type === "string" && test(node)) return true;
+  return Object.entries(node).some(([key, child]) => key !== "parent" && contains(child, test));
+}
+
+/** An onError that toasts but never reaches handleWriteError. */
+function bareToast(fn: ESTree.Node): boolean {
   if (fn.type !== "ArrowFunctionExpression" && fn.type !== "FunctionExpression") return false;
-  const { body } = fn;
-  if (body?.type !== "BlockStatement") return isToastError(body);
-  return body.body.length === 1 && isToastError(body.body[0]);
+  return (
+    contains(fn.body, (node) => isCallTo(node, "toast", "error")) &&
+    !contains(fn.body, (node) => isCallTo(node, null, "handleWriteError"))
+  );
 }
 
 export const writeErrorsViaHandlerRule = defineRule({
@@ -38,12 +52,12 @@ export const writeErrorsViaHandlerRule = defineRule({
     return {
       CallExpression(node) {
         const { callee } = node;
-        if (
-          callee.type !== "MemberExpression" ||
-          callee.property.type !== "Identifier" ||
-          callee.property.name !== "mutationOptions"
-        )
-          return;
+        const mutation =
+          (callee.type === "MemberExpression" &&
+            callee.property.type === "Identifier" &&
+            callee.property.name === "mutationOptions") ||
+          (callee.type === "Identifier" && callee.name === "useMutation");
+        if (!mutation) return;
         for (const arg of node.arguments) {
           if (arg.type !== "ObjectExpression") continue;
           for (const property of arg.properties) {
@@ -51,7 +65,7 @@ export const writeErrorsViaHandlerRule = defineRule({
               property.type === "Property" &&
               property.key.type === "Identifier" &&
               property.key.name === "onError" &&
-              onlyToasts(property.value)
+              bareToast(property.value)
             )
               context.report({ node: property, messageId: "bareToast" });
           }

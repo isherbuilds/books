@@ -30,6 +30,7 @@ export function ReportDownloads({
   const download = useMutation({
     mutationFn: build,
     onSuccess: saveFile,
+    // oxlint-disable-next-line accly/write-errors-via-handler -- an export download reads; it writes nothing
     onError: (error) => toast.error(errorMessage(error, failure)),
   });
 
