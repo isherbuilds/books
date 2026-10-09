@@ -9,20 +9,17 @@ type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
  * order, to one plain function: `const f = (a, b) => g(a, b)`. It adds a name and a hop, not
  * behaviour. Call `g` directly, or give the wrapper real work.
  *
- * A callback is exempt, because its caller may pass more arguments than it forwards:
- * `xs.map((s) => parseInt(s))` pins the arity where `xs.map(parseInt)` would not, and
- * Base UI calls `onValueChange(value, eventDetails)`. So a function passed as a call
- * argument, a JSX attribute value or an object property value is left alone.
+ * Only a named wrapper is checked: a function declaration or a variable initialised with
+ * a function. An inline callback is left alone, because its caller may pass more
+ * arguments than it forwards: `xs.map((s) => parseInt(s))` pins the arity where
+ * `xs.map(parseInt)` would not, and Base UI calls `onValueChange(value, eventDetails)`.
  * An `async` wrapper is not reported either: it turns a synchronous throw into a
  * rejection, so it is not a pure pass-through.
  */
 function isForwarding(node: FunctionNode): boolean {
   const { params, parent } = node;
   if (node.async) return false;
-  if (parent.type === "CallExpression" && parent.arguments.some((arg) => arg === node))
-    return false;
-  if (parent.type === "JSXExpressionContainer") return false;
-  if (parent.type === "Property" && parent.value === node) return false;
+  if (node.type !== "FunctionDeclaration" && parent.type !== "VariableDeclarator") return false;
   if (params.length === 0 || params.some((param) => param.type !== "Identifier")) return false;
   let call = node.body;
   if (call?.type === "BlockStatement") {
