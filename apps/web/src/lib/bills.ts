@@ -30,3 +30,7 @@ export const billTotalsOptions = (
   ...orpc.bill.totals.queryOptions({ input: { orgSlug, ...filters } }),
   ...OPERATIONAL_REFETCH,
 });
+
+// The command palette's number/party/reference search over bills.
+export const billSearchOptions = (orgSlug: string, q: string, limit: number) =>
+  orpc.bill.list.queryOptions({ input: { orgSlug, q, limit } });

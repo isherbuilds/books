@@ -48,3 +48,7 @@ export const receiptTotalsOptions = (
 /** A party's five latest receipts, for its overview. */
 export const recentReceiptsOptions = (orgSlug: string, partyId: string) =>
   orpc.receipt.list.queryOptions({ input: { orgSlug, partyId, limit: 5 } });
+
+// The command palette's number/party/reference search over receipts.
+export const receiptSearchOptions = (orgSlug: string, q: string, limit: number) =>
+  orpc.receipt.list.queryOptions({ input: { orgSlug, q, limit } });

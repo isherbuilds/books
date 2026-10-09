@@ -1,5 +1,6 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
+import type { skipToken } from "@tanstack/react-query";
 
 import { OPERATIONAL_REFETCH } from "@/lib/operational-query";
 import { nextPage, orpc } from "@/lib/orpc";
@@ -36,3 +37,12 @@ export const invoiceTotalsOptions = (
   ...orpc.invoice.totals.queryOptions({ input: { orgSlug, ...filters } }),
   ...OPERATIONAL_REFETCH,
 });
+
+// The command palette's number/party/reference search over invoices.
+export const invoiceSearchOptions = (orgSlug: string, q: string, limit: number) =>
+  orpc.invoice.list.queryOptions({ input: { orgSlug, q, limit } });
+
+// Server-computed totals for an unsaved invoice; skipped until there is something to quote.
+export const invoiceQuoteOptions = (
+  input: Parameters<AppRouterClient["invoice"]["quote"]>[0] | typeof skipToken,
+) => orpc.invoice.quote.queryOptions({ input });

@@ -38,7 +38,7 @@ import { NoteSourceLink } from "@/components/note-columns";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { invalidateSettlementState } from "@/lib/domain-invalidation";
-import type { NoteSource } from "@/lib/notes";
+import { noteQuoteOptions, type NoteSource } from "@/lib/notes";
 import { useCan } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import { applyOrpcFieldError, errorMessage, handleWriteError } from "@/lib/orpc-error";
@@ -127,11 +127,9 @@ export function NoteForm({
   const debounced = useDebouncedValue(request, 300);
 
   const quote = useQuery({
-    ...orpc.note.quote.queryOptions({
-      input: debounced
-        ? { orgSlug, type, againstDocumentId: source.id, lines: debounced }
-        : skipToken,
-    }),
+    ...noteQuoteOptions(
+      debounced ? { orgSlug, type, againstDocumentId: source.id, lines: debounced } : skipToken,
+    ),
     placeholderData: keepPreviousData,
     retry: false,
   });

@@ -28,7 +28,7 @@ import { openCreditsOptions, openItemsOptions } from "@/lib/pickers";
  */
 const MODES = ["advance", "against", "direct", "refund"] as const;
 
-export type SettlementMode = (typeof MODES)[number];
+type SettlementMode = (typeof MODES)[number];
 
 type Side = "receivable" | "payable";
 

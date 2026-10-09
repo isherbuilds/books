@@ -63,7 +63,7 @@ import {
   invalidateInvoiceDrafts,
   invalidateSettlementState,
 } from "@/lib/domain-invalidation";
-import type { InvoiceDetail } from "@/lib/invoices";
+import { invoiceQuoteOptions, type InvoiceDetail } from "@/lib/invoices";
 import { useCan, useMembership } from "@/lib/membership";
 import { orpc } from "@/lib/orpc";
 import {
@@ -322,7 +322,7 @@ export function InvoiceForm({
   const debouncedRequest = useDebouncedValue(quoteRequestValue, 300);
 
   const quote = useQuery({
-    ...orpc.invoice.quote.queryOptions({ input: debouncedRequest?.input ?? skipToken }),
+    ...invoiceQuoteOptions(debouncedRequest?.input ?? skipToken),
     placeholderData: keepPreviousData,
     retry: false,
   });
