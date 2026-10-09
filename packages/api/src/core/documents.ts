@@ -816,13 +816,8 @@ export async function reverseDocument(
   }
 
   // Refunds reverse allocations targeting them, restoring each source's credit:
-  // reverse the apply entry, or release a source that allocated at post. Sources lock
-  // in id order, as in lockDocuments, so concurrent cancels cannot deadlock.
-  const bySource = [...asTarget].sort((a, b) =>
-    a.sourceDocumentId < b.sourceDocumentId ? -1 : a.sourceDocumentId > b.sourceDocumentId ? 1 : 0,
-  );
-
-  for (const row of bySource) await reverseAllocation(tx, scope, settings, row.id, reason);
+  // reverse the apply entry, or release a source that allocated at post.
+  for (const row of asTarget) await reverseAllocation(tx, scope, settings, row.id, reason);
 
   const asSource = active.filter((row) => row.targetDocumentId !== documentId);
 
