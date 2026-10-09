@@ -123,8 +123,7 @@ export const paymentRouter = {
       const accountIds =
         settlementKind === "direct"
           ? [input.expenseAccountId]
-          : // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
-            settlementKind === "against" && input.exposureSide === "payable"
+          : settlementKind === "against" && input.exposureSide === "payable"
             ? [
                 ...(input.writeOffs ?? []).map(({ accountId }) => accountId),
                 ...(input.fee ? [input.fee.accountId] : []),
@@ -191,7 +190,6 @@ export const paymentRouter = {
           input.narration ?? (isRefund(input) ? "Credit note refund" : "Payment against bills");
         lines = [accountLine(null, lineDescription, input.amount)];
 
-        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
         if (input.exposureSide === "payable") {
           const writeOffs = (input.writeOffs ?? []).map(({ accountId, amount }) => {
             const account = byAccountId.get(accountId);

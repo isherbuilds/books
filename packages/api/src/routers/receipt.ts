@@ -127,7 +127,6 @@ export async function postReceipt(
   const { settlementKind } = input;
   const refund = isRefund(input);
   // The input's own discriminant narrows it to the fields a customer receipt carries.
-  // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
   const isCustomerAgainst = settlementKind === "against" && input.exposureSide === "receivable";
 
   const allocatedPaise =

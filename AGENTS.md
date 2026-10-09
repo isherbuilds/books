@@ -76,7 +76,7 @@ A rule with only `prose` behind it that an agent breaks again moves up a level i
 | Roles authorize as a union (rule 2)                                                                                   | `@accly/auth/access` is the only parser; test `tests/unit/access.test.ts`            |
 | Migrations come from `db:generate` (rule 4)                                                                           | `bun run db:check`                                                                   |
 | No server-only module in client code (rule 6)                                                                         | lint `accly/client-safe-imports`; allowlist in `tools/oxlint/accly/client-safe.ts`   |
-| Settlement roles come from `core/document-roles.ts`                                                                   | lint `accly/no-exposure-side-branch`                                                 |
+| Settlement roles in `apps/web` come from `core/document-roles.ts`                                                     | lint `accly/no-exposure-side-branch`                                                 |
 | Money sums go through `paiseSum`                                                                                      | lint `accly/no-raw-paise-sum`                                                        |
 | No bigint literal in `.tsx`                                                                                           | lint `accly/no-bigint-in-components`                                                 |
 | No paise maths in components                                                                                          | lint `accly/no-paise-arithmetic-in-components`                                       |

@@ -61,7 +61,6 @@ function ImportRoute() {
   const template = useMutation({
     mutationFn: () => orpc.import.template.call({ orgSlug }),
     onSuccess: saveFile,
-    // oxlint-disable-next-line accly/write-errors-via-handler -- the template download reads; it writes nothing
     onError: (error) => toast.error(errorMessage(error, "Could not download the template")),
   });
 
@@ -73,7 +72,6 @@ function ImportRoute() {
     },
     onMutate: () => setResult(null),
     onSuccess: (checked) => setResult({ kind: "checked", ...checked }),
-    // oxlint-disable-next-line accly/write-errors-via-handler -- the workbook check validates; it writes nothing
     onError: (error) => toast.error(errorMessage(error, "Could not check the workbook")),
   });
 

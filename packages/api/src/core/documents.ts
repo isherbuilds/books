@@ -592,7 +592,6 @@ export async function postDocument(
           side: "receivable",
           amountPaise: -posting.amountPaise,
         });
-        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       } else if (posting.exposureSide === "receivable") {
         const settledPaise =
           posting.amountPaise + sumPaise(posting.adjustments.map((row) => row.amountPaise));
@@ -600,7 +599,6 @@ export async function postDocument(
         ledgers.push({ partyId: posting.partyId, side: "receivable", amountPaise: -settledPaise });
         pairs = settles(posting.allocations);
         assertFullyAllocated(pairs, posting.adjustments.length > 0, settledPaise);
-        // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       } else if (posting.exposureSide === "payable") {
         ledgers.push({
           partyId: posting.partyId,
@@ -626,7 +624,6 @@ export async function postDocument(
 
       if (posting.settlementKind === "direct") break;
 
-      // oxlint-disable-next-line accly/no-exposure-side-branch -- narrows the request type
       if (posting.exposureSide === "receivable") {
         // A refund pays out credit notes; the router checked the amounts match.
         ledgers.push({

@@ -103,7 +103,6 @@ function ReportsRoute() {
   const periodDownload = useMutation({
     mutationFn: (key: PeriodReport) => orpc.export[key].call({ orgSlug, from, to }),
     onSuccess: saveFile,
-    // oxlint-disable-next-line accly/write-errors-via-handler -- a report download reads; it writes nothing
     onError: (error) => toast.error(errorMessage(error, "Could not build the report")),
   });
 

@@ -700,8 +700,7 @@ function hasRole(position: "source" | "target", side: Side): SQL | undefined {
                 eq(documents.type, type),
                 exposureSide === null
                   ? isNull(documents.exposureSide)
-                  : // oxlint-disable-next-line accly/no-exposure-side-branch -- translates documentRole() into SQL
-                    eq(documents.exposureSide, exposureSide),
+                  : eq(documents.exposureSide, exposureSide),
               ),
             ]
           : [],
