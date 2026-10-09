@@ -11,7 +11,7 @@ import { parties } from "@accly/db/schema/parties";
 import { paymentMethods } from "@accly/db/schema/payment-methods";
 import { tdsDeductions } from "@accly/db/schema/tds-deductions";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { badRequest, impossible } from "../lib/conflict";
@@ -21,6 +21,7 @@ import {
   activeAllocationsOf,
   applyAllocations,
   lockDocuments,
+  reverseAllocationToCancelled,
   settlementPaise,
   type AllocationPair,
   type AllocationTarget,
@@ -814,10 +815,16 @@ export async function reverseDocument(
     });
   }
 
-  // Refunds reverse allocations targeting them, restoring each source's credit.
-  if (active.length > 0) {
+  // Refunds reverse allocations targeting them, restoring each source's credit:
+  // reverse the apply entry, or release a source that allocated at post.
+  for (const row of asTarget)
+    await reverseAllocationToCancelled(tx, scope, settings, row.id, reason);
+
+  const asSource = active.filter((row) => row.targetDocumentId !== documentId);
+
+  if (asSource.length > 0) {
     await tx.insert(allocations).values(
-      active.map((row) => ({
+      asSource.map((row) => ({
         id: Bun.randomUUIDv7(),
         orgId: scope.orgId,
         sourceDocumentId: row.sourceDocumentId,
@@ -841,17 +848,8 @@ export async function reverseDocument(
       and(
         eq(allocations.orgId, scope.orgId),
         eq(allocations.id, journalEntries.documentId),
-        // A refund reverses only its own applies; a release entry written when another
-        // source's apply to it was reversed belongs to that source.
-        or(
-          eq(allocations.sourceDocumentId, documentId),
-          asTarget.length > 0
-            ? inArray(
-                allocations.id,
-                asTarget.map((row) => row.id),
-              )
-            : undefined,
-        ),
+        // A refund reverses only its own applies; applies to it were reversed above.
+        eq(allocations.sourceDocumentId, documentId),
       ),
     )
     .leftJoin(

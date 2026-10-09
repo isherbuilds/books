@@ -1,6 +1,7 @@
 import type { DocumentCursor } from "@accly/api/lib/schemas";
 import type { AppRouterClient } from "@accly/api/routers/index";
 
+import { OPERATIONAL_REFETCH } from "@/lib/operational-query";
 import { nextPage, orpc } from "@/lib/orpc";
 
 type ReceiptListFilters = Omit<
@@ -39,7 +40,10 @@ export const receiptDetailOptions = (orgSlug: string, receiptId: string) =>
 export const receiptTotalsOptions = (
   orgSlug: string,
   filters: Omit<Parameters<AppRouterClient["receipt"]["totals"]>[0], "orgSlug">,
-) => orpc.receipt.totals.queryOptions({ input: { orgSlug, ...filters } });
+) => ({
+  ...orpc.receipt.totals.queryOptions({ input: { orgSlug, ...filters } }),
+  ...OPERATIONAL_REFETCH,
+});
 
 /** A party's five latest receipts, for its overview. */
 export const recentReceiptsOptions = (orgSlug: string, partyId: string) =>
